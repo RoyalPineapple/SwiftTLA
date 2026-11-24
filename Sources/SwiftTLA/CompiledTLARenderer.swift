@@ -74,6 +74,7 @@ package struct AlternativeFailureRegion {
     package let armOrdinal: Int
     fileprivate let body: CompiledActionExpr
     fileprivate let sharedBindingCount: Int
+    fileprivate let selector: CompiledExpression?
     package let bindings: [(binder: BinderID, target: VariableID)]
 
     package func index(of site: BinderID) -> Int? {
@@ -94,12 +95,7 @@ package extension CompiledActionExpr {
             }
             return (definitions, remainder)
         }
-        var choice = self
-        while case .define(_, _, let body) = choice { choice = body }
-        guard case .or(let left, let right) = choice else { return [] }
-        let (prefix, _) = splitDefinitions(self)
-
-        func isValue(_ value: CompiledExpression) -> Bool {
+        func isIntValue(_ value: CompiledExpression) -> Bool {
             switch value.operation {
             case .value(.integer), .stateVariable, .boundValue:
                 return value.resultType == .int && value.children.isEmpty
@@ -107,23 +103,67 @@ package extension CompiledActionExpr {
                 return false
             }
         }
-        func isSupported(_ definition: Definition) -> Bool {
-            let value = definition.value
-            return isValue(value) || (value.isObservedAlternativeIntegerOperation
-                && value.children.count == 2 && value.children.allSatisfy(isValue))
+        func isBoolValue(_ value: CompiledExpression) -> Bool {
+            switch value.operation {
+            case .value(.boolean), .stateVariable, .boundValue:
+                return value.resultType == .bool && value.children.isEmpty
+            default:
+                return false
+            }
+        }
+        var choice = self
+        while case .define(_, _, let body) = choice { choice = body }
+        let branches: (CompiledActionExpr, CompiledActionExpr, CompiledExpression?)
+        switch choice {
+        case .or(let first, let second):
+            branches = (first, second, nil)
+        case .ifElse(let condition, let first, let second):
+            guard case .ifElse = self, condition.resultType == .bool,
+                  condition.operation == .lessThan || condition.operation == .equal,
+                  condition.children.count == 2, condition.children.allSatisfy(isIntValue) else { return [] }
+            branches = (first, second, condition)
+        default:
+            return []
+        }
+        let (left, right, selector) = branches
+        let (prefix, _) = splitDefinitions(self)
+
+        func isFailureSite(_ value: CompiledExpression) -> Bool {
+            guard value.isObservedAlternativeIntegerOperation else { return false }
+            return selector == nil ? value.operation != .add : value.operation == .add
+        }
+        func isSupported(_ value: CompiledExpression) -> Bool {
+            if isIntValue(value) { return true }
+            if selector == nil {
+                return isFailureSite(value) && value.children.count == 2 && value.children.allSatisfy(isIntValue)
+            }
+            if isBoolValue(value) { return true }
+            var pending = [value]
+            while let part = pending.popLast() {
+                if isIntValue(part) { continue }
+                guard isFailureSite(part), part.children.count == 2 else { return false }
+                pending.append(contentsOf: part.children)
+            }
+            return true
         }
         // The existing native history records a reached arm. A shared RHS must be total here.
-        guard prefix.allSatisfy({ isValue($0.value) }) else { return [] }
+        guard prefix.allSatisfy({ isIntValue($0.value) }) else { return [] }
 
         func withPrefix(_ body: CompiledActionExpr) -> CompiledActionExpr {
             prefix.reversed().reduce(body) { rest, definition in
                 .define(definition.binder, definition.value, rest)
             }
         }
-        func arm(_ body: CompiledActionExpr, ordinal: Int) -> AlternativeFailureRegion? {
+        func arm(_ body: CompiledActionExpr, ordinal: Int) -> (region: AlternativeFailureRegion, canFail: Bool)? {
             let (local, frame) = splitDefinitions(body)
-            guard local.allSatisfy(isSupported),
-                  local.contains(where: { $0.value.isObservedAlternativeIntegerOperation }) else { return nil }
+            guard local.allSatisfy({ isSupported($0.value) }) else { return nil }
+            let lastFailure = local.lastIndex(where: { isFailureSite($0.value) })
+            if let lastFailure {
+                // The existing callback can retain Int values only.
+                guard local[..<lastFailure].allSatisfy({ $0.value.resultType == .int }) else { return nil }
+            } else if selector == nil {
+                return nil
+            }
 
             var pending = [frame]
             var targets: [BinderID: VariableID] = [:]
@@ -132,7 +172,7 @@ package extension CompiledActionExpr {
                 case .and(let left, let right):
                     pending.append(right)
                     pending.append(left)
-                case .assign(let target, let value) where isValue(value):
+                case .assign(let target, let value) where isIntValue(value) || (selector != nil && isBoolValue(value)):
                     if case .boundValue(let binder) = value.operation {
                         guard targets.updateValue(target, forKey: binder) == nil else { return nil }
                     }
@@ -153,20 +193,23 @@ package extension CompiledActionExpr {
                       terminal == nil || terminal == target else { return nil }
                 mapped.append((binder, target))
             }
-            return .init(armOrdinal: ordinal, body: withPrefix(body), sharedBindingCount: prefix.count, bindings: mapped)
+            return (.init(armOrdinal: ordinal, body: withPrefix(body), sharedBindingCount: prefix.count,
+                          selector: selector, bindings: mapped), lastFailure != nil)
         }
         guard let first = arm(left, ordinal: 0), let second = arm(right, ordinal: 1),
-              Set(first.bindings.dropFirst(prefix.count).map(\.binder))
-                .isDisjoint(with: second.bindings.dropFirst(prefix.count).map(\.binder)) else { return [] }
-        guard first.bindings.prefix(prefix.count)
-            .elementsEqual(second.bindings.prefix(prefix.count), by: { $0.target == $1.target }) else { return [] }
-        return [first, second]
+              first.canFail || second.canFail,
+              Set(first.region.bindings.dropFirst(prefix.count).map(\.binder))
+                .isDisjoint(with: second.region.bindings.dropFirst(prefix.count).map(\.binder)),
+              first.region.bindings.prefix(prefix.count)
+                .elementsEqual(second.region.bindings.prefix(prefix.count), by: { $0.target == $1.target })
+        else { return [] }
+        return [first.region, second.region]
     }
 }
 
 package extension CompiledExpression {
     var isObservedAlternativeIntegerOperation: Bool {
-        resultType == .int && [.divide, .integerDivide, .modulo].contains(operation)
+        resultType == .int && [.add, .divide, .integerDivide, .modulo].contains(operation)
     }
 }
 
@@ -464,11 +507,19 @@ struct CompiledTLARenderer {
         guard !regions.isEmpty else { return nil }
         let source = "<<\(layout.variables.map(\.formalName).joined(separator: ", "))>>"
 
-        // Arm failures use the actual lexical values captured before the split.
+        let selection: (predicate: String, defined: String?)?
+        if let selector = regions.first?.selector {
+            guard let value = try? selectedCondition(selector) else { return nil }
+            selection = value
+        } else {
+            selection = nil
+        }
+
+        // Arm failures use the actual lexical values captured on the reached path.
         var events: [String] = []
         for region in regions {
             guard let failures = try? evaluationFailures(region.body, retainingAllRHSBindings: true),
-                  !failures.isEmpty else { return nil }
+                  selection != nil || !failures.isEmpty else { return nil }
             for failure in failures {
                 guard let binding = failure.observedBinding, let before = failure.rhsBindingsBefore,
                       let site = region.index(of: binding), before.count == site else {
@@ -495,10 +546,19 @@ struct CompiledTLARenderer {
                 let occurrence = "[source |-> \(source), action |-> \(ordinal), branch |-> \(region.armOrdinal), "
                     + "site |-> \(binding.ordinal), target |-> \(region.bindings[site].target.ordinal), payload |-> \(payload), "
                     + "before |-> \(renderRHSBindingPrefix(before, projecting: prefix))]"
-                events.append("(IF \(failure.predicate) THEN <<\(occurrence)>> ELSE <<>>)")
+                let reached: String
+                if let selection {
+                    let selected = region.armOrdinal == 0
+                        ? "(IF \(selection.predicate) THEN \(failure.predicate) ELSE FALSE)"
+                        : "(IF \(selection.predicate) THEN FALSE ELSE \(failure.predicate))"
+                    reached = selection.defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+                } else {
+                    reached = failure.predicate
+                }
+                events.append("(IF \(reached) THEN <<\(occurrence)>> ELSE <<>>)")
             }
         }
-        return events.joined(separator: " \\o ")
+        return events.isEmpty ? nil : events.joined(separator: " \\o ")
     }
 
     func evaluationFailures(_ action: CompiledActionExpr, retainingRHSBindings: Bool = false,

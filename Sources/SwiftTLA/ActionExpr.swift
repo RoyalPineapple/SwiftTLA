@@ -31,15 +31,15 @@ extension NamedAction {
         } else {
             completed = try complete(body)
         }
-        // These receipts describe the nullary alternative visitor only.
         if !displaced.isEmpty {
             var choice = completed
             while case .define(_, _, let body) = choice { choice = body }
-            if case .or = choice {
+            switch choice {
+            case .or, .ifElse:
                 // Normalization can drop a statically blocked remainder containing these bindings.
                 let retainedNames = completed.scopeNames
                 displaced = displaced.filter { retainedNames.contains($0.key) }
-            } else {
+            default:
                 displaced = [:]
             }
         }

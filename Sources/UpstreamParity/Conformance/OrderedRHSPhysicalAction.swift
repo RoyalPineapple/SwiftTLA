@@ -1,6 +1,6 @@
 import SwiftTLA
 
-/// Reads the physical LET operands in a checked straight-line action declaration.
+/// Reads physical LET operands with a separate lexical scope for each action path.
 /// Tags distinguish an original variable from a preceding captured RHS value.
 enum OrderedRHSPhysicalAction {
     struct Plan {
@@ -22,12 +22,40 @@ enum OrderedRHSPhysicalAction {
     }
 
     struct Action {
+        // Index 0 is the first evaluated RHS on this path. A failure site
+        // observes only the preceding captures in this array.
         let captures: [Capture]
+        // Actual final field references. An overwritten RHS may have no write here.
         let writes: [String: TLAValue]
     }
 
+    struct Conditional {
+        struct Arm {
+            let action: Action
+            let writeOrder: [String]
+
+            func scalarPlan() -> TLAValue? {
+                let captures = action.captures.compactMap { capture -> TLAValue? in
+                    let plan = capture.plan
+                    guard plan.kinds.count == 1 else { return nil }
+                    return plan.kinds[0] == .string("literal") ? .tuple([.string("literal"), plan.literals[0]]) : plan.reads[0]
+                }
+                guard captures.count == action.captures.count else { return nil }
+                let writes = writeOrder.compactMap { target in
+                    action.writes[target].map { TLAValue.tuple([.string(target), $0]) }
+                }
+                guard writes.count == action.writes.count else { return nil }
+                return .record(["captures": .tuple(captures), "guards": .tuple([]), "writes": .tuple(writes)])
+            }
+        }
+
+        let condition: TLAValue
+        let ifTrue: Arm
+        let ifFalse: Arm
+    }
+
     private enum Node {
-        case literal(Int)
+        case literal(TLAValue)
         case read(TLAValue)
         case addition(Int, Int)
     }
@@ -39,15 +67,9 @@ enum OrderedRHSPhysicalAction {
 
     static func decode(in module: String, action: String, body: CompiledActionExpr,
                        fields: [CompiledVariableLayout], counter: CompiledVariableLayout, destination: String) -> Action? {
-        let prefix = "\(action) == "
-        let declarations = module.split(separator: "\n").filter { $0.hasPrefix(prefix) }
-        guard declarations.count == 1, let declaration = declarations.first,
-              let tokens = StraightLineRenderedActionCheck.tokens(String(declaration.dropFirst(prefix.count))) else {
-            return nil
-        }
-        var bindings: [String: TLAValue] = Dictionary(uniqueKeysWithValues: fields.map {
-            ($0.formalName, .tuple([.string("state"), .string($0.declaration.name)]))
-        })
+        guard let text = actionText(in: module, named: action),
+              let tokens = StraightLineRenderedActionCheck.tokens(text) else { return nil }
+        var bindings = originalReads(fields)
         let definitions = tokens.indices.filter { tokens[$0] == "LET" }
         var remaining = body
         if case .and(let assignments, .assign(let id, _)) = body, id == counter.id {
@@ -64,13 +86,8 @@ enum OrderedRHSPhysicalAction {
                   let guardParts = additionGuards(tokens, before: offset, count: expression.additionNodes.count),
                   bindings.updateValue(.tuple([.string("capture"), .int(captures.count + 1)]),
                                        forKey: tokens[offset + 1]) == nil else { return nil }
-            var guards = Array(repeating: "TRUE", count: expression.terms.count)
-            for (node, guardText) in zip(expression.additionNodes, guardParts) {
-                guards[node - 1] = guardText
-            }
-            captures.append(.init(binding: tokens[offset + 1], rhs: tokens[(offset + 3)..<end].joined(separator: " "),
-                plan: expression.plan, terms: expression.terms, starts: expression.starts,
-                guards: guards, additionNodes: expression.additionNodes))
+            captures.append(capture(named: tokens[offset + 1], rhs: tokens[(offset + 3)..<end],
+                                    expression: expression, additionGuards: guardParts))
             remaining = next
             continuation = end + 1
         }
@@ -79,6 +96,185 @@ enum OrderedRHSPhysicalAction {
         guard let writes = writes(in: tokens[continuation...], fields: fields,
             bindings: bindings, counter: counter.formalName, destination: destination) else { return nil }
         return .init(captures: captures, writes: writes)
+    }
+
+    static func decodeConditional(in module: String, action: CompiledAction,
+                                  program: CompiledProgram) -> Conditional? {
+        guard action.bindings.isEmpty, case .ifElse(let predicate, let yes, let no) = action.body,
+              let label = program.layout.actions.first(where: { $0.id == action.id }),
+              let text = actionText(in: module, named: label.renderedName),
+              let tokens = StraightLineRenderedActionCheck.tokens(text), let split = conditional(tokens[...]),
+              let yesTokens = parentheses(split.yes), let noTokens = parentheses(split.no)
+        else { return nil }
+        let fields = program.layout.variables
+        let reads = originalReads(fields)
+        let names = Dictionary(uniqueKeysWithValues: fields.map { ($0.id, $0.formalName) })
+        let rawNames = Dictionary(uniqueKeysWithValues: fields.map { ($0.id, $0.declaration.name) })
+        guard let condition = comparison(split.condition, predicate: predicate, reads: reads, rawNames: rawNames),
+              let first = arm(yesTokens, body: yes, reads: reads, names: names, rawNames: rawNames, program: program),
+              let second = arm(noTokens, body: no, reads: reads, names: names, rawNames: rawNames, program: program)
+        else { return nil }
+        // Do not treat a present guard as a correct one. Match the checked scalar
+        // guard/definedness and failure-gating constructions against the same text.
+        do {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: text, layout: program.layout,
+                binders: program.binderNames, moduleName: program.moduleName, required: true)
+        } catch { return nil }
+        return .init(condition: condition, ifTrue: first, ifFalse: second)
+    }
+
+    private static func actionText(in module: String, named action: String) -> String? {
+        let prefix = "\(action) == "
+        let declarations = module.split(separator: "\n").filter { $0.hasPrefix(prefix) }
+        guard declarations.count == 1, let declaration = declarations.first else { return nil }
+        return String(declaration.dropFirst(prefix.count))
+    }
+
+    private static func originalReads(_ fields: [CompiledVariableLayout]) -> [String: TLAValue] {
+        Dictionary(uniqueKeysWithValues: fields.map {
+            ($0.formalName, .tuple([.string("state"), .string($0.declaration.name)]))
+        })
+    }
+
+    private static func capture(named name: String, rhs: ArraySlice<String>, expression: Expression,
+                                additionGuards: [String]) -> Capture {
+        var guards = Array(repeating: "TRUE", count: expression.terms.count)
+        for (node, guardText) in zip(expression.additionNodes, additionGuards) { guards[node - 1] = guardText }
+        return .init(binding: name, rhs: rhs.joined(separator: " "), plan: expression.plan,
+                     terms: expression.terms, starts: expression.starts, guards: guards,
+                     additionNodes: expression.additionNodes)
+    }
+
+    private static func comparison(_ text: ArraySlice<String>, predicate: CompiledExpression,
+                                   reads: [String: TLAValue], rawNames: [VariableID: String]) -> TLAValue? {
+        let comparison: (operation: String, symbol: String)
+        switch predicate.operation {
+        case .lessThan: comparison = ("lessThan", "<")
+        case .equal: comparison = ("equal", "=")
+        default: return nil
+        }
+        guard predicate.resultType == .bool, predicate.children.count == 2,
+              let inside = parentheses(text), let separator = inside.firstIndex(of: comparison.symbol),
+              let left = expression(inside[..<separator], bindings: reads, allowingBooleans: true),
+              let right = expression(inside[(separator + 1)...], bindings: reads, allowingBooleans: true),
+              left.plan.kinds.count == 1, right.plan.kinds.count == 1,
+              matches(left.plan, predicate.children[0], rawNames: rawNames, captures: [:]),
+              matches(right.plan, predicate.children[1], rawNames: rawNames, captures: [:])
+        else { return nil }
+        func term(_ plan: Plan) -> TLAValue {
+            plan.kinds[0] == .string("literal") ? .tuple([.string("literal"), plan.literals[0]]) : plan.reads[0]
+        }
+        return .tuple([.tuple([.string(comparison.operation)]), term(left.plan), term(right.plan)])
+    }
+
+    private static func arm(_ tokens: ArraySlice<String>, body: CompiledActionExpr, reads: [String: TLAValue],
+                            names: [VariableID: String], rawNames: [VariableID: String],
+                            program: CompiledProgram) -> Conditional.Arm? {
+        var bindings = reads
+        var positions: [BinderID: Int] = [:]
+        var captures: [Capture] = []
+        var remaining = body
+        var physical = tokens
+        while case .define(let binder, let value, let next) = remaining {
+            let declaration: ArraySlice<String>
+            let guardTokens: ArraySlice<String>?
+            if let guarded = conditional(physical) {
+                guard guarded.no.elementsEqual(["FALSE"]) else { return nil }
+                declaration = guarded.yes
+                guardTokens = guarded.condition
+            } else {
+                declaration = physical
+                guardTokens = nil
+            }
+            guard let inside = parentheses(declaration), inside.count >= 5,
+                  inside[inside.startIndex] == "LET", inside[inside.startIndex + 2] == "==",
+                  let expectedName = program.binderNames[binder], inside[inside.startIndex + 1] == expectedName,
+                  let end = inside.dropFirst(3).firstIndex(of: "IN"),
+                  let decoded = expression(inside[(inside.startIndex + 3)..<end], bindings: bindings, allowingBooleans: true),
+                  matches(decoded.plan, value, rawNames: rawNames, captures: positions),
+                  let guards = guardTexts(guardTokens, count: decoded.additionNodes.count),
+                  bindings.updateValue(.tuple([.string("capture"), .int(captures.count + 1)]), forKey: expectedName) == nil,
+                  positions.updateValue(captures.count + 1, forKey: binder) == nil else { return nil }
+            captures.append(capture(named: expectedName, rhs: inside[(inside.startIndex + 3)..<end],
+                                    expression: decoded, additionGuards: guards))
+            physical = inside[(end + 1)...]
+            remaining = next
+        }
+
+        var pending: [FramePart] = [.action(remaining)]
+        var writes: [String: TLAValue] = [:]
+        var order: [String] = []
+        func consume(_ token: String) -> Bool {
+            guard physical.first == token else { return false }
+            physical = physical.dropFirst()
+            return true
+        }
+        while let part = pending.popLast() {
+            switch part {
+            case .token(let token):
+                guard consume(token) else { return nil }
+            case .action(.and(let left, let right)):
+                pending += [.token(")"), .action(right), .token(#"/\"#), .action(left), .token("(")]
+            case .action(.guard_(let condition)):
+                guard condition.operation == .value(.boolean(true)), consume("TRUE") else { return nil }
+            case .action(.unchanged(let target)):
+                guard let formal = names[target], let raw = rawNames[target], consume("UNCHANGED"), consume(formal),
+                      writes.updateValue(.tuple([.string("state"), .string(raw)]), forKey: raw) == nil else { return nil }
+                order.append(raw)
+            case .action(.assign(let target, let value)):
+                guard let formal = names[target], let raw = rawNames[target], case .boundValue(let binder) = value.operation,
+                      let position = positions[binder], let name = program.binderNames[binder], consume(formal + "'"),
+                      consume("="), consume(name), writes.updateValue(.tuple([.string("capture"), .int(position)]),
+                                                                     forKey: raw) == nil else { return nil }
+                order.append(raw)
+            default: return nil
+            }
+        }
+        guard physical.isEmpty, writes.count == names.count else { return nil }
+        return .init(action: .init(captures: captures, writes: writes), writeOrder: order)
+    }
+
+    private enum FramePart {
+        case token(String)
+        case action(CompiledActionExpr)
+    }
+
+    private static func matches(_ plan: Plan, _ root: CompiledExpression, rawNames: [VariableID: String],
+                                captures: [BinderID: Int]) -> Bool {
+        var pending = [(plan.kinds.count - 1, root)]
+        while let (index, expression) = pending.popLast() {
+            switch expression.operation {
+            case .value(.integer(let value)):
+                guard plan.kinds[index] == .string("literal"), plan.literals[index] == .int(value) else { return false }
+            case .value(.boolean(let value)):
+                guard plan.kinds[index] == .string("literal"), plan.literals[index] == .bool(value) else { return false }
+            case .stateVariable(let id):
+                guard let field = rawNames[id], plan.kinds[index] == .string("read"),
+                      plan.reads[index] == .tuple([.string("state"), .string(field)]) else { return false }
+            case .boundValue(let binder):
+                guard let position = captures[binder], plan.kinds[index] == .string("read"),
+                      plan.reads[index] == .tuple([.string("capture"), .int(position)]) else { return false }
+            case .add:
+                guard expression.children.count == 2, plan.kinds[index] == .string("add"),
+                      case .int(let left) = plan.left[index], case .int(let right) = plan.right[index]
+                else { return false }
+                pending.append((right - 1, expression.children[1]))
+                pending.append((left - 1, expression.children[0]))
+            default: return false
+            }
+        }
+        return true
+    }
+
+    private static func parentheses(_ tokens: ArraySlice<String>) -> ArraySlice<String>? {
+        guard tokens.first == "(", tokens.last == ")" else { return nil }
+        var depth = 0
+        for index in tokens.indices {
+            if tokens[index] == "(" { depth += 1 }
+            if tokens[index] == ")" { depth -= 1 }
+            if depth == 0 && index != tokens.endIndex - 1 { return nil }
+        }
+        return depth == 0 ? tokens.dropFirst().dropLast() : nil
     }
 
     private static func writes(in tokens: ArraySlice<String>, fields: [CompiledVariableLayout],
@@ -124,7 +320,7 @@ enum OrderedRHSPhysicalAction {
     }
 
     private static func expression(_ input: ArraySlice<String>,
-                                   bindings: [String: TLAValue]) -> Expression? {
+                                   bindings: [String: TLAValue], allowingBooleans: Bool = false) -> Expression? {
         var nodes: [Node] = []
         var spans: [ClosedRange<Int>] = []
         var parts: [Part] = []
@@ -135,7 +331,7 @@ enum OrderedRHSPhysicalAction {
             spans.append(span)
         }
         func literal(_ index: Int) -> Int? {
-            if case .literal(let value) = nodes[index] { return value }
+            if case .literal(.int(let value)) = nodes[index] { return value }
             return nil
         }
 
@@ -164,7 +360,7 @@ enum OrderedRHSPhysicalAction {
                     guard !product.overflow, !wide.overflow,
                           let canonical = StraightLineRenderedActionCheck.tokens(TLAValue.int(wide.partialValue).description),
                           input[open.token...offset].elementsEqual(canonical) else { return nil }
-                    append(.literal(wide.partialValue), span: open.token...offset)
+                    append(.literal(.int(wide.partialValue)), span: open.token...offset)
                 default:
                     return nil
                 }
@@ -173,7 +369,9 @@ enum OrderedRHSPhysicalAction {
                 parts.append(.token(token))
             default:
                 if let value = Int(token), String(value) == token {
-                    append(.literal(value), span: offset...offset)
+                    append(.literal(.int(value)), span: offset...offset)
+                } else if allowingBooleans, token == "TRUE" || token == "FALSE" {
+                    append(.literal(.bool(token == "TRUE")), span: offset...offset)
                 } else if let reference = bindings[token] {
                     append(.read(reference), span: offset...offset)
                 } else {
@@ -204,7 +402,7 @@ enum OrderedRHSPhysicalAction {
             case .literal(let value):
                 starts.append(position)
                 kinds.append(.string("literal"))
-                literals.append(.int(value))
+                literals.append(value)
                 reads.append(.tuple([]))
                 left.append(.int(0))
                 right.append(.int(0))
@@ -249,7 +447,12 @@ enum OrderedRHSPhysicalAction {
             if start != nil || depth < 0 { break }
         }
         guard let start, start < then else { return nil }
-        let condition = tokens[start..<then]
+        return guardTexts(tokens[start..<then], count: count)
+    }
+
+    private static func guardTexts(_ tokens: ArraySlice<String>?, count: Int) -> [String]? {
+        guard count > 0 else { return tokens == nil ? [] : nil }
+        guard let condition = tokens else { return nil }
         if count == 1 { return [condition.joined(separator: " ")] }
 
         var remainder = condition

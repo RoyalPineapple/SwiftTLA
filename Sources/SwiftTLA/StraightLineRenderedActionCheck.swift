@@ -145,6 +145,15 @@ package enum StraightLineRenderedActionCheck {
                 switch node.operation {
                 case .not, .domain: arity = 1
                 case .and, .or, .equal, .modulo, .in, .integerRange, .union: arity = 2
+                case .lessThan:
+                    guard node.resultType == .bool, node.children.allSatisfy({ child in
+                        guard child.resultType == .int, child.children.isEmpty else { return false }
+                        switch child.operation {
+                        case .stateVariable, .boundValue, .value(.integer): return true
+                        default: return false
+                        }
+                    }) else { return nil }
+                    arity = 2
                 case .divide, .integerDivide:
                     guard node.resultType == .int else { return nil }
                     arity = 2
@@ -208,8 +217,9 @@ package enum StraightLineRenderedActionCheck {
                 value = "(IF \(first.value) THEN \(children[1].value) ELSE \(children[2].value))"
                 sites = first.sites + selected(children[1], whenTrue: true)
                     + selected(children[2], whenTrue: false)
-            case .equal:
-                value = "(\(first.value) = \(children[1].value))"
+            case .equal, .lessThan:
+                let comparison = node.operation == .equal ? "=" : "<"
+                value = "(\(first.value) \(comparison) \(children[1].value))"
                 sites = first.sites + children[1].sites
             case .domain:
                 value = "DOMAIN \(first.value)"; sites = first.sites
@@ -811,7 +821,7 @@ package enum StraightLineRenderedActionCheck {
         func directBoolean(_ expression: CompiledExpression) -> Bool {
             if controlledEquality(expression) { return true }
             switch expression.operation {
-            case .not, .and, .or, .ifThenElse, .equal, .in:
+            case .not, .and, .or, .ifThenElse, .equal, .lessThan, .in:
                 return checked(expression) != nil
             default: break
             }

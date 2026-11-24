@@ -594,6 +594,7 @@ def main():
         if ordered_copy_attachments is not None:
             ordered_copy_attachments.mkdir()
             test_filter += ("|OrderedStepTests/orderedActionsSupplySelectedProofs"
+                            "|GeneratedAtomicUpdateProofTests/conditionalOverflowKeepsTheSelectedArmHistory"
                             "|SequentialLoopControlTests/preservesCompletion"
                             "|ProcedureLoweringTests/callReturnRestoresFrame"
                             "|ProcedureLoweringTests/eachProcessesIsolateProcedureFrames"
@@ -890,6 +891,33 @@ def main():
             attached_source = Path(swift_source).name
             catalog_module = "SwiftTLAOrderedAssignmentCatalogOrderedCopy"
             attached = {path.name: path for path in ordered_copy_attachments.iterdir()}
+            variant = "GeneratedScalarConditionalOverflowProofModel"
+            variant_proof = f"SwiftTLA{variant}ConditionalOverflowHistory.tla"
+            variant_members = f"{variant}NativeMembers.swift"
+            variant_names = {variant + ".swift", variant + ".tla", variant_members, variant_proof}
+            if not variant_names.issubset(attached):
+                raise ValueError("missing the selected conditional overflow source, members, module, or proof")
+            variant_files = {name: attached.pop(name) for name in variant_names}
+            if any(path.is_symlink() or not path.is_file() or not path.stat().st_size for path in variant_files.values()):
+                raise ValueError("invalid selected conditional overflow input")
+            variant_source = variant_files[variant + ".swift"]
+            expansion, origin = capture_model_expansion(str(variant_source), "conditional-overflow",
+                owner=variant, compiler_module="SwiftTLATests")["members"]
+            retained_expansion = packet / "native-conditional-overflow-source.swift"
+            retained_expansion.write_bytes(expansion)
+            with (output / "conditional-overflow-compare-members.log").open("wb") as log:
+                subprocess.run([str(binary), "native", "verify-member-tokens",
+                                "--compiled-members", str(retained_expansion),
+                                "--attached-members", str(variant_files[variant_members])],
+                               env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+            receipt["conditionalOverflowHistory"] = {
+                "sourceSHA": head, "test": "GeneratedAtomicUpdateProofTests/conditionalOverflowKeepsTheSelectedArmHistory",
+                "fixture": conditional_model, "fixtureSHA256": inputs[conditional_model],
+                "authoredVariant": variant_source.name, "proof": variant_proof,
+                "files": {name: digest(path) for name, path in variant_files.items()},
+                "compiledMembersSHA256": digest(retained_expansion), "sourceOrigin": origin,
+                "matchingSourceAccurateTokens": True,
+            }
             loop_source = "Tests/SwiftTLATests/SequentialLoopControlFixtures.swift"
             loop_module = "SwiftTLASequentialControlFinishingLoop"
             loop_parent = loop_module + "ConfiguredProof"
@@ -983,7 +1011,7 @@ def main():
                 "validatorSHA256": digest(binary),
             }
             proof_files = {}
-            for name, path in sorted({**attached, **loop, **procedure}.items()):
+            for name, path in sorted({**attached, **loop, **procedure, **variant_files}.items()):
                 retained_input = imports / name
                 data = path.read_bytes()
                 if name.endswith(".tla") and data.split(b"\n", 1)[0] != f"---- MODULE {path.stem} ----".encode():

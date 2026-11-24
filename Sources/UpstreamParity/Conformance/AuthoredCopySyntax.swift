@@ -1166,8 +1166,33 @@ enum AuthoredCopySyntax {
         return .init(algorithm: selection.algorithm, labels: labels, ordinal: ordinal, name: moduleName, module: module)
     }
 
-    static func conditionalProofInput(source: String, modelName: String) throws -> TLAValue? {
-        let (members, specBody) = try specification(source: source, modelName: modelName)
+    struct ConditionalInput {
+        struct Write {
+            let target: String
+            let terms: [TLAValue]
+        }
+
+        let fields: Set<TLAValue>
+        let label: TLAValue
+        let predicate: TLAValue
+        let arms: [[Write]]
+
+        var scalarProof: TLAValue? {
+            func boolWrite(_ arm: [Write]) -> TLAValue? {
+                guard arm.count == 1, let write = arm.first,
+                      write.terms.count == 1, let term = write.terms.first,
+                      case .tuple(let parts) = term, parts.count == 2,
+                      parts[0] == .string("literal"), case .bool = parts[1] else { return nil }
+                return .tuple([.string(write.target), term])
+            }
+            guard arms.count == 2, let yes = boolWrite(arms[0]), let no = boolWrite(arms[1]) else { return nil }
+            return .record(["fields": .set(fields), "label": label, "predicate": predicate,
+                            "ifTrue": yes, "ifFalse": no])
+        }
+    }
+
+    static func conditionalProofInput(source: String, modelName: String) throws -> ConditionalInput? {
+        let (members, specBody) = try specification(source: source, modelName: modelName, requiringModuleName: true)
         guard let parameters = specBody.signature?.parameterClause?.as(ClosureShorthandParameterListSyntax.self),
               parameters.count == 1, let parameter = parameters.first,
               let call = specBody.statements.last?.item.as(FunctionCallExprSyntax.self),
@@ -1187,11 +1212,30 @@ enum AuthoredCopySyntax {
         guard fields.count == roots.count else { return nil }
         let statements = try controlStatements(body.statements, roots: roots, resolve: { _ in throw unsupported })
         guard statements.count == 1, case .ifElse(let predicate, let yes, let no)? = statements.first,
-              let guardTerm = scalarComparison(predicate), let yesWrite = conditionalWrite(yes),
-              let noWrite = conditionalWrite(no) else { return nil }
-
-        return .record(["fields": .set(fields), "label": .string(declaredLabel.1 ?? label.caseName),
-                        "predicate": guardTerm, "ifTrue": yesWrite, "ifFalse": noWrite])
+              let guardTerm = scalarComparison(predicate) else { return nil }
+        func writes(_ statements: [AlgorithmStatementModel]) throws -> [ConditionalInput.Write] {
+            try statements.map { statement in
+                guard case .set(.root(let target), let expression) = statement else { throw unsupported }
+                var pending = [expression]
+                var terms: [TLAValue] = []
+                while let next = pending.popLast() {
+                    switch next {
+                    case .variable, .value(.int), .value(.bool):
+                        guard let term = next.scalarEvidenceTerm else { throw unsupported }
+                        terms.append(term)
+                    case .add(let left, let right):
+                        terms.append(.tuple([.string("add")]))
+                        pending.append(right)
+                        pending.append(left)
+                    default:
+                        throw unsupported
+                    }
+                }
+                return .init(target: target, terms: terms)
+            }
+        }
+        return try .init(fields: fields, label: .string(declaredLabel.1 ?? label.caseName),
+                         predicate: guardTerm, arms: [writes(yes), writes(no)])
     }
 
     struct BranchwiseAssignments {
@@ -1274,13 +1318,6 @@ enum AuthoredCopySyntax {
             return expression.scalarEvidenceTerm
         default: return nil
         }
-    }
-
-    private static func conditionalWrite(_ statements: [AlgorithmStatementModel]) -> TLAValue? {
-        guard statements.count == 1,
-              case .set(.root(let target), let value)? = statements.first,
-              case .value(.bool) = value, let term = value.scalarEvidenceTerm else { return nil }
-        return .tuple([.string(target), term])
     }
 
     private static func controlStatements(_ statements: CodeBlockItemListSyntax, roots: [String: String],

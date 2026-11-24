@@ -118,3 +118,34 @@ package func nativeOrderedIntAssignmentFailureSource(actionOrdinal: Int, precedi
     "SwiftTLA._recordNativeOrderedIntAssignmentFailure(&context, actionOrdinal: \(actionOrdinal), "
         + "assignmentOrdinal: \(preceding.count + 1), preceding: [\(preceding.joined(separator: ", "))], reason: failure)"
 }
+
+private func nativeAlternativeFailureRecordingSource(regions: [AlternativeFailureRegion], site: BinderID,
+    action: Int, lexical: [String], program: CompiledProgram) -> String? {
+    for region in regions {
+        guard let position = region.index(of: site) else { continue }
+        guard lexical.count == position else { return nil }
+        let prefix = zip(region.bindings.prefix(position), lexical).compactMap { origin, local -> String? in
+            guard let name = program.binderNames[origin.binder], "_\(name)_\(origin.binder.ordinal)" == local else {
+                return nil
+            }
+            return "(binding: \(origin.binder.ordinal), target: \(origin.target.ordinal), value: \(local))"
+        }
+        guard prefix.count == position else { return nil }
+        return "SwiftTLA._recordNativeAlternativeFailure(&context, action: \(action), branch: \(region.armOrdinal), "
+            + "site: \(site.ordinal), target: \(region.bindings[position].target.ordinal), "
+            + "before: [\(prefix.joined(separator: ", "))], reason: failure)"
+    }
+    return nil
+}
+
+package func nativeActionFailureRecordingSource(value: CompiledExpression, site: BinderID, action: ActionID,
+    lexical: [String], regions: [AlternativeFailureRegion], program: CompiledProgram) -> String? {
+    let addition = value.operation == .add && value.resultType == .int
+    if addition || value.isObservedAlternativeIntegerOperation,
+       let branch = nativeAlternativeFailureRecordingSource(regions: regions, site: site,
+           action: action.ordinal, lexical: lexical, program: program) {
+        return branch
+    }
+    guard addition, program.requiresOrderedIntOutput(action) else { return nil }
+    return nativeOrderedIntAssignmentFailureSource(actionOrdinal: action.ordinal, preceding: lexical)
+}
