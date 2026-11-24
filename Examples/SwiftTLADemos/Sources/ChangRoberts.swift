@@ -56,7 +56,7 @@ public struct ChangRoberts {
                             Either {
                                 When(message.candidate == identifiers[node])
                                 Assign(leader, to: message.candidate)
-                                Assign(messages, to: messages.removing(message))
+                                messages.remove(message)
                             } or: {
                                 Either {
                                     When(message.candidate > identifiers[node])
@@ -69,7 +69,7 @@ public struct ChangRoberts {
                                     ))
                                 } or: {
                                     When(message.candidate < identifiers[node])
-                                    Assign(messages, to: messages.removing(message))
+                                    messages.remove(message)
                                 }
                             }
                         }

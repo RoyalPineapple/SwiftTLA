@@ -64,7 +64,7 @@ package struct TLCMCModel: Sendable {
                 While(Step.scanInitialStates, initialIndex <= frontier.expr.count) {
                     let initial = frontier.expr.at(initialIndex.expr)
                     Assign(currentState, to: SearchNode.first(initial))
-                    Assign(closed, to: closed.inserting(initial))
+                    closed.insert(initial)
                     Assign(levels, to: levels.overriding(initial, with: 0))
                     Assign(initialIndex, to: initialIndex + 1)
                     If(violations.contains(initial)) {
@@ -101,8 +101,8 @@ package struct TLCMCModel: Sendable {
                     } else: {
                         With(successors) { successor in
                             let current = currentState.expr.assuming(Node.self)
-                            Assign(successors, to: successors.removing(successor.expr))
-                            Assign(closed, to: closed.inserting(successor.expr))
+                            successors.remove(successor.expr)
+                            closed.insert(successor.expr)
                             Assign(frontier, to: frontier.expr.appending(successor.expr))
                             Assign(
                                 predecessorEdges,

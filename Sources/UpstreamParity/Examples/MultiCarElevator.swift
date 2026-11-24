@@ -60,7 +60,7 @@ package struct MultiCarElevator: Sendable {
             Do(Step.request, over: PersonID.all, FloorID.all, Direction.all) { person, floor, direction in
                 let call = Call.expression(person: person, floor: floor, direction: direction)
                 When(!calls.contains(call))
-                Assign(calls, to: calls.inserting(call))
+                calls.insert(call)
             }
             Do(Step.assign, over: PersonID.all, CarID.all, Direction.all) { person, car, direction in
                 When(calls.count == 1

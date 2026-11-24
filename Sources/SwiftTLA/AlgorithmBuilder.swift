@@ -1520,6 +1520,17 @@ extension AssignmentTarget where Value: FormalSetValue {
     }
 
     public func insert(_ member: Value.Element) -> StepStatement { insert(member.expr) }
+
+    public func remove(_ member: some TypedExpression<Value.Element>) -> StepStatement {
+        set(removing(member))
+    }
+
+    public func remove(_ member: Value.Element) -> StepStatement { remove(member.expr) }
+
+    public func formUnion<Other: FormalSetValue>(_ other: some TypedExpression<Other>) -> StepStatement
+    where Other.Element == Value.Element {
+        set(union(other))
+    }
 }
 
 extension AssignmentTarget where Value: _GeneratedRecordValue {

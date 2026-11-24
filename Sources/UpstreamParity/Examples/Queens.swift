@@ -32,8 +32,8 @@ package struct QueensModel: Sendable {
                     }
                     let extensions = columns.mapping { column in queens.appending(column) }
                     If(nextQueen == N) {
-                        Assign(todo, to: todo.removing(queens))
-                        Assign(sols, to: sols.union(extensions))
+                        todo.remove(queens)
+                        sols.formUnion(extensions)
                     } else: {
                         Assign(todo, to: todo.removing(queens).union(extensions))
                     }

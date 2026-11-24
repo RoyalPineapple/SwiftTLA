@@ -50,7 +50,7 @@ package struct BakeryModel: Sendable {
 
                     While(Label.e2, !unchecked.isEmpty) {
                         With(unchecked) { process in
-                            Assign(unchecked, to: unchecked.removing(process))
+                            unchecked.remove(process)
                             If(num[process] > max) { Assign(max, to: num[process]) }
                         }
                     }
@@ -92,7 +92,7 @@ package struct BakeryModel: Sendable {
                     Do(Label.w2) {
                         When(num[nxt] == 0 || num[selfID] < num[nxt]
                             || (num[selfID] == num[nxt] && selfID < nxt))
-                        Assign(unchecked, to: unchecked.removing(nxt.expr))
+                        unchecked.remove(nxt.expr)
                         Goto(Label.w1)
                     }
 

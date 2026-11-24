@@ -25,7 +25,7 @@ package struct QuicksortModel: Sendable {
                 While(Step.a, !U.isEmpty) {
                     With(U) { I in
                         If(I.count == 1) {
-                            Assign(U, to: U.removing(I))
+                            U.remove(I)
                         } else: {
                             Let(Select(from: I) { x in ForAll(in: I) { y in x <= y } }) { minimum in
                                 Let(Select(from: I) { x in ForAll(in: I) { y in x >= y } }) { maximum in

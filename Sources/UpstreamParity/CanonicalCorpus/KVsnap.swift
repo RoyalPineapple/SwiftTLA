@@ -106,7 +106,7 @@ package struct KVsnapModel: Sendable {
                     let ops: LocalVariable<[Operation]> = scope.localVar(initial: [])
 
                     Do(Step.start) {
-                        Assign(tx, to: tx.inserting(selfID))
+                        tx.insert(selfID)
                         Assign(snapshotStore, to: store)
                         With(NonEmptySubsets(of: SetExpr<Key>.literal(.k1, .k2))) { reads in
                             With(NonEmptySubsets(of: SetExpr<Key>.literal(.k1, .k2))) { writes in

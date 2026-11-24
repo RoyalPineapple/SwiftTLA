@@ -76,7 +76,7 @@ package struct BoulangerModel: Sendable {
 
                     While(Label.e2, !unchecked.isEmpty) {
                         With(unchecked) { process in
-                            Assign(unchecked, to: unchecked.removing(process))
+                            unchecked.remove(process)
                             If(num[process] > max) { Assign(max, to: num[process]) }
                         }
                     }

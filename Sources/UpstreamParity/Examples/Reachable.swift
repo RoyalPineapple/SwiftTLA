@@ -44,10 +44,10 @@ package struct ReachableModel: Sendable {
                 While(Step.a, !frontier.isEmpty) {
                     With(frontier) { node in
                         If(!marked.contains(node)) {
-                            Assign(marked, to: marked.inserting(node))
-                            Assign(frontier, to: frontier.expr.union(successors[node]))
+                            marked.insert(node)
+                            frontier.formUnion(successors[node])
                         } else: {
-                            Assign(frontier, to: frontier.removing(node))
+                            frontier.remove(node)
                         }
                     }
                 }

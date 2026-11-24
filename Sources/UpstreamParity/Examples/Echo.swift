@@ -108,7 +108,7 @@ package struct EchoModel: Sendable {
                                 }
                                 Assign(rcvd, to: rcvd.expr + 1)
                                 If(message.kind == .acknowledgement) {
-                                    Assign(children, to: children.expr.inserting(message.sndr))
+                                    children.insert(message.sndr)
                                 }
                             }
                         }

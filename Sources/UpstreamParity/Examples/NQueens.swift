@@ -42,8 +42,8 @@ package struct NQueensModel: Sendable {
                                     queens.expr.appending(column.expr)
                                 }) { extensions in
                                     If(nextQueen.expr == N) {
-                                        Assign(todo, to: todo.expr.removing(queens))
-                                        Assign(sols, to: sols.expr.union(extensions.expr))
+                                        todo.remove(queens)
+                                        sols.formUnion(extensions.expr)
                                     } else: {
                                         Assign(todo, to: todo.expr.removing(queens).union(extensions.expr))
                                     }

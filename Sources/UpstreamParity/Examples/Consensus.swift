@@ -34,7 +34,7 @@ package struct ConsensusModel: Sendable {
                 let choose = Macro {
                     When(chosen.isEmpty)
                     With(Value.all) { value in
-                        Assign(chosen, to: chosen.inserting(value))
+                        chosen.insert(value)
                     }
                 }
 
