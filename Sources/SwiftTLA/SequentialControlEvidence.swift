@@ -223,6 +223,31 @@ package struct SequentialControlEvidence: Sendable {
 
 
 extension SequentialControlEvidence {
+    package struct ProcedureActionDomain: Sendable {
+        package let label: String
+        package let workers: Set<TLAValue>?
+    }
+
+    package static func procedureActionDomains(in algorithm: AlgorithmModel) -> [ProcedureActionDomain]? {
+        let processes = algorithm.processes
+        let sequential = algorithm.sequentialSteps
+        guard !algorithm.procedures.isEmpty, processes.isEmpty || sequential.isEmpty else { return nil }
+        let domains = processes.compactMap { process in
+            process.domain.literalSetMembers.map { Set($0) }
+        }
+        guard domains.count == processes.count else { return nil }
+        var routes = sequential.map { ProcedureActionDomain(label: $0.label.name, workers: nil) }
+        for (process, domain) in zip(processes, domains) {
+            routes += process.steps.map { .init(label: $0.label.name, workers: domain) }
+        }
+        let workers = processes.isEmpty ? nil : domains.reduce(into: Set<TLAValue>()) { $0.formUnion($1) }
+        for procedure in algorithm.procedures {
+            routes += procedure.steps.map { .init(label: "procedure.\(procedure.name).\($0.label.name)", workers: workers) }
+        }
+        routes.append(.init(label: CompilerControlSymbol.terminatingAction.rawValue, workers: nil))
+        return routes
+    }
+
     /// A registered procedure While observed by the source frontend before scheduling.
     package struct ProcedureLoopSource: Sendable {
         package let owner: ControlOwner
@@ -233,6 +258,7 @@ extension SequentialControlEvidence {
         package let localRoots: Set<String>
         package let condition: StateExpr
         package let body: Branch?
+        package let routes: [ProcedureActionDomain]?
         package let fallsThrough: Bool
         package let ownsConfiguredAssertions: Bool
 
@@ -295,6 +321,7 @@ extension SequentialControlEvidence {
             guard case .shared(let shared) = component else { return nil }
             return shared.root
         })
+        let routes = procedureActionDomains(in: algorithm)
         let assertionOwners = (algorithm.sequentialSteps + algorithm.processes.flatMap(\.steps)
                                + algorithm.procedures.flatMap(\.steps)).filter { hasAssertion($0.statements) }.count
         return algorithm.procedures.flatMap { procedure in
@@ -310,7 +337,7 @@ extension SequentialControlEvidence {
                     Branch(observations: $0, control: .transfer(entry))
                 }
                 return .init(owner: owner, procedure: procedure.name, labels: labels, slot: index,
-                    sourceOffset: offset, localRoots: roots, condition: condition, body: body,
+                    sourceOffset: offset, localRoots: roots, condition: condition, body: body, routes: routes,
                     fallsThrough: !hasExplicitTransfer(step.statements),
                     ownsConfiguredAssertions: assertionOwners == 1 && hasAssertion(step.statements))
             }

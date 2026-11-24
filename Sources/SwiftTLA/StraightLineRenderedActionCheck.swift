@@ -1610,10 +1610,30 @@ package enum StraightLineRenderedActionCheck {
         guard actions.count == invocations.count, !actions.isEmpty, fields.count > 1,
               actions.map(\.renderedName) == names,
               zip(actions, invocations).allSatisfy({ $0.0.declaration.name.utf8.elementsEqual($0.1.sourceName.utf8) }),
-              invocations.allSatisfy({ $0.arguments.isEmpty }),
-              Set(names).count == names.count else { return nil }
+              invocations.allSatisfy({ $0.arguments.isEmpty }) else { return nil }
+        return finiteActionCatalog(in: rendered, frameFields: fields, matching: invocations)
+    }
 
-        let lines = rendered.tlaBundle.root.tla.components(separatedBy: "\n")
+    package static func finiteActionCatalog(
+        in rendered: RenderedSpecification, frameFields fields: [String], matching expected: [RenderedAction]
+    ) -> FiniteActionCatalog? {
+        let invocations = rendered.actions
+        let names = invocations.map(\.renderedName)
+        guard !expected.isEmpty, fields.count > 1, expected.count == invocations.count,
+              Set(names).count == names.count,
+              zip(expected, invocations).allSatisfy({ left, right in
+                  left.sourceName.utf8.elementsEqual(right.sourceName.utf8)
+                      && left.renderedName.utf8.elementsEqual(right.renderedName.utf8)
+                      && left.emittedInvocationName.utf8.elementsEqual(right.emittedInvocationName.utf8)
+              }) else { return nil }
+
+        let module = rendered.tlaBundle.root.tla
+        let aliases = expected.filter { !$0.arguments.isEmpty }.map {
+            (header: $0.renderedName, definition: "\($0.renderedName) == \($0.emittedInvocationName)")
+        }
+        do { try verifyRenderedActionDeclarations(module, declarations: aliases) }
+        catch { return nil }
+        let lines = module.components(separatedBy: "\n")
         let frame = "<<\(fields.joined(separator: ", "))>>"
         let behavior = ["Spec ==", "  /\\ Init", "  /\\ [][Next]_\(frame)"]
         guard let physicalInvocations = physicalNextInvocations(in: lines, directNext: names == ["Next"]),

@@ -100,8 +100,10 @@ extension SequentialControlOutputEvidence {
             assertionResult = ""
             assertionFact = ""
         }
-        let selection = procedureNext(rows, predicate: "AuthoredProcedureLoopInNext",
-                                      theorem: "ActualNextIncludesTheSelectedProcedureLoop")
+        guard let routes = source.routes,
+              let selection = try procedureNext(rendered, layout: program.layout, actions: program.behavior.actions,
+                                                registered: routes, selected: [source.action])
+        else { return nil }
         let configuration = procedureCFG(cfgInput.expected, prefix: "ProcedureLoop", theorem: "ActualProcedureLoopConfigurationIsSelected")
         let slot = source.slot + 1
         let name = "SwiftTLA" + module.name + "ConfiguredProcedureLoopProof"
@@ -148,11 +150,11 @@ extension SequentialControlOutputEvidence {
 
         THEOREM ConfiguredProcedureControlUsesTheAuthoredPaths ==
             /\ ProcedureLoopActualCFG = ProcedureLoopExpectedCFG
-            /\ AuthoredProcedureLoopInNext
+            /\ ProcedureNextUsesTheRegisteredRoutes
             /\ (\A worker : AuthoredProcedureLoopInput(worker) => AuthoredProcedureLoopControl(worker))
         \#(bodyResult)
         \#(assertionResult)
-            BY ONLY ActualProcedureLoopConfigurationIsSelected, ActualNextIncludesTheSelectedProcedureLoop,
+            BY ONLY ActualProcedureLoopConfigurationIsSelected, ActualNextPartitionsAllRegisteredProcedureRoutes,
                 ActualProcedureWhileUsesTheAuthoredControl\#(bodyFact)\#(assertionFact), Zenon
 
         ====
@@ -254,17 +256,104 @@ extension SequentialControlOutputEvidence {
         return (invariants, expectedCFG)
     }
 
-    private static func procedureNext(_ rows: [RenderedAction], predicate: String, theorem: String) -> String {
-        let members = rows.map { #"/\ (\#($0.emittedInvocationName) => Next)"# }.joined(separator: "\n    ")
-        let definitions = (["Next"] + rows.compactMap {
-            $0.renderedName == $0.emittedBaseName ? nil : $0.renderedName
-        }).joined(separator: ", ")
+    private static func procedureNext(
+        _ rendered: RenderedSpecification, layout: CompiledLayout, actions: [CompiledAction],
+        registered: [SequentialControlEvidence.ProcedureActionDomain], selected: Set<String>
+    ) throws -> String? {
+        let tla = rendered.tlaBundle.root.tla
+        guard !tla.contains("ProcedureCatalog"), !tla.contains("ProcedureRegisteredInvocations"),
+              !tla.contains("ProcedureRegisteredAction"), !tla.contains("ProcedureRegisteredLabeled"),
+              !tla.contains("ProcedureSelected"), !tla.contains("ProcedureRemainingStep"),
+              !tla.contains("ProcedureNextUsesTheRegisteredRoutes") else { return nil }
+        let declarations = layout.actions.filter { !$0.declaration.name.isEmpty }
+        guard declarations.count == registered.count, declarations.last?.isTermination == true,
+              !selected.isEmpty, selected.isSubset(of: Set(registered.map(\.label))) else { return nil }
+        var expected: [RenderedAction] = []
+        for (declaration, source) in zip(declarations, registered) {
+            guard declaration.declaration.name.utf8.elementsEqual(source.label.utf8),
+                  actions.indices.contains(declaration.id.ordinal) else { return nil }
+            let action = actions[declaration.id.ordinal]
+            guard action.id == declaration.id else { return nil }
+            let formal = declaration.renderedName
+            if let workers = source.workers {
+                guard action.bindings.count == 1, let members = action.bindings.first?.literalMembers else { return nil }
+                let values = try members.map { try $0.rendered(using: layout) }
+                let authored = values.compactMap { value in
+                    workers.firstIndex(of: value).map { workers[$0] }
+                }
+                guard values.count == workers.count, Set(authored) == workers else { return nil }
+                expected += authored.enumerated().map { index, worker in
+                    .init(sourceName: source.label, emittedBaseName: formal, arguments: [worker],
+                          renderedName: "\(formal)__\(index)")
+                }
+            } else {
+                guard action.bindings.isEmpty else { return nil }
+                expected.append(.init(sourceName: source.label, emittedBaseName: formal, arguments: [], renderedName: formal))
+            }
+        }
+        guard let catalog = StraightLineRenderedActionCheck.finiteActionCatalog(
+            in: rendered, frameFields: layout.variables.map(\.formalName), matching: expected)
+        else { return nil }
+        let physical = catalog.proofSource(prefix: "ProcedureCatalog")
+        let selectedLabels = TLAValue.set(Set(selected.map(TLAValue.string)))
+        let observations = expected.indices.map { "ProcedureRegisteredAction\($0 + 1)" }
+        let records = zip(observations, expected).map { name, row in
+            let observed = TLAValue.record(TLARecord([
+                .init("label", .string(row.sourceName)), .init("arguments", .tuple(row.arguments))
+            ]))
+            return "LOCAL \(name) == \(observed)"
+        }.joined(separator: "\n")
+        let invocations = zip(observations, expected).map { name, row in
+            row.arguments.isEmpty ? row.emittedBaseName : "\(row.emittedBaseName)(\(name).arguments[1])"
+        }.joined(separator: ", ")
+        let aliases = expected.filter { !$0.arguments.isEmpty }.map(\.renderedName)
+        let expansion = (["ProcedureCatalogActualActionValues", "ProcedureRegisteredInvocations"] + aliases + observations)
+            .joined(separator: ", ")
         return #"""
-        \#(predicate) ==
-            \#(members)
-        THEOREM \#(theorem) ==
-            \#(predicate)
-            BY ONLY PTL DEF \#(predicate), \#(definitions)
+        \#(physical.dispatch)
+        \#(physical.body)
+
+        ProcedureSelectedLabels == \#(selectedLabels)
+        \#(records)
+        ProcedureRegisteredActions == <<\#(observations.joined(separator: ", "))>>
+        ProcedureRegisteredInvocations == <<\#(invocations)>>
+        LOCAL ProcedureRegisteredLabeled(observed) ==
+            ProcedureCatalogDispatch!CatalogLabeledBranches(
+                ProcedureCatalogActualActionValues, ProcedureRegisteredActions, observed)
+        ProcedureSelectedStep(observed) ==
+            observed.label \in ProcedureSelectedLabels /\ ProcedureRegisteredLabeled(observed)
+        ProcedureRemainingStep(observed) ==
+            observed.label \notin ProcedureSelectedLabels /\ ProcedureRegisteredLabeled(observed)
+        ProcedureNextUsesTheRegisteredRoutes ==
+            /\ ProcedureCatalogActualActionValues = ProcedureRegisteredInvocations
+            /\ (Next <=> (\E observed : ProcedureSelectedStep(observed) \/ ProcedureRemainingStep(observed)))
+            /\ (\A observed : ~(ProcedureSelectedStep(observed) /\ ProcedureRemainingStep(observed)))
+            /\ ([Next]_vars <=> ((\E observed : ProcedureSelectedStep(observed) \/ ProcedureRemainingStep(observed))
+                                \/ ProcedureCatalogActualFrameAfter = ProcedureCatalogActualFrameBefore))
+
+        THEOREM ActualNextPartitionsAllRegisteredProcedureRoutes ==
+            ProcedureNextUsesTheRegisteredRoutes
+        PROOF
+        <1>bindings. ProcedureCatalogActualActionValues = ProcedureRegisteredInvocations
+            BY ONLY IsaM("simp") DEF \#(expansion)
+        <1>dimensions. DOMAIN ProcedureRegisteredInvocations = DOMAIN ProcedureRegisteredActions
+            BY ONLY IsaM("simp") DEF ProcedureRegisteredInvocations, ProcedureRegisteredActions
+        <1>inventory.
+            /\ (Next <=> (\E ProcedureCatalogIndex \in DOMAIN ProcedureCatalogActualActionValues : ProcedureCatalogActualActionValues[ProcedureCatalogIndex]))
+            /\ ([Next]_vars <=> ((\E ProcedureCatalogIndex \in DOMAIN ProcedureCatalogActualActionValues : ProcedureCatalogActualActionValues[ProcedureCatalogIndex])
+                                \/ ProcedureCatalogActualFrameAfter = ProcedureCatalogActualFrameBefore))
+            BY ONLY ProcedureCatalogActualNextUsesTheCompleteLabeledActionCatalog, PTL
+        <1>union. (\E ProcedureCatalogIndex \in DOMAIN ProcedureCatalogActualActionValues : ProcedureCatalogActualActionValues[ProcedureCatalogIndex])
+                   <=> (\E observed : ProcedureRegisteredLabeled(observed))
+            BY ONLY <1>bindings, <1>dimensions, ProcedureCatalogDispatch!CatalogLabeledBranchesComposeTheFiniteUnion, SMT
+                DEF ProcedureRegisteredLabeled
+        <1>split.
+            /\ ((\E observed : ProcedureRegisteredLabeled(observed))
+                <=> (\E observed : ProcedureSelectedStep(observed) \/ ProcedureRemainingStep(observed)))
+            /\ (\A observed : ~(ProcedureSelectedStep(observed) /\ ProcedureRemainingStep(observed)))
+            BY ONLY SMT DEF ProcedureSelectedStep, ProcedureRemainingStep
+        <1>. QED BY ONLY <1>bindings, <1>inventory, <1>union, <1>split, PTL
+            DEF ProcedureNextUsesTheRegisteredRoutes
         """#
     }
 
@@ -499,8 +588,10 @@ extension SequentialControlOutputEvidence {
             assign(stack, "Tail(\(stackBefore))"),
         ] + restored
         func clauses(_ values: [String]) -> String { values.map { #"/\ \#($0)"# }.joined(separator: "\n    ") }
-        let selection = procedureNext(callRows + returnRows, predicate: "AuthoredCallWhileInNext",
-                                      theorem: "ActualNextIncludesTheCallAndReturn")
+        guard let registered = SequentialControlEvidence.procedureActionDomains(in: source),
+              let selection = try procedureNext(rendered, layout: layout, actions: compilation.semantics.behavior.actions,
+                                                registered: registered, selected: [steps[index].label.name, returnRows[0].sourceName])
+        else { return nil }
         let configuration = procedureCFG(cfgInput.expected, prefix: "CallWhile", theorem: "ActualCallWhileConfigurationIsSelected")
         let slot = index + 1
         let name = "SwiftTLA" + module.name + "ConfiguredCallWhileProof"
@@ -562,11 +653,11 @@ extension SequentialControlOutputEvidence {
 
         THEOREM ConfiguredCallWhileUsesTheAuthoredContinuations ==
             /\ CallWhileActualCFG = CallWhileExpectedCFG
-            /\ AuthoredCallWhileInNext
+            /\ ProcedureNextUsesTheRegisteredRoutes
             /\ AuthoredCallWhileSavesContinuation
             /\ AuthoredCallWhileAdvancesOnFalse
             /\ AuthoredCallWhileRestoresContinuation
-            BY ONLY ActualCallWhileConfigurationIsSelected, ActualNextIncludesTheCallAndReturn,
+            BY ONLY ActualCallWhileConfigurationIsSelected, ActualNextPartitionsAllRegisteredProcedureRoutes,
                 ActualCallWhileSavesTheAuthoredContinuation, ActualFalseCallWhileTakesTheAuthoredNextLabel,
                 ActualCallWhileReturnRestoresTheSavedContinuation, PTL
 

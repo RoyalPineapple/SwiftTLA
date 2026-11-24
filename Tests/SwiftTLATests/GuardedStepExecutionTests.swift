@@ -30,6 +30,9 @@ struct GuardedStepExecutionTests {
             #expect(machine.state.value == 1)
             let prepare = GuardedProcesses.Action.procedure_choose_prepare(process: node)
             let body = GuardedProcesses.Action.procedure_choose_body(process: node)
+            for other in GuardedProcesses.Node.allCases where other != node {
+                #expect(try !machine.isEnabled(.procedure_choose_prepare(process: other)))
+            }
             #expect(try machine.violatedInvariants(atLevel: 2).isEmpty)
             let first = try machine.send(prepare)
             #expect(first.after.value == (bodyReady == 1 ? 3 : 1))
@@ -77,6 +80,20 @@ struct GuardedStepExecutionTests {
             let proof = try #require(try SequentialControlOutputEvidence.procedureLoopProof(
                 source: loop, program: frontend.program, rendered: rendered))
             try checkBooleanProcedureGuard(in: declaration)
+            let workers = rendered.actions.filter { $0.sourceName == loop.action }
+            try #require(workers.count == 2)
+            let original = workers.map { row in
+                (header: row.renderedName, definition: "\(row.renderedName) == \(row.emittedInvocationName)")
+            }
+            let changed = zip(original, workers.reversed()).reduce(module.tla) { text, pair in
+                let (alias, other) = pair
+                return text.replacingOccurrences(of: alias.definition + "\n",
+                    with: "\(alias.header) == \(other.emittedInvocationName)\n")
+            }
+            try #require(changed != module.tla)
+            #expect(throws: CompilationDiagnostic.self) {
+                try verifyRenderedActionDeclarations(changed, declarations: original)
+            }
             Attachment.record(Array(authored), named: source.lastPathComponent)
             Attachment.record(Array(module.tla.utf8), named: "\(module.name).tla")
             Attachment.record(Array(cfg.utf8), named: "\(module.name).cfg")
