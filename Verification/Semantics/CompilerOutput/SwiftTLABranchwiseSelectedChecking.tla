@@ -295,8 +295,22 @@ PROOF
     BY ONLY IsaM("auto") DEF ReachesScheduledSuffix, Scheduled, Native, BranchwiseNativeHistory,
         BranchwiseScheduledFailures
 <1>frame. KeepsScheduledFrame
-    BY ONLY IsaM("simp") DEF KeepsScheduledFrame, BranchwiseNativeEdges, BranchwiseNativeSnapshots,
-        BranchwiseScheduledAction, BranchwiseScheduledFrame
+    <2>. DEFINE frameAt(index) == <<BranchwiseNativeSnapshots[index][1], BranchwiseNativeSnapshots[index][2]>>
+    <2>fields. BranchwiseScheduledFrame = {1, 2}
+        BY ONLY DEF BranchwiseScheduledFrame
+    <2>same. /\ frameAt(5) = frameAt(9)
+              /\ frameAt(6) = frameAt(10)
+              /\ frameAt(7) = frameAt(11)
+              /\ frameAt(8) = frameAt(12)
+              /\ frameAt(12) = frameAt(13)
+        BY ONLY IsaM("simp") DEF frameAt, BranchwiseNativeSnapshots
+    <2>classify. \A edge \in BranchwiseNativeEdges :
+        edge[1] = edge[3] \/ <<edge[1] + 1, edge[3] + 1>> \in
+            {<<5, 9>>, <<6, 10>>, <<7, 11>>, <<8, 12>>, <<8, 13>>, <<12, 13>>, <<13, 12>>}
+        BY ONLY IsaM("simp") DEF BranchwiseNativeEdges
+    <2>frame. \A edge \in BranchwiseNativeEdges : frameAt(edge[1] + 1) = frameAt(edge[3] + 1)
+        BY ONLY <2>same, <2>classify, SMT
+    <2>. QED BY ONLY <2>fields, <2>frame, SMT DEF KeepsScheduledFrame, frameAt
 <1>. QED BY ONLY <1>route, <1>suffix, <1>frame, ActualBranchwiseOrderedFailureHistoriesAgree,
     ActualBranchwiseFailedCapturesBlockTheRemainingPhysicalGuards, SMT
 

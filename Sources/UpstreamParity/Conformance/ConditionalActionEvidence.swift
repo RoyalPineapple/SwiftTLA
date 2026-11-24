@@ -230,9 +230,16 @@ package enum ConditionalActionEvidence {
         let nativeComparison = try conditionalNativeComparison(native.predicate, integers: integers)
         let nativeRows = try [native.ifTrue, native.ifFalse].map(conditionalNativeFailureRow)
 
+        let occupied = Set(fields.map(\.formalName)).union([actionLayout.renderedName])
+        func proofBinding(_ preferred: String) -> String {
+            var name = preferred
+            while occupied.contains(name) { name += "_" }
+            return name
+        }
+
         let regions = action.body.orderedAlternativeFailureRegions
         guard regions.count == source.arms.count else { throw invalid }
-        let descriptors = try zip(source.arms, regions).enumerated().map { arm, pair -> TLAValue in
+        let descriptors = try zip(source.arms, regions).enumerated().map { arm, pair -> ConditionalOverflowArm in
             let (writes, region) = pair
             let emitted = arm == 0 ? physical.ifTrue.action : physical.ifFalse.action
             guard writes.count == region.bindings.count, writes.count == emitted.captures.count,
@@ -278,6 +285,7 @@ package enum ConditionalActionEvidence {
                           plan.kinds[node] == .string("read"), plan.reads[node] == reference else { throw invalid }
                 }
             }
+            let latestBeforeAddition = latest
             let routes = TLAValue.function(Dictionary(uniqueKeysWithValues: latest.compactMap { root, reference in
                 let key = TLAValue.string(root)
                 return keys.contains(key) ? (key, reference) : nil
@@ -294,10 +302,76 @@ package enum ConditionalActionEvidence {
             }))
             let targets = writes.map { TLAValue.record(["target": .string($0.target)]) }
 
-            return .record(["prefix": .tuple(prefix.map(\.row)), "inputs": .tuple(operands),
-                            "routes": routes, "values": .tuple(prefix.map(\.value)),
-                            "suffix": .tuple(suffix), "finalRoutes": finalRoutes, "targets": .tuple(targets),
-                            "site": .int(failed.binding.binder.ordinal), "target": .int(failed.binding.target.ordinal)])
+            let position = arm + 1
+            let prefixExpression = "ConditionalPrefix(\(position))"
+            let completed = "ConditionalCompleted(\(position))"
+            var facts = ConditionalArmProofFacts()
+            facts.targets.append("Len(\(prefixExpression)) = \(addition)")
+            for index in prefix.indices {
+                facts.targets.append("\(prefixExpression)[\(index + 1)].target = \(TLAValue.string(writes[index].target))")
+            }
+            for field in integers {
+                let key = field.declaration.name
+                guard let reference = latestBeforeAddition[key] else { throw invalid }
+                facts.routes.append("ConditionalWriter(\(position), \(TLAValue.string(key))) = \(reference)")
+            }
+            facts.readInputs.append("ConditionalSourceRows[\(position)].inputs = \(TLAValue.tuple(operands))")
+            for operand in operands {
+                if let literal = conditionalLiteral([operand]) {
+                    facts.operands.append(literal)
+                    continue
+                }
+                guard let field = try sourceRead(operand, fields: names) else { throw invalid }
+                let root = field.declaration.name
+                let key = TLAValue.string(root)
+                guard let route = latestBeforeAddition[root] else { throw invalid }
+                let routeFact = "Arithmetic!DirectCopyRoutes(ConditionalIntKeys, \(prefixExpression))[Len(\(completed))][\(key)] = \(route)"
+                if !facts.readRoutes.contains(routeFact) { facts.readRoutes.append(routeFact) }
+                let value: TLAValue
+                if let index = prefix.indices.last(where: { writes[$0].target == root }) {
+                    value = prefix[index].value
+                    let inputFact = "\(completed)[\(index + 1)] = \(value)"
+                    if !facts.readInputs.contains(inputFact) { facts.readInputs.append(inputFact) }
+                } else {
+                    value = .constant(field.formalName)
+                }
+                let readFact = "ConditionalLatest(\(position))[\(key)] = \(value)"
+                if !facts.readValues.contains(readFact) { facts.readValues.append(readFact) }
+                facts.operands.append(value)
+            }
+            let captures = prefix.map { String(describing: $0.value) } + [proofBinding("result")]
+                + suffix.map { String(describing: $0) }
+            let outputs = try fields.map { field -> ConditionalOverflowOutput in
+                let fieldName = field.declaration.name
+                guard let reference = latest[fieldName] else { throw invalid }
+                let key = TLAValue.string(fieldName)
+                if reference == .tuple([.string("state"), key]) {
+                    return .init(key: key, reference: reference, slot: nil, expression: field.formalName)
+                }
+                guard case .tuple(let pair) = reference, pair.count == 2, pair[0] == .string("capture"),
+                      case .int(let slot) = pair[1], slot > 0, captures.indices.contains(slot - 1)
+                else { throw invalid }
+                return .init(key: key, reference: reference, slot: slot, expression: captures[slot - 1])
+            }
+            let row = TLAValue.record(["prefix": .tuple(prefix.map(\.row)), "inputs": .tuple(operands),
+                                       "routes": routes, "values": .tuple(prefix.map(\.value)),
+                                       "suffix": .tuple(suffix), "finalRoutes": finalRoutes, "targets": .tuple(targets),
+                                       "site": .int(failed.binding.binder.ordinal),
+                                       "target": .int(failed.binding.target.ordinal)])
+            let beforeFields = prefix.enumerated().map { index, capture in
+                let binding = ordered[index].binding
+                return TLAValue.record(["binding": .int(binding.binder.ordinal), "target": .int(binding.target.ordinal),
+                                        "value": capture.value])
+            }
+            let nativeBefore = prefix.indices.map { index in
+                let binding = ordered[index].binding
+                return TLAValue.record(["binding": .int(binding.binder.ordinal), "target": .int(binding.target.ordinal),
+                                        "slot": .int(index + 1)])
+            }
+            return .init(row: row, prefixRows: .tuple(prefix.map(\.row)), beforeFields: .tuple(beforeFields),
+                         nativeBefore: .tuple(nativeBefore),
+                         site: failed.binding.binder.ordinal, target: failed.binding.target.ordinal, targets: writes.map { .string($0.target) },
+                         prefix: prefix.map(\.value), suffix: suffix, outputs: outputs, proof: facts)
         }
 
         // Names come from the actual output. Reserved names may have collision suffixes.
@@ -343,11 +417,15 @@ package enum ConditionalActionEvidence {
         let proof = conditionalOverflowProof(name: proofName, model: rendered.moduleName,
             history: history, operation: operation, operands: operands, failures: failures,
             aggregate: aggregate, evaluationCheck: selection.checking, ordinal: ordinal,
-            arms: .tuple(descriptors), keys: .set(keys), before: stateCases(integers), state: state,
+            keys: .set(keys), before: stateCases(integers), state: state,
             typed: types.joined(separator: " /\\ "), predicate: source.predicate,
             actionName: actionLayout.renderedName, stateKeys: .set(source.fields),
             fullBefore: stateCases(fields), after: stateCases(fields, primed: true),
-            nativeComparison: nativeComparison, nativeRows: .tuple(nativeRows))
+            nativeComparison: nativeComparison, nativeRows: .tuple(nativeRows.map { conditionalProofRow($0.row) }),
+            nativeInputs: nativeRows.map(\.inputs), nativeWriteOrders: [native.ifTrue.writeOrder, native.ifFalse.writeOrder],
+            comparison: "\(lhs.formalName) < \(rhs.formalName)",
+            primedState: fields.map { "\($0.formalName)'" }.joined(separator: ", "),
+            descriptors: descriptors, proofBinding: proofBinding)
         let configuredName = proofName + "ConfiguredProof"
         let configured = conditionalConfiguredProof(name: configuredName, actionProof: proofName, cfgProof: selection.proof)
         return (proofName, Data(proof.utf8), configuration, (configuredName, Data(configured.utf8)))
@@ -368,7 +446,7 @@ package enum ConditionalActionEvidence {
                        .tuple([.string("state"), .string(rhs)])])
     }
 
-    private static func conditionalNativeFailureRow(_ arm: NativeConditionalArmOutput) throws -> TLAValue {
+    private static func conditionalNativeFailureRow(_ arm: NativeConditionalArmOutput) throws -> (row: TLAValue, inputs: TLAValue) {
         let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
         guard arm.failureCalls.count == 1, let call = arm.failureCalls.first,
               arm.failureAppendSites.count == 1, let slot = arm.failureAppendSites.first,
@@ -392,9 +470,10 @@ package enum ConditionalActionEvidence {
         let before = call.before.enumerated().map { index, binding in
             TLAValue.record(["binding": .int(binding.binding), "target": .int(binding.target), "slot": .int(index + 1)])
         }
-        return .record(["action": .int(call.action), "branch": .int(call.branch), "site": .int(call.site),
+        let inputs = TLAValue.tuple(operands)
+        return (.record(["action": .int(call.action), "branch": .int(call.branch), "site": .int(call.site),
                         "target": .int(call.target), "before": .tuple(before), "values": .tuple(values),
-                        "inputs": .tuple(operands), "suffix": materialization.suffix, "writes": materialization.writes])
+                        "inputs": inputs, "suffix": materialization.suffix, "writes": materialization.writes]), inputs)
     }
 
     private static func conditionalLiteral(_ terms: [TLAValue]) -> TLAValue? {
@@ -413,14 +492,172 @@ package enum ConditionalActionEvidence {
         return declared
     }
 
+    private static func conditionalProofRow(_ row: TLAValue) -> TLAValue {
+        guard case .record(let record) = row,
+              case .tuple(let values)? = record.value(named: "values") else { return row }
+        // Keep large numerals opaque when proving structural facts about the row.
+        let proofValues = values.map { value in
+            value == .int(Int.max) ? TLAValue.constant("ConditionalRowMaximum") : value
+        }
+        return .record(record.replacing(.tuple(proofValues), for: "values"))
+    }
+
+    private struct ConditionalArmProofFacts {
+        var targets: [String] = []
+        var routes: [String] = []
+        var readInputs: [String] = []
+        var readRoutes: [String] = []
+        var readValues: [String] = []
+        var operands: [TLAValue] = []
+    }
+
+    private static func conditionalOperandProof(_ arms: [ConditionalArmProofFacts], operands: [String])
+        -> (writers: String, values: String) {
+        func step(_ name: String, _ facts: [String], _ by: String) -> String {
+            "<1>\(name). /\\ " + facts.joined(separator: "\n    /\\ ") + "\n    " + by
+        }
+        let writers = [
+            step("prefixTargets", arms.flatMap(\.targets), "BY ONLY SMT DEF ConditionalPrefix, ConditionalSourceRows"),
+            step("receiptRoutes", arms.flatMap(\.routes), "BY ONLY SMT DEF ConditionalWriter, ConditionalSourceRows")
+        ].joined(separator: "\n")
+
+        let readRoutes = arms.flatMap(\.readRoutes)
+        let readValues = arms.flatMap(\.readValues)
+        let sourceOperands = arms.enumerated().map { index, arm in "ConditionalOperands(\(index + 1)) = \(TLAValue.tuple(arm.operands))" }
+        let physicalOperands = arms.enumerated().map { index, arm in
+            "ConditionalPhysicalOperands(\(index + 1)) = \(TLAValue.tuple(arm.operands))"
+        }
+        let bounds = arms.flatMap(\.operands).reduce(into: [TLAValue]()) { terms, value in
+            if case .int = value, !terms.contains(value) { terms.append(value) }
+        }.map { "\($0) \\in ConditionalIntValues" }
+        var steps = [
+            step("readInputs", arms.flatMap(\.readInputs),
+                 "BY ONLY SMT DEF ConditionalSourceRows, ConditionalCompleted, ConditionalRowMaximum")
+        ]
+        if !readRoutes.isEmpty {
+            steps.append(step("readRoutes", readRoutes, #"""
+            BY ONLY <1>shape, <1>routes, <1>receiptRoutes, SMT DEF ConditionalIntKeys
+            """#))
+            steps.append(step("readValues", readValues, #"""
+            BY ONLY <1>readInputs, <1>readRoutes, SMT
+                DEF ConditionalLatest, ConditionalBefore, ConditionalIntKeys, Arithmetic!CompletedAssignmentBindings,
+                    Arithmetic!CopyMaterializedState, Arithmetic!CopyReferenceValue
+            """#))
+        }
+        let readBindings = readValues.isEmpty ? "" : ", <1>readValues"
+        steps.append(step("readOperands", sourceOperands,
+            "BY ONLY <1>readInputs\(readBindings), SMT DEF ConditionalOperands, Arithmetic!CopyReferenceValue"))
+        steps.append(step("physicalOperands", physicalOperands,
+            "BY ONLY SMT DEF ConditionalPhysicalOperands, \(operands.joined(separator: ", "))"))
+        if !bounds.isEmpty {
+            steps.append(step("operandBounds", bounds, "BY ONLY SMT DEF ConditionalIntValues"))
+        }
+        let operandBounds = bounds.isEmpty ? "" : ", <1>operandBounds"
+        steps.append(#"""
+        <1>values. \A arm \in ConditionalArms :
+            /\ ConditionalPhysicalOperands(arm) = ConditionalOperands(arm)
+            /\ ConditionalOperands(arm)[1] \in ConditionalIntValues
+            /\ ConditionalOperands(arm)[2] \in ConditionalIntValues
+            BY ONLY <1>shape, <1>readOperands, <1>physicalOperands\#(operandBounds), ConditionalTypedState, SMT
+                DEF ConditionalTypedState
+        """#)
+        return (writers, steps.joined(separator: "\n"))
+    }
+
+    private struct ConditionalOverflowOutput {
+        let key: TLAValue
+        let reference: TLAValue
+        let slot: Int?
+        let expression: String
+    }
+
+    private struct ConditionalOverflowArm {
+        let row: TLAValue
+        let prefixRows: TLAValue
+        let beforeFields: TLAValue
+        let nativeBefore: TLAValue
+        let site: Int
+        let target: Int
+        let targets: [TLAValue]
+        let prefix: [TLAValue]
+        let suffix: [TLAValue]
+        let outputs: [ConditionalOverflowOutput]
+        let proof: ConditionalArmProofFacts
+    }
+
     private static func conditionalOverflowProof(
         name: String, model: String, history: String, operation: [String], operands: [String],
         failures: [String], aggregate: String, evaluationCheck: String, ordinal: Int,
-        arms: TLAValue, keys: TLAValue, before: String,
+        keys: TLAValue, before: String,
         state: String, typed: String, predicate: TLAValue, actionName: String,
-        stateKeys: TLAValue, fullBefore: String, after: String, nativeComparison: TLAValue, nativeRows: TLAValue
+        stateKeys: TLAValue, fullBefore: String, after: String, nativeComparison: TLAValue, nativeRows: TLAValue,
+        nativeInputs: [TLAValue], nativeWriteOrders: [[String]],
+        comparison: String, primedState: String, descriptors: [ConditionalOverflowArm], proofBinding: (String) -> String
     ) -> String {
-        let nativeSuccess = conditionalNativeSuccessProof()
+        let physicalArm = proofBinding("arm")
+        let physicalResult = proofBinding("result")
+        let postState = proofBinding("after")
+        let writes = proofBinding("writes")
+        let defined = proofBinding("defined")
+        let total = proofBinding("total")
+        let routes = proofBinding("finalRef")
+        let targets = proofBinding("targetKeys")
+        let slotValue = proofBinding("value")
+        let writtenRef = proofBinding("writtenRef")
+        func byArm(_ first: String, _ second: String, arm: String = "arm") -> String {
+            first == second ? first : "(IF \(arm) = 1 THEN \(first) ELSE \(second))"
+        }
+        func lengths(_ selector: (ConditionalOverflowArm) -> [TLAValue]) -> String {
+            byArm(String(selector(descriptors[0]).count), String(selector(descriptors[1]).count))
+        }
+        func asTuple(_ selector: (ConditionalOverflowArm) -> [TLAValue]) -> String {
+            byArm(String(describing: TLAValue.tuple(selector(descriptors[0]))),
+                  String(describing: TLAValue.tuple(selector(descriptors[1]))))
+        }
+        func conjuncts(_ formulas: [String], indentation: Int) -> String {
+            formulas.map { "/\\ " + $0 }.joined(separator: "\n" + String(repeating: " ", count: indentation))
+        }
+
+        let writerIntervals = descriptors.map { descriptor in
+            "{\(descriptor.targets.indices.map { String($0 + 1) }.joined(separator: ", "))}"
+        }
+        let keyBinding = proofBinding("key")
+        let finalRoutes = zip(descriptors[0].outputs, descriptors[1].outputs).map { first, second in
+            "\(keyBinding) = \(first.key) -> " + byArm(String(describing: first.reference),
+                String(describing: second.reference), arm: physicalArm)
+        }.joined(separator: " [] ")
+        let writtenValues = descriptors.map { $0.outputs.map(\.expression).joined(separator: ", ") }
+        let result = "ConditionalSourceAdd(arm).value"
+        func materialized(_ expression: String) -> String { expression == physicalResult ? result : expression }
+        let captureSlots = descriptors.enumerated().map { index, descriptor in
+            let equations = descriptor.outputs.compactMap { output -> String? in
+                guard let slot = output.slot else { return nil }
+                return "ConditionalSuccessfulCaptures(arm)[\(slot)] = \(materialized(output.expression))"
+            }
+            return "(arm = \(index + 1) => (\(equations.joined(separator: " /\\ "))))"
+        }
+        let lookupRefs = zip(descriptors[0].outputs, descriptors[1].outputs).map { first, second in
+            "\(writtenRef)(\(first.key)) = " + byArm(String(describing: first.reference), String(describing: second.reference))
+        }
+        let lookupValues = zip(descriptors[0].outputs, descriptors[1].outputs).map { first, second in
+            "\(slotValue)(\(first.key)) = " + byArm(materialized(first.expression), materialized(second.expression))
+        }
+        let nativeSuccess = conditionalNativeSuccessProof(writeOrders: nativeWriteOrders)
+        let operandProof = conditionalOperandProof(descriptors.map(\.proof), operands: operands)
+        let first = descriptors[0]
+        let second = descriptors[1]
+        let wireEquations = descriptors.enumerated().flatMap { index, descriptor in
+            let name = index == 0 ? "firstBefore" : "secondBefore"
+            return descriptor.prefix.indices.map { slot in
+                "ConditionalBeforeFields(\(index + 1))[\(slot + 1)] = \(name)[\(slot + 1)]"
+            }
+        }
+        let wireFields = wireEquations.isEmpty ? "" : #"""
+            <2>fields. \#(conjuncts(wireEquations, indentation: 15))
+                BY ONLY <2>prefix, <2>completed, SMT DEF ConditionalBeforeFields, firstBefore, secondBefore
+
+        """#
+        let wireFieldFacts = wireEquations.isEmpty ? "" : ", <2>fields"
         return #"""
         ---- MODULE \#(name) ----
         EXTENDS \#(model), TLAPS, Sequences
@@ -434,7 +671,8 @@ package enum ConditionalActionEvidence {
         ConditionalStateKeys == \#(stateKeys)
         ConditionalStateBefore == [key \in ConditionalStateKeys |-> CASE \#(fullBefore) [] OTHER -> 0]
         ConditionalStateAfter == [key \in ConditionalStateKeys |-> CASE \#(after) [] OTHER -> 0]
-        ConditionalSourceRows == \#(arms)
+        ConditionalRowMaximum == \#(TLAValue.int(Int.max))
+        ConditionalSourceRows == \#(TLAValue.tuple(descriptors.map { conditionalProofRow($0.row) }))
         ConditionalSourceComparison == \#(predicate)
         ConditionalNativeComparison == \#(nativeComparison)
         ConditionalNativeRows == \#(nativeRows)
@@ -539,25 +777,18 @@ package enum ConditionalActionEvidence {
                          /\ Len(ConditionalPrefix(arm)) = Len(ConditionalCompleted(arm))
                          /\ DOMAIN ConditionalPrefix(arm) = DOMAIN ConditionalCompleted(arm)
             BY ONLY SMT DEF ConditionalArms, ConditionalPrefix, ConditionalCompleted, ConditionalSourceRows
+        \#(operandProof.writers)
         <1>writers. \A arm \in ConditionalArms : \A key \in ConditionalIntKeys :
             Arithmetic!CopyReceiptNamesWriter(ConditionalPrefix(arm), Len(ConditionalPrefix(arm)), key,
                                                ConditionalWriter(arm, key))
-            BY ONLY <1>shape, SMT DEF ConditionalIntKeys, ConditionalPrefix, ConditionalWriter, ConditionalSourceRows,
-                Arithmetic!CopyReceiptNamesWriter, Arithmetic!CopyReceiptOrdinal,
-                Arithmetic!LastDirectCopy, Arithmetic!DirectCopyReference
+            BY ONLY <1>shape, <1>prefixTargets, <1>receiptRoutes, SMT
+                DEF ConditionalIntKeys, Arithmetic!CopyReceiptNamesWriter, Arithmetic!CopyReceiptOrdinal,
+                    Arithmetic!LastDirectCopy, Arithmetic!DirectCopyReference
         <1>routes. \A arm \in ConditionalArms : \A key \in ConditionalIntKeys :
             ConditionalWriter(arm, key) =
                 Arithmetic!DirectCopyRoutes(ConditionalIntKeys, ConditionalPrefix(arm))[Len(ConditionalPrefix(arm))][key]
             BY ONLY <1>shape, <1>writers, Arithmetic!NamedReceiptReferenceUsesTheLastWriter, SMT
-        <1>values. \A arm \in ConditionalArms :
-            /\ ConditionalPhysicalOperands(arm) = ConditionalOperands(arm)
-            /\ ConditionalOperands(arm)[1] \in ConditionalIntValues
-            /\ ConditionalOperands(arm)[2] \in ConditionalIntValues
-            BY ONLY ConditionalTypedState, <1>shape, <1>routes, SMT
-                DEF ConditionalTypedState, ConditionalIntKeys, ConditionalIntValues, ConditionalBefore,
-                    ConditionalOperands, ConditionalLatest, ConditionalWriter, ConditionalPrefix, ConditionalCompleted,
-                    ConditionalPhysicalOperands, ConditionalSourceRows, \#(operands.joined(separator: ", ")),
-                    Arithmetic!CompletedAssignmentBindings, Arithmetic!CopyMaterializedState, Arithmetic!CopyReferenceValue
+        \#(operandProof.values)
         <1>selector. ConditionalSelectedArm \in ConditionalArms
             BY ONLY <1>shape, SMT DEF ConditionalSelectedArm, ConditionalArmFor
         <1>probes. \A arm \in ConditionalArms :
@@ -575,20 +806,54 @@ package enum ConditionalActionEvidence {
                 Arithmetic!InRange
         <1>evaluationSites. ConditionalSelectedEvaluationCheck <=>
                 ~(\E arm \in ConditionalArms : ConditionalPhysicalFailure(arm))
-            BY ONLY <1>shape, SMT DEF ConditionalSelectedEvaluationCheck, \#(evaluationCheck), \#(aggregate),
-                ConditionalPhysicalFailure, \#(failures.joined(separator: ", "))
+            <2>actual. ConditionalSelectedEvaluationCheck <=> ~(ConditionalPhysicalFailure(1) \/ ConditionalPhysicalFailure(2))
+                <3>then. CASE \#(comparison)
+                    BY ONLY <3>then, SMT
+                        DEF ConditionalSelectedEvaluationCheck, \#(evaluationCheck), \#(aggregate),
+                            ConditionalPhysicalFailure, \#(failures.joined(separator: ", "))
+                <3>else. CASE ~(\#(comparison))
+                    BY ONLY <3>else, SMT
+                        DEF ConditionalSelectedEvaluationCheck, \#(evaluationCheck), \#(aggregate),
+                            ConditionalPhysicalFailure, \#(failures.joined(separator: ", "))
+                <3>. QED BY ONLY <3>then, <3>else, SMT
+            <2>. QED BY ONLY <2>actual, <1>shape, SMT DEF ConditionalPhysicalFailure
         <1>evaluationOutcome. ConditionalSelectedEvaluationCheck <=> ConditionalSourceAdd(ConditionalSelectedArm).ok
             BY ONLY <1>evaluationSites, <1>selector, <1>probes, <1>addition, SMT
                 DEF Arithmetic!GeneratedAdd, Arithmetic!Success, Arithmetic!GeneratedOverflow
         <1>evaluation. ConditionalSelectedEvaluationCheck <=> ConditionalSourceHistory = <<>>
             BY ONLY <1>evaluationOutcome, SMT DEF ConditionalSourceHistory
         <1>wire. ActualConditionalHistory = ConditionalPhysicalEvent(1) \o ConditionalPhysicalEvent(2)
-            BY ONLY <1>shape, SMT
-                DEF ActualConditionalHistory, \#(history), ConditionalPhysicalEvent, ConditionalPhysicalRecord,
-                    ConditionalPhysicalFailure,
-                    ConditionalPhysicalOperands, ConditionalPhysicalOperation, ConditionalFailureRecord,
-                    ConditionalBeforeFields, ConditionalEntry, ConditionalActionOrdinal, ConditionalPrefix,
-                    ConditionalCompleted, ConditionalSourceRows, \#((failures + operands + operation).joined(separator: ", "))
+            <2>. DEFINE firstBefore == \#(first.beforeFields)
+                        secondBefore == \#(second.beforeFields)
+            <2>prefix. /\ ConditionalPrefix(1) = \#(first.prefixRows)
+                        /\ ConditionalPrefix(2) = \#(second.prefixRows)
+                BY ONLY SMT DEF ConditionalPrefix, ConditionalSourceRows
+            <2>completed. /\ ConditionalCompleted(1) = \#(TLAValue.tuple(first.prefix))
+                           /\ ConditionalCompleted(2) = \#(TLAValue.tuple(second.prefix))
+                BY ONLY SMT DEF ConditionalCompleted, ConditionalSourceRows, ConditionalRowMaximum
+            <2>domain. /\ DOMAIN ConditionalBeforeFields(1) = 1..\#(first.prefix.count)
+                        /\ DOMAIN ConditionalBeforeFields(2) = 1..\#(second.prefix.count)
+                BY ONLY <2>prefix, SMT DEF ConditionalBeforeFields
+        \#(wireFields)    <2>before. /\ ConditionalBeforeFields(1) = firstBefore /\ ConditionalBeforeFields(2) = secondBefore
+                BY ONLY <2>domain\#(wireFieldFacts), SMT DEF ConditionalBeforeFields, firstBefore, secondBefore
+            <2>. DEFINE firstRecord == [source |-> ConditionalEntry, action |-> \#(ordinal), branch |-> 0,
+                            site |-> \#(first.site), target |-> \#(first.target),
+                            payload |-> <<"integerOverflow", "addition", \#(operands[0])>>, before |-> firstBefore]
+                        secondRecord == [source |-> ConditionalEntry, action |-> \#(ordinal), branch |-> 1,
+                            site |-> \#(second.site), target |-> \#(second.target),
+                            payload |-> <<"integerOverflow", "addition", \#(operands[1])>>, before |-> secondBefore]
+            <2>site. /\ ConditionalSourceRows[1].site = \#(first.site) /\ ConditionalSourceRows[1].target = \#(first.target)
+                      /\ ConditionalSourceRows[2].site = \#(second.site) /\ ConditionalSourceRows[2].target = \#(second.target)
+                BY ONLY SMT DEF ConditionalSourceRows
+            <2>record. /\ ConditionalPhysicalRecord(1) = firstRecord /\ ConditionalPhysicalRecord(2) = secondRecord
+                BY ONLY <2>before, <2>site, SMT DEF ConditionalPhysicalRecord, ConditionalPhysicalOperands, ConditionalPhysicalOperation,
+                    ConditionalFailureRecord, ConditionalActionOrdinal, \#(operation.joined(separator: ", ")), firstRecord, secondRecord
+            <2>raw. ActualConditionalHistory =
+                    (IF \#(failures[0]) THEN <<firstRecord>> ELSE <<>>) \o
+                    (IF \#(failures[1]) THEN <<secondRecord>> ELSE <<>>)
+                BY ONLY SMT DEF ActualConditionalHistory, \#(history), firstRecord, secondRecord,
+                    firstBefore, secondBefore, ConditionalEntry, \#((failures + operands).joined(separator: ", "))
+            <2>. QED BY ONLY <2>raw, <2>record, SMT DEF ConditionalPhysicalEvent, ConditionalPhysicalFailure
         <1>typed. \A arm \in ConditionalArms :
             ConditionalPhysicalEvent(arm) \in Seq({ConditionalPhysicalRecord(arm)})
             BY ONLY EmptySeq, SMT DEF ConditionalPhysicalEvent, Seq
@@ -597,41 +862,146 @@ package enum ConditionalActionEvidence {
             /\ <<>> \o ConditionalPhysicalEvent(arm) = ConditionalPhysicalEvent(arm)
             BY ONLY <1>typed, ConcatEmptySeq, SMT
         <1>rendered. ActualConditionalHistory = ConditionalSourceHistory
-            BY ONLY <1>shape, <1>selector, <1>wire, <1>probes, <1>addition, <1>empty, SMT
-                DEF ConditionalSourceHistory, ConditionalPhysicalEvent, ConditionalPhysicalRecord,
-                    Arithmetic!GeneratedAdd, Arithmetic!Success, Arithmetic!GeneratedOverflow
+            <2>gates. \A arm \in ConditionalArms :
+                ConditionalPhysicalFailure(arm) <=> arm = ConditionalSelectedArm /\ ~ConditionalSourceAdd(arm).ok
+                BY ONLY <1>probes, <1>addition, SMT DEF Arithmetic!GeneratedAdd, Arithmetic!Success, Arithmetic!GeneratedOverflow
+            <2>pairs. \A arm \in ConditionalArms :
+                ConditionalPhysicalOperands(arm) = <<ConditionalPhysicalOperands(arm)[1], ConditionalPhysicalOperands(arm)[2]>>
+                BY ONLY <1>shape, SMT DEF ConditionalPhysicalOperands, \#(operands.joined(separator: ", "))
+            <2>payload. ~ConditionalSourceAdd(ConditionalSelectedArm).ok =>
+                ConditionalSourceAdd(ConditionalSelectedArm).failure =
+                    <<"integerOverflow", "addition", ConditionalPhysicalOperands(ConditionalSelectedArm)>>
+                BY ONLY <1>selector, <1>addition, <2>pairs, SMT
+                    DEF Arithmetic!GeneratedAdd, Arithmetic!Success, Arithmetic!GeneratedOverflow
+            <2>selectedEvent. ConditionalPhysicalEvent(ConditionalSelectedArm) = ConditionalSourceHistory
+                BY ONLY <1>selector, <1>probes, <2>gates, <2>payload, SMT
+                    DEF ConditionalSourceHistory, ConditionalPhysicalEvent, ConditionalPhysicalRecord
+            <2>inactive. \A arm \in ConditionalArms :
+                arm # ConditionalSelectedArm => ConditionalPhysicalEvent(arm) = <<>>
+                BY ONLY <2>gates, SMT DEF ConditionalPhysicalEvent
+            <2>left. CASE ConditionalSelectedArm = 1
+                BY ONLY <2>left, <1>shape, <1>wire, <1>empty, <2>inactive, <2>selectedEvent, SMT
+            <2>right. CASE ConditionalSelectedArm = 2
+                BY ONLY <2>right, <1>shape, <1>wire, <1>empty, <2>inactive, <2>selectedEvent, SMT
+            <2>. QED BY ONLY <1>shape, <1>selector, <2>left, <2>right, SMT
         <1>comparison. ConditionalNativeComparison = ConditionalSourceComparison
             BY ONLY SMT DEF ConditionalNativeComparison, ConditionalSourceComparison
         <1>selected. ConditionalNativeSelectedArm = ConditionalSelectedArm
             BY ONLY <1>comparison, SMT DEF ConditionalNativeSelectedArm, ConditionalSelectedArm
         <1>nativePrefix. \A arm \in ConditionalArms : ConditionalNativeRows[arm].values = ConditionalCompleted(arm)
-            BY ONLY <1>shape, SMT DEF ConditionalNativeRows, ConditionalCompleted, ConditionalSourceRows
+            <2>columns. /\ ConditionalNativeRows[1].values = ConditionalCompleted(1)
+                        /\ ConditionalNativeRows[2].values = ConditionalCompleted(2)
+                BY ONLY IsaM("auto") DEF ConditionalNativeRows, ConditionalCompleted, ConditionalSourceRows
+            <2>. QED BY ONLY <2>columns, <1>shape, SMT
         <1>nativeRoutes. \A arm \in ConditionalArms : \A position \in 1..2 :
             LET input == ConditionalSourceRows[arm].inputs[position]
             IN /\ input[1] \in {"literal", "state"}
                /\ (input[1] = "state" => input[2] \in ConditionalIntKeys)
                /\ ConditionalNativeRows[arm].inputs[position] =
                     IF input[1] = "state" THEN ConditionalWriter(arm, input[2]) ELSE input
-            BY ONLY <1>shape, SMT DEF ConditionalNativeRows, ConditionalSourceRows, ConditionalIntKeys, ConditionalWriter
+            <2>. DEFINE agrees(a, p) ==
+                        LET input == ConditionalSourceRows[a].inputs[p]
+                        IN /\ input[1] \in {"literal", "state"}
+                           /\ (input[1] = "state" => input[2] \in ConditionalIntKeys)
+                           /\ ConditionalNativeRows[a].inputs[p] =
+                                   IF input[1] = "state" THEN ConditionalWriter(a, input[2]) ELSE input
+            <2>inputs. \#(conjuncts(nativeInputs.enumerated().map { "ConditionalNativeRows[\($0.offset + 1)].inputs = \($0.element)" }, indentation: 17))
+                BY ONLY IsaM("simp") DEF ConditionalNativeRows
+            <2>columns. /\ agrees(1, 1) /\ agrees(1, 2) /\ agrees(2, 1) /\ agrees(2, 2)
+                BY ONLY <1>readInputs, <1>receiptRoutes, <2>inputs, SMT DEF agrees, ConditionalIntKeys
+            <2>all. \A arm \in ConditionalArms : \A position \in 1..2 : agrees(arm, position)
+                BY ONLY <1>shape, <2>columns, SMT
+            <2>. QED BY ONLY <2>all DEF agrees
         <1>nativeOperands. \A arm \in ConditionalArms :
             ConditionalNativeOperands(arm) = ConditionalOperands(arm)
             <2>. TAKE arm \in ConditionalArms
+            <2>latest. \A key \in ConditionalIntKeys :
+                ConditionalLatest(arm)[key] = Arithmetic!CopyReferenceValue(
+                    ConditionalBefore, ConditionalCompleted(arm), ConditionalWriter(arm, key))
+                BY ONLY (arm \in ConditionalArms), <1>shape, <1>routes, SMT
+                    DEF ConditionalLatest, Arithmetic!CompletedAssignmentBindings, Arithmetic!CopyMaterializedState
             <2>pointwise. \A position \in 1..2 :
                 ConditionalNativeOperand(arm, position) = ConditionalOperands(arm)[position]
-                BY ONLY (arm \in ConditionalArms), <1>shape, <1>nativePrefix, <1>nativeRoutes, <1>routes, SMT
-                    DEF ConditionalNativeOperand, ConditionalOperands, ConditionalLatest, ConditionalSourceRows,
-                        Arithmetic!CompletedAssignmentBindings, Arithmetic!CopyMaterializedState,
-                        Arithmetic!CopyReferenceValue
+                <3>. TAKE position \in 1..2
+                <3>. DEFINE input == ConditionalSourceRows[arm].inputs[position]
+                            native == ConditionalNativeRows[arm].inputs[position]
+                            value == Arithmetic!CopyReferenceValue(ConditionalLatest(arm), <<>>, input)
+                <3>source. ConditionalOperands(arm)[position] = value
+                    BY ONLY (position \in 1..2), SMT DEF ConditionalOperands, value, input
+                <3>role. /\ input[1] \in {"literal", "state"}
+                         /\ (input[1] = "state" => input[2] \in ConditionalIntKeys)
+                         /\ native = IF input[1] = "state" THEN ConditionalWriter(arm, input[2]) ELSE input
+                    BY ONLY (arm \in ConditionalArms), (position \in 1..2), <1>nativeRoutes, SMT DEF input, native
+                <3>raw. ConditionalNativeOperand(arm, position) =
+                    Arithmetic!CopyReferenceValue(ConditionalBefore, ConditionalCompleted(arm), native)
+                    BY ONLY (arm \in ConditionalArms), <1>nativePrefix, SMT DEF ConditionalNativeOperand, native
+                <3>literal. CASE input[1] = "literal"
+                    BY ONLY <3>literal, <3>role, <3>raw, <3>source, SMT DEF value, Arithmetic!CopyReferenceValue
+                <3>read. CASE input[1] = "state"
+                    <4>bound. ConditionalLatest(arm)[input[2]] =
+                        Arithmetic!CopyReferenceValue(ConditionalBefore, ConditionalCompleted(arm), native)
+                        BY ONLY <3>role, <3>read, <2>latest, SMT
+                    <4>. QED BY ONLY <3>read, <4>bound, <3>raw, <3>source, SMT DEF value, Arithmetic!CopyReferenceValue
+                <3>. QED BY ONLY <3>role, <3>literal, <3>read, SMT
             <2>. QED BY ONLY <2>pointwise, SMT DEF ConditionalNativeOperands, ConditionalOperands
         <1>nativeAdd. \A arm \in ConditionalArms : ConditionalNativeAdd(arm) = ConditionalSourceAdd(arm)
-            BY ONLY <1>nativeOperands, <1>values, SMT
-                DEF ConditionalNativeAdd, ConditionalSourceAdd, ConditionalIntValues,
-                    Arithmetic!InRange, Arithmetic!GeneratedOverflow, Arithmetic!SourceOverflow
+            <2>. TAKE arm \in ConditionalArms
+            <2>. DEFINE a == ConditionalOperands(arm)[1]
+                        b == ConditionalOperands(arm)[2]
+                        sum == a + b
+            <2>bounds. /\ a \in Int /\ b \in Int /\ sum \in Int
+                BY ONLY (arm \in ConditionalArms), <1>values, SMT DEF a, b, sum, ConditionalIntValues
+            <2>inputs. ConditionalNativeOperands(arm) = ConditionalOperands(arm)
+                BY ONLY (arm \in ConditionalArms), <1>nativeOperands, SMT
+            <2>adequate. Arithmetic!InRange(sum) <=>
+                ~(sum < \#(TLAValue.int(Int.min)) \/
+                  sum > \#(TLAValue.int(Int.max)))
+                BY ONLY <2>bounds, SMT DEF Arithmetic!InRange
+            <2>. QED BY ONLY <2>adequate, <2>inputs, SMT DEF a, b, sum, ConditionalNativeAdd, ConditionalSourceAdd,
+                    Arithmetic!SourceAdd, Arithmetic!GeneratedOverflow, Arithmetic!SourceOverflow
         <1>nativeWire. \A arm \in ConditionalArms : \A payload :
             ConditionalNativeRecord(arm, payload) = ConditionalFailureRecord(arm, payload)
-            BY ONLY <1>shape, SMT DEF ConditionalNativeRecord, ConditionalFailureRecord, ConditionalBeforeFields,
-                ConditionalNativeRows, ConditionalSourceRows, ConditionalPrefix, ConditionalCompleted,
-                ConditionalActionOrdinal
+            <2>. DEFINE matches(a) ==
+                    LET row == ConditionalNativeRows[a]
+                        src == ConditionalSourceRows[a]
+                    IN /\ row.action = ConditionalActionOrdinal /\ row.branch = a-1
+                       /\ row.site = src.site /\ row.target = src.target
+                       /\ DOMAIN row.before = DOMAIN ConditionalPrefix(a)
+                       /\ \A i \in DOMAIN row.before :
+                              /\ row.before[i].binding = ConditionalPrefix(a)[i].binding
+                              /\ row.before[i].target = ConditionalPrefix(a)[i].field
+                              /\ row.before[i].slot = i
+            <2>header. /\ ConditionalNativeRows[1].action = ConditionalActionOrdinal
+                        /\ ConditionalNativeRows[2].action = ConditionalActionOrdinal
+                        /\ ConditionalNativeRows[1].branch = 1 - 1
+                        /\ ConditionalNativeRows[2].branch = 2 - 1
+                        /\ ConditionalNativeRows[1].site = ConditionalSourceRows[1].site
+                        /\ ConditionalNativeRows[2].site = ConditionalSourceRows[2].site
+                        /\ ConditionalNativeRows[1].target = ConditionalSourceRows[1].target
+                        /\ ConditionalNativeRows[2].target = ConditionalSourceRows[2].target
+                BY ONLY IsaM("simp") DEF ConditionalNativeRows, ConditionalSourceRows, ConditionalActionOrdinal
+            <2>prefix. /\ ConditionalPrefix(1) = \#(first.prefixRows)
+                        /\ ConditionalPrefix(2) = \#(second.prefixRows)
+                BY ONLY IsaM("simp") DEF ConditionalPrefix, ConditionalSourceRows
+            <2>recorded. /\ ConditionalNativeRows[1].before = \#(first.nativeBefore)
+                          /\ ConditionalNativeRows[2].before = \#(second.nativeBefore)
+                BY ONLY IsaM("simp") DEF ConditionalNativeRows
+            <2>both. matches(1) /\ matches(2)
+                BY ONLY <2>header, <2>prefix, <2>recorded, SMT DEF matches
+            <2>every. \A a \in ConditionalArms : matches(a)
+                BY ONLY <1>shape, <2>both, SMT
+            <2>. TAKE arm \in ConditionalArms
+            <2>. TAKE payload
+            <2>. DEFINE row == ConditionalNativeRows[arm]
+                        obs == [i \in DOMAIN row.before |->
+                                LET capture == row.before[i]
+                                IN [binding |-> capture.binding, target |-> capture.target, value |-> row.values[capture.slot]]]
+            <2>columns. matches(arm)
+                BY ONLY (arm \in ConditionalArms), <2>every, SMT
+            <2>frames. obs = ConditionalBeforeFields(arm)
+                BY ONLY (arm \in ConditionalArms), <2>columns, <1>nativePrefix, SMT
+                    DEF matches, row, obs, ConditionalBeforeFields
+            <2>. QED BY ONLY <2>columns, <2>frames, SMT DEF matches, row, obs, ConditionalNativeRecord, ConditionalFailureRecord
         <1>native. ConditionalNativeHistory(TRUE) = ConditionalSourceHistory
             BY ONLY <1>selector, <1>selected, <1>nativeAdd, <1>nativeWire, SMT
                 DEF ConditionalNativeHistory, ConditionalSourceHistory
@@ -639,9 +1009,26 @@ package enum ConditionalActionEvidence {
             LET row == ConditionalSourceRows[arm]
             IN /\ Len(row.targets) \in Nat
                /\ Arithmetic!CopyReceiptNamesWriter(row.targets, Len(row.targets), key, row.finalRoutes[key])
-            BY ONLY <1>shape, SMT DEF ConditionalSourceRows, ConditionalStateKeys,
-                Arithmetic!CopyReceiptNamesWriter, Arithmetic!CopyReceiptOrdinal,
-                Arithmetic!LastDirectCopy, Arithmetic!DirectCopyReference
+            <2>. TAKE arm \in ConditionalArms
+            <2>. TAKE key \in ConditionalStateKeys
+            <2>. DEFINE row == ConditionalSourceRows[arm]
+                          \#(routes)(\#(physicalArm), \#(keyBinding)) == CASE \#(finalRoutes) [] OTHER -> 0
+                          \#(targets) == \#(asTuple(\.targets))
+            <2>cases. arm = 1 \/ arm = 2
+                BY ONLY <1>shape, (arm \in ConditionalArms), SMT
+            <2>length. Len(row.targets) = \#(lengths(\.targets))
+                BY ONLY <2>cases, SMT DEF row, ConditionalSourceRows
+            <2>interval. 1..Len(row.targets) = \#(byArm(writerIntervals[0], writerIntervals[1]))
+                BY ONLY <2>cases, <2>length, SMT
+            <2>route. row.finalRoutes[key] = \#(routes)(arm, key)
+                BY ONLY <2>cases, (key \in ConditionalStateKeys), SMT
+                    DEF row, ConditionalSourceRows, ConditionalStateKeys, \#(routes)
+            <2>targets. \A i \in 1..Len(row.targets) : row.targets[i].target = \#(targets)[i]
+                BY ONLY <2>cases, <2>interval, SMT DEF row, ConditionalSourceRows, \#(targets)
+            <2>. QED BY ONLY <2>cases, <2>length, <2>interval, <2>route, <2>targets,
+                (key \in ConditionalStateKeys), SMT
+                DEF row, ConditionalStateKeys, \#(routes), \#(targets), Arithmetic!CopyReceiptNamesWriter,
+                    Arithmetic!CopyReceiptOrdinal, Arithmetic!LastDirectCopy, Arithmetic!DirectCopyReference
         <1>routesAreComplete. \A arm \in ConditionalArms : \A key \in ConditionalStateKeys :
             LET row == ConditionalSourceRows[arm]
             IN row.finalRoutes[key] = Arithmetic!DirectCopyRoutes(ConditionalStateKeys, row.targets)[Len(row.targets)][key]
@@ -650,9 +1037,18 @@ package enum ConditionalActionEvidence {
             /\ ConditionalCompleted(arm) \in Seq(Int \cup BOOLEAN)
             /\ <<ConditionalSourceAdd(arm).value>> \in Seq(Int \cup BOOLEAN)
             /\ ConditionalSourceRows[arm].suffix \in Seq(Int \cup BOOLEAN)
-            BY ONLY <1>shape, <1>values, <1>addition, SeqDef, SMT
-                DEF ConditionalSourceRows, ConditionalCompleted, ConditionalIntValues,
-                    Arithmetic!GeneratedAdd, Arithmetic!Success, Arithmetic!GeneratedOverflow
+            <2>. TAKE arm \in ConditionalArms
+            <2>slots. /\ ConditionalCompleted(arm) \in [1..\#(lengths(\.prefix)) -> (Int \cup BOOLEAN)]
+                      /\ ConditionalSourceRows[arm].suffix \in [1..\#(lengths(\.suffix)) -> (Int \cup BOOLEAN)]
+                BY ONLY <1>shape, (arm \in ConditionalArms), SMT
+                    DEF ConditionalSourceRows, ConditionalCompleted, ConditionalRowMaximum
+            <2>sum. ConditionalSourceAdd(arm).value \in Int
+                BY ONLY (arm \in ConditionalArms), <1>values, <1>addition, SMT
+                    DEF ConditionalIntValues, Arithmetic!GeneratedAdd,
+                        Arithmetic!Success, Arithmetic!GeneratedOverflow
+            <2>middle. <<ConditionalSourceAdd(arm).value>> \in [1..1 -> (Int \cup BOOLEAN)]
+                BY ONLY <2>sum, SMT
+            <2>. QED BY ONLY <2>slots, <2>middle, SeqDef, SMT
         <1>captureValues. \A arm \in ConditionalArms :
             LET prefix == ConditionalCompleted(arm)
                 suffix == ConditionalSourceRows[arm].suffix
@@ -667,20 +1063,54 @@ package enum ConditionalActionEvidence {
                    /\ (Next <=> ConditionalPhysicalStep)
             BY ONLY SMT DEF vars, ConditionalEntry, Next, ConditionalPhysicalStep
         <1>step. ConditionalPhysicalStep <=> ConditionalSourceStep
-            BY ONLY ConditionalTypedState, <1>shape, <1>values, <1>addition, <1>probes,
-                <1>selector, <1>routesAreComplete, <1>captureValues, SMT
-                DEF ConditionalPhysicalStep, \#(actionName), ConditionalSourceStep,
-                    ConditionalSelectedArm, ConditionalArmFor, ConditionalSourceComparison,
-                    ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter, ConditionalBefore, ConditionalIntKeys,
-                    ConditionalSuccessfulState, ConditionalCompleted, ConditionalSourceRows,
-                    ConditionalPhysicalOperands, \#(operands.joined(separator: ", ")),
-                    Arithmetic!CopyMaterializedState, Arithmetic!CopyReferenceValue,
-                    Arithmetic!GeneratedAdd, Arithmetic!GeneratedAddDefined, Arithmetic!SmallAddOperands,
+            <2>. DEFINE \#(postState) == <<\#(primedState)>>
+                          \#(writes)(\#(physicalArm), \#(physicalResult)) ==
+                              IF \#(physicalArm) = 1 THEN \#(postState) = <<\#(writtenValues[0])>>
+                                         ELSE \#(postState) = <<\#(writtenValues[1])>>
+                          \#(defined)(\#(physicalArm)) == Arithmetic!GeneratedAddDefined(
+                              ConditionalPhysicalOperands(\#(physicalArm))[1], ConditionalPhysicalOperands(\#(physicalArm))[2])
+                          \#(total)(\#(physicalArm)) == ConditionalPhysicalOperands(\#(physicalArm))[1] + ConditionalPhysicalOperands(\#(physicalArm))[2]
+            <2>select. (ConditionalSelectedArm = 1) <=> \#(comparison)
+                BY ONLY SMT DEF ConditionalSelectedArm, ConditionalArmFor, ConditionalSourceComparison,
+                    ConditionalBefore, ConditionalIntKeys, Arithmetic!CopyReferenceValue
+            <2>physical. ConditionalPhysicalStep <=>
+                             \#(defined)(ConditionalSelectedArm) /\ \#(writes)(ConditionalSelectedArm, \#(total)(ConditionalSelectedArm))
+                BY ONLY <1>shape, <1>selector, <2>select, SMT DEF ConditionalPhysicalStep, \#(actionName),
+                    \#(postState), \#(writes), \#(defined), \#(total), ConditionalPhysicalOperands, \#(operands.joined(separator: ", ")),
+                    Arithmetic!GeneratedAddDefined, Arithmetic!SmallAddOperands
+            <2>result. \A arm \in ConditionalArms :
+                /\ (ConditionalSourceAdd(arm).ok <=> \#(defined)(arm))
+                /\ (\#(defined)(arm) => ConditionalSourceAdd(arm).value = \#(total)(arm))
+                BY ONLY <1>addition, SMT DEF \#(defined), \#(total), Arithmetic!GeneratedAdd,
                     Arithmetic!Success, Arithmetic!GeneratedOverflow
+            <2>state. \A arm \in ConditionalArms :
+                (ConditionalStateAfter = ConditionalSuccessfulState(arm)) <=> \#(writes)(arm, ConditionalSourceAdd(arm).value)
+                <3>. TAKE arm \in ConditionalArms
+                <3>cases. arm = 1 \/ arm = 2
+                    BY ONLY (arm \in ConditionalArms), <1>shape, SMT
+                <3>geometry. /\ ConditionalCompleted(arm) = \#(asTuple(\.prefix))
+                             /\ ConditionalSourceRows[arm].suffix = \#(asTuple(\.suffix))
+                    BY ONLY <3>cases, SMT DEF ConditionalCompleted, ConditionalSourceRows, ConditionalRowMaximum
+                <3>slots. \#(conjuncts(captureSlots, indentation: 18))
+                    BY ONLY (arm \in ConditionalArms), <3>cases, <3>geometry, <1>captureValues, SMT
+                <3>. DEFINE \#(writtenRef)(\#(keyBinding)) == ConditionalSourceRows[arm].finalRoutes[\#(keyBinding)]
+                              \#(slotValue)(\#(keyBinding)) == Arithmetic!CopyReferenceValue(
+                                  ConditionalStateBefore, ConditionalSuccessfulCaptures(arm), \#(writtenRef)(\#(keyBinding)))
+                <3>refs. \#(conjuncts(lookupRefs, indentation: 17))
+                    BY ONLY <3>cases, SMT DEF \#(writtenRef), ConditionalSourceRows
+                <3>values. \#(conjuncts(lookupValues, indentation: 19))
+                    BY ONLY <3>cases, <3>refs, <3>slots, SMT DEF \#(slotValue), ConditionalStateBefore, ConditionalStateKeys,
+                        Arithmetic!CopyReferenceValue
+                <3>. QED BY ONLY <3>values, SMT DEF \#(writes), \#(postState), ConditionalStateKeys, ConditionalStateAfter,
+                    ConditionalSuccessfulState, Arithmetic!CopyMaterializedState, \#(slotValue), \#(writtenRef)
+            <2>. QED BY ONLY <1>selector, <2>physical, <2>result, <2>state, SMT
+                DEF ConditionalSourceStep
         <1>noSuccessor. ~ConditionalSourceAdd(ConditionalSelectedArm).ok => ~ENABLED Next
-            BY ONLY <1>step, <1>layout, ExpandENABLED, SMT
-                DEF Next, \#(actionName), ConditionalPhysicalStep, ConditionalSourceStep,
-                    ConditionalStateAfter, ConditionalSuccessfulState
+            <2>then. ConditionalPhysicalFailure(1) => ~ENABLED Next
+                BY ONLY ExpandENABLED, SMT DEF Next, \#(actionName), ConditionalPhysicalFailure, \#(failures[0])
+            <2>else. ConditionalPhysicalFailure(2) => ~ENABLED Next
+                BY ONLY ExpandENABLED, SMT DEF Next, \#(actionName), ConditionalPhysicalFailure, \#(failures[1])
+            <2>. QED BY ONLY <1>evaluationOutcome, <1>evaluationSites, <1>shape, <2>then, <2>else, SMT
         \#(nativeSuccess.steps)
         <1>. QED BY ONLY <1>rendered, <1>native, <1>evaluation, <1>layout, <1>step, <1>nativeSuccess, <1>noSuccessor, PTL
 

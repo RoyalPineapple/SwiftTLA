@@ -1407,9 +1407,45 @@ private func checkNativeValidationActionRoute(_ functions: [FunctionDeclSyntax])
 
 /// The checked visitor has one continuation per arm. It reaches the successor
 /// wrapper only after all captures and ordered _Updates merges have succeeded.
-func conditionalNativeSuccessProof() -> (definitions: String, steps: String) {
+func conditionalNativeSuccessProof(writeOrders: [[String]]) -> (definitions: String, steps: String) {
+    let arms = writeOrders.indices.map { $0 + 1 }
+    let suffixSteps = arms.map { arm in
+        #"""
+            <2>suffix\#(arm). ConditionalNativeRows[\#(arm)].suffix = ConditionalSourceRows[\#(arm)].suffix
+                BY ONLY IsaM("simp") DEF ConditionalNativeRows, ConditionalSourceRows
+        """#
+    }.joined(separator: "\n")
+    let suffixFacts = arms.map { "<2>suffix\($0)" }.joined(separator: ", ")
+    let writeRoleSteps = zip(arms, writeOrders).map { arm, order in
+        let renderedKeys = TLAValue.tuple(order.map(TLAValue.string))
+        let keySet = "{\(order.map { String(describing: TLAValue.string($0)) }.joined(separator: ", "))}"
+        let matches = order.indices.map { index in
+            "raw[\(index + 1)][2] = routes[keys[\(index + 1)]]"
+        }
+        let matchBody = matches.isEmpty ? "TRUE" : matches.joined(separator: " /\\ ")
+        let matchProof = matches.isEmpty
+            ? "OBVIOUS"
+            : #"BY ONLY <2>arm\#(arm), IsaM("simp"), SMT DEF raw, keys, routes, ConditionalNativeRows, ConditionalSourceRows"#
+        return #"""
+            <2>arm\#(arm). CASE arm = \#(arm)
+                <3>. DEFINE keys == \#(renderedKeys)
+                            targets == \#(keySet)
+                <3>domain. Len(raw) = \#(order.count) /\ DOMAIN raw = 1..\#(order.count)
+                            /\ (\A i \in 1..\#(order.count) : raw[i][1] = keys[i])
+                    BY ONLY <2>arm\#(arm), IsaM("auto"), SMT DEF raw, keys, ConditionalNativeRows
+                <3>keySet. targets = {keys[i] : i \in 1..\#(order.count)} /\ targets \subseteq ConditionalStateKeys
+                    BY ONLY SMT DEF keys, targets, ConditionalStateKeys
+                <3>matches. \#(matchBody)
+                    \#(matchProof)
+                <3>untouched. \A key \in ConditionalStateKeys \ targets : routes[key] = <<"state", key>>
+                    BY ONLY <2>arm\#(arm), IsaM("auto"), SMT DEF routes, targets, ConditionalSourceRows, ConditionalStateKeys
+                <3>. QED BY ONLY <3>domain, <3>keySet, <3>matches, <3>untouched, SMT
+        """#
+    }.joined(separator: "\n")
+    let writeRoleCases = arms.map { "<2>arm\($0)" }.joined(separator: ", ")
+
     let definitions = #"""
-    ConditionalMerge == INSTANCE NativePendingWriteFold
+    ConditionalMerge == INSTANCE NativePendingWriteFold WITH Vars <- ConditionalStateKeys, Values <- ConditionalIntValues \cup BOOLEAN, ActionLabels <- {ConditionalActionOrdinal}, FailureValues <- {}, NoFailure <- <<>>
     ConditionalNativeCompleted(arm) ==
         LET row == ConditionalNativeRows[arm]
         IN row.values \o <<ConditionalNativeAdd(arm).value>> \o row.suffix
@@ -1429,7 +1465,8 @@ func conditionalNativeSuccessProof() -> (definitions: String, steps: String) {
     let steps = #"""
     <1>nativeSuffix. \A arm \in ConditionalArms :
         ConditionalNativeRows[arm].suffix = ConditionalSourceRows[arm].suffix
-        BY ONLY <1>shape, SMT DEF ConditionalNativeRows, ConditionalSourceRows
+    \#(suffixSteps)
+        <2>. QED BY ONLY <1>shape, \#(suffixFacts), SMT
     <1>nativeCompleted. \A arm \in ConditionalArms :
         ConditionalNativeCompleted(arm) = ConditionalSuccessfulCaptures(arm)
         BY ONLY <1>nativePrefix, <1>nativeSuffix, <1>nativeAdd, SMT
@@ -1443,7 +1480,11 @@ func conditionalNativeSuccessProof() -> (definitions: String, steps: String) {
                   /\ raw[i][2] = routes[raw[i][1]]
            /\ \A key \in ConditionalStateKeys :
                   (\A i \in DOMAIN raw : raw[i][1] # key) => routes[key] = <<"state", key>>
-        BY ONLY <1>shape, SMT DEF ConditionalNativeRows, ConditionalSourceRows, ConditionalStateKeys
+        <2>. TAKE arm \in ConditionalArms
+        <2>. DEFINE raw == ConditionalNativeRows[arm].writes
+                    routes == ConditionalSourceRows[arm].finalRoutes
+    \#(writeRoleSteps)
+        <2>. QED BY ONLY (arm \in ConditionalArms), <1>shape, \#(writeRoleCases), SMT DEF raw, routes
     <1>nativeMaterialized. \A arm \in ConditionalArms :
         ConditionalMerge!NativePendingMergesEmit(
             ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter,
