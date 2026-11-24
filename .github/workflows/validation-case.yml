@@ -275,6 +275,7 @@ jobs:
     env:
       CASE_ID: ${{ inputs.case_id }}
       FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+      SWIFTTLA_UPSTREAM_REFERENCE_CACHE: ${{ github.workspace }}/.build/upstream-reference-cache
       FINITE_GRAPH_INPUT_ROOT: ${{ github.workspace }}/.build/finite-graph-tools/inputs
     steps:
       - uses: actions/checkout@v5
@@ -343,6 +344,20 @@ jobs:
             rmdir "$(dirname "$cached")"
           fi
           echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
+      - name: Restore original TLC executions independently of the Swift port
+        if: steps.upstream-reuse.outputs.reuse != 'true'
+        id: reference-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .build/upstream-reference-cache
+          key: upstream-reference-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.case_id }}-${{ hashFiles('Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/UpstreamParity/Conformance/UpstreamReferenceCache.swift', 'Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Verification/FiniteGraph/toolchain.json') }}-${{ steps.upstream-key.outputs.key }}
+          restore-keys: upstream-reference-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.case_id }}-${{ hashFiles('Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/UpstreamParity/Conformance/UpstreamReferenceCache.swift', 'Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Verification/FiniteGraph/toolchain.json') }}-
+      - name: Count restored reference captures
+        if: steps.upstream-reuse.outputs.reuse != 'true'
+        id: reference-count
+        run: |
+          mkdir -p "$SWIFTTLA_UPSTREAM_REFERENCE_CACHE"
+          echo "count=$(find "$SWIFTTLA_UPSTREAM_REFERENCE_CACHE" -name reference-origin.json | wc -l)" >> "$GITHUB_OUTPUT"
       - name: Identify reusable generated TLC oracle
         if: inputs.native_enabled
         id: oracle-key
@@ -427,6 +442,18 @@ jobs:
           jq -n --arg key '${{ steps.upstream-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
             --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
             > ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
+      - name: Detect newly captured original executions
+        if: always() && steps.reference-count.outcome == 'success' && steps.reference-cache.outputs.cache-hit != 'true'
+        id: reference-growth
+        run: |
+          if (( $(find "$SWIFTTLA_UPSTREAM_REFERENCE_CACHE" -name reference-origin.json | wc -l) > ${{ steps.reference-count.outputs.count }} )); then
+            echo "save=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/cache/save@v4
+        if: always() && steps.reference-growth.outputs.save == 'true'
+        with:
+          path: .build/upstream-reference-cache
+          key: ${{ steps.reference-cache.outputs.cache-primary-key }}
       - name: Recompare retained complete TLC evidence
         if: steps.upstream-reuse.outputs.reuse == 'true'
         run: .build/validation-bin/tlc-validate upstream recompare --case "$CASE_ID" --evidence .build/validation-evidence/upstream

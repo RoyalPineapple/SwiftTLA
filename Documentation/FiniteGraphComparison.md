@@ -66,6 +66,41 @@ machine scenarios are declared in the SwiftTLA corpus. Both lists are
 enumerated by the validator, so a newly declared case enters the appropriate
 hosted matrix without a manually maintained workflow list.
 
+## Port an upstream example locally
+
+Capture the original module with its published configuration before writing the
+Swift model. Use the pinned tools prepared by `scripts/setup-finite-graph-tools.sh`
+and the same `tlc-validate` executable as CI. For example, from the repo root,
+with the original Peterson sources staged in `$original`:
+
+```sh
+export FINITE_GRAPH_TOOL_ROOT="$PWD/.build/finite-graph-tools"
+export SWIFTTLA_UPSTREAM_REFERENCE_CACHE="$PWD/.build/upstream-reference-cache"
+tlc-validate reference capture --case peterson-safety \
+  --module "$original/Peterson.tla" --config "$original/Peterson.cfg" \
+  --output "$run/original" "Peterson=$original/Lock.tla" \
+  "Peterson=$original/TLAPS.tla" "Lock=$original/TLAPS.tla"
+```
+
+Once the Swift port has a native case, run it after each edit. Use a new output
+directory for each run and keep the same reference cache.
+
+```sh
+tlc-validate native run --case peterson-safety --output "$run/native" --maximum-states 10000000
+tlc-validate reference compare --case peterson-safety \
+  --module "$original/Peterson.tla" --config "$original/Peterson.cfg" \
+  --output "$run/compare" --native "$run/native" "Peterson=$original/Lock.tla" \
+  "Peterson=$original/TLAPS.tla" "Lock=$original/TLAPS.tla"
+```
+
+The comparison requires a cached capture for those exact inputs. For complete
+graphs it compares initial states, reachable states, and labeled transitions.
+Counts help locate a mismatch. The existing native and upstream parity commands
+check selected property verdicts separately. The upstream job also uses this
+cache for original TLC executions. Changing the Swift port can reuse them.
+Changing a reference module, configuration, tool pin, or TLC invocation requires
+a new capture. Cached captures retain their original process records and logs.
+
 ## Hosted admission
 
 The `Independent Validation Pipeline` workflow runs on pull requests. For a
