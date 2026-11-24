@@ -44,7 +44,7 @@ package struct ChangRobertsModel: Sendable {
                             msgs[successor].set(msgs[successor].inserting(Id[node]))
                         }
                     }
-                    While(Step.n1, true) {
+                    Loop(Step.n1) {
                         With(msgs[node]) { candidate in
                             msgs[node].set(msgs[node].removing(candidate))
                             If(state[node] == ProcessState.lost || candidate < Id[node]) {

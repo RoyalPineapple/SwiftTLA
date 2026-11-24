@@ -38,7 +38,7 @@ package struct ConsensusModel: Sendable {
                     }
                 }
 
-                While(Step.choose, true) {
+                Loop(Step.choose) {
                     choose()
                 }
 

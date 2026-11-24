@@ -228,7 +228,7 @@ package struct VoteProofModel: Sendable {
                 }
 
                 Each(Acceptor.all) { selfID in
-                    While(Step.acc, true) {
+                    Loop(Step.acc) {
                         With(ballots) { ballot in
                             Either {
                                 increaseMaxBal(ballot.expr, selfID.expr)

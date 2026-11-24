@@ -116,7 +116,7 @@ package struct TLCMCModel: Sendable {
                     }
                 }
 
-                While(Step.trace, true) {
+                Loop(Step.trace) {
                     If(initialStates.contains(counterexample.expr.head())) {
                         Assert(counterexample.expr.count > 0)
                         Stop()

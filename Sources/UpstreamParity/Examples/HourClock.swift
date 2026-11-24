@@ -10,7 +10,7 @@ package struct HourClockModel: Sendable {
             let HCini = Invariant()
             let Clock = Algorithm(scoped: { scope in
                 let hr = scope.sharedVar(initiallyIn: 1...12)
-                While(Step.HCnxt, true) {
+                Loop(Step.HCnxt) {
                     If(hr != 12) {
                         hr += 1
                     } else: {
