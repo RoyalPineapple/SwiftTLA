@@ -93,8 +93,8 @@ public struct ClockModel: Sendable {
                 }
 
                 ValidTime {
-                    (0...23).contains(hour) &&
-                    (0...59).contains(minute) &&
+                    (0...23).contains(hour)
+                    (0...59).contains(minute)
                     (0...59).contains(second)
                 }
             }
@@ -105,6 +105,8 @@ public struct ClockModel: Sendable {
 ```
 
 Each successful `send(.tick)` runs the loop body once. The next tick needs another send.
+
+Every condition in an invariant must hold. Here, all three lines form the single property `.ValidTime`.
 
 The ranges in `sharedVar(initiallyIn:)` describe the allowed **starting values**.
 `ValidTime` asks a separate question about **reached values**. For example,
