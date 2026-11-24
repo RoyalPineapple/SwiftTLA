@@ -484,7 +484,105 @@ struct ChoiceEvaluationFailureTests {
                     #expect(diagnostic.path.hasPrefix("native.action.part.")
                         || diagnostic.path.hasPrefix("native.action.alternative."))
                 }
+                try checkOverwrittenBranchCapture(declaration)
             }
+        }
+    }
+
+    private func checkOverwrittenBranchCapture(_ source: StructDeclSyntax) throws {
+        let authored = source.description
+        let survivingWrite = "Assign(selected, to: 0)"
+        let displacedWrite = "Assign(selected, to: 4)"
+        try #require(authored.components(separatedBy: survivingWrite).count == 2)
+        let overwritten = authored.replacingOccurrences(of: survivingWrite,
+            with: "\(displacedWrite)\n                    \(survivingWrite)")
+        let variant = try #require(Parser.parse(source: overwritten).statements.first?.item.as(StructDeclSyntax.self))
+        let compiled = try TLASpecVerifier.parseAndVerify(variant)
+        let action = try #require(compiled.program.behavior.actions.first)
+        guard case .or(let left, let right) = action.body else {
+            Issue.record("The compiler lost the authored alternative")
+            return
+        }
+        func binders(_ branch: CompiledActionExpr) -> [BinderID] {
+            var pending = branch
+            var bindings: [BinderID] = []
+            while case .define(let binding, _, let next) = pending {
+                bindings.append(binding)
+                pending = next
+            }
+            return bindings
+        }
+        let earlier = binders(left)
+        let later = binders(right)
+        try #require(earlier.count == 3 && later.count == 2)
+        let selected = try #require(compiled.program.layout.variables.first { $0.declaration.name == "selected" }).id
+        let result = try #require(compiled.program.layout.variables.first { $0.declaration.name == "result" }).id
+        let branches = action.body.orderedAlternativeFailureBranches
+        #expect(branches.map { $0.bindings.map(\.binder) } == [earlier, later])
+        #expect(branches.map { $0.bindings.map(\.target) } == [[selected, selected, result], [selected, result]])
+
+        // Both variants publish the same final frame. Only the first capture's target differs.
+        try #require(overwritten.components(separatedBy: displacedWrite).count == 2)
+        let otherTarget = overwritten.replacingOccurrences(of: displacedWrite, with: "Assign(result, to: 4)")
+        let otherVariant = try #require(Parser.parse(source: otherTarget).statements.first?.item.as(StructDeclSyntax.self))
+        let otherCompiled = try TLASpecVerifier.parseAndVerify(otherVariant)
+        #expect(otherCompiled.program.identity != compiled.program.identity)
+
+        let first = earlier[0]
+        let second = earlier[1]
+        let site = earlier[2].ordinal
+        let firstName = try #require(compiled.program.binderNames[first])
+        let secondName = try #require(compiled.program.binderNames[second])
+        let firstLocal = "_\(firstName)_\(first.ordinal)"
+        let secondLocal = "_\(secondName)_\(second.ordinal)"
+        var emitter = NativeSwiftEmitter(model: compiled)
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates\(action.id.ordinal)"
+        })
+        let nativeEvent = "branch: 0, site: \(site), target: \(result.ordinal), before: "
+            + "[(binding: \(first.ordinal), target: \(selected.ordinal), value: \(firstLocal)), "
+            + "(binding: \(second.ordinal), target: \(selected.ordinal), value: \(secondLocal))], reason: failure"
+        let nativeTokens = visitor.tokens(viewMode: .sourceAccurate).map(\.text).joined(separator: " ")
+        let eventTokens = Parser.parse(source: "_record(\(nativeEvent))")
+            .tokens(viewMode: .sourceAccurate).filter { $0.tokenKind != .endOfFile }
+            .map(\.text).dropFirst(2).dropLast().joined(separator: " ")
+        #expect(nativeTokens.contains(eventTokens))
+        #expect(nativeTokens.contains("let \(firstLocal) = 4"))
+        #expect(nativeTokens.contains("let \(secondLocal) = 0"))
+
+        let module = try compiled.program.renderModule()
+        let otherModule = try otherCompiled.program.renderModule()
+        let relation = try #require(module.renderedModuleSource.split(separator: "\n").first { $0.hasPrefix("pick == ") })
+        #expect(otherModule.renderedModuleSource.split(separator: "\n").first { $0.hasPrefix("pick == ") } == relation)
+        let history = try #require(module.renderedModuleSource.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAActionFailureHistory\(action.id.ordinal) == ")
+        })
+        let divisionReceipt = "branch |-> 0, site |-> \(site), target |-> \(result.ordinal), "
+            + "payload |-> <<\"divisionByZero\">>, before |-> (LET \(firstName) == 4 IN (LET \(secondName) == 0 IN "
+            + "<<[binding |-> \(first.ordinal), target |-> \(selected.ordinal), value |-> \(firstName)], "
+            + "[binding |-> \(second.ordinal), target |-> \(selected.ordinal), value |-> \(secondName)]>>))"
+        #expect(history.contains(divisionReceipt))
+
+        let parts = try emitter.actionFunctions(action)
+        func verify(_ member: DeclSyntax) throws {
+            try verifyGeneratedActionWriteOutput(member, action: action.body, program: compiled.program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+        }
+        try verify(visitor)
+
+        let firstCapture = "(binding: \(first.ordinal), target: \(selected.ordinal), value: \(firstLocal))"
+        let wrongCapture = "(binding: \(first.ordinal), target: \(result.ordinal), value: \(firstLocal))"
+        try #require(firstCapture != wrongCapture)
+        try #require(visitor.description.components(separatedBy: firstCapture).count == 2)
+        let tampered = Parser.parse(source: visitor.description.replacingOccurrences(of: firstCapture, with: wrongCapture))
+        try #require(!tampered.hasError)
+        let wrongVisitor = try #require(tampered.statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verify(wrongVisitor)
+            Issue.record("The generated failure history accepted the wrong earlier assignment target")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.failures."))
+            #expect(diagnostic.actual == "missing or changed assignment failure observation")
         }
     }
 

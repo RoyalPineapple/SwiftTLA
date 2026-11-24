@@ -23,7 +23,8 @@ enum AlgorithmLowerer {
     }
     private static let processBinding = CompilerBindingSymbol.process
 
-    static func lowerAtomicStep(_ step: AtomicStep) throws -> (action: ActionExpr, assertions: [StateExpr]) {
+    static func lowerAtomicStep(_ step: AtomicStep) throws
+        -> (action: ActionExpr, assertions: [StateExpr], displacedAssignmentTargets: [String: String]) {
         try step.requireIndependentStep()
         var usedBindings = step.model.statements.algorithmScopeNames
         var ordinal = 0
@@ -34,8 +35,12 @@ enum AlgorithmLowerer {
                 if usedBindings.insert(name).inserted { return name }
             }
         }
-        return lower(scheduleAtomicStatements(step.model.statements, binding: binding),
-            processLocalRoots: nil, procedures: [], owner: nil, nextLabel: nil, control: nil)
+        var displacedTargets: [String: String] = [:]
+        let scheduled = scheduleAtomicStatements(step.model.statements, binding: binding) {
+            displacedTargets[$0] = $1
+        }
+        let lowered = lower(scheduled, processLocalRoots: nil, procedures: [], owner: nil, nextLabel: nil, control: nil)
+        return (lowered.action, lowered.assertions, displacedTargets)
     }
 
     private static func lowered(_ specification: TLASpec) -> TLASpec {
@@ -697,16 +702,12 @@ enum AlgorithmLowerer {
             } else {
                 body = statements.action
             }
-            actions.append(NamedAction(
-                name: label,
-                body: try ActionNormalization.checkedComplete(
-                    needsProgramCounter
-                        ? .and(.guard_(.equal(.programCounter, control.location(atomic.label.name))), body)
-                        : body,
-                    variables: variables,
-                    at: "actions.\(label).normalization"
-                )
-            ))
+            let guarded = needsProgramCounter
+                ? .and(.guard_(.equal(.programCounter, control.location(atomic.label.name))), body)
+                : body
+            actions.append(try NamedAction(name: label, body: guarded, isTermination: false,
+                displacedAssignmentTargets: atomic.displacedAssignmentTargets)
+                .completingFrame(variables: variables, preservingOuterDomain: false))
             let atStep = StateExpr.equal(.programCounter, control.location(atomic.label.name))
             let enabled = atomic.loopCondition.map { StateExpr.and(atStep, $0) } ?? atStep
             generatedAssertionInvariants += statements.assertions.map {

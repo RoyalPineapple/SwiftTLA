@@ -1245,7 +1245,8 @@ struct CompiledLowerer {
         }
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
-        let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
+        let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope,
+            displacedAssignmentTargets: action.displacedAssignmentTargets)
         try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
             body: body, layout: layout)
         try body.verifyBranchwiseContinuation(at: "actions.\(action.name).body")
@@ -2155,7 +2156,8 @@ struct CompiledLowerer {
     private mutating func lower(
         _ action: ActionExpr,
         at path: String,
-        scope: BindingScope
+        scope: BindingScope,
+        displacedAssignmentTargets: [String: String]
     ) throws -> CompiledActionExpr {
         var tasks = [ActionLoweringTask.expression(action, path: path, scope: scope)]
         var lowered: [CompiledActionExpr] = []
@@ -2190,8 +2192,13 @@ struct CompiledLowerer {
                         on: &tasks
                     )
                 case .define(let name, let value, let body):
-                    let nested = try bind([name], at: "\(taskPath).binder", scope: scope)
-                    let binder = try bound(name, in: nested, at: taskPath)
+                    let displacedTarget = try displacedAssignmentTargets[name].map { target in
+                        try variable(named: target, at: "\(taskPath).assign")
+                    }
+                    let binder = try allocateBinder(name, in: scope, at: "\(taskPath).binder",
+                        displacedAssignmentTarget: displacedTarget)
+                    var nested = scope
+                    nested.values[name] = binder
                     let compiledValue = try lower(value, at: "\(taskPath).value", scope: scope)
                     scheduleAction(
                         [(body, "\(taskPath).body")],
@@ -2483,7 +2490,8 @@ struct CompiledLowerer {
         _ name: String,
         exactRenderedName: String? = nil,
         in scope: BindingScope,
-        at path: String
+        at path: String,
+        displacedAssignmentTarget: VariableID? = nil
     ) throws -> BinderID {
         guard isFormalIdentifier(name) else {
             throw CompilationDiagnostic(
@@ -2495,7 +2503,7 @@ struct CompiledLowerer {
                 nextSafeAction: "Use an ASCII identifier beginning with a letter or underscore."
             )
         }
-        let binder = BinderID(ordinal: nextBinderOrdinal)
+        let binder = BinderID(ordinal: nextBinderOrdinal, displacedAssignmentTarget: displacedAssignmentTarget)
         nextBinderOrdinal += 1
         knownBinderNames.insert(name)
         var preferredRenderedName = exactRenderedName ?? tlaDeclarationStem(name)

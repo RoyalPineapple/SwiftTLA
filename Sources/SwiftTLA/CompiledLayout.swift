@@ -4,6 +4,16 @@ package struct VariableID: Hashable, Sendable {
 
 package struct BinderID: Hashable, Sendable {
     package let ordinal: Int
+    // Only assignment definitions can retain a target displaced from their terminal frame.
+    let displacedAssignmentTarget: VariableID?
+
+    init(ordinal: Int, displacedAssignmentTarget: VariableID? = nil) {
+        self.ordinal = ordinal
+        self.displacedAssignmentTarget = displacedAssignmentTarget
+    }
+
+    package static func == (lhs: Self, rhs: Self) -> Bool { lhs.ordinal == rhs.ordinal }
+    package func hash(into hasher: inout Hasher) { hasher.combine(ordinal) }
 }
 
 package struct CheckingRegisterID: Hashable, Sendable {

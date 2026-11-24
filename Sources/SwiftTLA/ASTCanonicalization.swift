@@ -61,16 +61,22 @@ func alphaKey(_ action: ActionExpr) -> String {
     alphaKey(action, bindingNames: [])
 }
 
-func alphaKey(_ action: ActionExpr, bindingNames: [String], preservingEvaluation: Bool = false) -> String {
+func alphaKey(_ action: ActionExpr, bindingNames: [String], preservingEvaluation: Bool = false,
+              displacedAssignmentTargets: [String: String] = [:]) -> String {
     var next = 0
     var environment: [String: String] = [:]
     for name in bindingNames {
         let (_, extended) = fresh(name, environment: environment, next: &next)
         environment = extended
     }
-    if preservingEvaluation { return actionKey(action, environment: environment, next: &next) }
+    if preservingEvaluation {
+        return actionKey(action, environment: environment, next: &next, displacedAssignmentTargets: displacedAssignmentTargets)
+    }
     let branches = ActionNormalization.branches(of: action) { semanticStateBranches($0).map(ActionExpr.guard_) }
-    return "or[\(branches.map { actionKey($0, environment: environment, next: &next) }.joined(separator: ","))]"
+    let keys = branches.map {
+        actionKey($0, environment: environment, next: &next, displacedAssignmentTargets: displacedAssignmentTargets)
+    }
+    return "or[\(keys.joined(separator: ","))]"
 }
 
 /// Splits only disjunctions that occur inside a Boolean guard. Swift can group
@@ -152,7 +158,8 @@ private enum ActionAssociativeOperation: String {
     case or
 }
 
-private func actionKey(_ action: ActionExpr, environment: [String: String], next: inout Int) -> String {
+private func actionKey(_ action: ActionExpr, environment: [String: String], next: inout Int,
+                       displacedAssignmentTargets: [String: String]) -> String {
     var tasks = [ActionKeyTask.expression(action, environment: environment)]
     var parts: [String] = []
     while let task = tasks.popLast() {
@@ -181,7 +188,8 @@ private func actionKey(_ action: ActionExpr, environment: [String: String], next
             case .define(let variable, let value, let body):
                 let valueKey = state(value)
                 let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-                tasks.append(.finish(1) { "define(\(canonical),\(valueKey),\($0[0]))" })
+                let displaced = displacedAssignmentTargets[variable].map { "," + typeKeyNode("assignmentTarget", [$0]) } ?? ""
+                tasks.append(.finish(1) { "define(\(canonical),\(valueKey),\($0[0])\(displaced))" })
                 tasks.append(.expression(body, environment: extended))
             case .ifElse(let condition, let then, let otherwise):
                 let conditionKey = state(condition)

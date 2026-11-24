@@ -17,12 +17,48 @@ public indirect enum ActionExpr: Hashable, Sendable {
 }
 
 extension NamedAction {
+    func completingFrame(variables: [NamedVar], preservingOuterDomain: Bool = true) throws -> NamedAction {
+        var displaced = displacedAssignmentTargets
+        func complete(_ action: ActionExpr) throws -> ActionExpr {
+            try ActionNormalization.checkedComplete(action, variables: variables,
+                at: "actions.\(name).normalization") { previous, fresh in
+                if let target = displaced[previous] { displaced[fresh] = target }
+            }
+        }
+        let completed: ActionExpr
+        if preservingOuterDomain, case .existsAction(let binder, let domain, let member) = body {
+            completed = try .existsAction(binder, domain, complete(member))
+        } else {
+            completed = try complete(body)
+        }
+        // These receipts describe the nullary alternative visitor only.
+        if !displaced.isEmpty {
+            if case .or = completed {
+                // Normalization can drop a statically blocked remainder containing these bindings.
+                let retainedNames = completed.scopeNames
+                displaced = displaced.filter { retainedNames.contains($0.key) }
+            } else {
+                displaced = [:]
+            }
+        }
+        return NamedAction(name: name, body: completed, bindings: bindings, isTermination: isTermination,
+            displacedAssignmentTargets: displaced)
+    }
+
     package func substitutingVariables(_ replacements: [String: StateExpr]) -> NamedAction {
         guard sourceIssue == nil, !replacements.isEmpty else { return self }
         let scoped = bindings.reversed().reduce(body) { body, binding in
             .existsAction(binding.name, binding.domain, body)
         }
-        var substituted = scoped.substitutingVariables(replacements)
+        var displaced = displacedAssignmentTargets
+        var substituted: ActionExpr
+        if displaced.isEmpty {
+            substituted = scoped.substitutingVariables(replacements)
+        } else {
+            substituted = scoped.substitutingVariables(replacements, avoidingBinders: scoped.scopeNames) { previous, fresh in
+                if let target = displaced[previous] { displaced[fresh] = target }
+            }
+        }
         let bindings = bindings.map { binding -> ActionBinding in
             guard case .existsAction(let name, let domain, let body) = substituted else {
                 preconditionFailure("Substitution must preserve action binding scopes")
@@ -30,7 +66,8 @@ extension NamedAction {
             substituted = body
             return ActionBinding(name: name, domain: domain, generatedSwiftType: binding.generatedSwiftType)
         }
-        return NamedAction(name: name, body: substituted, bindings: bindings, isTermination: isTermination)
+        return NamedAction(name: name, body: substituted, bindings: bindings, isTermination: isTermination,
+            displacedAssignmentTargets: displaced)
     }
 }
 
@@ -40,22 +77,32 @@ extension ActionExpr {
     }
 
     package func substitutingVariables(_ replacements: [String: StateExpr]) -> ActionExpr {
+        substitutingVariables(replacements, avoidingBinders: []) { _, _ in }
+    }
+
+    fileprivate func substitutingVariables(_ replacements: [String: StateExpr], avoidingBinders: Set<String>,
+                                           renamingDefinition: (String, String) -> Void) -> ActionExpr {
         guard !replacements.isEmpty else { return self }
         func state(_ expression: StateExpr) -> StateExpr {
             StateExpr.substituteVariables(replacements, in: expression)
         }
         func action(_ expression: ActionExpr) -> ActionExpr {
-            expression.substitutingVariables(replacements)
+            expression.substitutingVariables(replacements, avoidingBinders: avoidingBinders,
+                renamingDefinition: renamingDefinition)
         }
         func scope(_ binder: String, _ body: ActionExpr) -> (String, ActionExpr) {
             let scoped = replacements.filter { $0.key != binder }
             guard !scoped.isEmpty else { return (binder, body) }
             let freeVariables = Set(scoped.values.flatMap(\.freeVariableNames))
-            guard freeVariables.contains(binder) else { return (binder, body.substitutingVariables(scoped)) }
+            guard freeVariables.contains(binder) else {
+                return (binder, body.substitutingVariables(scoped, avoidingBinders: avoidingBinders,
+                    renamingDefinition: renamingDefinition))
+            }
             let fresh = StateExpr.freshBoundName(binder, avoiding: body.scopeNames
-                .union(freeVariables).union(scoped.keys).union([binder]))
+                .union(freeVariables).union(scoped.keys).union([binder]).union(avoidingBinders))
             let renamed = body.substitutingVariable(binder, with: .variable(fresh))
-            return (fresh, renamed.substitutingVariables(scoped))
+            return (fresh, renamed.substitutingVariables(scoped, avoidingBinders: avoidingBinders,
+                renamingDefinition: renamingDefinition))
         }
         switch self {
         case .assign(let target, let value): return .assign(target, state(value))
@@ -66,6 +113,7 @@ extension ActionExpr {
             return .existsAction(name, state(values), body)
         case .define(let binder, let value, let body):
             let (name, body) = scope(binder, body)
+            if name != binder { renamingDefinition(binder, name) }
             return .define(name, state(value), body)
         case .ifElse(let condition, let then, let otherwise): return .ifElse(state(condition), action(then), action(otherwise))
         case .and(let lhs, let rhs): return .and(action(lhs), action(rhs))

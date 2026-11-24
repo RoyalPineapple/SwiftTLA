@@ -14,7 +14,8 @@ enum ActionNormalization {
         case definition(String, StateExpr)
     }
 
-    static func complete(_ action: ActionExpr, variables: [NamedVar]) -> ActionExpr {
+    static func complete(_ action: ActionExpr, variables: [NamedVar],
+                         renamingDefinition: (String, String) -> Void = { _, _ in }) -> ActionExpr {
         let targets = variables.map(actionTarget(for:))
         var unavailable = action.scopeNames
         var tasks = [CompletionTask.visit([action], [])]
@@ -58,6 +59,7 @@ enum ActionNormalization {
                             : body.substitutingVariable(binder, with: .variable(fresh))
                         if !prefix.isEmpty { tasks.append(.prepend(prefix)) }
                         if case .define = node {
+                            if fresh != binder { renamingDefinition(binder, fresh) }
                             tasks.append(.definition(fresh, domain))
                         } else {
                             tasks.append(.existential(fresh, domain))
@@ -90,8 +92,9 @@ enum ActionNormalization {
         return results[0]
     }
 
-    static func checkedComplete(_ action: ActionExpr, variables: [NamedVar], at path: String) throws -> ActionExpr {
-        let normalized = complete(action, variables: variables)
+    static func checkedComplete(_ action: ActionExpr, variables: [NamedVar], at path: String,
+                                renamingDefinition: (String, String) -> Void = { _, _ in }) throws -> ActionExpr {
+        let normalized = complete(action, variables: variables, renamingDefinition: renamingDefinition)
         try StraightLineAssignmentCheck.verifyNormalization(action, normalized: normalized,
             variables: variables, at: path)
         return normalized

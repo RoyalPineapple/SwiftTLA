@@ -2223,7 +2223,7 @@ private struct CanonicalSpecificationEncoder {
     private func canonicalAction(_ action: NamedAction) -> String {
         return node("action", [
             action.name,
-            canonicalActionExpression(action.body),
+            canonicalActionExpression(action.body, displacedAssignmentTargets: action.displacedAssignmentTargets),
             canonicalList(action.bindings.map {
                 node("action-binding", [
                     $0.name,
@@ -2260,10 +2260,11 @@ private struct CanonicalSpecificationEncoder {
 
     private func canonicalActionExpression(
         _ expression: ActionExpr,
-        bindingNames: [String] = []
+        bindingNames: [String] = [],
+        displacedAssignmentTargets: [String: String] = [:]
     ) -> String {
         node("action", [alphaKey(expression, bindingNames: bindingNames,
-            preservingEvaluation: preservesActionEvaluation)])
+            preservingEvaluation: preservesActionEvaluation, displacedAssignmentTargets: displacedAssignmentTargets)])
     }
 
     private func canonicalTemporal(_ expression: TemporalCondition<StateExpr>) -> String {

@@ -68,8 +68,7 @@ enum RenderedEvaluationFailureKind {
     case emptySequence
 }
 
-// An observation is available only when every lexical binding has one actual
-// frame assignment to that value. This excludes writes optimized out of the frame.
+// Each lexical value has an assignment target from its scheduled occurrence or the final frame.
 package struct AlternativeFailureBranch {
     package let body: CompiledActionExpr
     package let bindings: [(binder: BinderID, target: VariableID)]
@@ -119,8 +118,14 @@ package extension CompiledActionExpr {
                     return nil
                 }
             }
-            let mapped = bindings.compactMap { binder in targets[binder].map { (binder, $0) } }
-            guard mapped.count == bindings.count, Set(bindings).count == mapped.count else { return nil }
+            guard Set(bindings).count == bindings.count else { return nil }
+            var mapped: [(binder: BinderID, target: VariableID)] = []
+            for binder in bindings {
+                let terminal = targets[binder]
+                guard let target = binder.displacedAssignmentTarget ?? terminal,
+                      terminal == nil || terminal == target else { return nil }
+                mapped.append((binder, target))
+            }
             return .init(body: body, bindings: mapped)
         }
         guard case .or(let left, let right) = self, let first = branch(left), let second = branch(right),

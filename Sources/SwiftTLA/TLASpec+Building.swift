@@ -144,7 +144,8 @@ extension TLASpec {
       let lowered = try AlgorithmLowerer.lowerAtomicStep(step)
       try StraightLineAssignmentCheck.verify(step, lowered: lowered.action,
         stateRoots: Set(variables.map(\.name)))
-      actions.append(.init(name: step.model.label.name, body: lowered.action, bindings: step.bindings))
+      actions.append(.init(name: step.model.label.name, body: lowered.action, bindings: step.bindings,
+        isTermination: false, displacedAssignmentTargets: lowered.displacedAssignmentTargets))
       invariants += lowered.assertions.enumerated().map {
         NamedStatePredicate(name: "__step_assert_\(step.model.label.name)_\($0.offset)",
           body: step.bindings.reversed().reduce($0.element) { body, binding in
@@ -196,26 +197,7 @@ extension TLASpec {
       }
     }
 
-    actions = try actions.map { action in
-      let body: ActionExpr
-      if case .existsAction(let binder, let domain, let memberBody) = action.body {
-        body = .existsAction(
-          binder,
-          domain,
-          try ActionNormalization.checkedComplete(memberBody, variables: variables,
-            at: "actions.\(action.name).normalization")
-        )
-      } else {
-        body = try ActionNormalization.checkedComplete(action.body, variables: variables,
-          at: "actions.\(action.name).normalization")
-      }
-      return NamedAction(
-        name: action.name,
-        body: body,
-        bindings: action.bindings,
-        isTermination: action.isTermination
-      )
-    }
+    actions = try actions.map { try $0.completingFrame(variables: variables) }
 
     for action in actions {
       try ActionNormalization.verifyComplete(action.body, variables: variables,

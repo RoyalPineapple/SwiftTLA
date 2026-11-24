@@ -137,6 +137,7 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
   public let bindings: [ActionBinding]
   let sourceIssue: SourceModelIssue?
   let isTermination: Bool
+  let displacedAssignmentTargets: [String: String]
 
   public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
     self.init(name: name, body: body, bindings: bindings, isTermination: false)
@@ -148,11 +149,17 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     bindings: [ActionBinding] = [],
     isTermination: Bool
   ) {
+    self.init(name: name, body: body, bindings: bindings, isTermination: isTermination, displacedAssignmentTargets: [:])
+  }
+
+  init(name: String, body: ActionExpr, bindings: [ActionBinding] = [], isTermination: Bool,
+       displacedAssignmentTargets: [String: String]) {
     self.name = name
     self.body = body
     self.bindings = bindings
     self.sourceIssue = Self.bindingIssue(action: name, bindings: bindings)
     self.isTermination = isTermination
+    self.displacedAssignmentTargets = bindings.isEmpty ? displacedAssignmentTargets : [:]
   }
 
   private static func bindingIssue(action: String, bindings: [ActionBinding]) -> SourceModelIssue? {

@@ -140,8 +140,12 @@ package struct AlgorithmModel: Sendable {
                     if retainingScalarCopyRoutes { scalarCopies[step.label.name] = plan.receipt }
                     return .step(.init(label: step.label, statements: plan.statements, loopCondition: step.loopCondition))
                 }
-                return .step(.init(label: step.label, statements: scheduleAtomicStatements(step.statements, binding: binding),
-                    loopCondition: step.loopCondition))
+                var displacedTargets: [String: String] = [:]
+                let statements = scheduleAtomicStatements(step.statements, binding: binding) {
+                    displacedTargets[$0] = $1
+                }
+                return .step(.init(label: step.label, statements: statements, loopCondition: step.loopCondition,
+                    displacedAssignmentTargets: displacedTargets))
             case .process(let process):
                 return .process(.init(typeName: process.typeName, name: process.name, domain: process.domain,
                     fairness: process.fairness, components: process.components.map(component),
@@ -670,11 +674,18 @@ package struct AlgorithmStepModel: Sendable {
     /// A labeled PlusCal `while` loop. A true condition returns to `label`; a
     /// false condition advances to the following step.
     package let loopCondition: StateExpr?
+    let displacedAssignmentTargets: [String: String]
 
     package init(label: AlgorithmLabelModel, statements: [AlgorithmStatementModel], loopCondition: StateExpr? = nil) {
+        self.init(label: label, statements: statements, loopCondition: loopCondition, displacedAssignmentTargets: [:])
+    }
+
+    init(label: AlgorithmLabelModel, statements: [AlgorithmStatementModel], loopCondition: StateExpr?,
+         displacedAssignmentTargets: [String: String]) {
         self.label = label
         self.statements = statements
         self.loopCondition = loopCondition
+        self.displacedAssignmentTargets = displacedAssignmentTargets
     }
 }
 
@@ -808,7 +819,8 @@ private func scheduleDirectScalarCopies(
 }
 
 func scheduleAtomicStatements(
-    _ statements: [AlgorithmStatementModel], binding: () -> String
+    _ statements: [AlgorithmStatementModel], binding: () -> String,
+    displace: (String, String) -> Void
 ) -> [AlgorithmStatementModel] {
     // Snapshot each write where it occurs, then publish one assignment per
     // root at the end of the atomic branch. PlusCal labels require that form.
@@ -830,6 +842,9 @@ func scheduleAtomicStatements(
         case .set(let target, let value):
             let name = binding()
             let updated = expression(target.assigning(value))
+            if case .variable(let capture)? = replacements[target.root] {
+                displace(capture, target.root)
+            }
             let pending = assignments.filter { $0.target.root != target.root }
                 + [.init(target: .root(target.root), value: .variable(name))]
             var next = replacements
