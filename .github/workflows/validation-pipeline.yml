@@ -44,7 +44,7 @@ permissions:
   actions: read
 
 env:
-  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
   SWIFT_TLA_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.swift_tla_sha || github.sha }}
   ADMISSION_MODE: ${{ inputs.admission_mode || 'candidate' }}
 
@@ -80,7 +80,7 @@ jobs:
             .build/release/tlc-validate
             .build/release/native-initial-source.swift
             .build/release/native-initial-source.json
-          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-16.4-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', '.github/workflows/validation-pipeline.yml', 'scripts/retain-native-initial-source.py') }}
+          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-26.3-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', '.github/workflows/validation-pipeline.yml', 'scripts/retain-native-initial-source.py') }}
       - name: Build validator for this revision
         if: steps.binary-cache.outputs.cache-hit != 'true'
         run: |
@@ -651,7 +651,7 @@ jobs:
         id: binary-cache
         with:
           path: .build/release/tlc-validate
-          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-16.4-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
+          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-26.3-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
       - name: Build comparator for this revision
         if: steps.binary-cache.outputs.cache-hit != 'true'
         run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1

@@ -30,7 +30,7 @@ permissions:
   actions: read
 
 env:
-  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
   SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha }}
   ADMISSION_MODE: ${{ inputs.admission_mode }}
 

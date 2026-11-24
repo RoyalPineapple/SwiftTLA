@@ -237,5 +237,5 @@ running state, use the generated `Actor`. See
 
 ## Requirements
 
-- macOS 14+
-- Xcode 16.4
+- Deployment target: macOS 14 or later
+- CI toolchain: Xcode 26.3 on macOS 15
