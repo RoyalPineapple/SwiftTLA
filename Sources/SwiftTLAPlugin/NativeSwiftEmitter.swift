@@ -736,13 +736,15 @@ struct NativeSwiftEmitter {
              .assertView, .convert, .equal, .notEqual,
              .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual:
             return try scalarExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .tupleAppend:
+            return try appendExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .setLiteral, .tupleLiteral, .in, .subset, .union,
              .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
              .setMap, .forAll, .exists, .choose, .sequenceFromSet, .sequenceFromFunction,
              .powerSet, .sequenceSet, .unionAll, .functionSet, .randomSubset, .randomElement, .setSum:
             return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving, .tuplePrefix,
-             .tupleLength, .tupleHead, .tupleTail, .tupleAppend, .tupleConcatenate:
+             .tupleLength, .tupleHead, .tupleTail, .tupleConcatenate:
             return try sequenceExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .domain, .functionLiteral, .functionApply:
             return try functionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
@@ -1299,6 +1301,33 @@ struct NativeSwiftEmitter {
         return ("func \(name)() throws -> (\(predicateType)) {\n\(body)\n}", "try \(name)()")
     }
 
+    private mutating func appendExpression(
+        _ root: CompiledExpression, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<ResolvedFunctionID>
+    ) throws -> String {
+        // Render the left spine iteratively. Each appended operand still follows its receiver.
+        var receiver = root
+        var suffixes: [(operand: CompiledExpression, elements: String)] = []
+        var parts: [String] = []
+        while case .tupleAppend = receiver.operation, expressionValues[receiver] == nil {
+            guard case .array = receiver.resultType else { throw unsupported("sequence append result") }
+            let source = receiver.children[0]
+            let elements = try nativeSequenceElements("_sequenceValue", source: source.resultType)
+            parts.append("(try { () throws -> \(try swiftType(receiver.resultType)) in\n")
+            parts.append("    let _sequenceValue: \(try swiftType(source.resultType)) = ")
+            suffixes.append((receiver.children[1], elements))
+            receiver = source
+        }
+        parts.append(try expression(receiver, state: state, substitutions: substitutions, activeFunctions: activeFunctions))
+        for (operand, elements) in suffixes.reversed() {
+            let type = try swiftType(operand.resultType)
+            let value = try expression(operand, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            parts.append("\n    let _appendedValue: \(type) = \(value)\n")
+            parts.append("    return SwiftTLA._NativeMachineOperations.sequenceAppend(\(elements), _appendedValue)\n}())")
+        }
+        return parts.joined()
+    }
+
     private mutating func sequenceExpression(
         _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
@@ -1376,18 +1405,6 @@ struct NativeSwiftEmitter {
             guard case .array = result else { throw unsupported("sequence tail result") }
             let source = childType(0)
             return "(try SwiftTLA._NativeMachineOperations.sequenceTail(\(try nativeSequenceElements(emit(0), source: source))))"
-        case .tupleAppend:
-            let result = node.resultType
-            guard case .array = result else { throw unsupported("sequence append result") }
-            let source = childType(0)
-            let elements = try nativeSequenceElements("_sequenceValue", source: source)
-            return """
-            (try { () throws -> \(try swiftType(result)) in
-                let _sequenceValue: \(try swiftType(source)) = \(try emit(0))
-                let _appendedValue: \(try swiftType(childType(1))) = \(try emit(1))
-                return SwiftTLA._NativeMachineOperations.sequenceAppend(\(elements), _appendedValue)
-            }())
-            """
         case .tupleConcatenate:
             let result = node.resultType
             guard case .array = result else { throw unsupported("sequence concatenation result") }
