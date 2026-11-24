@@ -39,6 +39,20 @@ public func >=(_ lhs: some TypedExpression<Int>, _ rhs: some TypedExpression<Int
     Expr(.greaterOrEqual(lhs.stateExpr, rhs.stateExpr))
 }
 
+extension ClosedRange where Bound == Int {
+    public func contains(_ field: SharedVariable<Int>) -> Expr<Bool> {
+        Expr(boundsCheck(for: field.stateExpr))
+    }
+
+    public func contains(_ field: LocalVariable<Int>) -> Expr<Bool> {
+        Expr(boundsCheck(for: field.stateExpr))
+    }
+
+    package func boundsCheck(for field: StateExpr) -> StateExpr {
+        .and(.greaterOrEqual(field, .int(lowerBound)), .lessOrEqual(field, .int(upperBound)))
+    }
+}
+
 public func ==<Left: TypedExpression, Right: TypedExpression>(
     _ lhs: Left, _ rhs: Right
 ) -> Expr<Bool> where Left.ExpressionValue == Right.ExpressionValue {

@@ -93,9 +93,9 @@ public struct ClockModel: Sendable {
                 }
 
                 ValidTime {
-                    hour >= 0 && hour <= 23 &&
-                    minute >= 0 && minute <= 59 &&
-                    second >= 0 && second <= 59
+                    (0...23).contains(hour) &&
+                    (0...59).contains(minute) &&
+                    (0...59).contains(second)
                 }
             }
             clock

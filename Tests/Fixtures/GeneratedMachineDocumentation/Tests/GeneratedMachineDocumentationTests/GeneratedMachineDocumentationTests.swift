@@ -114,6 +114,42 @@ struct GeneratedMachineDocumentationTests {
         #expect(machine.state == transition.after)
     }
 
+    @Test("an inclusive hour range preserves the explicit bounds and their midnight failure")
+    func hourRangePreservesBounds() throws {
+        let explicit = #spec("HourRangeFixture") {
+            let ValidHour = Invariant()
+            let clock = Algorithm { scope in
+                let hour = scope.sharedVar(initial: -1)
+                Loop(HourRangeFixture.Step.tick) { hour += 1 }
+                ValidHour { hour >= 0 && hour <= 23 }
+            }
+            clock
+        }
+        let expected = try explicit.compile().render().tlaBundle
+        let authored = try HourRangeFixture.spec.compile().render().tlaBundle
+        let generated = try HourRangeFixture.render().tlaBundle
+        #expect(authored.tla == expected.tla)
+        #expect(generated.tla == expected.tla)
+        #expect(authored.cfg == expected.cfg)
+        #expect(generated.cfg == expected.cfg)
+
+        var clock = try HourRangeFixture.makeMachine()
+        #expect(try clock.violatedInvariants(checking: [.ValidHour], atLevel: 1) == [.ValidHour])
+        for hour in 0...23 {
+            #expect(try clock.send(.tick).after.hour == hour)
+            #expect(try clock.violatedInvariants(checking: [.ValidHour], atLevel: 1).isEmpty)
+        }
+        guard case .counterexample(let witness) = try clock.check(
+            properties: [.ValidHour], checkDeadlock: false, maximumStates: 2
+        ) else {
+            Issue.record("Expected one tick from 23 to violate ValidHour")
+            return
+        }
+        #expect(witness.violations == [.invariant(.ValidHour)])
+        #expect(witness.trace.map(\.action) == [nil, .tick])
+        #expect(try clock.replay(witness).state.hour == 24)
+    }
+
     @Test("two tick sends cross midnight and advance one more second")
     func ticksAcrossMidnight() throws {
         var clock = try ClockModel.makeMachine(.init(hour: 23, minute: 59, second: 59))

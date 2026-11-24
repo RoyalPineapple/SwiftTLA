@@ -1441,6 +1441,15 @@ final class ParserSession {
             guard let memberSyntax = call.arguments.first?.expression,
                   let member = decodeTypedFacadeValue(memberSyntax, scope: scope, expectedEnumType: elementEnumType)
             else { return nil }
+            let receiver = unparenthesized(baseSyntax)
+            if receiver.is(SequenceExprSyntax.self) || receiver.is(InfixOperatorExprSyntax.self),
+               case .integerRange(.value(.int(let lower)), .value(.int(let upper))) = base,
+               lower <= upper, let reference = unparenthesized(memberSyntax).as(DeclReferenceExprSyntax.self),
+               scope.shape(for: reference) == .int, case .variable = member,
+               call.arguments.count == 1, call.arguments.first?.label == nil,
+               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty {
+                return (lower...upper).boundsCheck(for: member)
+            }
             return .in(member, base)
         case "union":
             guard let otherSyntax = call.arguments.first?.expression,
@@ -2010,13 +2019,7 @@ final class ParserSession {
             return .bool
         }
         if decodeStepEnabledness(expression, scope: scope) != nil { return .bool }
-        var expression = expression
-        while let parentheses = expression.as(TupleExprSyntax.self),
-              parentheses.elements.count == 1,
-              let element = parentheses.elements.first,
-              element.label == nil {
-            expression = element.expression
-        }
+        let expression = unparenthesized(expression)
         if expression.is(BooleanLiteralExprSyntax.self) { return .bool }
         if expression.is(StringLiteralExprSyntax.self) { return .string }
         if SourceIntegerLiteral.value(expression) != nil || decodeSwiftIntegerBound(expression, scope: scope) != nil {
@@ -3071,11 +3074,13 @@ extension ParserSession {
         return disjunction ? .or(left, right) : .and(left, right)
     }
 
-    func unwrapSingleElementTuple(_ expression: ExprSyntax) -> ExprSyntax {
-        if let tuple = expression.as(TupleExprSyntax.self),
-           tuple.elements.count == 1,
-           let nested = tuple.elements.first?.expression {
-            return nested
+    private func unparenthesized(_ expression: ExprSyntax) -> ExprSyntax {
+        var expression = expression
+        while let parentheses = expression.as(TupleExprSyntax.self),
+              parentheses.elements.count == 1,
+              let element = parentheses.elements.first,
+              element.label == nil {
+            expression = element.expression
         }
         return expression
     }
