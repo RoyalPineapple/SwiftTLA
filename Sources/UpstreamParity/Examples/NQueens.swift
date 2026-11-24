@@ -25,14 +25,13 @@ package struct NQueensModel: Sendable {
                             Let(
                                 IntRange(1, through: N).filter { column in
                                     !IntRange(1, through: queens.expr.count).contains { row in
-                                        queens.expr.appending(column.expr).at(row.expr)
-                                            == queens.expr.appending(column.expr).at(nextQueen.expr)
-                                            || queens.expr.appending(column.expr).at(row.expr)
-                                                - queens.expr.appending(column.expr).at(nextQueen.expr)
-                                                == row.expr - nextQueen.expr
-                                            || queens.expr.appending(column.expr).at(nextQueen.expr)
-                                                - queens.expr.appending(column.expr).at(row.expr)
-                                                == row.expr - nextQueen.expr
+                                        let placement = queens.expr.appending(column.expr)
+                                        let priorColumn = placement[row]
+                                        let newColumn = placement[nextQueen]
+                                        let rowDifference = row.expr - nextQueen.expr
+                                        return priorColumn == newColumn
+                                            || priorColumn - newColumn == rowDifference
+                                            || newColumn - priorColumn == rowDifference
                                     }
                                 }
                             ) { columns in
