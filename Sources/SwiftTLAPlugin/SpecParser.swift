@@ -2110,6 +2110,15 @@ final class ParserSession {
                && typedFacadeValueType($0.value, scope: scope) == value }) {
             return .dictionary(key, value)
         }
+        if let sequence = expression.as(SequenceExprSyntax.self),
+           sequence.elements.contains(where: { $0.as(BinaryOperatorExprSyntax.self)?.operator.text == "..<" }),
+           case .letValue = decodeTypedInfix(Array(sequence.elements), scope: scope) {
+            return .set(.int)
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text == "..<" {
+            return .set(.int)
+        }
         let integerOperations = ["+", "-", "*", "/", "%"]
         if let sequence = expression.as(SequenceExprSyntax.self) {
             let elements = Array(sequence.elements)
@@ -2879,7 +2888,7 @@ final class ParserSession {
             case "||": return 1
             case "&&": return 2
             case "==", "!=", "<", "<=", ">", ">=": return 3
-            case "...": return 4
+            case "...", "..<": return 4
             case "+", "-": return 5
             case "*", "/", "%": return 6
             default: return nil
@@ -2937,6 +2946,7 @@ final class ParserSession {
         case "!=": return .notEqual(lhs, rhs)
         case "&&": return .and(lhs, rhs)
         case "||": return .or(lhs, rhs)
+        case "..<": return formalHalfOpenRange(lhs, rhs)
         case "...":
             guard case .value(.int) = lhs, case .value(.int) = rhs else { return nil }
             return .integerRange(lhs, rhs)

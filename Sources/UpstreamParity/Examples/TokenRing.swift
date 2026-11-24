@@ -17,15 +17,15 @@ package struct TokenRingModel: Sendable {
             Assume(M > 0)
             Assume(N <= M + 1)
 
-            let nodes = IntRange(0, through: N - 1)
-            let values = IntRange(0, through: M - 1)
+            let nodes = 0..<N
+            let values = 0..<M
             let c: SharedVariable<[Int: Int]> = scope.sharedVar(initiallyIn: Functions(from: nodes, to: values))
 
             let createToken = Do(Step.createToken, when: c[0] == c[N - 1]) {
                 c[0].set((c[N - 1] + 1) % M)
             }
             createToken
-            let passToken = Do(Step.passToken, over: IntRange(1, through: N - 1)) { i in
+            let passToken = Do(Step.passToken, over: 1..<N) { i in
                 When(c[i] != c[i - 1])
                 c[i].set(c[i - 1])
             }
@@ -35,8 +35,8 @@ package struct TokenRingModel: Sendable {
             Invariant("TypeOK") { Functions(from: nodes, to: values).contains(c) }
             let Stab = EventuallyAlways()
             let uniqueToken = IntRange(0, through: N).contains { split in
-                IntRange(0, through: split - 1).allSatisfy { i in c[i] == c[0] }
-                    && IntRange(split, through: N - 1).allSatisfy { i in c[i] == (c[0] - 1) % M }
+                (0..<split).allSatisfy { i in c[i] == c[0] }
+                    && (split..<N).allSatisfy { i in c[i] == (c[0] - 1) % M }
             }
             Stab(uniqueToken)
             let sixNodes = Validation {

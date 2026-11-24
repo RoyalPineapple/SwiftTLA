@@ -1046,6 +1046,23 @@ extension TypedExpression {
   }
 }
 
+/// The formal integer domain starting at the lower bound and excluding the upper bound.
+@_disfavoredOverload
+public func ..< (lower: some TypedExpression<Int>, upper: some TypedExpression<Int>) -> Expr<Set<Int>> {
+  Expr(formalHalfOpenRange(lower.stateExpr, upper.stateExpr))
+}
+
+package func formalHalfOpenRange(_ lower: StateExpr, _ upper: StateExpr) -> StateExpr {
+  let names = lower.freeVariableNames.union(upper.freeVariableNames)
+  let first = StateExpr.freshBoundName("__rangeStart", avoiding: names)
+  let end = StateExpr.freshBoundName("__rangeEnd", avoiding: names)
+  // Evaluate both endpoints once. Only a nonempty domain needs a predecessor.
+  return .letValue(first, lower, .letValue(end, upper,
+    .ifThenElse(.lessThan(.variable(first), .variable(end)),
+      .integerRange(.variable(first), .subtract(.variable(end), .int(1))),
+      .integerRange(.int(1), .int(0)))))
+}
+
 /// A bounded, inclusive TLA+ integer set whose endpoints can depend on state.
 public func IntRange(
   _ lower: some TypedExpression<Int>,
