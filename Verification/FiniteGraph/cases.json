@@ -275,6 +275,26 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "token-ring",
+      "sourceModel": "token-ring",
+      "scenario": "sixNodes",
+      "module": "token-ring/TokenRing.tla",
+      "configuration": "token-ring/TokenRing.cfg",
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd426/TokenRing.tla",
+        "sha256": "e13841dfa43b3bd65a35d53c0c7c02bf8de42bb6864bd202ba30b724b33a056f"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e13841dfa43b3bd65a35d53c0c7c02bf8de42bb6864bd202ba30b724b33a056f",
+      "cfgSHA256": "8dcdfc79502bc6074033e444e96adb838b89224a53a00a4d21fac94a7a70c740",
+      "timeoutSeconds": 600,
+      "imports": [],
+      "dependencies": []
+    },
+    {
       "id": "auxiliary-lock",
       "sourceModel": "auxiliary-lock",
       "scenario": "twoProcess",

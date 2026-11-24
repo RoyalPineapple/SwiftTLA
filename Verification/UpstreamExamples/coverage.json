@@ -5483,8 +5483,8 @@
     {
       "path": "specifications/ewd426",
       "name": "EWD 426: Token Stabilization",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Exhaustive six-node TokenRing port locally matched the published graph, TypeOK, and Stab.",
+      "gap": "APTokenRing symbolic checks, SimTokenRing simulation, and hosted parity remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5505,7 +5505,9 @@
           "path": "specifications/ewd426/TokenRing.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TokenRing.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -5534,10 +5536,16 @@
           "module": "specifications/ewd426/TokenRing.tla",
           "configuration": "specifications/ewd426/TokenRing.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TokenRing.swift",
+              "scenario": "sixNodes",
+              "caseID": "token-ring"
+            }
+          ],
           "evidence": []
         }
       ],
