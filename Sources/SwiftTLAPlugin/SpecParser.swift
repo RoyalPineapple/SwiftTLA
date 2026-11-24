@@ -769,7 +769,8 @@ final class ParserSession {
               case .expr(let predicateSyntax) = closure.statements.first?.item,
               let predicate = decodeTypedFacadeValue(
                 predicateSyntax,
-                scope: scope.extending(binding: parameter, to: .variable(canonicalBinding))
+                scope: scope.extending(binding: parameter, to: .variable(canonicalBinding),
+                    shape: typedFacadeValueType(candidatesSyntax, scope: scope)?.selectedElement)
               )
         else {
             algorithmParseFailure = "Where requires one parameter and one decodable predicate expression."

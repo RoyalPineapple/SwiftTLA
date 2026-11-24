@@ -1389,8 +1389,8 @@ import SwiftTLAMacros
                 let successors = scope.sharedVar(_name: "successors", initiallyIn: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
-                    ForAll(Node.all) { node in
-                        successor[node].cardinality == 1
+                    Node.all.allSatisfy { node in
+                        successor[node].count == 1
                     }
                 })
                 Do(TestControlLabel.done) { Stop() }
