@@ -58,16 +58,14 @@ package struct CigaretteSmokersModel: Sendable {
             let TypeOK = Invariant()
             let AtMostOne = Invariant()
 
-            Do(Step.startSmoking) {
-                When(!dealer.isEmpty)
+            Do(Step.startSmoking, when: !dealer.isEmpty) {
                 smokers.set(Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { ingredient in
                     Smoker.expression(smoking:
                         Set<Ingredient>([]).inserting(ingredient.expr).union(dealer) == Ingredients)
                 })
                 dealer.set(Set<Ingredient>([]))
             }
-            Do(Step.stopSmoking) {
-                When(dealer.isEmpty)
+            Do(Step.stopSmoking, when: dealer.isEmpty) {
                 Let(Select(from: Ingredients) { ingredient in
                     smokers[ingredient].smoking && ForAll(in: Ingredients) { other in
                         !smokers[other].smoking || other == ingredient

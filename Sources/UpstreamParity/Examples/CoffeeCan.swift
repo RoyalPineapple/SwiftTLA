@@ -26,17 +26,14 @@ package struct CoffeeCanModel: Sendable {
             })
             let beanCount = can.black + can.white
 
-            Do(Step.PickSameColorWhite) {
-                When(beanCount > 1 && can.white >= 2)
+            Do(Step.PickSameColorWhite, when: beanCount > 1 && can.white >= 2) {
                 can.black += 1
                 can.white.set(can.white - 2)
             }
-            Do(Step.PickSameColorBlack) {
-                When(beanCount > 1 && can.black >= 2)
+            Do(Step.PickSameColorBlack, when: beanCount > 1 && can.black >= 2) {
                 can.black.set(can.black - 1)
             }
-            Do(Step.PickDifferentColor) {
-                When(beanCount > 1 && can.black >= 1 && can.white >= 1)
+            Do(Step.PickDifferentColor, when: beanCount > 1 && can.black >= 1 && can.white >= 1) {
                 can.black.set(can.black - 1)
             }
             let Termination = Do(Step.Termination, when: beanCount == 1) { Skip() }

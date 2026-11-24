@@ -41,8 +41,7 @@ package struct EWD998TerminationModel: Sendable {
                 active[node].set(true)
                 pending[node].set(pending[node] - 1)
             }
-            let detectTermination = Do(Step.DetectTermination) {
-                When(terminated)
+            let detectTermination = Do(Step.DetectTermination, when: terminated) {
                 terminationDetected.set(true)
             }
             detectTermination

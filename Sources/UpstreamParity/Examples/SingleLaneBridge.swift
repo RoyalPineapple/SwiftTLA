@@ -82,8 +82,7 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             moveInside
 
-            let enterBridge = Do(Step.EnterBridge) {
-                When(WaitingBeforeBridge.count > 0)
+            let enterBridge = Do(Step.EnterBridge, when: WaitingBeforeBridge.count > 0) {
                 let car = WaitingBeforeBridge.head()
                 let next = If(CarsRight.contains(car),
                     then: If(Location[car] > StartPos, then: Location[car] - 1, else: EndPos),

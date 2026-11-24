@@ -34,8 +34,7 @@ package struct SyncTerminationDetectionModel: Sendable {
                 When(active[node])
                 active[destination].set(true)
             }
-            let detectTermination = Do(Step.DetectTermination) {
-                When(terminated)
+            let detectTermination = Do(Step.DetectTermination, when: terminated) {
                 terminationDetected.set(true)
             }
             detectTermination

@@ -27,8 +27,7 @@ package struct MajorityModel: Sendable {
             let TypeOK = Invariant()
             let Correct = Invariant()
             let Inv = Invariant()
-            Do(Step.Next) {
-                When(i <= seq.count)
+            Do(Step.Next, when: i <= seq.count) {
                 If(cnt == 0) {
                     cand.set(seq[i])
                     cnt.set(1)

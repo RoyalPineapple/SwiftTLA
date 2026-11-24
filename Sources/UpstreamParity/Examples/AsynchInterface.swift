@@ -31,15 +31,13 @@ package struct AsynchInterfaceModel: Sendable {
             let ack = scope.sharedVar(initial: rdy)
             let TypeInvariant = Invariant()
 
-            Do(Step.Send) {
-                When(rdy == ack)
+            Do(Step.Send, when: rdy == ack) {
                 With(Data) { datum in
                     val.set(datum)
                 }
                 rdy.set(1 - rdy)
             }
-            Do(Step.Rcv) {
-                When(rdy != ack)
+            Do(Step.Rcv, when: rdy != ack) {
                 ack.set(1 - ack)
             }
             TypeInvariant {

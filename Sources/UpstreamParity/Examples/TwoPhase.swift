@@ -12,13 +12,11 @@ package struct TwoPhaseModel: Sendable {
             let c = scope.sharedVar(initial: 0)
             let x = scope.sharedVar(initial: 0)
 
-            Do(Step.ProducerStep) {
-                When(p == c)
+            Do(Step.ProducerStep, when: p == c) {
                 p.set((p + 1) % 2)
                 x.set(x)
             }
-            Do(Step.ConsumerStep) {
-                When(p != c)
+            Do(Step.ConsumerStep, when: p != c) {
                 c.set((c + 1) % 2)
                 x.set(x)
             }

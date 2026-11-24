@@ -43,8 +43,7 @@ package struct ChannelModel: Sendable {
                 chan.val.set(d)
                 chan.rdy.set(1 - chan.rdy)
             }
-            Do(Step.Rcv) {
-                When(chan.rdy != chan.ack)
+            Do(Step.Rcv, when: chan.rdy != chan.ack) {
                 chan.ack.set(1 - chan.ack)
             }
             TypeInvariant {
