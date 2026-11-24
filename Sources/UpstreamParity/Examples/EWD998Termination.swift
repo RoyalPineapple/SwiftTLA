@@ -27,23 +27,23 @@ package struct EWD998TerminationModel: Sendable {
 
             Do(Step.Terminate, over: Node) { node in
                 When(active[node])
-                Assign(active[node], to: false)
+                active[node].set(false)
                 With(SetExpr<Bool>.literal(terminationDetected, terminated)) { detected in
-                    Assign(terminationDetected, to: detected)
+                    terminationDetected.set(detected)
                 }
             }
             Do(Step.SendMsg, over: Node, Node) { sender, receiver in
                 When(active[sender])
-                Assign(pending[receiver], to: pending[receiver] + 1)
+                pending[receiver] += 1
             }
             Do(Step.RcvMsg, over: Node) { node in
                 When(pending[node] > 0)
-                Assign(active[node], to: true)
-                Assign(pending[node], to: pending[node] - 1)
+                active[node].set(true)
+                pending[node].set(pending[node] - 1)
             }
             let detectTermination = Do(Step.DetectTermination) {
                 When(terminated)
-                Assign(terminationDetected, to: true)
+                terminationDetected.set(true)
             }
             detectTermination
             WeakFairness(detectTermination)

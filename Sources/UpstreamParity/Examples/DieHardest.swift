@@ -22,51 +22,51 @@ package struct DieHardestModel: Sendable {
                     If(copy == 1) {
                         With(Capacities[1].keys) { j in
                             If(operation == 0) {
-                                Assign(c1[j], to: Capacities[1][j])
+                                c1[j].set(Capacities[1][j])
                             } else: {
                                 If(operation == 1) {
-                                    Assign(c1[j], to: 0)
+                                    c1[j].set(0)
                                 } else: {
                                     With(Capacities[1].keys) { k in
                                         When(j != k)
                                         If(c1[j] < Capacities[1][k] - c1[k]) {
                                             let amount = c1[j]
-                                            Assign(c1[j], to: 0)
-                                            Assign(c1[k], to: c1[k] + amount)
+                                            c1[j].set(0)
+                                            c1[k] += amount
                                         } else: {
                                             let amount = Capacities[1][k] - c1[k]
-                                            Assign(c1[j], to: c1[j] - amount)
-                                            Assign(c1[k], to: Capacities[1][k])
+                                            c1[j].set(c1[j] - amount)
+                                            c1[k].set(Capacities[1][k])
                                         }
                                     }
                                 }
                             }
                         }
-                        Assign(s1, to: s1 + 1)
+                        s1 += 1
                     } else: {
                         With(Capacities[2].keys) { j in
                             If(operation == 0) {
-                                Assign(c2[j], to: Capacities[2][j])
+                                c2[j].set(Capacities[2][j])
                             } else: {
                                 If(operation == 1) {
-                                    Assign(c2[j], to: 0)
+                                    c2[j].set(0)
                                 } else: {
                                     With(Capacities[2].keys) { k in
                                         When(j != k)
                                         If(c2[j] < Capacities[2][k] - c2[k]) {
                                             let amount = c2[j]
-                                            Assign(c2[j], to: 0)
-                                            Assign(c2[k], to: c2[k] + amount)
+                                            c2[j].set(0)
+                                            c2[k] += amount
                                         } else: {
                                             let amount = Capacities[2][k] - c2[k]
-                                            Assign(c2[j], to: c2[j] - amount)
-                                            Assign(c2[k], to: Capacities[2][k])
+                                            c2[j].set(c2[j] - amount)
+                                            c2[k].set(Capacities[2][k])
                                         }
                                     }
                                 }
                             }
                         }
-                        Assign(s2, to: s2 + 1)
+                        s2 += 1
                     }
                 }
             }

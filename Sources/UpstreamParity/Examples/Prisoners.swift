@@ -34,19 +34,19 @@ package struct PrisonersModel: Sendable {
 
             let counterStep = Do(Step.CounterStep) {
                 If(switchAUp) {
-                    Assign(switchAUp, to: false)
-                    Assign(count, to: count + 1)
+                    switchAUp.set(false)
+                    count += 1
                 } else: {
-                    Assign(switchBUp, to: !switchBUp)
+                    switchBUp.set(!switchBUp)
                 }
             }
             counterStep
             let nonCounterStep = Do(Step.NonCounterStep, over: OtherPrisoner) { prisoner in
                 If(!switchAUp && timesSwitched[prisoner] < 2) {
-                    Assign(switchAUp, to: true)
-                    Assign(timesSwitched[prisoner], to: timesSwitched[prisoner] + 1)
+                    switchAUp.set(true)
+                    timesSwitched[prisoner] += 1
                 } else: {
-                    Assign(switchBUp, to: !switchBUp)
+                    switchBUp.set(!switchBUp)
                 }
             }
             nonCounterStep

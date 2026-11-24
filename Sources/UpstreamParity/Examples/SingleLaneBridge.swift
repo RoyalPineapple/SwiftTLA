@@ -62,9 +62,9 @@ package struct SingleLaneBridgeModel: Sendable {
                 When(!Bridge.contains(next))
                 If(CarsRight.contains(car) && next == EndBridge + 1
                     || CarsLeft.contains(car) && next == StartBridge - 1) {
-                    Assign(WaitingBeforeBridge, to: WaitingBeforeBridge.appending(car))
+                    WaitingBeforeBridge.set(WaitingBeforeBridge.appending(car))
                 }
-                Assign(Location[car], to: next)
+                Location[car].set(next)
             }
             moveOutside
 
@@ -76,9 +76,9 @@ package struct SingleLaneBridgeModel: Sendable {
                     && ForAll(in: Cars) { other in Location[other] != next })
                 If(CarsRight.contains(car) && next == EndBridge + 1
                     || CarsLeft.contains(car) && next == StartBridge - 1) {
-                    Assign(WaitingBeforeBridge, to: WaitingBeforeBridge.appending(car))
+                    WaitingBeforeBridge.set(WaitingBeforeBridge.appending(car))
                 }
-                Assign(Location[car], to: next)
+                Location[car].set(next)
             }
             moveInside
 
@@ -94,8 +94,8 @@ package struct SingleLaneBridgeModel: Sendable {
                     }
                     && ForAll(in: Cars) { other in Location[other] != next }
                 When(CarsInBridge.isEmpty || canFollow)
-                Assign(Location[car], to: next)
-                Assign(WaitingBeforeBridge, to: WaitingBeforeBridge.tail())
+                Location[car].set(next)
+                WaitingBeforeBridge.set(WaitingBeforeBridge.tail())
             }
             enterBridge
 

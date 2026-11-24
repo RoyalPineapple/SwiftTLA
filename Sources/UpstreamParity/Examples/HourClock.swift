@@ -12,9 +12,9 @@ package struct HourClockModel: Sendable {
                 let hr = scope.sharedVar(initiallyIn: 1...12)
                 While(Step.HCnxt, true) {
                     If(hr != 12) {
-                        Assign(hr, to: hr + 1)
+                        hr += 1
                     } else: {
-                        Assign(hr, to: 1)
+                        hr.set(1)
                     }
                 }
                 HCini { hr >= 1 && hr <= 12 }

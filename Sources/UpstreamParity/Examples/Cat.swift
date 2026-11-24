@@ -27,14 +27,14 @@ package struct CatModel: Sendable {
             Do(Step.Next) {
                 With(Boxes) { next in
                     When(next == cat_box + 1 || next == cat_box - 1)
-                    Assign(cat_box, to: next)
+                    cat_box.set(next)
                 }
                 let next_box = If(direction == Direction.right,
                     then: observed_box + 1, else: observed_box - 1)
                 If(Observed_Boxes.contains(next_box)) {
-                    Assign(observed_box, to: next_box)
+                    observed_box.set(next_box)
                 } else: {
-                    Assign(direction, to: If(direction == Direction.right,
+                    direction.set(If(direction == Direction.right,
                         then: Direction.left, else: Direction.right))
                 }
             }

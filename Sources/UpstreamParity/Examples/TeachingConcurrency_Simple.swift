@@ -29,10 +29,10 @@ package struct TeachingSimpleN5Model: Sendable {
 
                 Each(Process.all) { process in
                     Do(Step.a) {
-                        Assign(x, to: x.updating(process, to: 1))
+                        x.set(x.updating(process, to: 1))
                     }
                     Do(Step.b) {
-                        Assign(y, to: y.updating(process, to: x[predecessor[process]]))
+                        y.set(y.updating(process, to: x[predecessor[process]]))
                     }
                 }
 

@@ -67,8 +67,8 @@ package struct DiningPhilosophersModel: Sendable {
 
                             Either {
                                 When(leftFork.holder == philosopher && leftFork.clean == false)
-                                Assign(forks[philosopher].holder, to: left)
-                                Assign(forks[philosopher].clean, to: true)
+                                forks[philosopher].holder.set(left)
+                                forks[philosopher].clean.set(true)
                             } or: {
                                 Either {
                                     When(
@@ -76,8 +76,8 @@ package struct DiningPhilosophersModel: Sendable {
                                             && rightFork.clean == false
                                             && !(leftFork.holder == philosopher && leftFork.clean == false)
                                     )
-                                    Assign(forks[right].holder, to: right)
-                                    Assign(forks[right].clean, to: true)
+                                    forks[right].holder.set(right)
+                                    forks[right].clean.set(true)
                                 } or: {
                                     When(
                                         !(leftFork.holder == philosopher && leftFork.clean == false)
@@ -102,7 +102,7 @@ package struct DiningPhilosophersModel: Sendable {
                     }
 
                     Do(Step.think) {
-                        Assign(hungry, to: true)
+                        hungry.set(true)
                         Goto(Step.loop)
                     }
 
@@ -111,9 +111,9 @@ package struct DiningPhilosophersModel: Sendable {
                             If(philosopher == Philosopher.two, then: Philosopher.three, else:
                                 If(philosopher == Philosopher.three, then: Philosopher.four, else:
                                     If(philosopher == Philosopher.four, then: Philosopher.five, else: Philosopher.one))))
-                        Assign(hungry, to: false)
-                        Assign(forks[philosopher].clean, to: false)
-                        Assign(forks[right].clean, to: false)
+                        hungry.set(false)
+                        forks[philosopher].clean.set(false)
+                        forks[right].clean.set(false)
                         Goto(Step.loop)
                     }
 

@@ -29,10 +29,10 @@ package struct LockModel: Sendable {
                 let lock = scope.sharedVar(initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
                     When(value == 1)
-                    Assign(value, to: 0)
+                    value.set(0)
                 }
                 let release = Macro { (value: MacroParameter<Int>) in
-                    Assign(value, to: 1)
+                    value.set(1)
                 }
 
                 Each(Process.all) { _ in

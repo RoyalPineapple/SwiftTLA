@@ -40,14 +40,14 @@ public struct PeripheralModel {
                 Each(ConnectProcess.all) { _ in
                     Do(Step.connected) {
                         When(phase == .disconnected)
-                        Assign(phase, to: Phase.connected)
+                        phase.set(Phase.connected)
                         Goto(Step.connected)
                     }
                 }
-                Each(BeginDiscoveryProcess.all) { _ in Do(Step.beginDiscovery) { When(phase == .connected); Assign(phase, to: Phase.discovering); Goto(Step.beginDiscovery) } }
-                Each(FinishDiscoveryProcess.all) { _ in Do(Step.finishDiscovery) { When(phase == .discovering); Assign(phase, to: Phase.ready); Goto(Step.finishDiscovery) } }
-                Each(DiscoveryFailedProcess.all) { _ in Do(Step.discoveryFailed) { When(phase == .discovering); Assign(phase, to: Phase.connected); Goto(Step.discoveryFailed) } }
-                Each(DisconnectProcess.all) { _ in Do(Step.disconnect) { When(phase == .ready); Assign(phase, to: Phase.disconnected); Goto(Step.disconnect) } }
+                Each(BeginDiscoveryProcess.all) { _ in Do(Step.beginDiscovery) { When(phase == .connected); phase.set(Phase.discovering); Goto(Step.beginDiscovery) } }
+                Each(FinishDiscoveryProcess.all) { _ in Do(Step.finishDiscovery) { When(phase == .discovering); phase.set(Phase.ready); Goto(Step.finishDiscovery) } }
+                Each(DiscoveryFailedProcess.all) { _ in Do(Step.discoveryFailed) { When(phase == .discovering); phase.set(Phase.connected); Goto(Step.discoveryFailed) } }
+                Each(DisconnectProcess.all) { _ in Do(Step.disconnect) { When(phase == .ready); phase.set(Phase.disconnected); Goto(Step.disconnect) } }
                 knownPeripheralPhase { phase == .disconnected || phase == .connected || phase == .discovering || phase == .ready }
             })
             peripheralModel

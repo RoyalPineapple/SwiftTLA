@@ -18,18 +18,18 @@ package struct DieHarderModel: Sendable {
             let TypeOK = Invariant()
             let NotSolved = Invariant()
             Assume(Capacity.keys == Jug && Goal >= 0 && ForAll(in: Jug) { j in Capacity[j] > 0 })
-            Do(Step.FillJug, over: Jug) { j in Assign(contents[j], to: Capacity[j]) }
-            Do(Step.EmptyJug, over: Jug) { j in Assign(contents[j], to: 0) }
+            Do(Step.FillJug, over: Jug) { j in contents[j].set(Capacity[j]) }
+            Do(Step.EmptyJug, over: Jug) { j in contents[j].set(0) }
             Do(Step.JugToJug, over: Jug, Jug) { j, k in
                 When(j != k)
                 If(contents[j] < Capacity[k] - contents[k]) {
                     let amountPoured = contents[j]
-                    Assign(contents[j], to: 0)
-                    Assign(contents[k], to: contents[k] + amountPoured)
+                    contents[j].set(0)
+                    contents[k] += amountPoured
                 } else: {
                     let amountPoured = Capacity[k] - contents[k]
-                    Assign(contents[j], to: contents[j] - amountPoured)
-                    Assign(contents[k], to: Capacity[k])
+                    contents[j].set(contents[j] - amountPoured)
+                    contents[k].set(Capacity[k])
                 }
             }
             TypeOK { contents.keys == Jug && ForAll(in: Jug) { j in contents[j] >= 0 } }

@@ -14,26 +14,26 @@ package struct DieHardModel: Sendable {
             let small = scope.sharedVar(initial: 0)
             let TypeOK = Invariant()
             let NotSolved = Invariant()
-            Do(Step.FillSmallJug) { Assign(small, to: 3) }
-            Do(Step.FillBigJug) { Assign(big, to: 5) }
-            Do(Step.EmptySmallJug) { Assign(small, to: 0) }
-            Do(Step.EmptyBigJug) { Assign(big, to: 0) }
+            Do(Step.FillSmallJug) { small.set(3) }
+            Do(Step.FillBigJug) { big.set(5) }
+            Do(Step.EmptySmallJug) { small.set(0) }
+            Do(Step.EmptyBigJug) { big.set(0) }
             Do(Step.SmallToBig) {
                 If(big + small <= 5) {
-                    Assign(big, to: big + small)
-                    Assign(small, to: 0)
+                    big += small
+                    small.set(0)
                 } else: {
-                    Assign(small, to: small - (5 - big))
-                    Assign(big, to: 5)
+                    small.set(small - (5 - big))
+                    big.set(5)
                 }
             }
             Do(Step.BigToSmall) {
                 If(big + small <= 3) {
-                    Assign(small, to: big + small)
-                    Assign(big, to: 0)
+                    small.set(big + small)
+                    big.set(0)
                 } else: {
-                    Assign(big, to: big - (3 - small))
-                    Assign(small, to: 3)
+                    big.set(big - (3 - small))
+                    small.set(3)
                 }
             }
             TypeOK { big >= 0 && big <= 5 && small >= 0 && small <= 3 }

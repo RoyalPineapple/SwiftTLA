@@ -40,12 +40,12 @@ package struct ChannelModel: Sendable {
 
             Do(Step.Send, over: Data) { d in
                 When(chan.rdy == chan.ack)
-                Assign(chan.val, to: d)
-                Assign(chan.rdy, to: 1 - chan.rdy)
+                chan.val.set(d)
+                chan.rdy.set(1 - chan.rdy)
             }
             Do(Step.Rcv) {
                 When(chan.rdy != chan.ack)
-                Assign(chan.ack, to: 1 - chan.ack)
+                chan.ack.set(1 - chan.ack)
             }
             TypeInvariant {
                 Data.contains(chan.val)

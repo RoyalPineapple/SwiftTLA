@@ -22,8 +22,8 @@ package struct SumSequenceModel: Sendable {
                 let n = scope.sharedVar(initial: 1)
 
                 While(Step.a, n <= seq.count) {
-                    Assign(sum, to: sum + seq[n])
-                    Assign(n, to: n + 1)
+                    sum += seq[n]
+                    n += 1
                 }
 
                 let sums = LetRec("SeqSum", over: Sequences(of: Int.all), taking: [Int].self,

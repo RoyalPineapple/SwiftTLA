@@ -39,50 +39,50 @@ package struct BakeryModel: Sendable {
 
                     Do(Label.e1) {
                         Either {
-                            Assign(flag[selfID], to: !flag[selfID])
+                            flag[selfID].set(!flag[selfID])
                             Goto(Label.e1)
                         } or: {
-                            Assign(flag[selfID], to: true)
-                            Assign(unchecked, to: Procs.removing(selfID))
-                            Assign(max, to: 0)
+                            flag[selfID].set(true)
+                            unchecked.set(Procs.removing(selfID))
+                            max.set(0)
                         }
                     }
 
                     While(Label.e2, !unchecked.isEmpty) {
                         With(unchecked) { process in
                             unchecked.remove(process)
-                            If(num[process] > max) { Assign(max, to: num[process]) }
+                            If(num[process] > max) { max.set(num[process]) }
                         }
                     }
 
                     Do(Label.e3) {
                         Either {
                             With(Nat) { ticket in
-                                Assign(num[selfID], to: ticket.expr)
+                                num[selfID].set(ticket.expr)
                                 Goto(Label.e3)
                             }
                         } or: {
                             With(Nat) { ticket in
                                 When(ticket.expr > max)
-                                Assign(num[selfID], to: ticket.expr)
+                                num[selfID].set(ticket.expr)
                             }
                         }
                     }
 
                     Do(Label.e4) {
                         Either {
-                            Assign(flag[selfID], to: !flag[selfID])
+                            flag[selfID].set(!flag[selfID])
                             Goto(Label.e4)
                         } or: {
-                            Assign(flag[selfID], to: false)
-                            Assign(unchecked, to: Procs.removing(selfID))
+                            flag[selfID].set(false)
+                            unchecked.set(Procs.removing(selfID))
                         }
                     }
 
                     Do(Label.w1) {
                         If(!unchecked.isEmpty) {
                             With(unchecked) { process in
-                                Assign(nxt, to: process.expr)
+                                nxt.set(process.expr)
                                 When(!flag[process])
                                 Goto(Label.w2)
                             }
@@ -101,11 +101,11 @@ package struct BakeryModel: Sendable {
                     Do(Label.exit) {
                         Either {
                             With(Nat) { ticket in
-                                Assign(num[selfID], to: ticket.expr)
+                                num[selfID].set(ticket.expr)
                                 Goto(Label.exit)
                             }
                         } or: {
-                            Assign(num[selfID], to: 0)
+                            num[selfID].set(0)
                             Goto(Label.ncs)
                         }
                     }

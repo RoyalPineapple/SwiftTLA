@@ -30,20 +30,20 @@ package struct EWD840AnimationModel: Sendable {
 
             let initiate = Do(Step.AnimInitiateProbe, when: tpos == 0
                 && (tcolor == Color.black || color[0] == Color.black)) {
-                Assign(tpos, to: N - 1)
-                Assign(tcolor, to: Color.white)
-                Assign(color[0], to: Color.white)
-                Assign(history, to: Triple.literal(history.first(), history.second(), "InitiateProbe"))
+                tpos.set(N - 1)
+                tcolor.set(Color.white)
+                color[0].set(Color.white)
+                history.set(Triple.literal(history.first(), history.second(), "InitiateProbe"))
             }
             initiate
 
             let pass = Do(Step.AnimPassToken, over: Node) { i in
                 When(i != 0 && tpos == i
                     && (!active[i] || color[i] == Color.black || tcolor == Color.black))
-                Assign(tpos, to: i - 1)
-                Assign(tcolor, to: If(color[i] == Color.black, then: Color.black, else: tcolor))
-                Assign(color[i], to: Color.white)
-                Assign(history, to: Triple.literal(history.first(), history.second(), "PassToken"))
+                tpos.set(i - 1)
+                tcolor.set(If(color[i] == Color.black, then: Color.black, else: tcolor))
+                color[i].set(Color.white)
+                history.set(Triple.literal(history.first(), history.second(), "PassToken"))
             }
             pass
             WeakFairness(anyOf: [initiate, pass])
@@ -52,18 +52,18 @@ package struct EWD840AnimationModel: Sendable {
                 When(active[i])
                 With(Node) { j in
                     When(j != i)
-                    Assign(active[j], to: true)
+                    active[j].set(true)
                     If(j > i) {
-                        Assign(color[i], to: Color.black)
+                        color[i].set(Color.black)
                     }
-                    Assign(history, to: Triple.literal(i, j, "SendMsg"))
+                    history.set(Triple.literal(i, j, "SendMsg"))
                 }
             }
 
             Do(Step.AnimDeactivate, over: Node) { i in
                 When(active[i])
-                Assign(active[i], to: false)
-                Assign(history, to: Triple.literal(history.first(), history.second(), "Deactivate"))
+                active[i].set(false)
+                history.set(Triple.literal(history.first(), history.second(), "Deactivate"))
             }
 
             let AnimInv = Invariant()

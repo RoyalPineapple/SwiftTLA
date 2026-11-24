@@ -60,11 +60,11 @@ package struct CigaretteSmokersModel: Sendable {
 
             Do(Step.startSmoking) {
                 When(!dealer.isEmpty)
-                Assign(smokers, to: Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { ingredient in
+                smokers.set(Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { ingredient in
                     Smoker.expression(smoking:
                         Set<Ingredient>([]).inserting(ingredient.expr).union(dealer) == Ingredients)
                 })
-                Assign(dealer, to: Set<Ingredient>([]))
+                dealer.set(Set<Ingredient>([]))
             }
             Do(Step.stopSmoking) {
                 When(dealer.isEmpty)
@@ -73,10 +73,10 @@ package struct CigaretteSmokersModel: Sendable {
                         !smokers[other].smoking || other == ingredient
                     }
                 }) { ingredient in
-                    Assign(smokers[ingredient].smoking, to: false)
+                    smokers[ingredient].smoking.set(false)
                 }
                 With(Offers) { offer in
-                    Assign(dealer, to: offer)
+                    dealer.set(offer)
                 }
             }
 

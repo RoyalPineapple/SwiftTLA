@@ -30,13 +30,13 @@ package struct MajorityModel: Sendable {
             Do(Step.Next) {
                 When(i <= seq.count)
                 If(cnt == 0) {
-                    Assign(cand, to: seq[i])
-                    Assign(cnt, to: 1)
+                    cand.set(seq[i])
+                    cnt.set(1)
                 } else: {
-                    If(cand == seq[i]) { Assign(cnt, to: cnt + 1) }
-                    else: { Assign(cnt, to: cnt - 1) }
+                    If(cand == seq[i]) { cnt += 1 }
+                    else: { cnt.set(cnt - 1) }
                 }
-                Assign(i, to: i + 1)
+                i += 1
             }
             WeakFairnessNext()
 

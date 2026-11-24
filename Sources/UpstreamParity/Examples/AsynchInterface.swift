@@ -34,13 +34,13 @@ package struct AsynchInterfaceModel: Sendable {
             Do(Step.Send) {
                 When(rdy == ack)
                 With(Data) { datum in
-                    Assign(val, to: datum)
+                    val.set(datum)
                 }
-                Assign(rdy, to: 1 - rdy)
+                rdy.set(1 - rdy)
             }
             Do(Step.Rcv) {
                 When(rdy != ack)
-                Assign(ack, to: 1 - ack)
+                ack.set(1 - ack)
             }
             TypeInvariant {
                 Data.contains(val) && rdy >= 0 && rdy <= 1 && ack >= 0 && ack <= 1

@@ -23,7 +23,7 @@ package struct GameOfLifeModel: Sendable {
             let grid: SharedVariable<[Position: Bool]> = scope.sharedVar(initiallyIn: grids)
 
             Do(Step.Next) {
-                Assign(grid, to: Dictionary<Position, Bool>.mapping(over: positions) { cell in
+                grid.set(Dictionary<Position, Bool>.mapping(over: positions) { cell in
                     positions.filter { neighbor in
                         IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
                             .contains(neighbor.expr.first())

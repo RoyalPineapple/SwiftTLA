@@ -59,11 +59,10 @@ package struct MissionariesAndCannibalsModel: Sendable {
                     When(arriving.isSubset(of: Cannibals)
                         || arriving.intersection(Cannibals).count
                             <= arriving.intersection(Missionaries).count)
-                    Assign(who_is_on_bank, to:
-                        Dictionary<Bank, Set<Person>>.mapping(over: Banks) { bank in
+                    who_is_on_bank.set(Dictionary<Bank, Set<Person>>.mapping(over: Banks) { bank in
                             If(bank == bank_of_boat, then: departing, else: arriving)
                         })
-                    Assign(bank_of_boat, to: other)
+                    bank_of_boat.set(other)
                 }
             }
             TypeOK {

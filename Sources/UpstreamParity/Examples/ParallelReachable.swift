@@ -50,7 +50,7 @@ package struct ParallelReachableModel: Sendable {
                         Either {
                             When(!frontier.isEmpty)
                             With(frontier) { node in
-                                Assign(current, to: node)
+                                current.set(node)
                             }
                             Goto(Step.b)
                         } or: {
@@ -62,7 +62,7 @@ package struct ParallelReachableModel: Sendable {
                     Do(Step.b) {
                         If(!marked.contains(current.expr)) {
                             marked.insert(current.expr)
-                            Assign(pending, to: successors[current])
+                            pending.set(successors[current])
                             Goto(Step.c)
                         } else: {
                             frontier.remove(current.expr)

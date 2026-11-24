@@ -67,30 +67,30 @@ package struct MultiCarElevator: Sendable {
                     && cars[.carA].rider != person.assuming(String.self)
                     && cars[.carB].rider != person.assuming(String.self)
                     && cars[car].rider == "none")
-                Assign(cars[car].rider, to: person.assuming(String.self))
+                cars[car].rider.set(person.assuming(String.self))
             }
             Do(Step.move, over: CarID.all, Direction.all, FloorID.all) { car, direction, floor in
                 When(cars[car].doorsOpen == false && cars[car].floor != floor)
-                Assign(cars[car].floor, to: floor)
-                Assign(lastMoveDoorClosed, to: true)
+                cars[car].floor.set(floor)
+                lastMoveDoorClosed.set(true)
             }
             Do(Step.openDoor, over: CarID.all, FloorID.all, Direction.all) { car, floor, direction in
                 When(cars[car].doorsOpen == false)
-                Assign(cars[car].doorsOpen, to: true)
+                cars[car].doorsOpen.set(true)
             }
             Do(Step.board, over: PersonID.all, CarID.all, FloorID.all) { person, car, floor in
                 When(cars[car].doorsOpen == true && cars[car].rider == person.assuming(String.self))
-                Assign(calls, to: calls.removing(Call.expression(person: person, floor: floor, direction: Direction.up)))
+                calls.set(calls.removing(Call.expression(person: person, floor: floor, direction: Direction.up)))
             }
             Do(Step.closeDoor, over: CarID.all, FloorID.all, Direction.all) { car, floor, direction in
                 When(cars[car].doorsOpen == true)
-                Assign(cars[car].doorsOpen, to: false)
+                cars[car].doorsOpen.set(false)
             }
             Do(Step.completeRide, over: PersonID.all, CarID.all, FloorID.all) { person, car, floor in
                 When(cars[car].doorsOpen == true
                     && cars[car].rider == person.assuming(String.self)
                     && cars[car].floor == floor)
-                Assign(cars[car].rider, to: "none")
+                cars[car].rider.set("none")
             }
             let MultiCarElevator = Validation {}.checkingDeadlock(false)
             MultiCarElevator

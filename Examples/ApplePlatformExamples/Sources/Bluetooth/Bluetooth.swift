@@ -51,43 +51,43 @@ public struct BluetoothModel {
                 Each(PoweredOnProcess.all) { _ in
                     Do(Step.poweredOn) {
                         When(phase == .unknown || phase == .resetting || phase == .poweredOff)
-                        Assign(phase, to: Phase.poweredOn)
+                        phase.set(Phase.poweredOn)
                         Goto(Step.poweredOn)
                     }
                 }
                 Each(PoweredOffProcess.all) { _ in
                     Do(Step.poweredOff) {
                         When(phase == .unknown || phase == .resetting || phase == .poweredOn || phase == .scanning)
-                        Assign(phase, to: Phase.poweredOff)
+                        phase.set(Phase.poweredOff)
                         Goto(Step.poweredOff)
                     }
                 }
                 Each(ResettingProcess.all) { _ in
                     Do(Step.resetting) {
                         When(phase != .resetting)
-                        Assign(phase, to: Phase.resetting)
+                        phase.set(Phase.resetting)
                         Goto(Step.resetting)
                     }
                 }
                 Each(UnsupportedProcess.all) { _ in
                     Do(Step.unsupported) {
                         When(phase != .unsupported)
-                        Assign(phase, to: Phase.unsupported)
+                        phase.set(Phase.unsupported)
                         Goto(Step.unsupported)
                     }
                 }
                 Each(UnauthorizedProcess.all) { _ in
                     Do(Step.unauthorized) {
                         When(phase != .unauthorized)
-                        Assign(phase, to: Phase.unauthorized)
+                        phase.set(Phase.unauthorized)
                         Goto(Step.unauthorized)
                     }
                 }
                 Each(StartScanProcess.all) { _ in
-                    Do(Step.startScan) { When(phase == .poweredOn); Assign(phase, to: Phase.scanning); Goto(Step.startScan) }
+                    Do(Step.startScan) { When(phase == .poweredOn); phase.set(Phase.scanning); Goto(Step.startScan) }
                 }
                 Each(StopScanProcess.all) { _ in
-                    Do(Step.stopScan) { When(phase == .scanning); Assign(phase, to: Phase.poweredOn); Goto(Step.stopScan) }
+                    Do(Step.stopScan) { When(phase == .scanning); phase.set(Phase.poweredOn); Goto(Step.stopScan) }
                 }
                 knownCentralPhase { phase == .unknown || phase == .resetting || phase == .unsupported || phase == .unauthorized || phase == .poweredOff || phase == .poweredOn || phase == .scanning }
             })

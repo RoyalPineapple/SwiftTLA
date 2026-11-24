@@ -42,14 +42,14 @@ package struct TeachingSimpleRegularN8Model: Sendable {
 
                 Each(Process.all) { process in
                     Do(Step.a1) {
-                        Assign(x, to: x.updating(process, to: SetExpr<Int>.literal(0, 1)))
+                        x.set(x.updating(process, to: SetExpr<Int>.literal(0, 1)))
                     }
                     Do(Step.a2) {
-                        Assign(x, to: x.updating(process, to: SetExpr<Int>.literal(1)))
+                        x.set(x.updating(process, to: SetExpr<Int>.literal(1)))
                     }
                     Do(Step.b) {
                         With(x[predecessor[process]]) { value in
-                            Assign(y, to: y.updating(process, to: value.expr))
+                            y.set(y.updating(process, to: value.expr))
                         }
                     }
                 }

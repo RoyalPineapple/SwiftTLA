@@ -107,11 +107,11 @@ package struct KVsnapModel: Sendable {
 
                     Do(Step.start) {
                         tx.insert(selfID)
-                        Assign(snapshotStore, to: store)
+                        snapshotStore.set(store)
                         With(NonEmptySubsets(of: SetExpr<Key>.literal(.k1, .k2))) { reads in
                             With(NonEmptySubsets(of: SetExpr<Key>.literal(.k1, .k2))) { writes in
-                                Assign(read_keys, to: reads.expr)
-                                Assign(write_keys, to: writes.expr)
+                                read_keys.set(reads.expr)
+                                write_keys.set(writes.expr)
                             }
                         }
                     }
@@ -120,16 +120,13 @@ package struct KVsnapModel: Sendable {
                         let reads: Expr<Set<Operation>> = read_keys.expr.mapping { key in
                             ModuleCall(as: Operation.self, "CC", "r", key.expr, snapshotStore[key.expr])
                         }
-                        Assign(
-                            ops,
-                            to: ops.expr.concatenating(
+                        ops.set(ops.expr.concatenating(
                                 InjectiveSequence(from: reads)
-                            )
-                        )
+                            ))
                     }
 
                     Do(Step.update) {
-                        Assign(snapshotStore, to: Function<Key, Value>.mapping { key in
+                        snapshotStore.set(Function<Key, Value>.mapping { key in
                             If(
                                 write_keys.expr.contains(key),
                                 then: Value.first(selfID.expr),
@@ -141,15 +138,15 @@ package struct KVsnapModel: Sendable {
                     Do(Step.commit) {
                         If(missed[selfID].intersection(write_keys.expr).isEmpty) {
                             Let(tx.removing(selfID.expr)) { committedTransactions in
-                                Assign(tx, to: committedTransactions.expr)
-                                Assign(missed, to: Function<Transaction, SetExpr<Key>>.mapping { other in
+                                tx.set(committedTransactions.expr)
+                                missed.set(Function<Transaction, SetExpr<Key>>.mapping { other in
                                     If(
                                         committedTransactions.expr.contains(other),
                                         then: missed[other.expr].union(write_keys.expr),
                                         else: missed[other.expr]
                                     )
                                 })
-                                Assign(store, to: Function<Key, Value>.mapping { key in
+                                store.set(Function<Key, Value>.mapping { key in
                                     If(
                                         write_keys.expr.contains(key),
                                         then: snapshotStore[key.expr],
@@ -159,12 +156,9 @@ package struct KVsnapModel: Sendable {
                                 let writes: Expr<Set<Operation>> = write_keys.expr.mapping { key in
                                     ModuleCall(as: Operation.self, "CC", "w", key.expr, Value.first(selfID.expr))
                                 }
-                                Assign(
-                                    ops,
-                                    to: ops.expr.concatenating(
+                                ops.set(ops.expr.concatenating(
                                         InjectiveSequence(from: writes)
-                                    )
-                                )
+                                    ))
                             }
                         }
                     }

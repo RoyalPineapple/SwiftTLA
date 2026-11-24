@@ -69,7 +69,7 @@ package struct DijkstraMutexModel: Sendable {
                     )
 
                     Do(Label.li0) {
-                        Assign(b, to: b.updating(selfID, to: false))
+                        b.set(b.updating(selfID, to: false))
                     }
 
                     Do(Label.li1) {
@@ -81,16 +81,13 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li2) {
-                        Assign(c, to: c.updating(selfID, to: true))
+                        c.set(c.updating(selfID, to: true))
                     }
 
                     Do(Label.li3a) {
-                        Assign(
-                            temp,
-                            to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(
+                        temp.set(OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(
                                 OneOf<Process, Set<Process>>.first(k.expr)
-                            )
-                        )
+                            ))
                     }
 
                     Do(Label.li3b) {
@@ -104,7 +101,7 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li3c) {
-                        Assign(k, to: selfID.expr)
+                        k.set(selfID.expr)
                     }
 
                     Do(Label.li3d) {
@@ -112,14 +109,11 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li4a) {
-                        Assign(c, to: c.updating(selfID, to: false))
-                        Assign(
-                            temp,
-                            to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
+                        c.set(c.updating(selfID, to: false))
+                        temp.set(OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
                                 Proc.removing(selfID)
                             )
-                        )
-                        )
+                        ))
                     }
 
                     Do(Label.li4b) {
@@ -127,13 +121,10 @@ package struct DijkstraMutexModel: Sendable {
                         let remaining = active.assuming(Set<Process>.self)
                         If(!remaining.isEmpty) {
                             With(remaining) { process in
-                                Assign(
-                                    temp,
-                                    to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
+                                temp.set(OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
                                         remaining.removing(process)
                                     )
-                                )
-                                )
+                                ))
                                 If(!c[process]) {
                                     Goto(Label.li1)
                                 } else: {
@@ -146,8 +137,8 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.critical) { Skip() }
-                    Do(Label.li5) { Assign(c, to: c.updating(selfID, to: true)) }
-                    Do(Label.li6) { Assign(b, to: b.updating(selfID, to: true)) }
+                    Do(Label.li5) { c.set(c.updating(selfID, to: true)) }
+                    Do(Label.li6) { b.set(b.updating(selfID, to: true)) }
                     Do(Label.nonCritical) { Goto(Label.li0) }
                     DeadlockFree(
                         At(Label.li0, selfID),

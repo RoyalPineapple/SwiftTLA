@@ -38,10 +38,10 @@ package struct PetersonModel: Sendable {
                         Skip()
                     }
                     Do(Step.a1) {
-                        Assign(c, to: c.updating(process, to: true))
+                        c.set(c.updating(process, to: true))
                     }
                     Do(Step.a2) {
-                        Assign(turn, to: If(
+                        turn.set(If(
                             process == .one,
                             then: Process.two,
                             else: Process.one
@@ -60,7 +60,7 @@ package struct PetersonModel: Sendable {
                         Skip()
                     }
                     Do(Step.a4) {
-                        Assign(c, to: c.updating(process, to: false))
+                        c.set(c.updating(process, to: false))
                         Goto(Step.a0)
                     }
                 }

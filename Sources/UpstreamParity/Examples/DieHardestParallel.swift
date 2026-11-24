@@ -21,21 +21,21 @@ package struct DieHardestParallelModel: Sendable {
             let firstStep = Macro {
                 With(Capacities[1].keys, Set<Int>([0, 1, 2])) { j, operation in
                     If(operation == 0) {
-                        Assign(c1[j], to: Capacities[1][j])
+                        c1[j].set(Capacities[1][j])
                     } else: {
                         If(operation == 1) {
-                            Assign(c1[j], to: 0)
+                            c1[j].set(0)
                         } else: {
                             With(Capacities[1].keys) { k in
                                 When(j != k)
                                 If(c1[j] < Capacities[1][k] - c1[k]) {
                                     let amount = c1[j]
-                                    Assign(c1[j], to: 0)
-                                    Assign(c1[k], to: c1[k] + amount)
+                                    c1[j].set(0)
+                                    c1[k] += amount
                                 } else: {
                                     let amount = Capacities[1][k] - c1[k]
-                                    Assign(c1[j], to: c1[j] - amount)
-                                    Assign(c1[k], to: Capacities[1][k])
+                                    c1[j].set(c1[j] - amount)
+                                    c1[k].set(Capacities[1][k])
                                 }
                             }
                         }
@@ -45,21 +45,21 @@ package struct DieHardestParallelModel: Sendable {
             let secondStep = Macro {
                 With(Capacities[2].keys, Set<Int>([0, 1, 2])) { j, operation in
                     If(operation == 0) {
-                        Assign(c2[j], to: Capacities[2][j])
+                        c2[j].set(Capacities[2][j])
                     } else: {
                         If(operation == 1) {
-                            Assign(c2[j], to: 0)
+                            c2[j].set(0)
                         } else: {
                             With(Capacities[2].keys) { k in
                                 When(j != k)
                                 If(c2[j] < Capacities[2][k] - c2[k]) {
                                     let amount = c2[j]
-                                    Assign(c2[j], to: 0)
-                                    Assign(c2[k], to: c2[k] + amount)
+                                    c2[j].set(0)
+                                    c2[k] += amount
                                 } else: {
                                     let amount = Capacities[2][k] - c2[k]
-                                    Assign(c2[j], to: c2[j] - amount)
-                                    Assign(c2[k], to: Capacities[2][k])
+                                    c2[j].set(c2[j] - amount)
+                                    c2[k].set(Capacities[2][k])
                                 }
                             }
                         }
@@ -69,18 +69,18 @@ package struct DieHardestParallelModel: Sendable {
             Do(Step.NextParallel, when: !Freeze) {
                 firstStep()
                 secondStep()
-                Assign(s1, to: s1)
-                Assign(s2, to: s2)
+                s1.set(s1)
+                s2.set(s2)
             }
             Do(Step.NextParallelFreeze, when: Freeze) {
                 If(Exists(in: c1.keys) { j in c1[j] == Goal }) {
-                    Assign(c1, to: c1)
+                    c1.set(c1)
                 } else: { firstStep() }
                 If(Exists(in: c2.keys) { j in c2[j] == Goal }) {
-                    Assign(c2, to: c2)
+                    c2.set(c2)
                 } else: { secondStep() }
-                Assign(s1, to: s1)
-                Assign(s2, to: s2)
+                s1.set(s1)
+                s2.set(s2)
             }
             NotSolved {
                 !(Exists(in: c1.keys) { j in c1[j] == Goal }

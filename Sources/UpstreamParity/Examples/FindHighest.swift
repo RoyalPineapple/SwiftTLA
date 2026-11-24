@@ -25,8 +25,8 @@ package struct FindHighestModel: Sendable {
                 let i = scope.sharedVar(initial: 1)
 
                 While(Step.lb, i <= f.count) {
-                    Assign(h, to: If(h >= f[i], then: h, else: f[i]))
-                    Assign(i, to: i + 1)
+                    h.set(If(h >= f[i], then: h, else: f[i]))
+                    i += 1
                 }
 
                 StateConstraint(f.count <= MaxLength)

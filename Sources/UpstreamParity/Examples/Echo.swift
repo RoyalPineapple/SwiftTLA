@@ -84,7 +84,7 @@ package struct EchoModel: Sendable {
 
                     Do(Step.n0) {
                         If(selfID == initiator) {
-                            Assign(inbox, to: Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
+                            inbox.set(Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
                                 If(nbrs.expr.contains(destination),
                                    then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
                                    else: inbox[destination])
@@ -97,16 +97,16 @@ package struct EchoModel: Sendable {
                             Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { (networkAfterReceive: WithValue<[NodeID: Set<Message>]>) in
                                 If(selfID != initiator && rcvd.expr == 0) {
                                     Assert(message.kind == .message)
-                                    Assign(parent, to: OneOf<NodeID, NoNode>.first(message.sndr))
-                                    Assign(inbox, to: Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
+                                    parent.set(OneOf<NodeID, NoNode>.first(message.sndr))
+                                    inbox.set(Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
                                         If(nbrs.expr.removing(message.sndr).contains(destination),
                                            then: networkAfterReceive[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
                                            else: networkAfterReceive[destination])
                                     })
                                 } else: {
-                                    Assign(inbox, to: networkAfterReceive.expr)
+                                    inbox.set(networkAfterReceive.expr)
                                 }
-                                Assign(rcvd, to: rcvd.expr + 1)
+                                rcvd += 1
                                 If(message.kind == .acknowledgement) {
                                     children.insert(message.sndr)
                                 }
@@ -118,7 +118,7 @@ package struct EchoModel: Sendable {
                         If(selfID != initiator) {
                             let destination = parent.expr.assuming(NodeID.self)
                             Assert(nbrs.expr.contains(destination))
-                            Assign(inbox, to: inbox.updating(destination, to: inbox[destination].inserting(
+                            inbox.set(inbox.updating(destination, to: inbox[destination].inserting(
                                 Message.expression(kind: MessageKind.acknowledgement, sndr: selfID)
                             )))
                         }

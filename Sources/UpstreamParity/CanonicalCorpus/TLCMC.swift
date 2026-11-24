@@ -63,12 +63,12 @@ package struct TLCMCModel: Sendable {
 
                 While(Step.scanInitialStates, initialIndex <= frontier.expr.count) {
                     let initial = frontier.expr.at(initialIndex.expr)
-                    Assign(currentState, to: SearchNode.first(initial))
+                    currentState.set(SearchNode.first(initial))
                     closed.insert(initial)
-                    Assign(levels, to: levels.overriding(initial, with: 0))
-                    Assign(initialIndex, to: initialIndex + 1)
+                    levels.set(levels.overriding(initial, with: 0))
+                    initialIndex += 1
                     If(violations.contains(initial)) {
-                        Assign(counterexample, to: TupleExpr<Node>.literal(initial))
+                        counterexample.set(TupleExpr<Node>.literal(initial))
                         Goto(Step.trace)
                     }
                 }
@@ -83,11 +83,11 @@ package struct TLCMCModel: Sendable {
                     } else: {
                         let current = frontier.at(1)
                         let nonSelfSuccessors = transitionTargets[current].removing(current)
-                        Assign(currentState, to: SearchNode.first(current))
-                        Assign(frontier, to: frontier.expr.removing(at: 1))
-                        Assign(successors, to: nonSelfSuccessors.subtracting(closed.expr))
+                        currentState.set(SearchNode.first(current))
+                        frontier.set(frontier.expr.removing(at: 1))
+                        successors.set(nonSelfSuccessors.subtracting(closed.expr))
                         If(nonSelfSuccessors.count == 0) {
-                            Assign(counterexample, to: TupleExpr<Node>.literal(current))
+                            counterexample.set(TupleExpr<Node>.literal(current))
                             Goto(Step.trace)
                         } else: {
                             Goto(Step.exploreSuccessors)
@@ -103,14 +103,11 @@ package struct TLCMCModel: Sendable {
                             let current = currentState.expr.assuming(Node.self)
                             successors.remove(successor.expr)
                             closed.insert(successor.expr)
-                            Assign(frontier, to: frontier.expr.appending(successor.expr))
-                            Assign(
-                                predecessorEdges,
-                                to: predecessorEdges.expr.appending(Pair<Node, Node>.literal(current, successor.expr))
-                            )
-                            Assign(levels, to: levels.overriding(successor.expr, with: levels[current] + 1))
+                            frontier.set(frontier.expr.appending(successor.expr))
+                            predecessorEdges.set(predecessorEdges.expr.appending(Pair<Node, Node>.literal(current, successor.expr)))
+                            levels.set(levels.overriding(successor.expr, with: levels[current] + 1))
                             If(violations.contains(successor)) {
-                                Assign(counterexample, to: TupleExpr<Node>.literal(current, successor.expr))
+                                counterexample.set(TupleExpr<Node>.literal(current, successor.expr))
                                 Goto(Step.trace)
                             } else: {
                                 Goto(Step.exploreSuccessors)
@@ -128,10 +125,7 @@ package struct TLCMCModel: Sendable {
                             .selecting { edge in edge.second() == counterexample.at(1) }
                             .at(1)
                             .first()
-                        Assign(
-                            counterexample,
-                            to: TupleExpr<Node>.literal(predecessor).concatenating(counterexample.expr)
-                        )
+                        counterexample.set(TupleExpr<Node>.literal(predecessor).concatenating(counterexample.expr))
                         Goto(Step.trace)
                     }
                 }

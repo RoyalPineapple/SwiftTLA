@@ -68,7 +68,7 @@ public struct ElevatorBank {
                                 When(cars[car].rider == .none)
                                 When(riders[rider].phase == .waiting)
                                 When(riders[rider].floor == cars[car].floor)
-                                Assign(cars[car].door, to: .open)
+                                cars[car].door.set(.open)
                             }
                         } or: {
                             Either {
@@ -77,9 +77,9 @@ public struct ElevatorBank {
                                     When(cars[car].rider == .none)
                                     When(riders[rider].phase == .waiting)
                                     When(riders[rider].floor == cars[car].floor)
-                                    Assign(cars[car].rider, to: rider)
-                                    Assign(cars[car].door, to: .closed)
-                                    Assign(riders[rider].phase, to: .onboard)
+                                    cars[car].rider.set(rider)
+                                    cars[car].door.set(.closed)
+                                    riders[rider].phase.set(.onboard)
                                 }
                             } or: {
                                 Either {
@@ -88,10 +88,10 @@ public struct ElevatorBank {
                                     When(cars[car].floor < riders[cars[car].rider].destination)
                                     Either {
                                         When(cars[car].floor == .one)
-                                        Assign(cars[car].floor, to: .two)
+                                        cars[car].floor.set(.two)
                                     } or: {
                                         When(cars[car].floor == .two)
-                                        Assign(cars[car].floor, to: .three)
+                                        cars[car].floor.set(.three)
                                     }
                                 } or: {
                                     Either {
@@ -100,26 +100,26 @@ public struct ElevatorBank {
                                         When(cars[car].floor > riders[cars[car].rider].destination)
                                         Either {
                                             When(cars[car].floor == .three)
-                                            Assign(cars[car].floor, to: .two)
+                                            cars[car].floor.set(.two)
                                         } or: {
                                             When(cars[car].floor == .two)
-                                            Assign(cars[car].floor, to: .one)
+                                            cars[car].floor.set(.one)
                                         }
                                     } or: {
                                         Either {
                                             When(cars[car].door == .closed)
                                             When(cars[car].rider != .none)
                                             When(cars[car].floor == riders[cars[car].rider].destination)
-                                            Assign(cars[car].door, to: .open)
+                                            cars[car].door.set(.open)
                                         } or: {
                                             When(cars[car].door == .open)
                                             When(cars[car].rider != .none)
                                             When(riders[cars[car].rider].phase == .onboard)
                                             When(cars[car].floor == riders[cars[car].rider].destination)
                                             let exitingRider = cars[car].rider
-                                            Assign(cars[car].rider, to: .none)
-                                            Assign(cars[car].door, to: .closed)
-                                            Assign(riders[exitingRider].phase, to: .arrived)
+                                            cars[car].rider.set(.none)
+                                            cars[car].door.set(.closed)
+                                            riders[exitingRider].phase.set(.arrived)
                                         }
                                     }
                                 }

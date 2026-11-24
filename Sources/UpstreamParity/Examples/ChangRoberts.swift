@@ -41,20 +41,20 @@ package struct ChangRobertsModel: Sendable {
                     let successor = If(node == N, then: 1, else: node + 1)
                     Do(Step.n0) {
                         If(initiator[node]) {
-                            Assign(msgs[successor], to: msgs[successor].inserting(Id[node]))
+                            msgs[successor].set(msgs[successor].inserting(Id[node]))
                         }
                     }
                     While(Step.n1, true) {
                         With(msgs[node]) { candidate in
-                            Assign(msgs[node], to: msgs[node].removing(candidate))
+                            msgs[node].set(msgs[node].removing(candidate))
                             If(state[node] == ProcessState.lost || candidate < Id[node]) {
-                                Assign(msgs[successor], to: msgs[successor].inserting(candidate))
+                                msgs[successor].set(msgs[successor].inserting(candidate))
                                 If(state[node] != ProcessState.lost) {
-                                    Assign(state[node], to: ProcessState.lost)
+                                    state[node].set(ProcessState.lost)
                                 }
                             } else: {
                                 If(candidate == Id[node]) {
-                                    Assign(state[node], to: ProcessState.won)
+                                    state[node].set(ProcessState.won)
                                 }
                             }
                         }

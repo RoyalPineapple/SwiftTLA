@@ -55,12 +55,12 @@ public struct ChangRoberts {
                             When(leader == 0 && message.to == node)
                             Either {
                                 When(message.candidate == identifiers[node])
-                                Assign(leader, to: message.candidate)
+                                leader.set(message.candidate)
                                 messages.remove(message)
                             } or: {
                                 Either {
                                     When(message.candidate > identifiers[node])
-                                    Assign(messages, to: messages.removing(message).inserting(
+                                    messages.set(messages.removing(message).inserting(
                                         Message.expression(
                                             candidate: message.candidate,
                                             from: node,

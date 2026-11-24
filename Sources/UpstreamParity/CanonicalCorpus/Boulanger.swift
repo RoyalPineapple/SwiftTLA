@@ -65,40 +65,40 @@ package struct BoulangerModel: Sendable {
 
                     Do(Label.e1) {
                         Either {
-                            Assign(flag[selfID], to: !flag[selfID])
+                            flag[selfID].set(!flag[selfID])
                             Goto(Label.e1)
                         } or: {
-                            Assign(flag[selfID], to: true)
-                            Assign(unchecked, to: Procs.removing(selfID))
-                            Assign(max, to: 0)
+                            flag[selfID].set(true)
+                            unchecked.set(Procs.removing(selfID))
+                            max.set(0)
                         }
                     }
 
                     While(Label.e2, !unchecked.isEmpty) {
                         With(unchecked) { process in
                             unchecked.remove(process)
-                            If(num[process] > max) { Assign(max, to: num[process]) }
+                            If(num[process] > max) { max.set(num[process]) }
                         }
                     }
 
                     Do(Label.e3) {
                         Either {
                             With(IntRange(0, through: MaxNat)) { ticket in
-                                Assign(num[selfID], to: ticket.expr)
+                                num[selfID].set(ticket.expr)
                                 Goto(Label.e3)
                             }
                         } or: {
-                            Assign(num[selfID], to: max + 1)
+                            num[selfID].set(max + 1)
                         }
                     }
 
                     Do(Label.e4) {
                         Either {
-                            Assign(flag[selfID], to: !flag[selfID])
+                            flag[selfID].set(!flag[selfID])
                             Goto(Label.e4)
                         } or: {
-                            Assign(flag[selfID], to: false)
-                            Assign(unchecked, to: If(num[selfID] == 1,
+                            flag[selfID].set(false)
+                            unchecked.set(If(num[selfID] == 1,
                                 then: IntRange(1, through: selfID - 1), else: Procs.removing(selfID)))
                         }
                     }
@@ -106,9 +106,9 @@ package struct BoulangerModel: Sendable {
                     Do(Label.w1) {
                         If(!unchecked.isEmpty) {
                             With(unchecked) { process in
-                                Assign(nxt, to: process.expr)
+                                nxt.set(process.expr)
                                 When(!flag[process])
-                                Assign(previous, to: -1)
+                                previous.set(-1)
                                 Goto(Label.w2)
                             }
                         } else: { Goto(Label.cs) }
@@ -117,11 +117,11 @@ package struct BoulangerModel: Sendable {
                     Do(Label.w2) {
                         If(num[nxt] == 0 || num[selfID] < num[nxt] || (num[selfID] == num[nxt] && selfID < nxt) || (previous != -1 && num[nxt] != previous)) {
                             Let(unchecked.removing(nxt.expr)) { remaining in
-                                Assign(unchecked, to: remaining.expr)
+                                unchecked.set(remaining.expr)
                                 If(remaining.expr.isEmpty) { Goto(Label.cs) } else: { Goto(Label.w1) }
                             }
                         } else: {
-                            Assign(previous, to: num[nxt])
+                            previous.set(num[nxt])
                             Goto(Label.w2)
                         }
                     }
@@ -131,11 +131,11 @@ package struct BoulangerModel: Sendable {
                     Do(Label.exit) {
                         Either {
                             With(IntRange(0, through: MaxNat)) { ticket in
-                                Assign(num[selfID], to: ticket.expr)
+                                num[selfID].set(ticket.expr)
                                 Goto(Label.exit)
                             }
                         } or: {
-                            Assign(num[selfID], to: 0)
+                            num[selfID].set(0)
                             Goto(Label.ncs)
                         }
                     }

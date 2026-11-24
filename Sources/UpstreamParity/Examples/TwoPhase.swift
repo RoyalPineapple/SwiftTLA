@@ -14,13 +14,13 @@ package struct TwoPhaseModel: Sendable {
 
             Do(Step.ProducerStep) {
                 When(p == c)
-                Assign(p, to: (p + 1) % 2)
-                Assign(x, to: x)
+                p.set((p + 1) % 2)
+                x.set(x)
             }
             Do(Step.ConsumerStep) {
                 When(p != c)
-                Assign(c, to: (c + 1) % 2)
-                Assign(x, to: x)
+                c.set((c + 1) % 2)
+                x.set(x)
             }
 
             Invariant("Inv") {

@@ -204,7 +204,7 @@ package struct VoteProofModel: Sendable {
 
                 let increaseMaxBal = Macro { (ballot: MacroParameter<Int>, acceptor: MacroParameter<Acceptor>) in
                     When(ballot.expr > maxBal[acceptor])
-                    Assign(maxBal, to: maxBal.updating(acceptor, to: ballot.expr))
+                    maxBal.set(maxBal.updating(acceptor, to: ballot.expr))
                 }
                 let voteFor = Macro { (vote: MacroParameter<Pair<Int, Value>>, acceptor: MacroParameter<Acceptor>) in
                     When(
@@ -220,11 +220,11 @@ package struct VoteProofModel: Sendable {
                             }
                             && FormalCall(as: Bool.self, "SafeAt", vote.expr.first(), vote.expr.second())
                     )
-                    Assign(votes, to: votes.updating(
+                    votes.set(votes.updating(
                         acceptor,
                         to: votes[acceptor].inserting(Pair<Int, Value>.literal(vote.expr.first(), vote.expr.second()))
                     ))
-                    Assign(maxBal, to: maxBal.updating(acceptor, to: vote.expr.first()))
+                    maxBal.set(maxBal.updating(acceptor, to: vote.expr.first()))
                 }
 
                 Each(Acceptor.all) { selfID in

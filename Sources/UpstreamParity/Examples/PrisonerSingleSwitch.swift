@@ -40,14 +40,14 @@ package struct PrisonerSingleSwitchModel: Sendable {
             let wardenAction = Do(Step.WardenAction, over: Prisoner) { prisoner in
                 If(prisoner == DesignatedCounter) {
                     If(light == Light.on) {
-                        Assign(light, to: Light.off)
-                        Assign(count, to: count + 1)
+                        light.set(Light.off)
+                        count += 1
                     }
-                    Assign(announced, to: count >= VictoryThreshold)
+                    announced.set(count >= VictoryThreshold)
                 } else: {
                     If(light == Light.off && signalled[prisoner] < SignalLimit) {
-                        Assign(light, to: Light.on)
-                        Assign(signalled[prisoner], to: signalled[prisoner] + 1)
+                        light.set(Light.on)
+                        signalled[prisoner] += 1
                     }
                 }
                 has_visited.insert(prisoner)

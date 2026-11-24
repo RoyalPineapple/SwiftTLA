@@ -36,12 +36,12 @@ package struct BinarySearchModel: Sendable {
                     Let((low + high).integerDivided(by: 2)) { mid in
                         Let(seq[mid.expr]) { middleValue in
                             If(middleValue == val) {
-                                Assign(result, to: mid.expr)
+                                result.set(mid.expr)
                             } else: {
                                 If(val < middleValue) {
-                                    Assign(high, to: mid.expr - 1)
+                                    high.set(mid.expr - 1)
                                 } else: {
-                                    Assign(low, to: mid.expr + 1)
+                                    low.set(mid.expr + 1)
                                 }
                             }
                         }

@@ -58,9 +58,9 @@ package struct ChameneosModel: Sendable {
                     When(chameneoses[cid].first() != fadedColor)
                     If(meetingPlace == empty) {
                         If(numMeetings < N) {
-                            Assign(meetingPlace, to: WaitingPlace.first(cid))
+                            meetingPlace.set(WaitingPlace.first(cid))
                         } else: {
-                            Assign(chameneoses[cid], to: Pair.literal(
+                            chameneoses[cid].set(Pair.literal(
                                 fadedColor, chameneoses[cid].second()))
                         }
                     } else: {
@@ -72,12 +72,12 @@ package struct ChameneosModel: Sendable {
                                 Select(from: initialColors) { color in
                                     color.expr != myColor && color.expr != otherColor
                                 })) { newColor in
-                                Assign(meetingPlace, to: empty)
-                                Assign(chameneoses[cid], to: Pair.literal(
+                                meetingPlace.set(empty)
+                                chameneoses[cid].set(Pair.literal(
                                     Color.first(newColor.expr), chameneoses[cid].second() + 1))
-                                Assign(chameneoses[waiting], to: Pair.literal(
+                                chameneoses[waiting].set(Pair.literal(
                                     Color.first(newColor.expr), chameneoses[waiting].second() + 1))
-                                Assign(numMeetings, to: numMeetings + 1)
+                                numMeetings += 1
                             }
                         }
                     }

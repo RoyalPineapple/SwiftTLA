@@ -30,18 +30,18 @@ package struct EWD840Model: Sendable {
 
             let initiate = Do(Step.InitiateProbe, when: tpos == 0
                 && (tcolor == Color.black || color[0] == Color.black)) {
-                Assign(tpos, to: N - 1)
-                Assign(tcolor, to: Color.white)
-                Assign(color[0], to: Color.white)
+                tpos.set(N - 1)
+                tcolor.set(Color.white)
+                color[0].set(Color.white)
             }
             initiate
 
             let pass = Do(Step.PassToken, over: Node) { i in
                 When(i != 0 && tpos == i
                     && (!active[i] || color[i] == Color.black || tcolor == Color.black))
-                Assign(tpos, to: i - 1)
-                Assign(tcolor, to: If(color[i] == Color.black, then: Color.black, else: tcolor))
-                Assign(color[i], to: Color.white)
+                tpos.set(i - 1)
+                tcolor.set(If(color[i] == Color.black, then: Color.black, else: tcolor))
+                color[i].set(Color.white)
             }
             pass
             WeakFairness(anyOf: [initiate, pass])
@@ -50,16 +50,16 @@ package struct EWD840Model: Sendable {
                 When(active[i])
                 With(Node) { j in
                     When(j != i)
-                    Assign(active[j], to: true)
+                    active[j].set(true)
                     If(j > i) {
-                        Assign(color[i], to: Color.black)
+                        color[i].set(Color.black)
                     }
                 }
             }
 
             Do(Step.Deactivate, over: Node) { i in
                 When(active[i])
-                Assign(active[i], to: false)
+                active[i].set(false)
             }
 
             let TypeOK = Invariant()

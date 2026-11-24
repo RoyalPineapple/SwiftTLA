@@ -26,7 +26,7 @@ package struct LeastCircularSubstringModel: Sendable {
                 Do(Step.L3) {
                     If(j < n * 2) { Goto(Step.L5) } else: { Stop() }
                 }
-                Do(Step.L5) { Assign(i, to: f[j - k - 1]) }
+                Do(Step.L5) { i.set(f[j - k - 1]) }
                 Do(Step.L6) {
                     If(b[j % n] != b[(k + i + 1) % n] && i != -1) {
                         Goto(Step.L7)
@@ -37,9 +37,9 @@ package struct LeastCircularSubstringModel: Sendable {
                         Goto(Step.L8)
                     } else: { Goto(Step.L9) }
                 }
-                Do(Step.L8) { Assign(k, to: j - i - 1) }
+                Do(Step.L8) { k.set(j - i - 1) }
                 Do(Step.L9) {
-                    Assign(i, to: f[i])
+                    i.set(f[i])
                     Goto(Step.L6)
                 }
                 Do(Step.L10) {
@@ -52,14 +52,14 @@ package struct LeastCircularSubstringModel: Sendable {
                         Goto(Step.L12)
                     } else: { Goto(Step.L13) }
                 }
-                Do(Step.L12) { Assign(k, to: j) }
+                Do(Step.L12) { k.set(j) }
                 Do(Step.L13) {
-                    Assign(f[j - k], to: -1)
+                    f[j - k].set(-1)
                     Goto(Step.LVR)
                 }
-                Do(Step.L14) { Assign(f[j - k], to: i + 1) }
+                Do(Step.L14) { f[j - k].set(i + 1) }
                 Do(Step.LVR) {
-                    Assign(j, to: j + 1)
+                    j += 1
                     Goto(Step.L3)
                 }
 

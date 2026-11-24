@@ -45,7 +45,7 @@ package struct NQueensModel: Sendable {
                                         todo.remove(queens)
                                         sols.formUnion(extensions.expr)
                                     } else: {
-                                        Assign(todo, to: todo.expr.removing(queens).union(extensions.expr))
+                                        todo.set(todo.expr.removing(queens).union(extensions.expr))
                                     }
                                 }
                             }

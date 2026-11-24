@@ -25,18 +25,18 @@ package struct SyncTerminationDetectionModel: Sendable {
 
             Do(Step.Terminate, over: Node) { node in
                 When(active[node])
-                Assign(active[node], to: false)
+                active[node].set(false)
                 With(SetExpr<Bool>.literal(terminationDetected, terminated)) { detected in
-                    Assign(terminationDetected, to: detected)
+                    terminationDetected.set(detected)
                 }
             }
             Do(Step.Wakeup, over: Node, Node) { node, destination in
                 When(active[node])
-                Assign(active[destination], to: true)
+                active[destination].set(true)
             }
             let detectTermination = Do(Step.DetectTermination) {
                 When(terminated)
-                Assign(terminationDetected, to: true)
+                terminationDetected.set(true)
             }
             detectTermination
             WeakFairness(detectTermination)

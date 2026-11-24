@@ -51,8 +51,8 @@ package struct QuicksortModel: Sendable {
                                                 }
                                             }
                                         }) { newseq in
-                                            Assign(seq, to: newseq)
-                                            Assign(U, to: U.removing(I)
+                                            seq.set(newseq)
+                                            U.set(U.removing(I)
                                                 .inserting(IntRange(minimum, through: p))
                                                 .inserting(IntRange(p + 1, through: maximum)))
                                         }
