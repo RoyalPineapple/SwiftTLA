@@ -22,7 +22,7 @@ package struct StonesModel: Sendable {
                                    then: SetExpr<[Int]>.literal(input.first()),
                                    else: IntRange(1, through: If(input.first().count == 0,
                                        then: input.second(), else: input.first().head()))
-                                       .filtering { x in
+                                       .filter { x in
                                            N - input.first().count - 1 <= input.second() - x.expr
                                                && input.second() <= x.expr * (N - input.first().count)
                                        }

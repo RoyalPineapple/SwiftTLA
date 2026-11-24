@@ -24,7 +24,7 @@ package struct GameOfLifeModel: Sendable {
 
             Do(Step.Next) {
                 Assign(grid, to: Dictionary<Position, Bool>.mapping(over: positions) { cell in
-                    positions.filtering { neighbor in
+                    positions.filter { neighbor in
                         IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
                             .contains(neighbor.expr.first())
                             && IntRange(cell.expr.second() - 1, through: cell.expr.second() + 1)
@@ -33,7 +33,7 @@ package struct GameOfLifeModel: Sendable {
                                 || neighbor.expr.second() != cell.expr.second())
                             && grid[neighbor.expr]
                     }.count == 3
-                        || (grid[cell.expr] && positions.filtering { neighbor in
+                        || (grid[cell.expr] && positions.filter { neighbor in
                             IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
                                 .contains(neighbor.expr.first())
                                 && IntRange(cell.expr.second() - 1, through: cell.expr.second() + 1)

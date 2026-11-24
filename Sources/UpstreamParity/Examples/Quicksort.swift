@@ -31,11 +31,11 @@ package struct QuicksortModel: Sendable {
                                 Let(Select(from: I) { x in ForAll(in: I) { y in x >= y } }) { maximum in
                                     With(IntRange(minimum, through: maximum - 1)) { p in
                                         With(Sequences(of: Values,
-                                            lengths: IntRange(seq.count, through: seq.count)).filtering { t in
+                                            lengths: IntRange(seq.count, through: seq.count)).filter { t in
                                             ForAll(in: Values) { value in
-                                                IntRange(1, through: seq.count).filtering { i in
+                                                IntRange(1, through: seq.count).filter { i in
                                                     t.expr[i] == value
-                                                }.count == IntRange(1, through: seq.count).filtering { i in
+                                                }.count == IntRange(1, through: seq.count).filter { i in
                                                     seq[i] == value
                                                 }.count
                                             }
@@ -71,8 +71,8 @@ package struct QuicksortModel: Sendable {
                         !I.isEmpty && I.isSubset(of: IntRange(1, through: seq0.count))
                     }
                 let permutation = seq.count == seq0.count && ForAll(in: IntRange(1, through: seq0.count)) { original in
-                    IntRange(1, through: seq.count).filtering { i in seq[i] == seq0[original] }.count
-                        == IntRange(1, through: seq0.count).filtering { i in seq0[i] == seq0[original] }.count
+                    IntRange(1, through: seq.count).filter { i in seq[i] == seq0[original] }.count
+                        == IntRange(1, through: seq0.count).filter { i in seq0[i] == seq0[original] }.count
                 }
                 let UV = U.union(IntRange(1, through: seq.count)
                     .subtracting(U.flatMapping { I in I.expr })

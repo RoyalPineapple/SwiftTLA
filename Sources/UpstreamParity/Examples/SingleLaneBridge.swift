@@ -49,7 +49,7 @@ package struct SingleLaneBridgeModel: Sendable {
                     If(CarsRight.contains(car), then: EndPos, else: StartPos)
                 })
             let WaitingBeforeBridge = scope.sharedVar(initial: Array<Car>([]))
-            let CarsInBridge = Cars.filtering { car in Bridge.contains(Location[car]) }
+            let CarsInBridge = Cars.filter { car in Bridge.contains(Location[car]) }
             let Invariants = Invariant()
             let TypeOK = Invariant()
             let CarsInBridgeExitBridge = Temporal()

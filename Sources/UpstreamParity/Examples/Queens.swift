@@ -21,7 +21,7 @@ package struct QueensModel: Sendable {
             Do(Step.PlaceQueen) {
                 With(todo) { queens in
                     let nextQueen = queens.count + 1
-                    let columns = IntRange(1, through: N).filtering { column in
+                    let columns = IntRange(1, through: N).filter { column in
                         !Exists(in: IntRange(1, through: queens.count)) { row in
                             queens.appending(column).at(row.expr) == queens.appending(column).at(nextQueen)
                                 || queens.appending(column).at(row.expr) - queens.appending(column).at(nextQueen)
@@ -42,7 +42,7 @@ package struct QueensModel: Sendable {
             WeakFairnessNext()
 
             let solutions = Sequences(of: IntRange(1, through: N), lengths: IntRange(N, through: N))
-                .filtering { placement in
+                .filter { placement in
                     ForAll(in: IntRange(1, through: N - 1)) { row in
                         ForAll(in: IntRange(row.expr + 1, through: N)) { other in
                             placement[row.expr] != placement[other.expr]

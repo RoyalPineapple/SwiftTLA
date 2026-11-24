@@ -1037,6 +1037,14 @@ public func IntRange(_ lower: Int, through upper: Int) -> Expr<Set<Int>> {
 }
 
 extension TypedExpression where ExpressionValue: FormalSetValue {
+  /// Returns the set of members that satisfy the predicate.
+  public func filter<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    _ predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<ExpressionValue> {
+    filtering(file: file, line: line, column: column, predicate)
+  }
+
   /// Selects formal set members that satisfy `predicate`.
   public func filtering<Predicate: TypedExpression<Bool>>(
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,

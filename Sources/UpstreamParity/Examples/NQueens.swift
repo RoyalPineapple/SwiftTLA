@@ -25,7 +25,7 @@ package struct NQueensModel: Sendable {
                     With(todo) { queens in
                         Let(queens.expr.count + 1) { nextQueen in
                             Let(
-                                IntRange(1, through: N).filtering { column in
+                                IntRange(1, through: N).filter { column in
                                     !Exists(in: IntRange(1, through: queens.expr.count)) { row in
                                         queens.expr.appending(column.expr).at(row.expr)
                                             == queens.expr.appending(column.expr).at(nextQueen.expr)
@@ -55,7 +55,7 @@ package struct NQueensModel: Sendable {
 
                 let validSolutions = Sequences(
                     of: IntRange(1, through: N), lengths: IntRange(N, through: N)
-                ).filtering { placement in
+                ).filter { placement in
                     ForAll(in: IntRange(1, through: N - 1)) { row in
                         ForAll(in: IntRange(row.expr + 1, through: N)) { other in
                             placement.expr[row.expr] != placement.expr[other.expr]

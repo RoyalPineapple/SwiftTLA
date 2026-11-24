@@ -1505,7 +1505,7 @@ final class ParserSession {
                   let value = decodeTypedFacadeValue(valueSyntax, scope: scope, expectedEnumType: selection.type?.enumerationType)
             else { return nil }
             return .partialFunctionOverriding(base, key: selection.selector, value: value)
-        case "filtering", "mapping", "flatMapping":
+        case "filter", "filtering", "mapping", "flatMapping":
             guard let closure = collectionClosure(in: call) else {
                 algorithmParseFailure = algorithmParseFailure
                     ?? "\(access.declName.baseName.sourceIdentifierName) requires one typed closure."
@@ -1521,7 +1521,7 @@ final class ParserSession {
                 return nil
             }
             switch access.declName.baseName.sourceIdentifierName {
-            case "filtering": return .setFilter(base, closure.binder, expression)
+            case "filter", "filtering": return .setFilter(base, closure.binder, expression)
             case "flatMapping": return .unionAll(.setMap(expression, closure.binder, base))
             default: return .setMap(expression, closure.binder, base)
             }
@@ -2241,7 +2241,7 @@ final class ParserSession {
             return typedFacadeValueType(base, scope: scope)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           ["prepending", "appending", "concatenating", "selecting", "filtering", "union", "intersection", "subtracting", "inserting", "removing", "updating", "overriding"].contains(member.declName.baseName.sourceIdentifierName),
+           ["prepending", "appending", "concatenating", "selecting", "filter", "filtering", "union", "intersection", "subtracting", "inserting", "removing", "updating", "overriding"].contains(member.declName.baseName.sourceIdentifierName),
            let base = member.base {
             return typedFacadeValueType(base, scope: scope)
         }
@@ -2267,10 +2267,16 @@ final class ParserSession {
 
     private func collectionClosure(in call: FunctionCallExprSyntax)
         -> (body: ExprSyntax, sourceName: String, binder: String)? {
-        guard call.additionalTrailingClosures.isEmpty,
-              call.arguments.allSatisfy({ ["file", "line", "column"].contains($0.label?.text ?? "") }),
-              let closure = call.trailingClosure,
-              closure.statements.count == 1,
+        guard call.additionalTrailingClosures.isEmpty else { return nil }
+        let arguments = call.arguments.filter { !["file", "line", "column"].contains($0.label?.text ?? "") }
+        let closure: ClosureExprSyntax
+        if arguments.isEmpty, let trailing = call.trailingClosure {
+            closure = trailing
+        } else if call.trailingClosure == nil, arguments.count == 1, let argument = arguments.first,
+                  argument.label == nil, let explicit = argument.expression.as(ClosureExprSyntax.self) {
+            closure = explicit
+        } else { return nil }
+        guard closure.statements.count == 1,
               case .expr(let body) = closure.statements.first?.item else { return nil }
         let parameters = closureParameterNames(in: closure)
         guard parameters.count == 1 || closure.signature?.parameterClause == nil else { return nil }
@@ -2524,7 +2530,7 @@ final class ParserSession {
             case "subtracting": return .setDifference(selfExpr, argExpr)
             case "isSubset": return .subset(selfExpr, argExpr)
             case "applying": return .functionApply(selfExpr, argExpr)
-            case "filtering": return .setFilter(selfExpr, generatedBinderName(), argExpr)
+            case "filter", "filtering": return .setFilter(selfExpr, generatedBinderName(), argExpr)
             case "mapping": return .setMap(argExpr, generatedBinderName(), selfExpr)
             case "appending": return .tupleAppend(selfExpr, argExpr)
             case "prepending": return .tupleConcatenate(.tupleLiteral([argExpr]), selfExpr)

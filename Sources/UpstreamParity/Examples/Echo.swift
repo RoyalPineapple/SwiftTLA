@@ -77,7 +77,7 @@ package struct EchoModel: Sendable {
                     let children: LocalVariable<Set<NodeID>> = scope.localVar(initial: Set<NodeID>())
                     let rcvd: LocalVariable<Int> = scope.localVar(initial: 0)
                     let nbrs: LocalVariable<Set<NodeID>> = scope.localVar(
-                        initial: Node.filtering { neighbor in
+                        initial: Node.filter { neighbor in
                             R.contains(Pair<NodeID, NodeID>.literal(neighbor, selfID))
                         }
                     )
@@ -131,7 +131,7 @@ package struct EchoModel: Sendable {
                             }
                         children.isSubset(of: Node)
                         rcvd >= 0 && rcvd <= nbrs.count
-                        nbrs == Node.filtering { neighbor in
+                        nbrs == Node.filter { neighbor in
                             R.contains(Pair<NodeID, NodeID>.literal(neighbor, selfID))
                         }
                         inbox.keys == Node.assuming(Set<NodeID>.self)

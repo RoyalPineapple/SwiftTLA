@@ -86,7 +86,7 @@ package struct CigaretteSmokersModel: Sendable {
                     && (Offers.contains(dealer) || dealer.isEmpty)
             }
             AtMostOne {
-                Ingredients.filtering { ingredient in smokers[ingredient].smoking }.count <= 1
+                Ingredients.filter { ingredient in smokers[ingredient].smoking }.count <= 1
             }
 
             let CigaretteSmokers = Validation {

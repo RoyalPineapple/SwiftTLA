@@ -114,7 +114,7 @@ package struct VoteProofModel: Sendable {
                 FormalDefinition(
                     "chosen",
                     parameters: [],
-                    body: values.filtering { value in
+                    body: values.filter { value in
                         Exists(in: ballots) { ballot in
                             FormalCall(as: Bool.self, "ChosenIn", ballot.expr, value.expr)
                         }

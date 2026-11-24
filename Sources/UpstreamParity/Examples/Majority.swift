@@ -49,19 +49,19 @@ package struct MajorityModel: Sendable {
             }
             Correct {
                 i <= seq.count || ForAll(in: Value) { value in
-                    2 * IntRange(1, through: seq.count).filtering { index in
+                    2 * IntRange(1, through: seq.count).filter { index in
                         seq[index.expr] == value
                     }.count <= seq.count || value == cand
                 }
             }
-            let candidateOccurrences = IntRange(1, through: i - 1).filtering { index in
+            let candidateOccurrences = IntRange(1, through: i - 1).filter { index in
                 seq[index.expr] == cand
             }.count
             Inv {
                 cnt <= candidateOccurrences
                     && 2 * (candidateOccurrences - cnt) <= i - 1 - cnt
                     && ForAll(in: Value) { value in
-                        value == cand || 2 * IntRange(1, through: i - 1).filtering { index in
+                        value == cand || 2 * IntRange(1, through: i - 1).filter { index in
                             seq[index.expr] == value
                         }.count <= i - 1 - cnt
                     }
