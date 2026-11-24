@@ -1154,6 +1154,8 @@ extension TypedExpression where ExpressionValue: FormalTupleValue {
 }
 
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  public var isEmpty: Expr<Bool> { count == 0 }
+
   public func head() -> Expr<ExpressionValue.Element> {
     Expr(.tupleHead(stateExpr))
   }

@@ -25,7 +25,7 @@ package struct SumSequenceModel: Sendable {
 
                 let sums = LetRec("SeqSum", over: Sequences(of: Int.all), taking: [Int].self,
                     { recursion, current in
-                        If(current.count == 0, then: 0,
+                        If(current.isEmpty, then: 0,
                             else: current.head() + recursion(current.tail()))
                     }, in: { recursion in
                         Pair.literal(

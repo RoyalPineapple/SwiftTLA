@@ -12,7 +12,7 @@ package struct StonesModel: Sendable {
             Assume(W >= 0 && N >= 1 && N <= W &&
                 LetRec("SeqSum", taking: [Int].self,
                     { (seqSum: LocalRecursion<[Int], Int>, sequence: WithValue<[Int]>) in
-                        If(sequence.count == 0, then: 0,
+                        If(sequence.isEmpty, then: 0,
                             else: sequence.head() + seqSum(sequence.tail()))
                     }, in: { seqSum in
                         LetRec("Partitions", taking: Pair<[Int], Int>.self,
@@ -20,7 +20,7 @@ package struct StonesModel: Sendable {
                                input: WithValue<Pair<[Int], Int>>) in
                                 If(input.first().count == N,
                                    then: SetExpr<[Int]>.literal(input.first()),
-                                   else: IntRange(1, through: If(input.first().count == 0,
+                                   else: IntRange(1, through: If(input.first().isEmpty,
                                        then: input.second(), else: input.first().head()))
                                        .filter { x in
                                            N - input.first().count - 1 <= input.second() - x.expr

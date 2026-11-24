@@ -1186,8 +1186,9 @@ let input = scope.parameter(as: [Int].self,
 let row = scope.sharedVar(initial: [Int]())
 ```
 
+Use `row.isEmpty` to check whether a sequence has zero elements and `row.count` for its length.
 Array expressions support append, concatenation, indexed reads, indexed removal,
-selection, length, head, and folds through the shared sequence operations.
+selection, head, and folds through the shared sequence operations.
 These operations retain the array type. They do not require a `TupleExpr` value.
 When a TLA+ state value is a heterogeneous fixed-length tuple rather than a
 sequence, `Pair<A, B>`, `Triple<A, B, C>`, and five-position `Quintuple` retain

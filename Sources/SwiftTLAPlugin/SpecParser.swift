@@ -422,6 +422,11 @@ final class ParserSession {
         return result.overflow ? .negate(operand) : .value(.int(result.partialValue))
     }
 
+    private func emptyCollection(_ base: StateExpr, type: CompiledValueType?) -> StateExpr {
+        if case .array = type { return .equal(.tupleLength(base), .value(.int(0))) }
+        return .equal(.cardinality(base), .value(.int(0)))
+    }
+
     func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
         if let domain = decodeIntegerDomain(expression) { return domain }
         if let enabled = decodeStepEnabledness(expression, scope: sourceScope) { return enabled }
@@ -522,7 +527,7 @@ final class ParserSession {
             case "count": return .tupleLength(selfExpr)
             case "head": return .tupleHead(selfExpr)
             case "tail": return .tupleTail(selfExpr)
-            case "isEmpty": return .equal(.cardinality(selfExpr), .value(.int(0)))
+            case "isEmpty": return emptyCollection(selfExpr, type: typedFacadeValueType(base, scope: sourceScope))
             default: return .recordAccess(selfExpr, propName)
             }
         }
@@ -1282,7 +1287,7 @@ final class ParserSession {
             case "tail": return .tupleTail(base)
             case "range":
                 return .operatorApplication(.reference("Range", arity: 1), [.value(base)])
-            case "isEmpty": return .equal(.cardinality(base), .value(.int(0)))
+            case "isEmpty": return emptyCollection(base, type: typedFacadeValueType(baseSyntax, scope: scope))
             case "subsets": return .powerSet(base)
             default: break
             }

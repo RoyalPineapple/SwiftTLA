@@ -78,7 +78,7 @@ package struct TLCMCModel: Sendable {
                 }
 
                 Do(Step.dequeue) {
-                    If(frontier.expr.count == 0) {
+                    If(frontier.expr.isEmpty) {
                         Stop()
                     } else: {
                         let current = frontier.at(1)
