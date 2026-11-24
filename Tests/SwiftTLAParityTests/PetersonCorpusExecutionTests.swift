@@ -22,7 +22,12 @@ struct PetersonCorpusExecutionTests {
     func nativeGraphMatchesFormalGraph() throws {
         let native = try ReachabilityGraph(initialMachines: PetersonModel.initialMachines(), maximumStates: 1_000)
         #expect(native.transitions.count == Example.petersonTwoProcess.expectedDistinct)
+        let generated = native.initialStates.count + native.transitions.values.reduce(0) { $0 + $1.count }
+        #expect(generated == 77)
+        #expect(try native.transitions.keys.map { try native.trace(to: $0).count }.max() == 11)
+        #expect(native.checking.properties == [.TypeOK, .Inv])
         #expect(native.safetyViolations.isEmpty)
+        #expect(native.deadlockedStates.isEmpty)
         let compilation = try PetersonModel.spec.compile()
         let formal = try ModelChecker(compilation: compilation,
             configuration: .init(maximumStateLimit: 1_000, symmetryReduction: .disabled)).explore()

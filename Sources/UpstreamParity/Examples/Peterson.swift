@@ -66,11 +66,29 @@ package struct PetersonModel: Sendable {
                 }
 
                 Invariant("TypeOK") {
-                    (c[.one] == false || c[.one] == true)
-                        && (c[.two] == false || c[.two] == true)
+                    Process.all.contains(turn)
+                    Process.all.allSatisfy { process in
+                        (c[process] == false || c[process] == true)
+                            && process.isAt(anyOf: Step.a0, .a1, .a2, .a3, .cs, .a4)
+                    }
+                }
+
+                let holders = Process.all.filter { process in process.isAt(anyOf: Step.cs, .a4) }
+                Invariant("Inv") {
+                    Process.all.allSatisfy { process in
+                        c[process] == process.isAt(anyOf: Step.a2, .a3, .cs, .a4)
+                    }
+                    Process.all.allSatisfy { process in
+                        !process.isAt(anyOf: Step.cs, .a4) || turn == process
+                            || If(process == .one, then: Process.two, else: Process.one)
+                                .isAt(anyOf: Step.a0, .a1, .a2)
+                    }
+                    holders.count <= 1
                 }
             }
             Peterson
+            let safety = Validation(label: "PetersonSafety") {}
+            safety
         }
     }
 }

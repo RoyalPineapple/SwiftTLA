@@ -1464,7 +1464,14 @@ public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: TLAValu
     ))
 }
 
-
+extension TypedExpression {
+    /// True when the process is at any of the named algorithm steps.
+    public func isAt<Label: CaseIterable & RawRepresentable & Sendable>(
+        anyOf first: Label, _ rest: Label...
+    ) -> Expr<Bool> where Label.RawValue == String {
+        rest.reduce(At(first, self)) { $0 || At($1, self) }
+    }
+}
 
 /// A writable model location with a statically known value type.
 public protocol AssignmentTarget<Value>: TypedExpression where ExpressionValue == Value {

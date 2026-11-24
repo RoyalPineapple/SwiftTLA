@@ -7224,7 +7224,7 @@
       "path": "specifications/locks_auxiliary_vars",
       "name": "Peterson Lock Refinement With Auxiliary Variables",
       "audit": "Published two-process Lock scenario registered; hosted comparison pending",
-      "gap": "LockHS, Peterson and the Stuttering companion remain open. The Lock transition and property comparison on hosted TLC remains pending.",
+      "gap": "PetersonSafety selects TypeOK and Inv. Peterson.cfg also selects the LSpec refinement, which remains open alongside LockHS and Stuttering. The Lock transition and property comparison on hosted TLC remains pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -7247,7 +7247,9 @@
           "path": "specifications/locks_auxiliary_vars/Peterson.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Peterson.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -7269,7 +7271,7 @@
           "implementations": [
             {
               "file": "Sources/UpstreamParity/Examples/Lock.swift",
-              "scenario": "Lock",
+              "scenario": "twoProcess",
               "caseID": "auxiliary-lock"
             }
           ],
@@ -7296,7 +7298,13 @@
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [
+        {
+          "caseID": "peterson-safety",
+          "implementation": "Sources/UpstreamParity/Examples/Peterson.swift",
+          "reason": "PetersonSafety.cfg selects both published invariants. The published Peterson.cfg also checks the LSpec refinement."
+        }
+      ]
     },
     {
       "path": "specifications/LoopInvariance",

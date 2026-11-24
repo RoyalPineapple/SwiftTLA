@@ -590,8 +590,31 @@ final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
-        guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "At",
+        guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
+        if let method = call.calledExpression.as(MemberAccessExprSyntax.self),
+           method.declName.baseName.sourceIdentifierName == "isAt" {
+            guard let receiver = method.base,
+                  let first = call.arguments.first, first.label?.text == "anyOf",
+                  let labelType = first.expression.as(MemberAccessExprSyntax.self)?.base,
+                  let type = terminalTypeName(in: labelType),
+                  let labels = enumDefinition(named: type),
+                  let process = decodeTypedFacadeValue(receiver, scope: scope),
+                  call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty
+            else { return nil }
+            let pc = StateExpr.functionApply(.programCounter, process)
+            var result: StateExpr?
+            for (index, argument) in call.arguments.enumerated() {
+                guard index == 0 || argument.label == nil,
+                      let member = argument.expression.as(MemberAccessExprSyntax.self),
+                      member.base == nil || terminalTypeName(in: member.base) == type,
+                      case .string(let raw) = labels.value(named: member.declName.baseName.sourceIdentifierName)
+                else { return nil }
+                let at = StateExpr.equal(pc, .controlLocation(.init(raw)))
+                result = result.map { .or($0, at) } ?? at
+            }
+            return result
+        }
+        guard call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "At",
               call.arguments.count == 2,
               let label = registeredStringEnumCase(call.arguments.first?.expression),
               let processSyntax = call.arguments.dropFirst().first?.expression,

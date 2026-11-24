@@ -123,7 +123,7 @@ package struct DiningPhilosophersModel: Sendable {
                             || forks[philosopher].holder == .four
                             || forks[philosopher].holder == .five)
                             && (hungry == true || hungry == false)
-                            && (At(Step.loop, philosopher) || At(Step.think, philosopher) || At(Step.eat, philosopher))
+                            && philosopher.isAt(anyOf: Step.loop, .think, .eat)
                     }
                 }
 

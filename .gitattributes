@@ -1,7 +1,7 @@
 # Preserve the pinned upstream module byte for byte, including its whitespace.
 Verification/FiniteGraph/fixtures/n-queens-four/QueensPluscal.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/dining-philosophers/DiningPhilosophers.tla whitespace=-blank-at-eol
-Verification/FiniteGraph/fixtures/auxiliary-lock/Lock.tla whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/auxiliary-lock/*.tla whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/boulanger/Boulanger.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/boulanger/TLAPS.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/bakery/* whitespace=-blank-at-eol,-blank-at-eof

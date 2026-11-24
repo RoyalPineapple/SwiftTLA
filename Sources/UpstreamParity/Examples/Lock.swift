@@ -54,11 +54,10 @@ package struct LockModel: Sendable {
                 Invariant("TypeOK") {
                     (0...1).contains(lock)
                     Process.all.allSatisfy { process in
-                        At(Step.l0, process) || At(Step.l1, process)
-                            || At(Step.cs, process) || At(Step.l2, process)
+                        process.isAt(anyOf: Step.l0, .l1, .cs, .l2)
                     }
                 }
-                let holders = Process.all.filter { process in At(Step.cs, process) || At(Step.l2, process) }
+                let holders = Process.all.filter { process in process.isAt(anyOf: Step.cs, .l2) }
                 Invariant("LockInv") {
                     holders.count <= 1
                     holders.isEmpty || lock == 0
