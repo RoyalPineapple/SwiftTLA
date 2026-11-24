@@ -258,6 +258,8 @@ extension ParserSession {
                     } else {
                         parseRefinement(call, named: sourceName, into: &parsed)
                     }
+                } else if compilerGrammarName(in: call.calledExpression) == "Invariant", call.arguments.isEmpty {
+                    parseStateProperty(call, into: &parsed, boundName: sourceName)
                 } else {
                     parseBuilderCall(call, into: &parsed)
                 }
@@ -1910,9 +1912,10 @@ extension ParserSession {
     func parseStateProperty(
         _ call: FunctionCallExprSyntax,
         into components: inout TLASpec,
-        reachability: Bool = false
+        reachability: Bool = false,
+        boundName: String? = nil
     ) {
-        guard let name = extractStringArg(call, index: 0), let closure = call.trailingClosure else {
+        guard let name = boundName ?? extractStringArg(call, index: 0), let closure = call.trailingClosure else {
             components.diagnostics.append(.init(
                 message: "State property declaration requires a name and a supported predicate.",
                 source: call

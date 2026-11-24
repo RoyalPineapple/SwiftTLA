@@ -9,13 +9,12 @@ public struct ClockModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("Clock") {
-            let ValidTime = Invariant()
-            let clock = Algorithm(label: "Clock") { scope in
-                let hour = scope.sharedVar(initiallyIn: 0...23)
-                let minute = scope.sharedVar(initiallyIn: 0...59)
-                let second = scope.sharedVar(initiallyIn: 0...59)
+        #spec("Clock") { scope in
+            let hour = scope.sharedVar(initiallyIn: 0...23)
+            let minute = scope.sharedVar(initiallyIn: 0...59)
+            let second = scope.sharedVar(initiallyIn: 0...59)
 
+            let clock = Algorithm(label: "Clock") {
                 Loop(Step.tick) {
                     Either {
                         When(second < 59) {
@@ -37,14 +36,15 @@ public struct ClockModel: Sendable {
                         }
                     }
                 }
-
-                ValidTime {
-                    (0...23).contains(hour)
-                    (0...59).contains(minute)
-                    (0...59).contains(second)
-                }
             }
             clock
+
+            let validTime = Invariant {
+                (0...23).contains(hour)
+                (0...59).contains(minute)
+                (0...59).contains(second)
+            }
+            validTime
         }
     }
 }

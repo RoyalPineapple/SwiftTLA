@@ -11,7 +11,6 @@ package struct TwoPhaseModel: Sendable {
             let p = scope.sharedVar(initial: 0)
             let c = scope.sharedVar(initial: 0)
             let x = scope.sharedVar(initial: 0)
-            let Inv = Invariant()
 
             Do(Step.ProducerStep) {
                 When(p == c)
@@ -24,7 +23,11 @@ package struct TwoPhaseModel: Sendable {
                 Assign(x, to: x)
             }
 
-            Inv { SetExpr<Int>.literal(0, 1).contains(p) && SetExpr<Int>.literal(0, 1).contains(c) }
+            Invariant("Inv") {
+                let phases = SetExpr<Int>.literal(0, 1)
+                phases.contains(p)
+                phases.contains(c)
+            }
             let MCTwoPhase = Validation {}
             MCTwoPhase
         }

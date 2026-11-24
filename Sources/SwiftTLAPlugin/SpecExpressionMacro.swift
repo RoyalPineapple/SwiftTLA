@@ -56,6 +56,8 @@ public struct SpecExpressionMacro: ExpressionMacro {
                     ? member?.declName.baseName.sourceIdentifierName : nil)
             if constructor == "Algorithm" || constructor == "Validation" {
                 context.diagnose(Diagnostic(node: Syntax(statement.item), message: BuilderBindingDiagnostic()))
+            } else if constructor == "Invariant", call.arguments.isEmpty, call.trailingClosure != nil {
+                context.diagnose(Diagnostic(node: Syntax(statement.item), message: PropertyBindingDiagnostic()))
             }
         }
 
@@ -189,6 +191,17 @@ private final class DSLRewriter: SyntaxRewriter {
                     return binding
                 }
                 binding.initializer?.value = ExprSyntax(boundCall)
+                return binding
+            }
+            if constructor == "Invariant", call.arguments.isEmpty, call.trailingClosure != nil {
+                guard node.bindingSpecifier.text == "let" else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: PropertyBindingDiagnostic()))
+                    return binding
+                }
+                call.leftParen = .leftParenToken()
+                call.arguments = [LabeledExprSyntax(expression: StringLiteralExprSyntax(content: name))]
+                call.rightParen = .rightParenToken()
+                binding.initializer?.value = ExprSyntax(call)
                 return binding
             }
             if constructor == "Refinement" {
@@ -487,7 +500,7 @@ private struct ParameterLabelDiagnostic: DiagnosticMessage {
 private struct PropertyBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-property-binding")
     let severity: DiagnosticSeverity = .error
-    let message = "A property handle must be an immutable named let binding."
+    let message = "A property with an inferred name requires an immutable named let binding."
 }
 
 private struct BuilderBindingDiagnostic: DiagnosticMessage {

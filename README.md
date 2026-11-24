@@ -46,7 +46,7 @@ because `Stop()` ended the algorithm. The counter stays at one.
 ## Write the system rules
 
 For a rule that repeats, consider a clock. Each tick adds a second. At
-23:59:59 it rolls over to midnight. Select `ValidTime` to check the hour,
+23:59:59 it rolls over to midnight. Select `validTime` to check the hour,
 minute, and second in the starting state and in each state the checker reaches.
 
 **Example ID:** `readme-clock-model`
@@ -63,13 +63,12 @@ public struct ClockModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("Clock") {
-            let ValidTime = Invariant()
-            let clock = Algorithm(label: "Clock") { scope in
-                let hour = scope.sharedVar(initiallyIn: 0...23)
-                let minute = scope.sharedVar(initiallyIn: 0...59)
-                let second = scope.sharedVar(initiallyIn: 0...59)
+        #spec("Clock") { scope in
+            let hour = scope.sharedVar(initiallyIn: 0...23)
+            let minute = scope.sharedVar(initiallyIn: 0...59)
+            let second = scope.sharedVar(initiallyIn: 0...59)
 
+            let clock = Algorithm(label: "Clock") {
                 Loop(Step.tick) {
                     Either {
                         When(second < 59) {
@@ -91,14 +90,15 @@ public struct ClockModel: Sendable {
                         }
                     }
                 }
-
-                ValidTime {
-                    (0...23).contains(hour)
-                    (0...59).contains(minute)
-                    (0...59).contains(second)
-                }
             }
             clock
+
+            let validTime = Invariant {
+                (0...23).contains(hour)
+                (0...59).contains(minute)
+                (0...59).contains(second)
+            }
+            validTime
         }
     }
 }
@@ -106,10 +106,10 @@ public struct ClockModel: Sendable {
 
 Each successful `send(.tick)` runs the loop body once. The next tick needs another send.
 
-Every condition in an invariant must hold. Here, all three lines form the single property `.ValidTime`.
+The `validTime` binding names one property. Its three conditions must all hold. Select `.validTime` when checking the clock.
 
 The ranges in `sharedVar(initiallyIn:)` describe the allowed **starting values**.
-`ValidTime` asks a separate question about **reached values**. For example,
+`validTime` asks a separate question about **reached values**. For example,
 an incorrect midnight update can write hour 24 even though the author allowed
 only hours 0 through 23 at startup.
 
@@ -128,7 +128,7 @@ print(transition.after)
 
 ## Check and replay a midnight tick
 
-Start the clock at 23:59:59 and select its `ValidTime` invariant. This check
+Start the clock at 23:59:59 and select its `validTime` invariant. This check
 explores up to ten states from that one start. A counterexample contains the
 initial snapshot and the action and snapshot for each step that follows.
 Replay follows those steps and returns a clock at the failure. The starting clock stays at 23:59:59.
@@ -136,13 +136,13 @@ Replay follows those steps and returns a clock at the failure. The starting cloc
 ```swift
 let start = try ClockModel.makeMachine(.init(hour: 23, minute: 59, second: 59))
 do {
-    let result = try start.check(properties: [.ValidTime], checkDeadlock: false, maximumStates: 10)
+    let result = try start.check(properties: [.validTime], checkDeadlock: false, maximumStates: 10)
     switch result {
     case .counterexample(let witness):
         let failedClock = try start.replay(witness)
         print(failedClock.state)
     case .exhausted:
-        print("ValidTime held in every reachable state from this start.")
+        print("validTime held in every reachable state from this start.")
     }
 } catch ExplorationError.stateLimitExceeded(let limit) {
     print("Reached the limit of \(limit) states. The check is incomplete.")

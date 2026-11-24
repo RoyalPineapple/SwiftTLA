@@ -885,7 +885,8 @@ public func Action(
     bindings: parameters.map(\.actionBinding)
   )
 }
-public func Invariant(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
+/// Inside `#spec`, an immutable binding supplies the omitted property name.
+public func Invariant(_ name: String = "", @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
   InvDecl(name, body())
 }
 public func Reachable(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> ReachableDecl {

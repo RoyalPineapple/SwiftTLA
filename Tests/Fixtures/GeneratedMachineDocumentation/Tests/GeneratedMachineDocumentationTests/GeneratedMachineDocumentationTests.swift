@@ -112,6 +112,7 @@ struct GeneratedMachineDocumentationTests {
         #expect(transition.before == initial)
         #expect(transition.after == .init(hour: time.3, minute: time.4, second: time.5))
         #expect(machine.state == transition.after)
+        #expect(try machine.violatedInvariants(checking: [.validTime], atLevel: 1).isEmpty)
     }
 
     @Test("an inclusive hour range preserves the explicit bounds and their midnight failure")
