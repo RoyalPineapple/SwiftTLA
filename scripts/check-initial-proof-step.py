@@ -7,6 +7,7 @@ Results are diagnostic: referenced facts and unselected dependencies are not che
 import difflib
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -181,15 +182,23 @@ def selected_result(log, first, last, exit_code):
 
 
 def main():
-    if not 4 <= len(sys.argv) <= 7:
+    arguments = sys.argv[1:]
+    thread_options = []
+    if arguments[:1] == ["--paired-worker"]:
+        arguments = arguments[1:]
+        online_cpus = os.sysconf("SC_NPROCESSORS_ONLN")
+        if online_cpus < 2:
+            raise ValueError("paired proof checks require at least two online CPUs")
+        thread_options = ["--threads", str(min(99, online_cpus // 2))]
+    if not 3 <= len(arguments) <= 6:
         raise ValueError("expected packet, line range, optional candidate and helper/caller byte inputs")
     root = Path.cwd()
-    packet = Path(sys.argv[1]).resolve(strict=True)
-    first, last = map(int, sys.argv[2:4])
+    packet = Path(arguments[0]).resolve(strict=True)
+    first, last = map(int, arguments[1:3])
     original = packet / "case/generated-tla/SwiftTLAInitialFailureProof.tla"
-    candidate = Path(sys.argv[4]).resolve(strict=True) if len(sys.argv) >= 5 else original
-    byte_source = Path(sys.argv[5]).resolve(strict=True) if len(sys.argv) >= 6 else None
-    caller_byte_source = Path(sys.argv[6]).resolve(strict=True) if len(sys.argv) == 7 else None
+    candidate = Path(arguments[3]).resolve(strict=True) if len(arguments) >= 4 else original
+    byte_source = Path(arguments[4]).resolve(strict=True) if len(arguments) >= 5 else None
+    caller_byte_source = Path(arguments[5]).resolve(strict=True) if len(arguments) == 6 else None
     preparation = json.loads((packet / "case/preparation.json").read_text())
     bindings = {
         "proofSHA256": original,
@@ -293,7 +302,7 @@ def main():
                  for page in re.findall(rf"\b{prefix}Page([0-9]+)(?:AtFileOffsets)?\b", text)}
         receipt[key] = load_byte_input(source, target.parent, pages, prefix)
     (output / "request.json").write_text(json.dumps(receipt, indent=2) + "\n")
-    command = [str(executable), "--strict", "--nofp", "--timing", "--toolbox", str(first), str(last),
+    command = [str(executable), *thread_options, "--strict", "--nofp", "--timing", "--toolbox", str(first), str(last),
                "--toolbox-vsn", "1", "--debug", "tempfiles",
                "-I", str(work / "proof-inputs"), str(target)]
     receipt.update(command=command, tlapmVersion=version, z3Version=z3)

@@ -8,8 +8,13 @@ repo="$tmp/repo"
 lock_file=""
 unrelated_lock_dir=""
 holder_ready_file="$tmp/holder-ready"
+pair_pid=""
 
 cleanup() {
+    if [[ -n "$pair_pid" ]]; then
+        kill -TERM "$pair_pid" 2>/dev/null || true
+        wait "$pair_pid" 2>/dev/null || true
+    fi
     rm -rf -- "$tmp"
 }
 trap cleanup EXIT
@@ -64,7 +69,7 @@ assert_wait_timeout() {
 
 assert_static_started() {
     run_validation static
-    [[ "$status" -eq 2 ]] || { echo "expected git diff --check exit 2, got $status" >&2; exit 1; }
+    [[ "$status" -eq 2 ]] || { echo "expected git diff --check exit 2 at line ${BASH_LINENO[0]}, got $status: $output" >&2; exit 1; }
     [[ "$elapsed" -le 1 ]] || { echo "uncontended validation took ${elapsed}s" >&2; exit 1; }
     [[ "$output" == *"trailing whitespace"* ]] || {
         echo "validation command did not start: $output" >&2
@@ -140,5 +145,177 @@ run_validation xcode-test Probe/test
     exit 1
 }
 release_lock_holder
+
+mkdir -p "$repo/scripts"
+cat > "$repo/scripts/check-initial-proof-step.py" <<'PYTHON'
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+
+args = sys.argv[1:]
+paired = args[:1] == ["--paired-worker"]
+if paired:
+    args.pop(0)
+packet, slot = Path(args[0]), args[1]
+
+
+def wait_for(path):
+    deadline = time.monotonic() + 15
+    while not path.is_file():
+        if time.monotonic() >= deadline:
+            raise SystemExit(f"stub {slot}: timed out waiting for {path.name}")
+        time.sleep(0.05)
+
+
+if slot == "child":
+    def terminated(_signum, _frame):
+        (packet / "child.terminated").touch()
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, terminated)
+    (packet / "child.ready").touch()
+    wait_for(packet / "child.unexpected-release")
+    raise SystemExit("stub child was released without TERM")
+
+if not paired:
+    if args[1:] == ["3", "3"] and os.environ.get("TLAPM_SMT_SOLVER") == "fixture-invalid-solver":
+        print("single worker kept its caller environment")
+        raise SystemExit(0)
+    raise SystemExit(f"unexpected single-worker invocation: {args[1:]}")
+
+if args[1:] != [slot, slot] or slot not in {"1", "2"}:
+    raise SystemExit(f"unexpected stub selection: {args[1:]}")
+if "TLAPM_SMT_SOLVER" in os.environ:
+    raise SystemExit("paired worker inherited the caller solver override")
+
+private = Path(tempfile.gettempdir())
+cache = Path(os.environ["TLAPM_CACHE_DIR"])
+scratch = Path(os.environ["SWIFTTLA_VALIDATION_SCRATCH_PATH"]).resolve()
+if packet.parent.resolve() not in scratch.parents or any(
+    not path.is_absolute() or scratch not in path.resolve().parents for path in (private, cache)
+):
+    raise SystemExit("stub temporary paths escaped the fixture")
+for directory, name in ((private, "result"), (cache, "fingerprint")):
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / name).open("x") as output:
+        output.write(slot)
+if slot == "1" and (packet / "terminate").exists():
+    subprocess.Popen([sys.executable, __file__, str(packet), "child"])
+    wait_for(packet / "child.ready")
+
+ready = packet / f"{slot}.starting"
+ready.write_text(f"{os.getpid()}\t{os.getpgrp()}\t{os.getcwd()}\t{private}\t{cache}\t{scratch}\n")
+ready.rename(packet / f"{slot}.ready")
+wait_for(packet / f"{slot}.release")
+(packet / f"{slot}.finished").touch()
+raise SystemExit(int((packet / f"{slot}.status").read_text()))
+PYTHON
+
+wait_for_file() {
+    for _ in {1..150}; do
+        [[ -f "$1" ]] && return
+        sleep 0.1
+    done
+    echo "proof fixture did not reach ${1##*/}" >&2
+    cat "$pair_log" >&2
+    exit 1
+}
+
+start_proof_pair() {
+    local first_status="$1" second_status="$2"
+    printf '%s\n' "$first_status" > "$packet/1.status"
+    printf '%s\n' "$second_status" > "$packet/2.status"
+    (
+        cd "$repo"
+        exec env TMPDIR="$tmp" TLAPM_SMT_SOLVER=fixture-invalid-solver \
+            SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS=1 "$runner" proof-step "$packet" 1 1 --also 2 2
+    ) > "$pair_log" 2>&1 &
+    pair_pid=$!
+    wait_for_file "$packet/1.ready"
+    wait_for_file "$packet/2.ready"
+    IFS=$'\t' read -r first_pid first_group first_cwd first_temp first_cache first_scratch < "$packet/1.ready"
+    IFS=$'\t' read -r second_pid second_group second_cwd second_temp second_cache second_scratch < "$packet/2.ready"
+    [[ "$first_pid" != "$second_pid" && "$first_group" == "$second_group" && "$first_group" != "$pair_pid" ]] &&
+        kill -0 "$first_pid" "$second_pid" &&
+        [[ "$first_cwd" -ef "$repo" && "$second_cwd" -ef "$repo" && "$first_scratch" == "$second_scratch" ]] &&
+        [[ "$first_temp" != "$second_temp" && "$(<"$first_temp/result")" == 1 && "$(<"$second_temp/result")" == 2 ]] &&
+        [[ "$first_cache" != "$second_cache" && "$(<"$first_cache/fingerprint")" == 1 && "$(<"$second_cache/fingerprint")" == 2 ]] || {
+        echo "proof workers did not overlap in one isolated process group with private temporary files" >&2
+        cat "$packet/"*.ready >&2
+        exit 1
+    }
+}
+
+finish_proof_pair() {
+    local expected="$1" observed=0
+    wait "$pair_pid" || observed=$?
+    pair_pid=""
+    [[ "$observed" -eq "$expected" ]] || {
+        echo "expected proof pair exit $expected, got $observed" >&2
+        cat "$pair_log" >&2
+        exit 1
+    }
+}
+
+for failing in 1 2; do
+    packet="$tmp/proof-failure-$failing"
+    pair_log="$packet/wrapper.log"
+    mkdir "$packet"
+    if [[ "$failing" == 1 ]]; then
+        first_status=7 second_status=0
+        successful=2
+    else
+        first_status=0 second_status=9
+        successful=1
+    fi
+    start_proof_pair "$first_status" "$second_status"
+    if [[ "$failing" == 1 ]]; then
+        assert_wait_timeout "lock owner appears active (pid $pair_pid"
+    fi
+    touch "$packet/$failing.release"
+    wait_for_file "$packet/$failing.finished"
+    if [[ "$failing" == 2 ]]; then
+        assert_wait_timeout "lock owner appears active (pid $pair_pid"
+    fi
+    touch "$packet/$successful.release"
+    finish_proof_pair 1
+    [[ -f "$packet/$successful.finished" ]] &&
+        [[ "$(<"$pair_log")" == *"proof-step pair: first exit $first_status, second exit $second_status"* ]] || {
+        echo "proof pair did not report both selection results" >&2
+        cat "$pair_log" >&2
+        exit 1
+    }
+done
+
+packet="$tmp/proof-success"
+pair_log="$packet/wrapper.log"
+mkdir "$packet"
+start_proof_pair 0 0
+touch "$packet/1.release" "$packet/2.release"
+finish_proof_pair 0
+
+packet="$tmp/proof-terminated"
+pair_log="$packet/wrapper.log"
+mkdir "$packet"
+touch "$packet/terminate"
+start_proof_pair 0 0
+kill -TERM "$pair_pid"
+finish_proof_pair 130
+wait_for_file "$packet/child.terminated"
+[[ ! -e "$first_scratch" ]] || {
+    echo "proof pair left temporary directories after TERM" >&2
+    exit 1
+}
+assert_static_started
+
+TLAPM_SMT_SOLVER=fixture-invalid-solver run_validation proof-step "$packet" 3 3
+[[ "$status" -eq 0 && "$output" == *"single worker kept its caller environment"* ]] || {
+    echo "single validation no longer uses the original proof command: $output" >&2
+    exit 1
+}
 
 echo "local validation lock contract passed"

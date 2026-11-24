@@ -15,6 +15,7 @@ usage: scripts/local-validation.sh static
        scripts/local-validation.sh swiftpm-test <test-filter>
        scripts/local-validation.sh xcode-test <test-identifier>
        scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]]
+       append --also <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]] for a second independent selection from that packet
        scripts/local-validation.sh proof-tools
        scripts/local-validation.sh proof-prepare <output-directory> <checked-proof> [ordered-copy-actions]
        scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion
@@ -36,8 +37,16 @@ require_positive_integer() {
     [[ "$value" =~ ^[1-9][0-9]*$ ]] || fail "$name must be a positive integer"
 }
 
+validate_proof_selection() {
+    [[ $# -ge 2 && $# -le 5 ]] || usage
+    require_positive_integer first-line "$1"
+    require_positive_integer last-line "$2"
+    [[ "$1" -le "$2" ]] || fail "first-line must not exceed last-line"
+}
+
 [[ "$(uname -s)" == "Darwin" ]] || fail "macOS is required"
 
+paired=false
 mode="${1:-}"
 case "$mode" in
     static|proof-tools)
@@ -48,11 +57,24 @@ case "$mode" in
         selector="$2"
         ;;
     proof-step)
-        [[ $# -eq 4 || $# -eq 5 || $# -eq 6 || $# -eq 7 ]] || usage
-        require_positive_integer first-line "$3"
-        require_positive_integer last-line "$4"
-        [[ "$3" -le "$4" ]] || fail "first-line must not exceed last-line"
-        proof_arguments=("${@:2}")
+        packet="${2:-}"
+        [[ -n "$packet" ]] || usage
+        shift 2
+        first_selection=()
+        while [[ $# -gt 0 && "$1" != --also ]]; do
+            first_selection+=("$1")
+            shift
+        done
+        [[ ${#first_selection[@]} -ge 2 ]] || usage
+        validate_proof_selection "${first_selection[@]}"
+        proof_arguments=("$packet" "${first_selection[@]}")
+        if [[ $# -gt 0 ]]; then
+            shift
+            validate_proof_selection "$@"
+            for argument in "$@"; do [[ "$argument" != --also ]] || usage; done
+            second_proof_arguments=("$packet" "$@")
+            paired=true
+        fi
         ;;
     proof-prepare)
         [[ $# -eq 3 || ( $# -eq 4 && "${4:-}" == ordered-copy-actions ) ]] || usage
@@ -82,8 +104,23 @@ terminate_group() {
     kill -TERM "-$command_group" 2>/dev/null || true
 }
 
+drain_proof_pair() {
+    [[ "$paired" == true && -n "$command_group" ]] || return 0
+    local i
+    for i in {1..20}; do
+        kill -0 -- "-$command_group" 2>/dev/null || return 0
+        sleep 0.1
+    done
+    kill -KILL -- "-$command_group" 2>/dev/null || return 0
+    while ps -axo pgid=,stat= | awk -v group="$command_group" '
+        $1 == group && $2 !~ /^Z/ { live=1 }
+        END { exit !live }
+    '; do sleep 0.1; done
+}
+
 cleanup() {
     terminate_group
+    drain_proof_pair
     if [[ -n "$watchdog_pid" ]]; then
         kill "$watchdog_pid" 2>/dev/null || true
         wait "$watchdog_pid" 2>/dev/null || true
@@ -145,8 +182,8 @@ fi
 printf '%s\n' "$$" > "$lock_file"
 
 tree_rss_mib() {
-    ps -axo pid=,ppid=,rss= | awk -v root="$1" '
-        { parent[$1] = $2; rss[$1] = $3 }
+    ps -axo pid=,ppid=,rss=,pgid= | awk -v root="$1" -v paired="$paired" '
+        { parent[$1] = $2; rss[$1] = $3; if (paired == "true" && $4 == root) present[$1] = 1 }
         END {
             present[root] = 1
             do {
@@ -181,6 +218,7 @@ watchdog() {
         [[ "$rss_mib" -le "$max_rss_mib" ]] || reason="process-tree-rss"
         [[ "$reclaimable_mib" -ge "$min_available_mib" ]] || reason="reclaimable-memory"
         if [[ -n "$reason" ]]; then
+            if [[ "$paired" == true ]]; then touch "$scratch_dir/pair-guard-trip"; fi
             terminate_group
             printf '%s\n' \
                 'guard_trip=local-validation' \
@@ -206,6 +244,7 @@ run_guarded() {
         python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/check-initial-proof-step.py").read_text())'
         python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/prepare-initial-proof.py").read_text())'
         python3 scripts/prepare-initial-proof.py --self-check
+        bash Tests/Fixtures/LocalValidation/assert_lock.sh
         ruby Tests/Fixtures/ProofFamily/assert_routing.rb
         python3 Tests/Fixtures/TLAPSBootstrap/assert_inputs.py
         python3 "$(dirname "$0")/retain-native-initial-source.py" --self-check
@@ -310,7 +349,26 @@ run_guarded() {
             bash scripts/bootstrap-pinned-proof.sh &
             ;;
         proof-step)
-            python3 scripts/check-initial-proof-step.py "${proof_arguments[@]}" &
+            if [[ "$paired" == true ]]; then
+                mkdir -p "$scratch_dir/first/cache" "$scratch_dir/second/cache"
+                (
+                    # Both workers stay in the one process group monitored and stopped by the watchdog.
+                    set +m
+                    unset TLAPM_SMT_SOLVER
+                    TMPDIR="$scratch_dir/first" TLAPM_CACHE_DIR="$scratch_dir/first/cache" python3 scripts/check-initial-proof-step.py --paired-worker "${proof_arguments[@]}" &
+                    first_pid=$!
+                    TMPDIR="$scratch_dir/second" TLAPM_CACHE_DIR="$scratch_dir/second/cache" python3 scripts/check-initial-proof-step.py --paired-worker "${second_proof_arguments[@]}" &
+                    second_pid=$!
+                    first_status=0
+                    second_status=0
+                    wait "$first_pid" || first_status=$?
+                    wait "$second_pid" || second_status=$?
+                    printf 'proof-step pair: first exit %d, second exit %d\n' "$first_status" "$second_status"
+                    (( first_status == 0 && second_status == 0 ))
+                ) &
+            else
+                python3 scripts/check-initial-proof-step.py "${proof_arguments[@]}" &
+            fi
             ;;
         proof-prepare)
             python3 scripts/prepare-initial-proof.py "$scratch_dir" "$build_dir" "${proof_arguments[@]}" &
@@ -337,13 +395,16 @@ run_guarded() {
     esac
     command_pid=$!
     command_group="$command_pid"
-    watchdog &
+    # The watchdog sleep can outlive its shell during cancellation.
+    watchdog 9>&- &
     watchdog_pid=$!
     wait "$command_pid" || status=$?
     terminate_group
+    drain_proof_pair
     command_group=""
     wait "$watchdog_pid" 2>/dev/null || true
     watchdog_pid=""
+    if [[ -f "$scratch_dir/pair-guard-trip" ]]; then return 1; fi
     return "$status"
 }
 
