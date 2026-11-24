@@ -68,7 +68,7 @@ private enum AlgorithmSourceConstruct: Equatable {
             return
         }
         guard let member = expression.as(MemberAccessExprSyntax.self) else { return nil }
-        if member.declName.baseName.sourceIdentifierName == "set", member.declName.argumentNames == nil,
+        if ["insert", "set"].contains(member.declName.baseName.sourceIdentifierName), member.declName.argumentNames == nil,
            member.base != nil {
             self = .assign
             return
@@ -1469,6 +1469,13 @@ extension ParserSession {
                       call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
                 targetSyntax = member.base
                 valueSyntax = call.arguments.first?.expression
+                if member.declName.baseName.sourceIdentifierName == "insert" {
+                    guard let receiver = member.base, let target = algorithmTarget(receiver, scope: scope),
+                          let valueSyntax, let value = decodeSetExpression("inserting", base: target.expression,
+                            operand: valueSyntax, type: typedFacadeValueType(receiver, scope: scope), scope: scope)
+                    else { return nil }
+                    return .set(target: target, value: value)
+                }
             } else {
                 targetSyntax = call.arguments.first?.expression
                 valueSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression

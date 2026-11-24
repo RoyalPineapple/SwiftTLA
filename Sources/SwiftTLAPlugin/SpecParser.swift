@@ -1451,11 +1451,6 @@ final class ParserSession {
                 return (lower...upper).boundsCheck(for: member)
             }
             return .in(member, base)
-        case "union":
-            guard let otherSyntax = call.arguments.first?.expression,
-                  let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
-            else { return nil }
-            return .union(base, other)
         case "intersection":
             guard let otherSyntax = call.arguments.first?.expression,
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
@@ -1496,14 +1491,10 @@ final class ParserSession {
                   let length = decodeTypedFacadeValue(lengthSyntax, scope: scope)
             else { return nil }
             return .tuplePrefix(base, length)
-        case "inserting", "removing":
-            guard let elementSyntax = call.arguments.first?.expression,
-                  let element = decodeTypedFacadeValue(elementSyntax, scope: scope, expectedEnumType: elementEnumType)
-            else { return nil }
-            let singleton = StateExpr.setLiteral([element])
-            return access.declName.baseName.sourceIdentifierName == "inserting"
-                ? .union(base, singleton)
-                : .setDifference(base, singleton)
+        case "union", "inserting", "removing":
+            guard let operand = call.arguments.first?.expression else { return nil }
+            return decodeSetExpression(access.declName.baseName.sourceIdentifierName, base: base,
+                operand: operand, type: baseType, scope: scope)
         case "updating":
             break
         case "overriding":
@@ -1568,6 +1559,18 @@ final class ParserSession {
               let value = decodeTypedFacadeValue(valueSyntax, scope: scope, expectedEnumType: selection.type?.enumerationType)
         else { return nil }
         return .except(base, selection.selector, value)
+    }
+
+    func decodeSetExpression(_ name: String, base: StateExpr, operand: ExprSyntax,
+                             type: CompiledValueType?, scope: TypedFacadeScope) -> StateExpr? {
+        guard let value = decodeTypedFacadeValue(operand, scope: scope,
+            expectedType: name == "union" ? type : type?.selectedElement) else { return nil }
+        switch name {
+        case "union": return .union(base, value)
+        case "inserting": return .union(base, .setLiteral([value]))
+        case "removing": return .setDifference(base, .setLiteral([value]))
+        default: return nil
+        }
     }
 
     func decodeTypedFacadeValue(

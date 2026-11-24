@@ -50,7 +50,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
                         Assign(signalled[prisoner], to: signalled[prisoner] + 1)
                     }
                 }
-                Assign(has_visited, to: has_visited.inserting(prisoner))
+                has_visited.insert(prisoner)
             }
             wardenAction
             WeakFairness(each: wardenAction)

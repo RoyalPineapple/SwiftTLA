@@ -1514,6 +1514,14 @@ extension AssignmentTarget {
     }
 }
 
+extension AssignmentTarget where Value: FormalSetValue {
+    public func insert(_ member: some TypedExpression<Value.Element>) -> StepStatement {
+        set(inserting(member))
+    }
+
+    public func insert(_ member: Value.Element) -> StepStatement { insert(member.expr) }
+}
+
 extension AssignmentTarget where Value: _GeneratedRecordValue {
     public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<Value, Field>) -> AlgorithmLValue<Field> {
         let base = algorithmLValue
