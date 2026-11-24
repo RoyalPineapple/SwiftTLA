@@ -728,6 +728,21 @@ struct NativeConditionalArmOutput {
     func operands() throws -> TLAValue {
         try conditionalArmOperands(capturePlans, writeOrder: writeOrder, writes: writes, failureAppendSites: failureAppendSites)
     }
+
+    func materialization(after slot: Int) throws -> (suffix: TLAValue, writes: TLAValue) {
+        let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
+        guard slot > 0, slot <= capturePlans.count else { throw invalid }
+        let suffix = try capturePlans.dropFirst(slot).map { plan -> TLAValue in
+            guard plan.kinds == [.string("literal")], let value = plan.literals.first,
+                  case .bool = value else { throw invalid }
+            return value
+        }
+        let pending = try writeOrder.map { target -> TLAValue in
+            guard let reference = writes[target] else { throw invalid }
+            return .tuple([.string(target), reference])
+        }
+        return (.tuple(suffix), .tuple(pending))
+    }
 }
 
 struct NativeConditionalActionOutput {
@@ -778,6 +793,18 @@ func verifyConditionalHistoryHelpers(operations: String, checking: String) throw
         ) throws -> Int {
             guard !result.overflow else { throw NativeMachineEvaluationError.integerOverflow(operation, operands: operands()) }
             return result.partialValue
+        }
+        """, in: members)
+    try require("mergeUpdate", """
+        @inlinable
+        public static func mergeUpdate<Value: Equatable & Sendable>(
+            _ current: inout Value?, _ incoming: Value?,
+            equivalent: @Sendable (Value, Value) -> Bool = { $0 == $1 }
+        ) -> Bool {
+            guard let incoming else { return true }
+            if let current, !equivalent(current, incoming) { return false }
+            current = incoming
+            return true
         }
         """, in: members)
     try require("visitConditional", """
@@ -1376,4 +1403,97 @@ private func checkNativeValidationActionRoute(_ functions: [FunctionDeclSyntax])
             return found
         }
         """) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+}
+
+/// The checked visitor has one continuation per arm. It reaches the successor
+/// wrapper only after all captures and ordered _Updates merges have succeeded.
+func conditionalNativeSuccessProof() -> (definitions: String, steps: String) {
+    let definitions = #"""
+    ConditionalMerge == INSTANCE NativePendingWriteFold
+    ConditionalNativeCompleted(arm) ==
+        LET row == ConditionalNativeRows[arm]
+        IN row.values \o <<ConditionalNativeAdd(arm).value>> \o row.suffix
+    ConditionalNativeWrites(arm) ==
+        LET raw == ConditionalNativeRows[arm].writes
+            completed == ConditionalNativeCompleted(arm)
+        IN [i \in DOMAIN raw |-> <<raw[i][1],
+            Arithmetic!CopyReferenceValue(ConditionalStateBefore, completed, raw[i][2])>>]
+    ConditionalNativeStep ==
+        LET arm == ConditionalNativeSelectedArm
+        IN IF ConditionalNativeAdd(arm).ok
+           THEN ConditionalMerge!NativePendingMergesEmit(
+                ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter,
+                Len(ConditionalNativeRows[arm].writes), ConditionalNativeWrites(arm))
+           ELSE FALSE
+    """#
+    let steps = #"""
+    <1>nativeSuffix. \A arm \in ConditionalArms :
+        ConditionalNativeRows[arm].suffix = ConditionalSourceRows[arm].suffix
+        BY ONLY <1>shape, SMT DEF ConditionalNativeRows, ConditionalSourceRows
+    <1>nativeCompleted. \A arm \in ConditionalArms :
+        ConditionalNativeCompleted(arm) = ConditionalSuccessfulCaptures(arm)
+        BY ONLY <1>nativePrefix, <1>nativeSuffix, <1>nativeAdd, SMT
+            DEF ConditionalNativeCompleted, ConditionalSuccessfulCaptures, ConditionalCompleted
+    <1>nativeWriteRoles. \A arm \in ConditionalArms :
+        LET raw == ConditionalNativeRows[arm].writes
+            routes == ConditionalSourceRows[arm].finalRoutes
+        IN /\ Len(raw) \in Nat /\ DOMAIN raw = 1..Len(raw)
+           /\ \A i \in DOMAIN raw :
+                  /\ raw[i][1] \in ConditionalStateKeys
+                  /\ raw[i][2] = routes[raw[i][1]]
+           /\ \A key \in ConditionalStateKeys :
+                  (\A i \in DOMAIN raw : raw[i][1] # key) => routes[key] = <<"state", key>>
+        BY ONLY <1>shape, SMT DEF ConditionalNativeRows, ConditionalSourceRows, ConditionalStateKeys
+    <1>nativeMaterialized. \A arm \in ConditionalArms :
+        ConditionalMerge!NativePendingMergesEmit(
+            ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter,
+            Len(ConditionalNativeRows[arm].writes), ConditionalNativeWrites(arm))
+        <=> ConditionalStateAfter = ConditionalSuccessfulState(arm)
+        <2>. TAKE arm \in ConditionalArms
+        <2>. DEFINE raw == ConditionalNativeRows[arm].writes
+                    writes == ConditionalNativeWrites(arm)
+                    count == Len(raw)
+                    targets == ConditionalMerge!PendingWriteKeys(writes, count)
+                    expected == ConditionalSuccessfulState(arm)
+                    routes == ConditionalSourceRows[arm].finalRoutes
+                    constraints == ConditionalMerge!NativePendingWriteConstraints(
+                        ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter, count, writes)
+        <2>columns. /\ count \in Nat
+                    /\ \A i \in 1..count : writes[i][1] = raw[i][1] /\ raw[i][1] \in ConditionalStateKeys
+            BY ONLY (arm \in ConditionalArms), <1>nativeWriteRoles, SMT DEF writes, raw, count, ConditionalNativeWrites
+        <2>fold. ConditionalMerge!NativePendingMergesEmit(
+            ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter, count, writes) <=> constraints
+            BY ONLY <2>columns, ConditionalMerge!PendingMergeFoldMaterializesExactlyTheCompatibleWrites, SMT DEF constraints
+        <2>written. \A i \in 1..count : expected[writes[i][1]] = writes[i][2]
+            BY ONLY (arm \in ConditionalArms), <1>nativeWriteRoles, <1>nativeCompleted, <2>columns, SMT
+                DEF expected, count, raw, writes, routes, ConditionalNativeWrites, ConditionalSuccessfulState,
+                    Arithmetic!CopyMaterializedState
+        <2>preserved. \A key \in ConditionalStateKeys \ targets : expected[key] = ConditionalStateBefore[key]
+            BY ONLY (arm \in ConditionalArms), <1>nativeWriteRoles, <2>columns, SMT
+                DEF expected, count, raw, routes, targets, ConditionalMerge!PendingWriteKeys, ConditionalSuccessfulState,
+                    Arithmetic!CopyMaterializedState, Arithmetic!CopyReferenceValue
+        <2>frames. /\ expected = [key \in ConditionalStateKeys |-> expected[key]]
+                   /\ ConditionalStateAfter = [key \in ConditionalStateKeys |-> ConditionalStateAfter[key]]
+            BY ONLY SMT DEF expected, ConditionalSuccessfulState, ConditionalStateAfter, Arithmetic!CopyMaterializedState
+        <2>forward. ASSUME constraints PROVE ConditionalStateAfter = expected
+            <3>frame. \A key \in ConditionalStateKeys : ConditionalStateAfter[key] = expected[key]
+                <4>. TAKE key \in ConditionalStateKeys
+                <4>touched. CASE key \in targets
+                    <5>witness. PICK i \in 1..count : key = writes[i][1]
+                        BY ONLY <4>touched, SMT DEF targets, ConditionalMerge!PendingWriteKeys
+                    <5>. QED BY ONLY <5>witness, constraints, <2>written, SMT
+                        DEF constraints, ConditionalMerge!NativePendingWriteConstraints
+                <4>untouched. CASE key \notin targets
+                    BY ONLY (key \in ConditionalStateKeys), <4>untouched, constraints, <2>preserved, SMT
+                        DEF constraints, targets, ConditionalMerge!NativePendingWriteConstraints
+                <4>. QED BY ONLY <4>touched, <4>untouched, SMT
+            <3>. QED BY ONLY <3>frame, <2>frames, SMT
+        <2>reverse. ConditionalStateAfter = expected => constraints
+            BY ONLY <2>written, <2>preserved, SMT DEF constraints, targets, ConditionalMerge!NativePendingWriteConstraints
+        <2>. QED BY ONLY <2>fold, <2>forward, <2>reverse, SMT
+    <1>nativeSuccess. ConditionalNativeStep <=> ConditionalSourceStep
+        BY ONLY <1>nativeMaterialized, <1>selected, <1>selector, <1>nativeAdd, SMT
+            DEF ConditionalNativeStep, ConditionalSourceStep
+    """#
+    return (definitions, steps)
 }

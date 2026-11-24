@@ -193,7 +193,7 @@ package enum ConditionalActionEvidence {
     static func arithmeticHistoryProof(authoredSource: String, modelName: String,
                                        program: CompiledProgram, rendered: RenderedModule,
                                        nativeSource: String, operations: String, checking: String)
-        throws -> (name: String, bytes: Data) {
+        throws -> (name: String, bytes: Data, configuration: String, configured: (name: String, bytes: Data)) {
         let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
         guard modelName.utf8.elementsEqual(program.moduleName.utf8),
               modelName.utf8.elementsEqual(rendered.moduleName.utf8), rendered.imports.isEmpty,
@@ -283,13 +283,20 @@ package enum ConditionalActionEvidence {
                 return keys.contains(key) ? (key, reference) : nil
             }))
             latest[failed.write.target] = .tuple([.string("capture"), .int(addition + 1)])
-            for index in (addition + 1)..<ordered.count {
-                guard case .bool = try retainLiteral(at: index, in: .bool) else { throw invalid }
+            let suffix = try ((addition + 1)..<ordered.count).map { index in
+                let literal = try retainLiteral(at: index, in: .bool)
+                guard case .bool = literal else { throw invalid }
+                return literal
             }
             guard latest == emitted.writes else { throw invalid }
+            let finalRoutes = TLAValue.function(Dictionary(uniqueKeysWithValues: latest.map {
+                (TLAValue.string($0.key), $0.value)
+            }))
+            let targets = writes.map { TLAValue.record(["target": .string($0.target)]) }
 
             return .record(["prefix": .tuple(prefix.map(\.row)), "inputs": .tuple(operands),
                             "routes": routes, "values": .tuple(prefix.map(\.value)),
+                            "suffix": .tuple(suffix), "finalRoutes": finalRoutes, "targets": .tuple(targets),
                             "site": .int(failed.binding.binder.ordinal), "target": .int(failed.binding.target.ordinal)])
         }
 
@@ -306,6 +313,7 @@ package enum ConditionalActionEvidence {
             guard matches.count == 1, let match = matches.first else { throw invalid }
             return match
         }
+        guard try name("vars") == "vars", try name("Next") == "Next" else { throw invalid }
         let history = try name("__SwiftTLAActionFailureHistory\(ordinal)")
         let operation = try [name("__SwiftTLAOverflowOperation\(ordinal)"),
                              name("__SwiftTLAOverflowOperation\(ordinal)_1")]
@@ -315,21 +323,34 @@ package enum ConditionalActionEvidence {
                             name("__SwiftTLAOverflowFailure\(ordinal)_1")]
         let siteDeclarations = rendered.evaluationFailureDeclarations.map { $0.prefix { $0 != " " } }
             .filter { $0.hasPrefix("__SwiftTLAOverflowFailure\(ordinal)") }
-        guard siteDeclarations.map(String.init) == failures else { throw invalid }
+        let aggregate = try name("__SwiftTLAAnyEvaluationFailure\(ordinal)")
+        let configuration = try rendered.configuration.render(usesSymmetryReduction: false)
+        guard siteDeclarations.map(String.init) == failures,
+              let selection = OrderedRHSCFGProof.normalSelection(cfg: configuration,
+                  intrinsicInvariants: Set(rendered.configuration.intrinsicInvariants)),
+              try name("__SwiftTLAEvaluationOK") == selection.checking else { throw invalid }
 
         // A map over actual Int layout names leaves the Boolean suffix out of arithmetic evaluation.
         let proofName = "SwiftTLA" + rendered.moduleName + "ConditionalOverflowHistory"
-        let prior = integers.map { "key = \(TLAValue.string($0.declaration.name)) -> \($0.formalName)" }
-            .joined(separator: " [] ")
+        func stateCases(_ fields: [CompiledVariableLayout], primed: Bool = false) -> String {
+            fields.map { field in
+                "key = \(TLAValue.string(field.declaration.name)) -> \(field.formalName)\(primed ? "'" : "")"
+            }.joined(separator: " [] ")
+        }
         let state = fields.map(\.formalName).joined(separator: ", ")
         let types = integers.map { "\($0.formalName) \\in ConditionalIntValues" }
             + booleans.map { "\($0.formalName) \\in BOOLEAN" }
         let proof = conditionalOverflowProof(name: proofName, model: rendered.moduleName,
-            history: history, operation: operation, operands: operands, failures: failures, ordinal: ordinal,
-            arms: .tuple(descriptors), keys: .set(keys), before: prior, state: state,
+            history: history, operation: operation, operands: operands, failures: failures,
+            aggregate: aggregate, evaluationCheck: selection.checking, ordinal: ordinal,
+            arms: .tuple(descriptors), keys: .set(keys), before: stateCases(integers), state: state,
             typed: types.joined(separator: " /\\ "), predicate: source.predicate,
+            actionName: actionLayout.renderedName, stateKeys: .set(source.fields),
+            fullBefore: stateCases(fields), after: stateCases(fields, primed: true),
             nativeComparison: nativeComparison, nativeRows: .tuple(nativeRows))
-        return (proofName, Data(proof.utf8))
+        let configuredName = proofName + "ConfiguredProof"
+        let configured = conditionalConfiguredProof(name: configuredName, actionProof: proofName, cfgProof: selection.proof)
+        return (proofName, Data(proof.utf8), configuration, (configuredName, Data(configured.utf8)))
     }
 
     private static func conditionalNativeComparison(_ tokens: [String], integers: [CompiledVariableLayout]) throws
@@ -366,13 +387,14 @@ package enum ConditionalActionEvidence {
             guard plan.kinds[node] == .string("literal"), case .int = plan.literals[node] else { throw invalid }
             return .tuple([.string("literal"), plan.literals[node]])
         }
+        let materialization = try arm.materialization(after: slot)
         // The visitor decoder has bound each parsed callback value to this physical local capture.
         let before = call.before.enumerated().map { index, binding in
             TLAValue.record(["binding": .int(binding.binding), "target": .int(binding.target), "slot": .int(index + 1)])
         }
         return .record(["action": .int(call.action), "branch": .int(call.branch), "site": .int(call.site),
                         "target": .int(call.target), "before": .tuple(before), "values": .tuple(values),
-                        "inputs": .tuple(operands)])
+                        "inputs": .tuple(operands), "suffix": materialization.suffix, "writes": materialization.writes])
     }
 
     private static func conditionalLiteral(_ terms: [TLAValue]) -> TLAValue? {
@@ -393,10 +415,13 @@ package enum ConditionalActionEvidence {
 
     private static func conditionalOverflowProof(
         name: String, model: String, history: String, operation: [String], operands: [String],
-        failures: [String], ordinal: Int, arms: TLAValue, keys: TLAValue, before: String,
-        state: String, typed: String, predicate: TLAValue, nativeComparison: TLAValue, nativeRows: TLAValue
+        failures: [String], aggregate: String, evaluationCheck: String, ordinal: Int,
+        arms: TLAValue, keys: TLAValue, before: String,
+        state: String, typed: String, predicate: TLAValue, actionName: String,
+        stateKeys: TLAValue, fullBefore: String, after: String, nativeComparison: TLAValue, nativeRows: TLAValue
     ) -> String {
-        #"""
+        let nativeSuccess = conditionalNativeSuccessProof()
+        return #"""
         ---- MODULE \#(name) ----
         EXTENDS \#(model), TLAPS, Sequences
         LOCAL INSTANCE SequenceTheorems
@@ -406,6 +431,9 @@ package enum ConditionalActionEvidence {
         ConditionalTypedState == \#(typed)
         ConditionalBefore == [key \in ConditionalIntKeys |-> CASE \#(before) [] OTHER -> 0]
         ConditionalEntry == <<\#(state)>>
+        ConditionalStateKeys == \#(stateKeys)
+        ConditionalStateBefore == [key \in ConditionalStateKeys |-> CASE \#(fullBefore) [] OTHER -> 0]
+        ConditionalStateAfter == [key \in ConditionalStateKeys |-> CASE \#(after) [] OTHER -> 0]
         ConditionalSourceRows == \#(arms)
         ConditionalSourceComparison == \#(predicate)
         ConditionalNativeComparison == \#(nativeComparison)
@@ -444,6 +472,16 @@ package enum ConditionalActionEvidence {
                 outcome == ConditionalSourceAdd(arm)
             IN IF outcome.ok THEN <<>> ELSE <<ConditionalFailureRecord(arm, outcome.failure)>>
 
+        ConditionalSuccessfulCaptures(arm) ==
+            ConditionalCompleted(arm) \o <<ConditionalSourceAdd(arm).value>> \o ConditionalSourceRows[arm].suffix
+        ConditionalSuccessfulState(arm) ==
+            Arithmetic!CopyMaterializedState(ConditionalStateKeys, ConditionalStateBefore,
+                ConditionalSuccessfulCaptures(arm), ConditionalSourceRows[arm].finalRoutes)
+        ConditionalSourceStep ==
+            /\ ConditionalSourceAdd(ConditionalSelectedArm).ok
+            /\ ConditionalStateAfter = ConditionalSuccessfulState(ConditionalSelectedArm)
+        ConditionalPhysicalStep == \#(actionName)
+
         ConditionalNativeSelectedArm == ConditionalArmFor(ConditionalNativeComparison)
         ConditionalNativeOperand(arm, position) ==
             LET row == ConditionalNativeRows[arm]
@@ -471,7 +509,10 @@ package enum ConditionalActionEvidence {
             IN IF recording /\ ~outcome.ok
                 THEN <<ConditionalNativeRecord(arm, outcome.failure)>> ELSE <<>>
 
+        \#(nativeSuccess.definitions)
+
         ActualConditionalHistory == \#(history)
+        ConditionalSelectedEvaluationCheck == \#(evaluationCheck)
         ConditionalPhysicalFailure(arm) == IF arm = 1 THEN \#(failures[0]) ELSE \#(failures[1])
         ConditionalPhysicalOperands(arm) == IF arm = 1 THEN \#(operands[0]) ELSE \#(operands[1])
         ConditionalPhysicalOperation(arm) == IF arm = 1 THEN \#(operation[0]) ELSE \#(operation[1])
@@ -485,6 +526,12 @@ package enum ConditionalActionEvidence {
             ASSUME ConditionalTypedState
             PROVE /\ ActualConditionalHistory = ConditionalSourceHistory
                   /\ ConditionalNativeHistory(TRUE) = ConditionalSourceHistory
+                  /\ (ConditionalSelectedEvaluationCheck <=> ConditionalSourceHistory = <<>>)
+                  /\ (ConditionalPhysicalStep <=> ConditionalSourceStep)
+                  /\ (ConditionalNativeStep <=> ConditionalSourceStep)
+                  /\ (Next <=> ConditionalSourceStep)
+                  /\ vars = ConditionalEntry
+                  /\ (~ConditionalSourceAdd(ConditionalSelectedArm).ok => ~ENABLED Next)
         PROOF
         <1>shape. /\ ConditionalArms = 1..2
                   /\ \A arm \in ConditionalArms :
@@ -526,6 +573,15 @@ package enum ConditionalActionEvidence {
                 Arithmetic!GeneratedAdd(ConditionalPhysicalOperands(arm)[1], ConditionalPhysicalOperands(arm)[2])
             BY ONLY <1>values, Arithmetic!CheckedAdditionRule, SMT DEF ConditionalSourceAdd, ConditionalIntValues,
                 Arithmetic!InRange
+        <1>evaluationSites. ConditionalSelectedEvaluationCheck <=>
+                ~(\E arm \in ConditionalArms : ConditionalPhysicalFailure(arm))
+            BY ONLY <1>shape, SMT DEF ConditionalSelectedEvaluationCheck, \#(evaluationCheck), \#(aggregate),
+                ConditionalPhysicalFailure, \#(failures.joined(separator: ", "))
+        <1>evaluationOutcome. ConditionalSelectedEvaluationCheck <=> ConditionalSourceAdd(ConditionalSelectedArm).ok
+            BY ONLY <1>evaluationSites, <1>selector, <1>probes, <1>addition, SMT
+                DEF Arithmetic!GeneratedAdd, Arithmetic!Success, Arithmetic!GeneratedOverflow
+        <1>evaluation. ConditionalSelectedEvaluationCheck <=> ConditionalSourceHistory = <<>>
+            BY ONLY <1>evaluationOutcome, SMT DEF ConditionalSourceHistory
         <1>wire. ActualConditionalHistory = ConditionalPhysicalEvent(1) \o ConditionalPhysicalEvent(2)
             BY ONLY <1>shape, SMT
                 DEF ActualConditionalHistory, \#(history), ConditionalPhysicalEvent, ConditionalPhysicalRecord,
@@ -579,7 +635,94 @@ package enum ConditionalActionEvidence {
         <1>native. ConditionalNativeHistory(TRUE) = ConditionalSourceHistory
             BY ONLY <1>selector, <1>selected, <1>nativeAdd, <1>nativeWire, SMT
                 DEF ConditionalNativeHistory, ConditionalSourceHistory
-        <1>. QED BY ONLY <1>rendered, <1>native
+        <1>finalWriters. \A arm \in ConditionalArms : \A key \in ConditionalStateKeys :
+            LET row == ConditionalSourceRows[arm]
+            IN /\ Len(row.targets) \in Nat
+               /\ Arithmetic!CopyReceiptNamesWriter(row.targets, Len(row.targets), key, row.finalRoutes[key])
+            BY ONLY <1>shape, SMT DEF ConditionalSourceRows, ConditionalStateKeys,
+                Arithmetic!CopyReceiptNamesWriter, Arithmetic!CopyReceiptOrdinal,
+                Arithmetic!LastDirectCopy, Arithmetic!DirectCopyReference
+        <1>routesAreComplete. \A arm \in ConditionalArms : \A key \in ConditionalStateKeys :
+            LET row == ConditionalSourceRows[arm]
+            IN row.finalRoutes[key] = Arithmetic!DirectCopyRoutes(ConditionalStateKeys, row.targets)[Len(row.targets)][key]
+            BY ONLY <1>finalWriters, Arithmetic!NamedReceiptReferenceUsesTheLastWriter, SMT
+        <1>captureTypes. \A arm \in ConditionalArms :
+            /\ ConditionalCompleted(arm) \in Seq(Int \cup BOOLEAN)
+            /\ <<ConditionalSourceAdd(arm).value>> \in Seq(Int \cup BOOLEAN)
+            /\ ConditionalSourceRows[arm].suffix \in Seq(Int \cup BOOLEAN)
+            BY ONLY <1>shape, <1>values, <1>addition, SeqDef, SMT
+                DEF ConditionalSourceRows, ConditionalCompleted, ConditionalIntValues,
+                    Arithmetic!GeneratedAdd, Arithmetic!Success, Arithmetic!GeneratedOverflow
+        <1>captureValues. \A arm \in ConditionalArms :
+            LET prefix == ConditionalCompleted(arm)
+                suffix == ConditionalSourceRows[arm].suffix
+                captures == ConditionalSuccessfulCaptures(arm)
+                middle == Len(prefix) + 1
+            IN /\ Len(captures) = middle + Len(suffix)
+               /\ \A i \in 1..Len(prefix) : captures[i] = prefix[i]
+               /\ captures[middle] = ConditionalSourceAdd(arm).value
+               /\ \A i \in 1..Len(suffix) : captures[middle + i] = suffix[i]
+            BY ONLY <1>captureTypes, LenProperties, ConcatProperties, SMT DEF ConditionalSuccessfulCaptures
+        <1>layout. /\ vars = ConditionalEntry
+                   /\ (Next <=> ConditionalPhysicalStep)
+            BY ONLY SMT DEF vars, ConditionalEntry, Next, ConditionalPhysicalStep
+        <1>step. ConditionalPhysicalStep <=> ConditionalSourceStep
+            BY ONLY ConditionalTypedState, <1>shape, <1>values, <1>addition, <1>probes,
+                <1>selector, <1>routesAreComplete, <1>captureValues, SMT
+                DEF ConditionalPhysicalStep, \#(actionName), ConditionalSourceStep,
+                    ConditionalSelectedArm, ConditionalArmFor, ConditionalSourceComparison,
+                    ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter, ConditionalBefore, ConditionalIntKeys,
+                    ConditionalSuccessfulState, ConditionalCompleted, ConditionalSourceRows,
+                    ConditionalPhysicalOperands, \#(operands.joined(separator: ", ")),
+                    Arithmetic!CopyMaterializedState, Arithmetic!CopyReferenceValue,
+                    Arithmetic!GeneratedAdd, Arithmetic!GeneratedAddDefined, Arithmetic!SmallAddOperands,
+                    Arithmetic!Success, Arithmetic!GeneratedOverflow
+        <1>noSuccessor. ~ConditionalSourceAdd(ConditionalSelectedArm).ok => ~ENABLED Next
+            BY ONLY <1>step, <1>layout, ExpandENABLED, SMT
+                DEF Next, \#(actionName), ConditionalPhysicalStep, ConditionalSourceStep,
+                    ConditionalStateAfter, ConditionalSuccessfulState
+        \#(nativeSuccess.steps)
+        <1>. QED BY ONLY <1>rendered, <1>native, <1>evaluation, <1>layout, <1>step, <1>nativeSuccess, <1>noSuccessor, PTL
+
+        ====
+        """#
+    }
+
+    private static func conditionalConfiguredProof(name: String, actionProof: String, cfgProof: String) -> String {
+        #"""
+        ---- MODULE \#(name) ----
+        EXTENDS \#(actionProof), CallerInputPageBlock1
+
+        \#(cfgProof)
+
+        ConditionalConfiguredBehavior == Init /\ [][ConditionalSourceStep]_vars
+
+        THEOREM NormalConditionalConfigurationUsesTheAuthoredArms ==
+            /\ LocalOrderedRHSActualCFG = LocalOrderedRHSExpectedCFG
+            /\ (ConditionalTypedState =>
+                  /\ (Next <=> ConditionalSourceStep)
+                  /\ (ConditionalNativeStep <=> ConditionalSourceStep)
+                  /\ (ConditionalSelectedEvaluationCheck <=> ConditionalSourceHistory = <<>>)
+                  /\ (ConditionalSelectedEvaluationCheck <=> ActualConditionalHistory = <<>>)
+                  /\ (ConditionalSelectedEvaluationCheck <=> ConditionalNativeHistory(TRUE) = <<>>))
+            /\ ([]ConditionalTypedState => (Spec <=> ConditionalConfiguredBehavior))
+        PROOF
+        <1>checked. ConditionalTypedState =>
+                  /\ (Next <=> ConditionalSourceStep)
+                  /\ (ConditionalNativeStep <=> ConditionalSourceStep)
+                  /\ (ConditionalSelectedEvaluationCheck <=> ConditionalSourceHistory = <<>>)
+                  /\ (ConditionalSelectedEvaluationCheck <=> ActualConditionalHistory = <<>>)
+                  /\ (ConditionalSelectedEvaluationCheck <=> ConditionalNativeHistory(TRUE) = <<>>)
+            BY ONLY ActualConditionalHistoryMatchesTheAuthoredArms, SMT
+        <1>stuttering. ConditionalTypedState => ([Next]_vars <=> [ConditionalSourceStep]_vars)
+            BY ONLY <1>checked, PTL
+        <1>always. []ConditionalTypedState => (([][Next]_vars) <=> ([][ConditionalSourceStep]_vars))
+            BY ONLY <1>stuttering, PTL
+        <1>spec. Spec <=> Init /\ [][Next]_vars
+            BY ONLY DEF Spec
+        <1>behavior. []ConditionalTypedState => (Spec <=> ConditionalConfiguredBehavior)
+            BY ONLY <1>spec, <1>always, PTL DEF ConditionalConfiguredBehavior
+        <1>. QED BY ONLY NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking, <1>checked, <1>behavior, PTL
 
         ====
         """#

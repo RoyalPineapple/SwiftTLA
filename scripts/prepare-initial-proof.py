@@ -892,14 +892,20 @@ def main():
             catalog_module = "SwiftTLAOrderedAssignmentCatalogOrderedCopy"
             attached = {path.name: path for path in ordered_copy_attachments.iterdir()}
             variant = "GeneratedScalarConditionalOverflowProofModel"
-            variant_proof = f"SwiftTLA{variant}ConditionalOverflowHistory.tla"
+            variant_proof = f"SwiftTLA{variant}ConditionalOverflowHistory"
+            variant_cfg = variant + ".cfg"
+            variant_configured = variant_proof + "ConfiguredProof.tla"
             variant_members = f"{variant}NativeMembers.swift"
-            variant_names = {variant + ".swift", variant + ".tla", variant_members, variant_proof}
+            variant_names = {variant + ".swift", variant + ".tla", variant_cfg, variant_members,
+                             variant_proof + ".tla", variant_configured}
             if not variant_names.issubset(attached):
-                raise ValueError("missing the selected conditional overflow source, members, module, or proof")
+                raise ValueError("missing the selected conditional source, members, module, configuration, or proof")
             variant_files = {name: attached.pop(name) for name in variant_names}
             if any(path.is_symlink() or not path.is_file() or not path.stat().st_size for path in variant_files.values()):
                 raise ValueError("invalid selected conditional overflow input")
+            if variant_files[variant_configured].read_text().splitlines()[1:2] != [
+                    f"EXTENDS {variant_proof}, CallerInputPageBlock1"]:
+                raise ValueError("conditional configuration proof does not consume the conditional action proof")
             variant_source = variant_files[variant + ".swift"]
             expansion, origin = capture_model_expansion(str(variant_source), "conditional-overflow",
                 owner=variant, compiler_module="SwiftTLATests")["members"]
@@ -913,7 +919,8 @@ def main():
             receipt["conditionalOverflowHistory"] = {
                 "sourceSHA": head, "test": "GeneratedAtomicUpdateProofTests/conditionalOverflowKeepsTheSelectedArmHistory",
                 "fixture": conditional_model, "fixtureSHA256": inputs[conditional_model],
-                "authoredVariant": variant_source.name, "proof": variant_proof,
+                "authoredVariant": variant_source.name, "proof": variant_proof + ".tla",
+                "configuration": variant_cfg, "configuredProof": variant_configured,
                 "files": {name: digest(path) for name, path in variant_files.items()},
                 "compiledMembersSHA256": digest(retained_expansion), "sourceOrigin": origin,
                 "matchingSourceAccurateTokens": True,

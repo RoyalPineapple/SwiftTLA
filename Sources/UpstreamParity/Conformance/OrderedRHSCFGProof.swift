@@ -297,13 +297,17 @@ package enum OrderedRHSCFGProof {
 
     private static func normalSelection(for rendered: RenderedSpecification) -> (checking: String, proof: String)? {
         guard let cfg = rendered.tlaBundle.root.cfg else { return nil }
+        return normalSelection(cfg: cfg, intrinsicInvariants: rendered.intrinsicInvariantNames)
+    }
+
+    static func normalSelection(cfg: String, intrinsicInvariants: Set<String>) -> (checking: String, proof: String)? {
         let lines = cfg.split(separator: "\n")
         let invariant = "INVARIANT __SwiftTLAEvaluationOK"
         guard lines.count == 3, lines[0] == "SPECIFICATION Spec", lines[1] == "CHECK_DEADLOCK TRUE",
               lines[2].hasPrefix(invariant), lines[2].dropFirst(invariant.count).allSatisfy({ $0 == "_" }),
               cfg.utf8.elementsEqual((lines.joined(separator: "\n") + "\n").utf8) else { return nil }
         let checking = lines[2].dropFirst("INVARIANT ".count)
-        guard rendered.intrinsicInvariantNames == [String(checking)] else { return nil }
+        guard intrinsicInvariants == [String(checking)] else { return nil }
         let expected = "<<\(cfg.utf8.map(String.init).joined(separator: ", "))>>"
         let pages = (1...((cfg.utf8.count + 15) / 16)).map { "CallerInputPage\($0)" }.joined(separator: " ")
         let proof = #"""

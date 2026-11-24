@@ -19,8 +19,14 @@ struct GeneratedAtomicUpdateProofTests {
         let originalName = "GeneratedScalarConditionalProofModel"
         try #require(authored.components(separatedBy: originalName).count == 3)
         authored = authored.replacingOccurrences(of: originalName, with: modelName)
+        let selectedField = "let selected = scope.sharedVar(initial: false)"
+        try #require(authored.components(separatedBy: selectedField).count == 2)
+        authored = authored.replacingOccurrences(of: selectedField, with: """
+            \(selectedField)
+            let increment = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(0, 1))
+            """)
         for (flag, local, first, target, operand) in [
-            ("true", "left", 13, "right", 1), ("false", "right", 17, "left", 2),
+            ("true", "left", 13, "right", "increment"), ("false", "right", 17, "left", "2"),
         ] {
             let finalWrite = "Assign(selected, to: \(flag))"
             try #require(authored.components(separatedBy: finalWrite).count == 2)
@@ -46,7 +52,18 @@ struct GeneratedAtomicUpdateProofTests {
         @main struct ObserveConditionalOverflow {
             static func main() throws {
                 let models = try GeneratedScalarConditionalOverflowProofModel.initialMachines()
-                for machine in models.sorted(by: { $0.state.left < $1.state.left }) {
+                let ordered = models.sorted {
+                    ($0.state.left, $0.state.increment) < ($1.state.left, $1.state.increment)
+                }
+                for var machine in ordered {
+                    if machine.state.left < machine.state.right && machine.state.increment == 0 {
+                        let transition = try machine.send(.choose)
+                        let expected = GeneratedScalarConditionalOverflowProofModel.State(
+                            left: Int.max, right: Int.max, selected: true, increment: 0)
+                        print("success \(transition.after == expected && machine.state == expected)")
+                        continue
+                    }
+                    if machine.state.increment == 0 { continue }
                     let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
                         checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { _ in }
                     let amount = machine.state.left < machine.state.right ? 1 : 2
@@ -63,6 +80,7 @@ struct GeneratedAtomicUpdateProofTests {
         """#)
         try #require(client.status == 0, Comment(rawValue: client.output))
         #expect(client.output.split(separator: "\n").map(String.init) == [
+            "success true",
             "entry 2 edges 0 overflow true", "branch 0 target 1 before 0=13,0=\(Int.max) reason true",
             "entry 4 edges 0 overflow true", "branch 1 target 0 before 1=17,1=\(Int.max) reason true",
         ])
@@ -76,7 +94,9 @@ struct GeneratedAtomicUpdateProofTests {
         Attachment.record(Array(authored.utf8), named: "\(modelName).swift")
         Attachment.record(Array(native.utf8), named: "\(modelName)NativeMembers.swift")
         Attachment.record(Array(tla.utf8), named: "\(modelName).tla")
+        Attachment.record(Array(proof.configuration.utf8), named: "\(modelName).cfg")
         Attachment.record(Array(proof.bytes), named: "\(proof.name).tla")
+        Attachment.record(Array(proof.configured.bytes), named: "\(proof.configured.name).tla")
     }
 
     @Test("The compiler stack action returns the child slots supplied by its visitor")
