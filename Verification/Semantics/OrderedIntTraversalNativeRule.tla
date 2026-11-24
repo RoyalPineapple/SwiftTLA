@@ -46,11 +46,15 @@ NativeTraversalExpandedPending(stack, left, right) ==
         pushes == NativeTraversalPushes(stack, left, right)
     IN Append(Append(Append(previous, pushes[1]), pushes[2]), pushes[3])
 
+NativeTraversalReturnedField(stack, left, right, field) ==
+    LET writes == <<NativeTraversalExpandedPending(stack, left, right), left, right>>
+    IN writes[NativeStackReturnedSlots[field]]
+
 NativeTraversalStep(stack, left, right, nextStack, nextLeft, nextRight) ==
     IF NativeTraversalEnabled(stack)
-    THEN /\ nextStack = NativeTraversalExpandedPending(stack, left, right)
-         /\ nextLeft = left
-         /\ nextRight = right
+    THEN /\ nextStack = NativeTraversalReturnedField(stack, left, right, 1)
+         /\ nextLeft = NativeTraversalReturnedField(stack, left, right, 2)
+         /\ nextRight = NativeTraversalReturnedField(stack, left, right, 3)
     ELSE FALSE
 
 LOCAL THEOREM NativeTraversalCountUsesEveryArrayIndex ==
@@ -139,7 +143,8 @@ PROOF
         SeedAuthoredExpansionUsesTheBoundFieldsAndPushes, SMT DEF SeedExpansionInput
 <1>native. NativeTraversalStep(pending, leftChild, rightChild, pending', leftChild', rightChild')
               <=> SeedExpansion
-    BY ONLY <1>operands, SMT DEF SeedExpansion, NativeTraversalStep
+    BY ONLY <1>operands, SMT DEF SeedExpansion, NativeTraversalStep,
+        NativeTraversalReturnedField, NativeStackReturnedSlots
 <1>. QED BY ONLY SeedExpansionInput, <1>native, ActualSeedExpansionPreservesThePendingReplacement, Isa
 
 \* The checked successor collector calls the visitor with the internal append

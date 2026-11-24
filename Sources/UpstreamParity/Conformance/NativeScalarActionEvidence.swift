@@ -159,6 +159,55 @@ private func checked<T>(_ matches: [T]) throws -> T {
     return match
 }
 
+/// Bind returned State arguments to physical update slots, in the checked layout's public-field order.
+func nativeUpdateSnapshotSlots(_ structs: [StructDeclSyntax], fields: [(member: String?, slot: String, type: String)]) throws -> [Int] {
+    let updates = try checked(structs.filter { $0.name.text == "_Updates" })
+    let apply = try checked(updates.memberBlock.members.compactMap { $0.decl.as(FunctionDeclSyntax.self) }
+        .filter { $0.name.text == "applying" })
+    guard let snapshot = apply.body?.statements.first?.item.as(FunctionCallExprSyntax.self),
+          let state = snapshot.arguments.first?.expression.as(FunctionCallExprSyntax.self) else {
+        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+    }
+    var ordinals: [String: Int] = [:]
+    for (index, field) in fields.enumerated() {
+        guard ordinals.updateValue(index + 1, forKey: field.slot) == nil else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+    }
+    let visible = fields.compactMap { field in field.member.map { (name: $0, slot: field.slot) } }
+    guard state.arguments.count == visible.count else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+    let slots = try zip(state.arguments, visible).map { argument, target in
+        guard let candidate = argument.expression.firstToken(viewMode: .sourceAccurate)?.text,
+              candidate.utf8.elementsEqual(target.slot.utf8), let ordinal = ordinals[candidate] else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        return ordinal
+    }
+    let storage = fields.map { "var \($0.slot): \($0.type)? = nil" }.joined(separator: "\n")
+    let merging = fields.map {
+        "guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.\($0.slot), other.\($0.slot)) else { return nil }"
+    }.joined(separator: "\n")
+    let materialized = zip(visible, slots).map { field, index in
+        "\(field.name): \(fields[index - 1].slot) ?? state.state.\(field.name)"
+    }.joined(separator: ", ")
+    let hiddenArguments = fields.filter { $0.member == nil }.map { ", \($0.slot): \($0.slot) ?? state.\($0.slot)" }.joined()
+    guard sameWords(syntaxWords(updates), """
+    private struct _Updates: Sendable {
+        \(storage)
+        func merging(_ other: Self) -> Self? {
+            var result = self
+            \(merging)
+            return result
+        }
+        func applying(to state: Snapshot) -> Snapshot {
+            Snapshot(state: State(\(materialized))\(hiddenArguments))
+        }
+    }
+    """) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+
+    return slots
+}
+
 package func verifyNativeMemberTokens(compiled: String, attached: String) throws {
     let actual = Parser.parse(source: compiled)
     let candidate = Parser.parse(source: attached)
@@ -755,25 +804,7 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
             return (formalName: field.name, route: route, type: .controlLocation, value: value)
         })
     }
-    let storage = fields.map { "var \($0.slot): \($0.type)? = nil" }.joined(separator: "\n")
-    let merging = fields.map {
-        "guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.\($0.slot), other.\($0.slot)) else { return nil }"
-    }.joined(separator: "\n")
-    let materialized = visible.map { "\($0.member!): \($0.slot) ?? \($0.before)" }.joined(separator: ", ")
-    let hiddenArguments = hidden.map { ", \($0.slot): \($0.slot) ?? \($0.before)" }.joined()
-    try require(checked(structs.filter { $0.name.text == "_Updates" }), """
-    private struct _Updates: Sendable {
-        \(storage)
-        func merging(_ other: Self) -> Self? {
-            var result = self
-            \(merging)
-            return result
-        }
-        func applying(to state: Snapshot) -> Snapshot {
-            Snapshot(state: State(\(materialized))\(hiddenArguments))
-        }
-    }
-    """)
+    _ = try nativeUpdateSnapshotSlots(structs, fields: fields.map { ($0.member, $0.slot, $0.type) })
 
     let execution = try checked(declarations.compactMap { $0.as(VariableDeclSyntax.self) }.filter {
         $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "_execution" }

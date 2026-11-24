@@ -17,6 +17,7 @@ struct NativeTraversalSeedExpansion: Sendable {
     let prefixDrop: Int
     let localExpandedPosition: Int
     let pushes: [Push]
+    let returnedSlots: [Int]
 }
 
 /// Bind the compiler seed's checked stack operations and ordered tuple operands to the actual native visitor.
@@ -105,6 +106,11 @@ func decodeGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws -> 
     let intType = nativeIntTypeTokens.joined()
     let frameType = "Pair<\(intType), \(nativeBoolType)>"
     let stackType = "[\(frameType)]"
+    let fields = ["pending", "leftChild", "rightChild"]
+    let returnedSlots = try nativeUpdateSnapshotSlots(declarations.compactMap { $0.as(StructDeclSyntax.self) },
+        fields: fields.enumerated().map { ordinal, name in
+            (name, "_value_\(name)_\(ordinal)", ordinal == 0 ? stackType : intType)
+        })
     let prefix = "SwiftTLA._NativeMachineOperations."
     let stack = "state.state.pending"
     let size = "(\(stack).count)"
@@ -297,7 +303,7 @@ func decodeGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws -> 
         throw fail("order")
     }
     return .init(countFloor: countFloor, lastIndex: lastIndex, prefixDrop: replacement.drop,
-                 localExpandedPosition: localExpandedPosition, pushes: replacement.pushes)
+                 localExpandedPosition: localExpandedPosition, pushes: replacement.pushes, returnedSlots: returnedSlots)
 }
 
 struct NativeTraversalSeedInitialization: Sendable, Equatable {

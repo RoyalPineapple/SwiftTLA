@@ -151,6 +151,7 @@ package enum CompilerStackSeedEvidence {
         EXTENDS Integers, Sequences, TLAPS
         AuthoredStackExpansion == \#(row(authored))
         TypedStackExpansion == \#(row(binding.typed))
+        NativeStackReturnedSlots == \#(TLAValue.tuple(nativeExpansion.returnedSlots.map(TLAValue.int)))
         NativeStackExpansion == \#(native)
         TypedStackFormalFields == \#(TLAValue.tuple(binding.formalFields.map(TLAValue.string)))
         TypedStackFieldOrdinals == \#(TLAValue.tuple(binding.fieldOrdinals.map(TLAValue.int)))

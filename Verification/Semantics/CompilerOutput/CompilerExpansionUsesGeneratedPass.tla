@@ -4,7 +4,7 @@ EXTENDS GeneratedCertificateExpansionRule, OrderedIntTraversalNativeRule, Ordere
 \* CallerInputPage1 CallerInputPage2 CallerInputPage3
 
 ActualGeneratedSingleton(origin, left, right) ==
-    NativeTraversalExpandedPending(<< <<origin, FALSE>> >>, left, right)
+    NativeTraversalReturnedField(<< <<origin, FALSE>> >>, left, right, 1)
 
 THEOREM InstalledGeneratedSingletonPushesInCompilerOrder ==
     ASSUME NEW origin \in SeedIntValues, NEW left \in SeedIntValues, NEW right \in SeedIntValues
@@ -29,7 +29,8 @@ PROOF
         SeedPendingExpansionRetainsPrefixAndPushOrder, SMT DEF one
 <1>suffix. SeedExpandedPending(one, left, right) = CompilerGeneratedExpansionSuffix(origin, left, right)
     BY ONLY <1>shape, LenProperties, SeqDef, SMT DEF CompilerGeneratedExpansionSuffix
-<1>. QED BY ONLY <1>functions, <1>suffix, SMT DEF actual, ActualGeneratedSingleton, NativeTraversalStep
+<1>. QED BY ONLY <1>functions, <1>suffix, SMT DEF actual, ActualGeneratedSingleton,
+    NativeTraversalStep, NativeTraversalReturnedField, NativeStackReturnedSlots
 
 THEOREM GeneratedSingletonAndRenderedExpansionSupplyTheSameFrames ==
     ASSUME NEW origin \in SeedIntValues, SeedExpansionInput, pending = << <<origin, FALSE>> >>
@@ -53,7 +54,8 @@ PROOF
 <1>physical. expand <=> /\ pending' = ActualGeneratedSingleton(origin, leftChild, rightChild)
                          /\ UNCHANGED <<leftChild, rightChild>>
     BY ONLY <1>enabled, pending = << <<origin, FALSE>> >>, SeedExpansionInput,
-        NativeAndRenderedSeedVisitTheSameExpansion, SMT DEF NativeTraversalStep, ActualGeneratedSingleton
+        NativeAndRenderedSeedVisitTheSameExpansion, SMT DEF NativeTraversalStep, ActualGeneratedSingleton,
+            NativeTraversalReturnedField, NativeStackReturnedSlots
 <1>configured. /\ (Next <=> expand)
                  /\ SeedAuthoredExpansionFailures = <<>>
                  /\ SeedRenderedExpansionFailures = <<>>

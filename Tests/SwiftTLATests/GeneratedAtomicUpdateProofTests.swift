@@ -1,7 +1,7 @@
 import SwiftTLACompilerSupport
 import Foundation
 import Testing
-import UpstreamParity
+@testable import UpstreamParity
 import SwiftParser
 import SwiftSyntax
 import SwiftTLAMacros
@@ -10,6 +10,37 @@ import SwiftTLAMacros
 
 @Suite("Generated atomic update proof input")
 struct GeneratedAtomicUpdateProofTests {
+    @Test("The compiler stack action returns the child slots supplied by its visitor")
+    func stackActionReturnsItsWrittenChildSlots() throws {
+        let before = OrderedIntTraversalPass.State(pending: [.init(first: 7, second: false)], leftChild: 2, rightChild: 3)
+        var machine = OrderedIntTraversalPass._machineForRefinement(before)
+        let transition = try machine.send(.expand)
+        let expected = OrderedIntTraversalPass.State(pending: [
+            .init(first: 7, second: true), .init(first: 3, second: false), .init(first: 2, second: false)
+        ], leftChild: 2, rightChild: 3)
+        #expect(transition.after == expected)
+        #expect(machine.state == expected)
+
+        let path = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Sources/UpstreamParity/CompilerPasses/OrderedIntTraversalPass.swift")
+        let file = Parser.parse(source: try String(contentsOf: path, encoding: .utf8))
+        let owner = try #require(file.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "OrderedIntTraversalPass" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(owner))
+        var members = try emitter.machineMembers()
+        _ = try decodeGeneratedTraversalSeedOutput(members)
+        let index = try #require(members.firstIndex { $0.as(StructDeclSyntax.self)?.name.text == "_Updates" })
+        let correct = members[index].description
+        let original = "leftChild: _value_leftChild_1 ?? state.state.leftChild"
+        try #require(correct.components(separatedBy: original).count == 2)
+        let crossed = correct.replacingOccurrences(of: original, with: "leftChild: _value_rightChild_2 ?? state.state.leftChild")
+        try #require(crossed != correct)
+        members[index] = try #require(Parser.parse(source: crossed).statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try decodeGeneratedTraversalSeedOutput(members)
+        }
+    }
+
     @Test("The proof input contains the generated Swift state and copy paths")
     func emittedSwiftTransitionMatchesProofInput() throws {
         let model = try compiledProofModel()
