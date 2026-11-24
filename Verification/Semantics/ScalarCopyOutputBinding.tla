@@ -49,7 +49,7 @@ PROOF
 <1>. SUFFICES ASSUME NEW index \in DOMAIN rows, NEW occurrence \in DOMAIN rows[index].reads
                PROVE LET read == rows[index].reads[occurrence]
                      IN read.reference = DirectCopyRoutes(keys, rows)[index - 1][read.key]
-    BY ONLY DEF ContinuationReadsUseTheOrderedWrites
+    BY DEF ContinuationReadsUseTheOrderedWrites
 <1>. DEFINE read == rows[index].reads[occurrence]
 <1>bound. /\ Len(rows) \in Nat /\ index - 1 \in 0..Len(rows)
     BY ONLY ContinuationReadsNameWriters(keys, rows), (index \in DOMAIN rows), SMT DEF ContinuationReadsNameWriters
@@ -71,12 +71,12 @@ PROOF
 <1>. DEFINE stopped(index) == index \in failure..count => ~gates[index]
 <1>before. stopped(0)
     BY ONLY (failure \in 1..count), SMT DEF stopped
-<1>step. \A index \in 1..count :
-    (\A prior \in 0..(index - 1) : stopped(prior)) => stopped(index)
-    <2>. SUFFICES ASSUME NEW index \in 1..count, \A prior \in 0..(index - 1) : stopped(prior),
-                         index \in failure..count
+<1>step. ASSUME NEW index \in 1..count,
+                \A prior \in 0..(index - 1) : stopped(prior)
+         PROVE stopped(index)
+    <2>. SUFFICES ASSUME index \in failure..count
                  PROVE ~gates[index]
-        BY ONLY DEF stopped
+        BY DEF stopped
     <2>at. CASE index = failure
         BY ONLY <2>at, (~gates[failure]), SMT
     <2>after. CASE index > failure
@@ -90,8 +90,30 @@ PROOF
             DEF ContinuationGuardsFollowTheLexicalPrefix
     <2>. QED BY ONLY <2>at, <2>after, (index \in failure..count), SMT
 <1>. HIDE DEF stopped
+<1>induction. \A index \in 1..count :
+    (\A prior \in 0..(index - 1) : stopped(prior)) => stopped(index)
+    BY ONLY <1>step, SMT
+<1>. DEFINE flags == [index \in 0..count |-> IF stopped(index) THEN TRUE ELSE FALSE]
+<1>flagType. flags \in [0..count -> BOOLEAN]
+    BY ONLY SMT DEF flags
+<1>flagValue. \A index \in 0..count : flags[index] <=> stopped(index)
+    BY ONLY SMT DEF flags
+<1>flagSeed. flags[0]
+    BY ONLY (count \in Nat), <1>before, <1>flagValue, SMT
+<1>flagStep. \A index \in 1..count :
+    (\A prior \in 0..(index - 1) : flags[prior]) => flags[index]
+    <2>. SUFFICES ASSUME NEW index \in 1..count, \A prior \in 0..(index - 1) : flags[prior]
+                 PROVE flags[index]
+        OBVIOUS
+    <2>bounds. 0..(index - 1) \subseteq 0..count /\ index \in 0..count
+        BY ONLY (count \in Nat), (index \in 1..count), SMT
+    <2>prior. \A prior \in 0..(index - 1) : stopped(prior)
+        BY ONLY <2>bounds, <1>flagValue, (\A prior \in 0..(index - 1) : flags[prior]), SMT
+    <2>. QED BY ONLY <2>bounds, <2>prior, <1>induction, <1>flagValue, (index \in 1..count), SMT
+<1>allFlags. \A index \in 0..count : flags[index]
+    BY ONLY (count \in Nat), <1>flagType, <1>flagSeed, <1>flagStep, FiniteBooleanPrefixProperty
 <1>all. \A index \in 0..count : stopped(index)
-    BY ONLY (count \in Nat), <1>before, <1>step, FiniteIndexedPrefixProperty, Isa
+    BY ONLY <1>allFlags, <1>flagValue, SMT
 <1>. QED BY ONLY <1>all, (failure \in 1..count), SMT DEF stopped
 
 ReceiptNamesLastWriters(keys, copies, reads, writes) ==
