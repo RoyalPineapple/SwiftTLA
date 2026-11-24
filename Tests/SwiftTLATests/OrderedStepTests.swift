@@ -143,6 +143,24 @@ import SwiftSyntax
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.route."))
         }
+        let support = packageRoot().appendingPathComponent("Sources/SwiftTLA")
+        let operations = try String(contentsOf: support.appendingPathComponent("NativeMachineOperations.swift"), encoding: .utf8)
+        let checking = try String(contentsOf: support.appendingPathComponent("CheckingContext.swift"), encoding: .utf8)
+        func sendBinding(_ declarations: [DeclSyntax]) throws -> Data {
+            try nativePublicSendBinding(declarations.map(\.description).joined(separator: "\n"),
+                operations: operations, checking: checking,
+                module: "SwiftTLAOrderedAssignmentCatalogOrderedCopySendBinding", binding: "CatalogSendBinding")
+        }
+        #expect(try !sendBinding(members).isEmpty)
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try sendBinding(wrongMembers)
+        }
+        let wrongSubject = dispatch.description.replacingOccurrences(of: "switch action", with: "switch Action.copy")
+        #expect(wrongSubject != dispatch.description)
+        wrongMembers[dispatchIndex] = try #require(Parser.parse(source: wrongSubject).statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try sendBinding(wrongMembers)
+        }
         let wrongLabel = formalCall.description.replacingOccurrences(
             of: "name: \"copy\"", with: "name: \"wrong\"")
         #expect(wrongLabel != formalCall.description)

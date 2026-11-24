@@ -680,8 +680,14 @@ ArithmeticSendBefore == <<pc, RHSOutputBefore>>
 
 
 LOCAL ArithmeticSendAction == ActualNativeAssignmentHandle
-ArithmeticSendVisits == ActualNativeAssignmentCallbackSnapshots
-LOCAL ArithmeticSendFailures == ActualNativeAssignmentFailureReasons
+LOCAL ArithmeticSendProducer == NativeActionRoutes[NativeActionOrdinal + 1].visitor
+LOCAL ArithmeticSendVisitor == DecodedSendReceiver(ArithmeticSendBinding, ArithmeticSendAction).visitor
+LOCAL ArithmeticSendVisitorOutputs ==
+    [visitor \in {ArithmeticSendProducer} |->
+        [callbacks |-> ActualNativeAssignmentCallbackSnapshots,
+         reasons |-> ActualNativeAssignmentFailureReasons]]
+ArithmeticSendVisits == ArithmeticSendVisitorOutputs[ArithmeticSendVisitor].callbacks
+LOCAL ArithmeticSendFailures == ArithmeticSendVisitorOutputs[ArithmeticSendVisitor].reasons
 ArithmeticPublicSend ==
     DecodedPublicSend(ArithmeticSendBinding, ArithmeticSendBefore, ArithmeticSendAction,
                            ArithmeticSendVisits, ArithmeticSendFailures)
@@ -734,6 +740,20 @@ PROOF
         DEF CallerInputSize
 <1>. DEFINE final == history[RHSOutputCount]
             sent == ArithmeticPublicSend
+<1>sendVisitors. DecodedSendRoutesMatch(ArithmeticSendBinding, NativeActionRoutes)
+    BY ONLY ArithmeticSendBindingReceivers, SMT DEF DecodedSendRoutesMatch, NativeActionRoutes
+<1>nativeSlot.
+    /\ NativeActionOrdinal + 1 \in DOMAIN NativeActionRoutes
+    /\ NativeActionRoutes[NativeActionOrdinal + 1].handle = ArithmeticSendAction
+    BY ONLY <1>handle, <1>name, SMT DEF ArithmeticSendAction, NativeActionOrdinal,
+        ActualNativeFailure, NativeAssignmentFailure, NativeActionRoutes
+<1>physicalVisitor. ArithmeticSendVisitor = ArithmeticSendProducer
+    BY ONLY <1>sendVisitors, <1>nativeSlot, DecodedSendReceiverUsesMatchedVisitor, SMT
+        DEF ArithmeticSendVisitor, ArithmeticSendProducer
+<1>physicalQueues.
+    /\ ArithmeticSendVisits = ActualNativeAssignmentCallbackSnapshots
+    /\ ArithmeticSendFailures = ActualNativeAssignmentFailureReasons
+    BY ONLY <1>physicalVisitor, SMT DEF ArithmeticSendVisits, ArithmeticSendFailures, ArithmeticSendVisitorOutputs
 <1>operands. DecodedSendOperands(ArithmeticSendBinding, ArithmeticSendAction)
     BY ONLY <1>handle, <1>name, ArithmeticSendBindingDecodesReceiverOperands, SMT
         DEF ArithmeticSendAction
@@ -743,7 +763,7 @@ PROOF
     /\ ArithmeticSendVisits \in Seq(snapshots)
     /\ ArithmeticSendFailures \in Seq(reasons)
     /\ <<>> \notin reasons
-    BY ONLY <1>visit, PTL DEF ArithmeticSendVisits, ArithmeticSendFailures, snapshots, final, reasons
+    BY ONLY <1>visit, <1>physicalQueues, SMT DEF snapshots, final, reasons
 <1>interpreted. sent =
     PublicSendOutcome(ArithmeticSendBinding, ArithmeticSendBefore, ArithmeticSendAction,
                            ArithmeticSendVisits, ArithmeticSendFailures)
@@ -755,7 +775,7 @@ PROOF
     <2>missing. ArithmeticSendBinding.errors[ArithmeticSendBinding.selectorGuards[1].error] = "noMatchingSuccessor"
         BY ONLY ArithmeticSendBindingReportsMissingSuccessor, PTL
     <2>empty. /\ ArithmeticSendVisits = <<>> /\ ArithmeticSendFailures = <<>>
-        BY ONLY ~RHSOutputSelected, <1>visit, IsaM("auto") DEF ArithmeticSendVisits, ArithmeticSendFailures
+        BY ONLY ~RHSOutputSelected, <1>visit, <1>physicalQueues, IsaM("auto")
     <2>. QED BY ONLY <2>empty, <2>missing, <1>interpreted,
         PublicSendOutcomeUsesTheEmptyAndSingletonQueues, SMT
 <1>overflow. ASSUME RHSOutputSelected /\ final.failure # <<>>
@@ -763,8 +783,8 @@ PROOF
           /\ sent.current = ArithmeticSendBefore
           /\ ArithmeticSendVisits = <<>>
     <2>queues. /\ ArithmeticSendVisits = <<>> /\ ArithmeticSendFailures = <<final.failure.payload>>
-        BY ONLY (RHSOutputSelected /\ final.failure # <<>>), <1>visit, IsaM("auto")
-            DEF ArithmeticSendVisits, ArithmeticSendFailures, final
+        BY ONLY (RHSOutputSelected /\ final.failure # <<>>), <1>visit, <1>physicalQueues, IsaM("auto")
+            DEF final
     <2>. QED BY ONLY <2>queues, <1>interpreted, PublicSendOutcomeUsesTheEmptyAndSingletonQueues, SMT
 <1>commit. ASSUME RHSOutputSelected /\ final.failure = <<>>
     PROVE /\ sent.kind = "success" /\ sent.current = <<RHSOutputExit, final.bindings>>
@@ -772,8 +792,8 @@ PROOF
                             before |-> RHSOutputBefore, after |-> final.bindings]
     <2>queues. /\ ArithmeticSendVisits = << <<RHSOutputExit, final.bindings>> >>
                /\ ArithmeticSendFailures = <<>>
-        BY ONLY (RHSOutputSelected /\ final.failure = <<>>), <1>visit, IsaM("auto")
-            DEF ArithmeticSendVisits, ArithmeticSendFailures, final
+        BY ONLY (RHSOutputSelected /\ final.failure = <<>>), <1>visit, <1>physicalQueues, IsaM("auto")
+            DEF final
     <2>. DEFINE callback == <<RHSOutputExit, final.bindings>>
     <2>policy. PublicSendOutcome(ArithmeticSendBinding, ArithmeticSendBefore, ArithmeticSendAction,
                                       <<callback>>, <<>>) =
@@ -800,7 +820,7 @@ PROOF
 <1>commitsCallback. ASSUME ArithmeticPublicSend.kind = "success"
     PROVE ArithmeticSendVisits = <<ArithmeticPublicSend.current>>
     <2>callback. ArithmeticSendVisits = << <<RHSOutputExit, final.bindings>> >>
-        BY ONLY <1>visit, ArithmeticPublicSend.kind = "success", <1>selectedOnSuccess, IsaM("auto") DEF ArithmeticSendVisits, final
+        BY ONLY <1>visit, <1>physicalQueues, ArithmeticPublicSend.kind = "success", <1>selectedOnSuccess, IsaM("auto") DEF final
     <2>. QED BY ONLY <2>callback, <1>commit, ArithmeticPublicSend.kind = "success", <1>selectedOnSuccess, IsaM("auto") DEF sent
 <1>result. \E history :
     /\ RHSOutputSourceHistory(history)

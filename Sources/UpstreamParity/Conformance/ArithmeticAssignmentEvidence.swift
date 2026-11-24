@@ -492,10 +492,22 @@ package enum ArithmeticAssignmentEvidence {
             let nativeLabeled = modules.map { row in
                 #"/\ (\#(prefix)NativeSelectedSteps[\#(row.slot)] <=> \#(prefix)CertifiedActions(histories)[\#(row.slot)])"#
             }.joined(separator: "\n    ")
+            let nativeProjection = modules.map { row in
+                #"/\ (\#(prefix)NativeSelectedSteps[\#(row.slot)] <=> NativeStep\#(row.slot))"#
+            }.joined(separator: "\n        ")
+            let certifiedProjection = modules.map { row in
+                #"/\ (\#(prefix)CertifiedActions(histories)[\#(row.slot)] <=> \#(row.instance)!RHSOutputHistoryAdvance(\#(row.history)))"#
+            }.joined(separator: "\n        ")
             nativeResults = #"""
         <1>nativeSlots.
             \#(nativeLabeled)
-            BY ONLY \#(checks), IsaM("simp") DEF histories, \#(prefix)NativeSelectedSteps, \#(prefix)CertifiedActions
+            <2>nativeColumns.
+                \#(nativeProjection)
+                BY ONLY SMT DEF \#(prefix)NativeSelectedSteps
+            <2>certifiedColumns.
+                \#(certifiedProjection)
+                BY ONLY SMT DEF histories, \#(prefix)CertifiedActions
+            <2>. QED BY ONLY <2>nativeColumns, <2>certifiedColumns, \#(checks), PTL
         <1>nativeDomain. DOMAIN \#(prefix)NativeSelectedSteps = {\#(indices)}
             BY ONLY IsaM("simp"), SMT DEF \#(prefix)NativeSelectedSteps
         <1>nativeResult.

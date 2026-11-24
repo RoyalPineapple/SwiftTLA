@@ -157,7 +157,7 @@ package enum OrderedRHSCFGProof {
         LOCAL NoAuthoredFailures(failures) == \A slot \in DOMAIN failures : failures[slot] = {}
         LOCAL \#(prefix)SendBefore == <<\#(before)>>
         LOCAL SendSlots == AuthoredSlots \cup {\#(terminal)}
-        LOCAL SendSlot(action) == CHOOSE slot \in SendSlots : NativeActionRoutes[slot].handle = action
+        LOCAL SendSlot(action) == DecodedSendReceiver(CatalogSendBinding, action).visitor
 
         \#(prefix)NativePublicSend(action) ==
             LET slot == SendSlot(action)
@@ -214,11 +214,12 @@ package enum OrderedRHSCFGProof {
             BY ONLY SMT DEF AuthoredLabels, AuthoredFormal
         <1>sendDomain. SendSlots = DOMAIN NativeActionRoutes
             BY ONLY IsaM("simp"), SMT DEF SendSlots, AuthoredSlots, \#(prefix)NativeSelectedSteps, NativeActionRoutes
+        <1>sendVisitors. DecodedSendRoutesMatch(CatalogSendBinding, NativeActionRoutes)
+            BY ONLY CatalogSendBindingReceivers, SMT DEF DecodedSendRoutesMatch, NativeActionRoutes
         <1>sendRoute. \A slot \in DOMAIN NativeActionRoutes : SendSlot(NativeActionRoutes[slot].handle) = slot
-            <2>unique. \A first, second \in DOMAIN NativeActionRoutes :
-                NativeActionRoutes[first].handle = NativeActionRoutes[second].handle => first = second
+            <2>ordinal. \A slot \in DOMAIN NativeActionRoutes : NativeActionRoutes[slot].visitor = slot
                 BY ONLY SMT DEF NativeActionRoutes
-            <2>. QED BY ONLY <1>sendDomain, <2>unique, SMT DEF SendSlot
+            <2>. QED BY ONLY <1>sendVisitors, <2>ordinal, DecodedSendReceiverUsesMatchedVisitor, SMT DEF SendSlot
         <1>sendBindings. \A slot \in DOMAIN NativeActionRoutes :
             DecodedSendOperands(CatalogSendBinding, NativeActionRoutes[slot].handle)
             BY ONLY CatalogSendBindingDecodesReceiverOperands, SMT DEF NativeActionRoutes

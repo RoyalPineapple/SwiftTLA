@@ -7,9 +7,11 @@ LOCAL Store == INSTANCE NativePendingWriteFold
     WITH Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>
 
 LOCAL Rank(steps, name) == CHOOSE place \in DOMAIN steps : steps[place] = name
-LOCAL Receiver(plan, action) ==
+DecodedSendReceiver(plan, action) ==
     LET row == CHOOSE index \in DOMAIN plan.receivers : plan.receivers[index].handle = action
-    IN plan.receivers[row].slot
+    IN plan.receivers[row]
+
+LOCAL Receiver(plan, action) == DecodedSendReceiver(plan, action).slot
 
 \* The operation and binding checks below apply to a plan read from Swift.
 \* The routed visitor's ordered callback and error arrays are supplied by its caller.
@@ -37,6 +39,35 @@ DecodedSendOperands(plan, action) ==
     /\ plan.captureSource = plan.getter
     /\ plan.writeValue = plan.selected
     /\ plan.fields = [action |-> plan.inputAction, before |-> plan.captured, after |-> plan.getter]
+
+DecodedSendRoutesMatch(plan, routes) ==
+    /\ DOMAIN plan.receivers = DOMAIN routes
+    /\ \A slot \in DOMAIN routes :
+           /\ plan.receivers[slot].handle = routes[slot].handle
+           /\ plan.receivers[slot].visitor = routes[slot].visitor
+    /\ \A first, second \in DOMAIN routes :
+           routes[first].handle = routes[second].handle => first = second
+
+THEOREM DecodedSendReceiverUsesMatchedVisitor ==
+    ASSUME NEW plan, NEW routes, NEW slot \in DOMAIN routes,
+           DecodedSendRoutesMatch(plan, routes)
+    PROVE DecodedSendReceiver(plan, routes[slot].handle).visitor = routes[slot].visitor
+PROOF
+<1>. DEFINE selected ==
+    CHOOSE index \in DOMAIN plan.receivers : plan.receivers[index].handle = routes[slot].handle
+<1>route.
+    /\ slot \in DOMAIN plan.receivers
+    /\ plan.receivers[slot].handle = routes[slot].handle
+    /\ plan.receivers[slot].visitor = routes[slot].visitor
+    BY ONLY (slot \in DOMAIN routes), DecodedSendRoutesMatch(plan, routes), SMT DEF DecodedSendRoutesMatch
+<1>picked.
+    /\ selected \in DOMAIN plan.receivers
+    /\ plan.receivers[selected].handle = routes[slot].handle
+    BY ONLY <1>route, SMT DEF selected
+<1>unique. selected = slot
+    BY ONLY (slot \in DOMAIN routes), <1>picked, DecodedSendRoutesMatch(plan, routes), SMT
+        DEF DecodedSendRoutesMatch
+<1>. QED BY ONLY <1>route, <1>unique, SMT DEF DecodedSendReceiver, selected
 
 LOCAL Continue(value) == [updates |-> <<value>>, failure |-> <<>>]
 LOCAL Stop(kind, reason) == [updates |-> <<>>, failure |-> [kind |-> kind, value |-> reason]]
@@ -200,7 +231,7 @@ PROOF
         <3>. QED BY ONLY <2>many, <3>result, SMT DEF ambiguous
     <2>. QED BY ONLY <2>empty, <2>one, <2>many
 <1>receiver. Receiver(plan, action) = plan.writeTarget
-    BY ONLY DecodedSendOperands(plan, action), SMT DEF DecodedSendOperands, Receiver
+    BY ONLY DecodedSendOperands(plan, action), SMT DEF DecodedSendOperands, Receiver, DecodedSendReceiver
 <1>finish. \A selected :
     Finish(plan, action, prior, selected) =
         Continue([kind |-> "success", current |-> selected,
