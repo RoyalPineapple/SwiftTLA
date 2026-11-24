@@ -35,7 +35,7 @@ public struct PeripheralModel {
     public static var spec: TLASpec {
         #spec {
             let knownPeripheralPhase = Invariant()
-            let peripheralModel = Algorithm(scoped: { scope in
+            let peripheralModel = Algorithm { scope in
                 let phase = scope.sharedVar(initial: Phase.disconnected)
                 Each(ConnectProcess.all) { _ in
                     Do(Step.connected) {
@@ -49,7 +49,7 @@ public struct PeripheralModel {
                 Each(DiscoveryFailedProcess.all) { _ in Do(Step.discoveryFailed) { When(phase == .discovering); phase.set(Phase.connected); Goto(Step.discoveryFailed) } }
                 Each(DisconnectProcess.all) { _ in Do(Step.disconnect) { When(phase == .ready); phase.set(Phase.disconnected); Goto(Step.disconnect) } }
                 knownPeripheralPhase { phase == .disconnected || phase == .connected || phase == .discovering || phase == .ready }
-            })
+            }
             peripheralModel
         }
     }

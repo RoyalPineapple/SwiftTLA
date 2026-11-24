@@ -24,7 +24,7 @@ package struct TeachingSimpleRegularN8Model: Sendable {
             let PCorrect = Invariant()
             let TypeOK = Invariant()
             let Inv = Invariant()
-            let SimpleRegular = Algorithm(scoped: { scope in
+            let SimpleRegular = Algorithm { scope in
                 let x = scope.sharedVar(initial: Function<Process, SetExpr<Int>>.literal(
                     (.p0, SetExpr<Int>.literal(0)), (.p1, SetExpr<Int>.literal(0)),
                     (.p2, SetExpr<Int>.literal(0)), (.p3, SetExpr<Int>.literal(0)),
@@ -75,7 +75,7 @@ package struct TeachingSimpleRegularN8Model: Sendable {
                     !ForAll(Process.all) { process in Finished(process) }
                         || Exists(in: Process.all) { process in y[process] == 1 }
                 }
-            })
+            }
             SimpleRegular
             let simpleRegularValidation = Validation(label: "SimpleRegular") {}
             simpleRegularValidation

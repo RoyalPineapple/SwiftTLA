@@ -66,11 +66,11 @@ package struct EchoModel: Sendable {
                 }))
             let TypeOK = Invariant()
             let AncestorProperties = Invariant()
-            let Echo = Algorithm(scoped: { (scope: AlgorithmScope) in
+            let Echo = Algorithm { (scope: AlgorithmScope) in
                 let inbox: SharedVariable<[NodeID: Set<Message>]> = scope.sharedVar(initial:
                     Dictionary<NodeID, Set<Message>>.mapping(over: Node) { _ in Set<Message>() })
 
-                Each(Node, scoped: { (selfID: ProcessIdentifier<NodeID>, scope: ProcessScope) in
+                Each(Node) { (selfID: ProcessIdentifier<NodeID>, scope: ProcessScope) in
                     let parent: LocalVariable<OneOf<NodeID, NoNode>> = scope.localVar(
                         initial: OneOf<NodeID, NoNode>.second(NoNode.value)
                     )
@@ -166,8 +166,8 @@ package struct EchoModel: Sendable {
                                         }
                                 })
                     }
-                })
-            })
+                }
+            }
             Echo
             let MCEcho = Validation {
                 Bind(Node, to: Set<NodeID>([.a, .b, .c]))

@@ -23,11 +23,11 @@ package struct BakeryModel: Sendable {
             let Inv = Invariant()
             let MutualExclusion = Invariant()
 
-            let Bakery = Algorithm(scoped: { scope in
+            let Bakery = Algorithm { scope in
                 let num: SharedVariable<[Int: Int]> = scope.sharedVar(initiallyIn: Functions(from: Procs, to: Nat))
                 let flag: SharedVariable<[Int: Bool]> = scope.sharedVar(initiallyIn: Functions(from: Procs, to: Set<Bool>([false, true])))
 
-                Each(Procs, fairness: .weak(excluding: [Label.ncs]), scoped: { (selfID: ProcessIdentifier<Int>, scope: ProcessScope) in
+                Each(Procs, fairness: .weak(excluding: [Label.ncs])) { (selfID: ProcessIdentifier<Int>, scope: ProcessScope) in
                     let unchecked: LocalVariable<Set<Int>> = scope.localVar(in: Subsets(of: Procs))
                     let max: LocalVariable<Int> = scope.localVar(in: Nat)
                     let nxt: LocalVariable<Int> = scope.localVar(in: Procs)
@@ -151,7 +151,7 @@ package struct BakeryModel: Sendable {
                                 return !(passedMember || criticalMember) || before
                             }
                     }
-                })
+                }
 
                 MutualExclusion {
                     ForAll(in: Procs) { first in
@@ -160,7 +160,7 @@ package struct BakeryModel: Sendable {
                         }
                     }
                 }
-            })
+            }
             Bakery
             InitialStates(satisfying: Inv)
             let MCBakery = Validation {

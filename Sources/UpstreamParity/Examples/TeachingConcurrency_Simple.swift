@@ -20,7 +20,7 @@ package struct TeachingSimpleN5Model: Sendable {
             let PCorrect = Invariant()
             let TypeOK = Invariant()
             let Inv = Invariant()
-            let Simple = Algorithm(scoped: { scope in
+            let Simple = Algorithm { scope in
                 let x = scope.sharedVar(initial: Function<Process, Int>.mapping { _ in 0 })
                 let y = scope.sharedVar(initial: Function<Process, Int>.mapping { _ in 0 })
                 let predecessor = Function<Process, Process>.literal(
@@ -54,7 +54,7 @@ package struct TeachingSimpleN5Model: Sendable {
                     !ForAll(Process.all) { process in Finished(process) }
                         || Exists(in: Process.all) { process in y[process] == 1 }
                 }
-            })
+            }
             Simple
             let simpleValidation = Validation(label: "Simple") {}
             simpleValidation

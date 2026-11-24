@@ -37,7 +37,7 @@ package struct DiningPhilosophersModel: Sendable {
             let ExclusiveAccess = Invariant()
             let NobodyStarves = AlwaysEventually()
 
-            let DiningPhilosophers = Algorithm(scoped: { scope in
+            let DiningPhilosophers = Algorithm { scope in
                 let forks = scope.sharedVar(initial: Function<Philosopher, Fork>.literal(
                     (Philosopher.one, Fork(holder: Philosopher.one, clean: false)),
                     (Philosopher.two, Fork(holder: Philosopher.one, clean: false)),
@@ -46,7 +46,7 @@ package struct DiningPhilosophersModel: Sendable {
                     (Philosopher.five, Fork(holder: Philosopher.five, clean: false))
                 ))
 
-                Each(Philosopher.all, fairness: .weak, scoped: { philosopher, scope in
+                Each(Philosopher.all, fairness: .weak) { philosopher, scope in
                     let hungry = scope.localVar(initial: true)
 
                     Do(Step.loop) {
@@ -128,7 +128,7 @@ package struct DiningPhilosophersModel: Sendable {
                             && (hungry == true || hungry == false)
                             && (At(Step.loop, philosopher) || At(Step.think, philosopher) || At(Step.eat, philosopher))
                     }
-                })
+                }
 
                 ExclusiveAccess {
                     ForAll(Philosopher.all) { first in
@@ -143,7 +143,7 @@ package struct DiningPhilosophersModel: Sendable {
                         }
                     }
                 }
-            })
+            }
             DiningPhilosophers
             let NP5 = Validation {}
             NP5

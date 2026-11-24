@@ -37,7 +37,7 @@ package struct TLCMCModel: Sendable {
     package static var spec: TLASpec {
         #spec("TLCMC") {
             Extends(.integers, .sequences)
-            let ModelChecker = Algorithm(fairness: .weak, scoped: { scope in
+            let ModelChecker = Algorithm(fairness: .weak) { scope in
                 let initialStates = SetExpr<Node>.literal(.one, .two)
                 let violations = SetExpr<Node>.literal(.four)
                 let transitionTargets = Function<Node, SetExpr<Node>>.literal(
@@ -134,7 +134,7 @@ package struct TLCMCModel: Sendable {
                     closed.expr.isSubset(of: SetExpr<Node>.literal(.one, .two, .three, .four))
                 }
                 Invariant("BFSLevel") { initialIndex >= 1 }
-            })
+            }
             ModelChecker
             let TLCMC = Validation {}.checking(only: [])
             TLCMC

@@ -22,11 +22,11 @@ package struct BoulangerModel: Sendable {
             let TypeOK = Invariant()
             let Inv = Invariant()
             let MutualExclusion = Invariant()
-            let Boulanger = Algorithm(scoped: { scope in
+            let Boulanger = Algorithm { scope in
                 let num: SharedVariable<[Int: Int]> = scope.sharedVar(initial: Dictionary<Int, Int>.mapping(over: Procs) { _ in 0 })
                 let flag: SharedVariable<[Int: Bool]> = scope.sharedVar(initial: Dictionary<Int, Bool>.mapping(over: Procs) { _ in false })
 
-                Each(Procs, fairness: .weak(excluding: [Label.ncs]), scoped: { (selfID: ProcessIdentifier<Int>, scope: ProcessScope) in
+                Each(Procs, fairness: .weak(excluding: [Label.ncs])) { (selfID: ProcessIdentifier<Int>, scope: ProcessScope) in
                     let unchecked: LocalVariable<Set<Int>> = scope.localVar(initial: Set<Int>())
                     let max: LocalVariable<Int> = scope.localVar(initial: 0)
                     let nxt: LocalVariable<Int> = scope.localVar(initial: 1)
@@ -169,7 +169,7 @@ package struct BoulangerModel: Sendable {
                                 return !requiresBefore || before
                             }
                     }
-                })
+                }
 
                 StateConstraint(ForAll(in: Procs) { process in num[process] < MaxNat })
                 MutualExclusion {
@@ -179,7 +179,7 @@ package struct BoulangerModel: Sendable {
                         }
                     }
                 }
-            })
+            }
             Boulanger
             let MCBoulanger = Validation {
                 Bind(N, to: 3)

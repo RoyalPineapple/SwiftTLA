@@ -8,7 +8,7 @@ package struct HourClockModel: Sendable {
     package static var spec: TLASpec {
         #spec("HourClock") {
             let HCini = Invariant()
-            let Clock = Algorithm(scoped: { scope in
+            let Clock = Algorithm { scope in
                 let hr = scope.sharedVar(initiallyIn: 1...12)
                 Loop(Step.HCnxt) {
                     If(hr != 12) {
@@ -18,7 +18,7 @@ package struct HourClockModel: Sendable {
                     }
                 }
                 HCini { hr >= 1 && hr <= 12 }
-            })
+            }
             Clock
             let Upstream = Validation {}
             Upstream

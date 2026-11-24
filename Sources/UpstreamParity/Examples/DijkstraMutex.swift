@@ -59,12 +59,12 @@ package struct DijkstraMutexModel: Sendable {
             let DeadlockFree = LeadsTo()
             let StarvationFree = LeadsTo()
             let DeadlockFreedom = LeadsTo()
-            let Mutex = Algorithm(scoped: { scope in
+            let Mutex = Algorithm { scope in
                 let b = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
                 let c = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
                 let k = scope.sharedVar(initiallyIn: Proc)
 
-                Each(Proc, fairness: .weak, scoped: { selfID, scope in
+                Each(Proc, fairness: .weak) { selfID, scope in
                     let temp = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.first(.notAssigned)
                     )
 
@@ -149,7 +149,7 @@ package struct DijkstraMutexModel: Sendable {
                         !At(Label.li5, selfID) && !At(Label.li6, selfID) && !At(Label.nonCritical, selfID),
                         Exists(in: Proc) { member in At(Label.critical, member) }
                     )
-                })
+                }
 
                 MutualExclusion {
                     ForAll(in: Proc) { first in
@@ -158,7 +158,7 @@ package struct DijkstraMutexModel: Sendable {
                         }
                     }
                 }
-            })
+            }
             Mutex
             let NonCriticalMayStutter = FairnessProfile(excluding: [Label.nonCritical])
             NonCriticalMayStutter
