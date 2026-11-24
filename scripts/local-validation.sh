@@ -6,7 +6,6 @@ set -euo pipefail
 readonly max_rss_mib=32768
 readonly min_available_mib=768
 readonly poll_seconds=2
-# The native advisory lock waits briefly rather than failing at first collision.
 # The environment override keeps the shell-level contention regression fast.
 readonly lock_wait_seconds="${SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS:-30}"
 
@@ -65,7 +64,12 @@ case "$mode" in
 esac
 
 readonly common_git_dir="$(git rev-parse --git-common-dir)"
-readonly lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
+# Xcode uses private DerivedData. SwiftPM and proof preparation share a writable build cache.
+if [[ "$mode" == xcode-test ]]; then
+    readonly lock_file="$common_git_dir/swifttla-xcode-validation.advisory.lock"
+else
+    readonly lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
+fi
 require_positive_integer "SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS" "$lock_wait_seconds"
 scratch_dir=""
 build_dir=""
@@ -115,7 +119,19 @@ lock_owner_diagnostics() {
 
 exec 9>>"$lock_file"
 set +e
-/usr/bin/lockf -s -t "$lock_wait_seconds" 9
+# Block in the kernel. The lock stays on the shell's open file description.
+python3 - "$lock_wait_seconds" <<'PYTHON'
+import fcntl
+import signal
+import sys
+
+def timeout(signum, frame):
+    sys.exit(75)
+
+signal.signal(signal.SIGALRM, timeout)
+signal.alarm(int(sys.argv[1]))
+fcntl.flock(9, fcntl.LOCK_EX)
+PYTHON
 lock_status=$?
 set -e
 if [[ "$lock_status" -ne 0 ]]; then
@@ -123,7 +139,7 @@ if [[ "$lock_status" -ne 0 ]]; then
     if [[ "$lock_status" -eq 75 ]]; then
         fail "timed out after ${lock_wait_seconds}s waiting for validation lock ($lock_file); ${owner}; lock was not changed"
     fi
-    fail "could not acquire validation lock ($lock_file; lockf status $lock_status); ${owner}; lock was not changed"
+    fail "could not acquire validation lock ($lock_file; flock status $lock_status); ${owner}; lock was not changed"
 fi
 
 printf '%s\n' "$$" > "$lock_file"
