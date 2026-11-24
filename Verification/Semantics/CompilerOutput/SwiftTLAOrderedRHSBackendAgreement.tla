@@ -334,12 +334,56 @@ PROOF
     BY ONLY <1>type, <1>source, ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles,
         RHSOutputInput!Rule!PhysicalNativeCapturesUseTheCertifiedAssignmentHistory, SMT
         DEF ActualNativeAssignmentCaptureHistory, NormalizedNativeAction, RHSOutputCount
+<1>receipt.
+    /\ ActualNativeFailure.site = 2
+    /\ ActualNativeFailure.payload = <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>
+    /\ ActualNativeFailure.completed = <<RHSOutputMax>>
+    BY ONLY SMT DEF ActualNativeFailure, NativeAssignmentFailure, RHSOutputMax
 <1>event. /\ RHSOutputSelectedSubExpressions = {<<ActualNativeFailure.site, 3>>}
            /\ RHSOutputActualFailures = {ActualNativeProjection}
-    BY Init, SMT DEF Init, RHSOutputSelectedSubExpressions, RHSOutputActualFailures, RHSOutputFailureProbeSites,
-        RHSOutputProbePositions, RHSOutputGuards, RHSOutputPayloads, ActualNativeProjection, ActualNativeFailure,
-        NativeAssignmentFailure, __SwiftTLAOverflowFailure0, __SwiftTLAOverflowFailure0_1, __SwiftTLAOverflowBefore0_1,
-        __SwiftTLAOverflowOperation0_1, __SwiftTLAOverflowOperands0_1
+    <2>prior. /\ pc = "advance"
+               /\ count = RHSOutputMax - 1
+        BY ONLY Init, SMT DEF Init, RHSOutputMax
+    <2>first. ~__SwiftTLAOverflowFailure0
+        BY ONLY <2>prior, SMT DEF __SwiftTLAOverflowFailure0, RHSOutputMax
+    <2>second. __SwiftTLAOverflowFailure0_1
+        BY ONLY <2>prior, SMT DEF __SwiftTLAOverflowFailure0_1, RHSOutputMax
+    <2>guards. /\ DOMAIN RHSOutputGuards = {1, 2}
+                /\ RHSOutputGuards[1] = __SwiftTLAOverflowFailure0
+                /\ RHSOutputGuards[2] = __SwiftTLAOverflowFailure0_1
+        BY ONLY IsaM("simp") DEF RHSOutputGuards
+    <2>probes. RHSOutputFailureProbeSites = {2}
+        BY ONLY <2>first, <2>second, <2>guards, SMT DEF RHSOutputFailureProbeSites
+    <2>position. RHSOutputProbePositions[2] = <<ActualNativeFailure.site, 3>>
+        BY ONLY <1>receipt, SMT DEF RHSOutputProbePositions
+    <2>sites. RHSOutputSelectedSubExpressions = {<<ActualNativeFailure.site, 3>>}
+        BY ONLY <2>position, <2>probes, SMT DEF RHSOutputSelectedSubExpressions
+    <2>payload. RHSOutputPayloads[2] =
+        [operation |-> __SwiftTLAOverflowOperation0_1, operands |-> __SwiftTLAOverflowOperands0_1,
+         prefix |-> __SwiftTLAOverflowBefore0_1]
+        BY ONLY <2>second, SMT DEF RHSOutputPayloads
+    <2>sum. count + 1 = RHSOutputMax
+        BY ONLY <2>prior, SMT DEF RHSOutputMax
+    <2>nativePayload.
+        /\ ActualNativeFailure.payload[2] = "addition"
+        /\ ActualNativeFailure.payload[3] = <<RHSOutputMax, 1>>
+        BY ONLY <1>receipt, IsaM("simp"), SMT
+    <2>physicalOperands. __SwiftTLAOverflowOperands0_1 = <<RHSOutputMax, 1>>
+        BY ONLY <2>sum, SMT DEF __SwiftTLAOverflowOperands0_1
+    <2>physicalPrefix. __SwiftTLAOverflowBefore0_1 = <<RHSOutputMax>>
+        BY ONLY <2>second, <2>sum, SMT DEF __SwiftTLAOverflowBefore0_1
+    <2>fields.
+        /\ __SwiftTLAOverflowOperation0_1 = ActualNativeFailure.payload[2]
+        /\ __SwiftTLAOverflowOperands0_1 = ActualNativeFailure.payload[3]
+        /\ __SwiftTLAOverflowBefore0_1 = ActualNativeFailure.completed
+        BY ONLY <1>receipt, <2>nativePayload, <2>physicalOperands, <2>physicalPrefix, SMT
+            DEF __SwiftTLAOverflowOperation0_1
+    <2>value. RHSOutputFailureEvent(RHSOutputProbePositions[2][1], RHSOutputPayloads[2].operation,
+                                    RHSOutputPayloads[2].operands, RHSOutputPayloads[2].prefix) = ActualNativeProjection
+        BY ONLY <2>position, <2>payload, <2>fields, SMT DEF ActualNativeProjection
+    <2>failures. RHSOutputActualFailures = {ActualNativeProjection}
+        BY ONLY <2>probes, <2>value, SMT DEF RHSOutputActualFailures
+    <2>. QED BY ONLY <2>sites, <2>failures
 <1>failure. LET final == history[RHSOutputCount]
     IN /\ final.failure # <<>>
        /\ final.failure.site = ActualNativeFailure.site
@@ -364,11 +408,6 @@ PROOF
     /\ RHSOutputRows[index].target = RHSOutputInput!MasterTargets[index]
     /\ RHSOutputInput!MasterTargets[index] = "count"
     BY ONLY <1>rows, SMT DEF RHSOutputInput!MasterFields, RHSOutputInput!MasterTargets
-<1>receipt.
-    /\ ActualNativeFailure.site = 2
-    /\ ActualNativeFailure.payload = <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>
-    /\ ActualNativeFailure.completed = <<RHSOutputMax>>
-    BY ONLY SMT DEF ActualNativeFailure, NativeAssignmentFailure, RHSOutputMax
 <1>prefix. Len(ActualNativeFailure.completed) = ActualNativeFailure.site - 1
     BY ONLY <1>receipt, SMT
 <1>route. RHSOutputInput!Rule!CopyReceiptNamesWriter(
