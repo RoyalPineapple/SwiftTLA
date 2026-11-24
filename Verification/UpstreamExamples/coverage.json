@@ -3282,22 +3282,26 @@
     {
       "path": "specifications/barriers",
       "name": "Barrier Synchronization",
-      "audit": "pinned source, manifest, and three published configurations inspected; implementation and hosted parity pending",
-      "gap": "APBarrier and Barrier select N = 6 and abstract TypeOK; Barrier also checks BarrierProperty. Barriers selects N = 6, four invariants, and BSpec refinement over its 13-location reusable-barrier algorithm. All three configured roots need model-owned scenarios, complete comparison, and hosted evidence. No existing Swift implementation or evidence is credited.",
+      "audit": "Abstract barrier and both six-process scenarios implemented; hosted comparisons pending",
+      "gap": "Barriers.tla and its concrete reusable-barrier refinement remain open. Hosted comparisons for APBarrier and Barrier are pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/barriers/APBarrier.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Barrier.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/barriers/Barrier.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Barrier.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3313,20 +3317,32 @@
           "module": "specifications/barriers/APBarrier.tla",
           "configuration": "specifications/barriers/APBarrier.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Barrier.swift",
+              "scenario": "APBarrier",
+              "caseID": "ap-barrier"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/barriers/Barrier.tla",
           "configuration": "specifications/barriers/Barrier.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Barrier.swift",
+              "scenario": "Barrier",
+              "caseID": "barrier"
+            }
+          ],
           "evidence": []
         },
         {

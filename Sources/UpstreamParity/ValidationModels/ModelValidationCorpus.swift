@@ -68,6 +68,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "chameneos", scenarios: { try ChameneosModel.validationScenarios() }),
     .init(id: "prisoners", scenarios: { try PrisonersModel.validationScenarios() }),
     .init(id: "prisoners-single-switch", scenarios: { try PrisonerSingleSwitchModel.validationScenarios() }),
+    .init(id: "barrier", scenarios: { try BarrierModel.validationScenarios() }),
     .init(id: "readers-writers", scenarios: { try ReadersWritersModel.validationScenarios() }),
     .init(id: "single-lane-bridge", scenarios: { try SingleLaneBridgeModel.validationScenarios() }),
     .init(id: "game-of-life", scenarios: { try GameOfLifeModel.validationScenarios() }),

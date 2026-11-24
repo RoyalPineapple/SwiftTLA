@@ -1304,6 +1304,53 @@
       "timeoutSeconds": 300
     },
     {
+      "id": "ap-barrier",
+      "sourceModel": "barrier",
+      "scenario": "APBarrier",
+      "module": "barrier/APBarrier.tla",
+      "configuration": "barrier/APBarrier.cfg",
+      "imports": [
+        "barrier/Barrier.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APBarrier",
+          "importedModule": "Barrier"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/barriers/APBarrier.tla",
+        "sha256": "09e60969912d06bdbb88e391d821acb8e29718f78e6a15352a758ea826f4090a"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "09e60969912d06bdbb88e391d821acb8e29718f78e6a15352a758ea826f4090a",
+      "cfgSHA256": "f540df1090b1ca0986763b26a2ccffb133f15b991fa777b43b9127f4200c5a29",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "barrier",
+      "sourceModel": "barrier",
+      "scenario": "Barrier",
+      "module": "barrier/Barrier.tla",
+      "configuration": "barrier/Barrier.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/barriers/Barrier.tla",
+        "sha256": "e4a28b2900e3769602e700c3d474e5ac2147a1187ce80ef2f365a029abc5c220"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e4a28b2900e3769602e700c3d474e5ac2147a1187ce80ef2f365a029abc5c220",
+      "cfgSHA256": "493424bad25906d0c8202fc727fec04cec8edba8e09ab89ebab06a577e54d6e1",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "ap-readers-writers",
       "sourceModel": "readers-writers",
       "scenario": "APReadersWriters",
