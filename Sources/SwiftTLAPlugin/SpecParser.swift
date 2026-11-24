@@ -456,7 +456,9 @@ final class ParserSession {
         if let filtered = decodeBoundedFilteredDomain(expression) {
             return filtered
         }
-        if let boundedQuantifier = decodeQuantifier(expression) {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let predicate = decodeCollectionPredicate(call, scope: sourceScope) { return predicate }
+        if let boundedQuantifier = decodeQuantifier(expression, scope: sourceScope) {
             return boundedQuantifier
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
@@ -526,7 +528,6 @@ final class ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self) {
-            if let predicate = decodeCollectionPredicate(call) { return predicate }
             return decodeMethodCall(memberAccess, call)
         }
         if let tuple = expression.as(TupleExprSyntax.self),
@@ -786,23 +787,41 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              let name = compilerGrammarName(in: call.calledExpression),
-              name == "ForAll" || name == "Exists",
-              call.additionalTrailingClosures.isEmpty,
-              let closure = call.trailingClosure,
-              let finalStatement = closure.statements.last
-        else { return nil }
+              call.additionalTrailingClosures.isEmpty else { return nil }
 
         let arguments = call.arguments.filter { !["file", "line", "column"].contains($0.label?.text ?? "") }
-        let labels = arguments.map { $0.label?.text }
-        guard labels == [nil] || labels == ["in"] || labels == ["in", "and"] else { return nil }
+        let name: String
+        let domains: [ExprSyntax]
+        let closure: ClosureExprSyntax
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           let kind = CollectionPredicateKind(rawValue: member.declName.baseName.sourceIdentifierName),
+           let receiver = member.base {
+            if arguments.isEmpty, let trailing = call.trailingClosure {
+                closure = trailing
+            } else if call.trailingClosure == nil, arguments.count == 1, let argument = arguments.first,
+                      argument.label?.text == (kind == .contains ? "where" : nil),
+                      let explicit = argument.expression.as(ClosureExprSyntax.self) {
+                closure = explicit
+            } else { return nil }
+            name = kind == .contains ? "Exists" : "ForAll"
+            domains = [receiver]
+        } else {
+            guard let trailing = call.trailingClosure else { return nil }
+            closure = trailing
+            guard let constructor = compilerGrammarName(in: call.calledExpression),
+                  constructor == "ForAll" || constructor == "Exists" else { return nil }
+            let labels = arguments.map { $0.label?.text }
+            guard labels == [nil] || labels == ["in"] || labels == ["in", "and"] else { return nil }
+            name = constructor
+            domains = arguments.map(\.expression)
+        }
+        guard let finalStatement = closure.statements.last else { return nil }
         let parameters = closureParameterNames(in: closure)
-        guard parameters.isEmpty || parameters.count == arguments.count,
+        guard parameters.isEmpty || parameters.count == domains.count,
               Set(parameters.filter { $0 != "_" }).count == parameters.filter({ $0 != "_" }).count else { return nil }
         var bodyScope = scope
         var bindings: [(domain: StateExpr, name: String)] = []
-        for (index, argument) in arguments.enumerated() {
-            let domainSyntax = argument.expression
+        for (index, domainSyntax) in domains.enumerated() {
             guard let domain = finiteAlgorithmDomain(domainSyntax).map({
                 StateExpr.setLiteral($0.values.map(StateExpr.value))
             }) ?? decodeTypedFacadeValue(domainSyntax, scope: scope) else {
@@ -820,11 +839,8 @@ final class ParserSession {
         }
         for statement in closure.statements.dropLast() {
             guard let declaration = statement.item.as(VariableDeclSyntax.self),
-                  let binding = parseFormalLet(declaration, scope: bodyScope),
-                  let initializer = declaration.bindings.first?.initializer?.value
-            else { return nil }
-            bodyScope = bodyScope.extending(binding: binding.name, to: binding.value,
-                shape: typedFacadeValueType(initializer, scope: bodyScope))
+                  let binding = parseFormalLet(declaration, scope: bodyScope) else { return nil }
+            bodyScope = bodyScope.extending(binding: binding.name, to: binding.value, shape: binding.shape)
         }
         let bodySyntax: ExprSyntax?
         if let returned = finalStatement.item.as(ReturnStmtSyntax.self) {
@@ -2530,7 +2546,7 @@ final class ParserSession {
             case "subtracting": return .setDifference(selfExpr, argExpr)
             case "isSubset": return .subset(selfExpr, argExpr)
             case "applying": return .functionApply(selfExpr, argExpr)
-            case "filter", "filtering": return .setFilter(selfExpr, generatedBinderName(), argExpr)
+            case "filtering": return .setFilter(selfExpr, generatedBinderName(), argExpr)
             case "mapping": return .setMap(argExpr, generatedBinderName(), selfExpr)
             case "appending": return .tupleAppend(selfExpr, argExpr)
             case "prepending": return .tupleConcatenate(.tupleLiteral([argExpr]), selfExpr)
@@ -3164,6 +3180,7 @@ extension ParserSession {
               case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
 
+        if case .set = scope.shape(for: collectionReference) { return nil }
         let sourceName = collectionReference.baseName.sourceIdentifierName
         let collection = scope.value(for: collectionReference) ?? .variable(sourceName)
         let parameter = generatedBinderName(

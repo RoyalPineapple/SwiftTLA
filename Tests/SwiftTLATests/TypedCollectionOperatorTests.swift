@@ -86,27 +86,35 @@ private struct TypedCollectionGeneratedModel {
 
 @TLAModel
 private struct TypedQuantifierGeneratedModel {
-    enum Step: String, CaseIterable { case findEven, allPositive, emptyAll, emptyAny }
+    enum Step: String, CaseIterable { case findEven, allPositive, emptyAll, emptyAny, updateMembers }
 
     static var spec: TLASpec {
         #spec("TypedQuantifierGeneratedModel") { scope in
             let typedQuantifierGeneratedModel = Algorithm(label: "TypedQuantifierGeneratedModel", scoped: { algorithm in
                 let result = algorithm.sharedVar(_name: "result", initial: false)
+                let members = algorithm.sharedVar(_name: "members", initial: Set<Int>())
                 Do(Step.findEven) {
-                    Assign(result, to: Exists(in: IntRange(1, through: 4)) { value in
+                    Assign(result, to: IntRange(1, through: 4).contains { value in
                         value.expr % 2 == 0
                     })
                 }
                 Do(Step.allPositive) {
-                    Assign(result, to: ForAll(in: IntRange(1, through: 4)) { value in
+                    Assign(result, to: IntRange(1, through: 4).allSatisfy { value in
                         value.expr > 0
                     })
                 }
                 Do(Step.emptyAll) {
-                    Assign(result, to: ForAll(in: IntRange(2, through: 1)) { value in value.expr < 0 })
+                    Assign(result, to: IntRange(2, through: 1).allSatisfy { value in value.expr < 0 })
                 }
                 Do(Step.emptyAny) {
-                    Assign(result, to: Exists(in: IntRange(2, through: 1)) { value in value.expr >= 0 })
+                    Assign(result, to: IntRange(2, through: 1).contains(where: { value in value.expr >= 0 }))
+                }
+                Do(Step.updateMembers) {
+                    members.insert(1)
+                    members.formUnion(IntRange(1, through: 5).filter({ $0 <= 3 }))
+                    members.remove(2)
+                    members.remove(4)
+                    result.set(members.count == 2 && members.contains(1) && members.contains(3))
                 }
             })
             typedQuantifierGeneratedModel
@@ -724,6 +732,7 @@ private struct FoldGeneratedModel {
         #expect(try machine.send(.allPositive).after.result)
         #expect(try machine.send(.emptyAll).after.result)
         #expect(try !machine.send(.emptyAny).after.result)
+        #expect(try machine.send(.updateMembers).after.result)
         #expect(try TypedQuantifierGeneratedModel.spec.compile().render().tlaBundle.tla.contains("\\E"))
     }
 }

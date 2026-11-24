@@ -784,7 +784,7 @@ extension ParserSession {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let binding = parseFormalLet(variable, scope: bodyScope) {
-                bodyScope = bodyScope.extending(binding: binding.name, to: binding.value)
+                bodyScope = bodyScope.extending(binding: binding.name, to: binding.value, shape: binding.shape)
                 continue
             }
             let expression: ExprSyntax?
@@ -1320,10 +1320,7 @@ extension ParserSession {
                     return nil
                 }
                 let saved = generatedBinderName(line: UInt(variable.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
-                let shape = variable.bindings.first?.initializer.flatMap {
-                    typedFacadeValueType($0.value, scope: scope)
-                }
-                let bodyScope = scope.extending(binding: binding.name, to: .variable(saved), shape: shape)
+                let bodyScope = scope.extending(binding: binding.name, to: .variable(saved), shape: binding.shape)
                 guard let body = parseAlgorithmStatements(
                     statements,
                     processParameter: processParameter,
@@ -1423,7 +1420,7 @@ extension ParserSession {
     func parseFormalLet(
         _ declaration: VariableDeclSyntax,
         scope: TypedFacadeScope
-    ) -> (name: String, value: StateExpr)? {
+    ) -> (name: String, value: StateExpr, shape: CompiledValueType?)? {
         guard declaration.bindingSpecifier.text == "let",
               declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
@@ -1432,7 +1429,7 @@ extension ParserSession {
               let value = decodeTypedFacadeValue(initializer, scope: scope,
                 requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation))
         else { return nil }
-        return (name, value)
+        return (name, value, typedFacadeValueType(initializer, scope: scope))
     }
 
     private func parseAlgorithmStatement(
