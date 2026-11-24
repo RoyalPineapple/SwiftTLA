@@ -7223,15 +7223,17 @@
     {
       "path": "specifications/locks_auxiliary_vars",
       "name": "Peterson Lock Refinement With Auxiliary Variables",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Published two-process Lock scenario registered; hosted comparison pending",
+      "gap": "LockHS, Peterson and the Stuttering companion remain open. The Lock transition and property comparison on hosted TLC remains pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/locks_auxiliary_vars/Lock.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Lock.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -7261,10 +7263,16 @@
           "module": "specifications/locks_auxiliary_vars/Lock.tla",
           "configuration": "specifications/locks_auxiliary_vars/Lock.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Lock.swift",
+              "scenario": "Lock",
+              "caseID": "auxiliary-lock"
+            }
+          ],
           "evidence": []
         },
         {

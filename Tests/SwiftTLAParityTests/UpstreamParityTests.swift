@@ -6,9 +6,16 @@ import Testing
 struct UpstreamParityTests {
     @Test("two-process Lock generated machine explores its complete bounded graph")
     func lockGeneratedGraph() throws {
-        let graph = try ReachabilityGraph(initialMachines: LockModel.initialMachines(), maximumStates: 100)
-        #expect(graph.transitions.count == Example.lockTwoProcess.expectedDistinct)
-        #expect(graph.safetyViolations.isEmpty)
+        let scenario = try #require(LockModel.validationScenarios().first)
+        let run = try NativeScenarioRun(scenario, maximumStates: 100)
+        try run.validateExpectations()
+        let graph = try #require(run.native.graph)
+        #expect(graph.isComplete)
+        #expect(graph.graph.initialStateKeys.count == 1)
+        #expect(graph.graph.states.count == 12)
+        #expect(graph.graph.edges.count == 20)
+        #expect(run.native.checks.properties == ["TypeOK": .satisfied, "LockInv": .satisfied])
+        #expect(run.native.checks.deadlock == .satisfied)
     }
 
     @Test("HourClock TLA+ module is TLC-shaped")

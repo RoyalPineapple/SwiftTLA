@@ -53,17 +53,20 @@ package struct LockModel: Sendable {
 
                 Invariant("TypeOK") {
                     (0...1).contains(lock)
+                    Process.all.allSatisfy { process in
+                        At(Step.l0, process) || At(Step.l1, process)
+                            || At(Step.cs, process) || At(Step.l2, process)
+                    }
+                }
+                let holders = Process.all.filter { process in At(Step.cs, process) || At(Step.l2, process) }
+                Invariant("LockInv") {
+                    holders.count <= 1
+                    holders.isEmpty || lock == 0
                 }
             }
             Lock
+            let twoProcess = Validation(label: "Lock") {}
+            twoProcess
         }
     }
-}
-
-extension Example {
-    package static let lockTwoProcess = FiniteModelFixture(
-        expectedDistinct: 12,
-        maximumStateLimit: 50_000,
-        spec: LockModel.spec,
-    )
 }

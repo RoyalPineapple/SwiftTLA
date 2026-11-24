@@ -275,6 +275,33 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "auxiliary-lock",
+      "sourceModel": "auxiliary-lock",
+      "scenario": "Lock",
+      "module": "auxiliary-lock/Lock.tla",
+      "configuration": "auxiliary-lock/Lock.cfg",
+      "imports": [
+        "boulanger/TLAPS.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Lock",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/Lock.tla",
+        "sha256": "f10562642cb5d9cb6a3d3912d93917fa692a97ab9a879fa3b3f2c7989098765f"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f10562642cb5d9cb6a3d3912d93917fa692a97ab9a879fa3b3f2c7989098765f",
+      "cfgSHA256": "1fa7fbd2d3841eb52c2e787ae8cef56d734ec5b69d73382f0005bdf2e80c2c98",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "binary-search",
       "sourceModel": "binary-search",
       "scenario": "MCBinarySearch",
