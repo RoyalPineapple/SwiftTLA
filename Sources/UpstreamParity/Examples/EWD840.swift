@@ -67,7 +67,7 @@ package struct EWD840Model: Sendable {
             let Inv = Invariant()
             let JsonInv = Invariant()
             let Liveness = Temporal()
-            let terminated = ForAll(in: Node) { i in !active[i] }
+            let terminated = Node.allSatisfy { i in !active[i] }
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
             TypeOK {
@@ -76,7 +76,7 @@ package struct EWD840Model: Sendable {
                     && Node.contains(tpos) && colors.contains(tcolor)
             }
             TerminationDetection { !terminationDetected || terminated }
-            let inductiveInvariant = ForAll(in: Node) { i in tpos >= i || !active[i] }
+            let inductiveInvariant = Node.allSatisfy { i in tpos >= i || !active[i] }
                 || Exists(in: IntRange(0, through: tpos)) { i in color[i] == Color.black }
                 || tcolor == Color.black
             Inv { inductiveInvariant }

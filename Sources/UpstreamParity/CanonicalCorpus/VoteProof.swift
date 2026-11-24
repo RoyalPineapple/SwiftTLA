@@ -78,20 +78,20 @@ package struct VoteProofModel: Sendable {
                 FormalDefinition("SafeAt", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value -> Expr<Bool> in
                     LetRec("SA", over: ballots, taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, currentBallot) in
                         currentBallot == 0 || Exists(in: quorums) { quorum in
-                            ForAll(in: quorum.expr) { acceptor in
+                            quorum.expr.allSatisfy { acceptor in
                                 maxBal[acceptor] >= currentBallot.expr
                             } && Exists(in: IntRange(-1, through: currentBallot.expr - 1)) { priorBallot in
                                 ((priorBallot == -1) || (
                                     recursion(priorBallot.expr)
-                                        && ForAll(in: quorum.expr) { acceptor in
-                                            ForAll(in: values) { candidate in
+                                        && quorum.expr.allSatisfy { acceptor in
+                                            values.allSatisfy { candidate in
                                                 !votes[acceptor].contains(Pair<Int, Value>.literal(priorBallot.expr, candidate.expr))
                                                     || candidate == value
                                             }
                                         }
-                                )) && ForAll(in: IntRange(priorBallot.expr + 1, through: currentBallot.expr - 1)) { laterBallot in
-                                    ForAll(in: quorum.expr) { acceptor in
-                                        ForAll(in: values) { candidate in
+                                )) && IntRange(priorBallot.expr + 1, through: currentBallot.expr - 1).allSatisfy { laterBallot in
+                                    quorum.expr.allSatisfy { acceptor in
+                                        values.allSatisfy { candidate in
                                             !votes[acceptor].contains(Pair<Int, Value>.literal(laterBallot.expr, candidate.expr))
                                         }
                                     }
@@ -105,7 +105,7 @@ package struct VoteProofModel: Sendable {
 
                 FormalDefinition("ChosenIn", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value -> Expr<Bool> in
                     Exists(in: quorums) { quorum in
-                        ForAll(in: quorum.expr) { acceptor in
+                        quorum.expr.allSatisfy { acceptor in
                             votes[acceptor].contains(Pair<Int, Value>.literal(ballot, value))
                         }
                     }
@@ -126,8 +126,8 @@ package struct VoteProofModel: Sendable {
                 FormalDefinition(
                     "VoteProofTypeOK",
                     parameters: [],
-                    body: ForAll(in: acceptors) { acceptor in
-                        ForAll(in: votes[acceptor]) { vote in
+                    body: acceptors.allSatisfy { acceptor in
+                        votes[acceptor].allSatisfy { vote in
                             ballots.contains(vote.first()) && values.contains(vote.second())
                         } && ballots.union(SetExpr<Int>.literal(-1)).contains(maxBal[acceptor])
                     },
@@ -138,10 +138,10 @@ package struct VoteProofModel: Sendable {
                 FormalDefinition(
                     "VoteProofSingleVotePerBallot",
                     parameters: [],
-                    body: ForAll(in: acceptors) { acceptor in
-                        ForAll(in: ballots) { ballot in
-                            ForAll(in: values) { value in
-                                ForAll(in: values) { otherValue in
+                    body: acceptors.allSatisfy { acceptor in
+                        ballots.allSatisfy { ballot in
+                            values.allSatisfy { value in
+                                values.allSatisfy { otherValue in
                                     (!votes[acceptor].contains(Pair<Int, Value>.literal(ballot.expr, value.expr))
                                         || !votes[acceptor].contains(Pair<Int, Value>.literal(ballot.expr, otherValue.expr)))
                                         || value == otherValue
@@ -156,9 +156,9 @@ package struct VoteProofModel: Sendable {
                 FormalDefinition(
                     "VoteProofVotesAreSafe",
                     parameters: [],
-                    body: ForAll(in: acceptors) { acceptor in
-                        ForAll(in: ballots) { ballot in
-                            ForAll(in: values) { value in
+                    body: acceptors.allSatisfy { acceptor in
+                        ballots.allSatisfy { ballot in
+                            values.allSatisfy { value in
                                 !votes[acceptor].contains(Pair<Int, Value>.literal(ballot.expr, value.expr))
                                     || FormalCall(as: Bool.self, "SafeAt", ballot.expr, value.expr)
                             }
@@ -172,11 +172,11 @@ package struct VoteProofModel: Sendable {
                 FormalDefinition(
                     "VoteProofAgreement",
                     parameters: [],
-                    body: ForAll(in: acceptors) { firstAcceptor in
-                        ForAll(in: acceptors) { secondAcceptor in
-                            ForAll(in: ballots) { ballot in
-                                ForAll(in: values) { firstValue in
-                                    ForAll(in: values) { secondValue in
+                    body: acceptors.allSatisfy { firstAcceptor in
+                        acceptors.allSatisfy { secondAcceptor in
+                            ballots.allSatisfy { ballot in
+                                values.allSatisfy { firstValue in
+                                    values.allSatisfy { secondValue in
                                         (!votes[firstAcceptor].contains(Pair<Int, Value>.literal(ballot.expr, firstValue.expr))
                                             || !votes[secondAcceptor].contains(Pair<Int, Value>.literal(ballot.expr, secondValue.expr)))
                                             || firstValue == secondValue
@@ -192,8 +192,8 @@ package struct VoteProofModel: Sendable {
                 FormalDefinition(
                     "VoteProofChosenValuesAgree",
                     parameters: [],
-                    body: ForAll(in: FormalCall(as: SetExpr<Value>.self, "chosen")) { value in
-                        ForAll(in: FormalCall(as: SetExpr<Value>.self, "chosen")) { otherValue in
+                    body: FormalCall(as: SetExpr<Value>.self, "chosen").allSatisfy { value in
+                        FormalCall(as: SetExpr<Value>.self, "chosen").allSatisfy { otherValue in
                             value == otherValue
                         }
                     },
@@ -209,11 +209,11 @@ package struct VoteProofModel: Sendable {
                 let voteFor = Macro { (vote: MacroParameter<Pair<Int, Value>>, acceptor: MacroParameter<Acceptor>) in
                     When(
                         maxBal[acceptor] <= vote.expr.first()
-                            && ForAll(in: values) { candidate in
+                            && values.allSatisfy { candidate in
                                 !votes[acceptor].contains(Pair<Int, Value>.literal(vote.expr.first(), candidate.expr))
                             }
-                            && ForAll(in: acceptors.removing(acceptor.expr)) { peer in
-                                ForAll(in: values) { candidate in
+                            && acceptors.removing(acceptor.expr).allSatisfy { peer in
+                                values.allSatisfy { candidate in
                                     !votes[peer].contains(Pair<Int, Value>.literal(vote.expr.first(), candidate.expr))
                                         || candidate == vote.expr.second()
                                 }

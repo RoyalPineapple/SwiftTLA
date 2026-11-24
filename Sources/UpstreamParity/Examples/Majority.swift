@@ -42,12 +42,12 @@ package struct MajorityModel: Sendable {
             TypeOK {
                 seq.count <= bound && i >= 1 && i <= seq.count + 1 && cnt >= 0
                     && Value.contains(cand)
-                    && ForAll(in: IntRange(1, through: seq.count)) { index in
+                    && IntRange(1, through: seq.count).allSatisfy { index in
                         Value.contains(seq[index.expr])
                     }
             }
             Correct {
-                i <= seq.count || ForAll(in: Value) { value in
+                i <= seq.count || Value.allSatisfy { value in
                     2 * IntRange(1, through: seq.count).filter { index in
                         seq[index.expr] == value
                     }.count <= seq.count || value == cand
@@ -59,7 +59,7 @@ package struct MajorityModel: Sendable {
             Inv {
                 cnt <= candidateOccurrences
                     && 2 * (candidateOccurrences - cnt) <= i - 1 - cnt
-                    && ForAll(in: Value) { value in
+                    && Value.allSatisfy { value in
                         value == cand || 2 * IntRange(1, through: i - 1).filter { index in
                             seq[index.expr] == value
                         }.count <= i - 1 - cnt

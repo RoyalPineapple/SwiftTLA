@@ -22,8 +22,8 @@ package struct ChangRobertsModel: Sendable {
             let Id = model.parameter(as: [Int].self, in: Sequences(of: Int.all))
             let Node = IntRange(1, through: N)
             Assume(N > 0 && Id.count == N
-                && ForAll(in: Node) { node in Id[node] >= 0
-                    && ForAll(in: Node) { other in node == other || Id[node] != Id[other] }
+                && Node.allSatisfy { node in Id[node] >= 0
+                    && Node.allSatisfy { other in node == other || Id[node] != Id[other] }
                 })
             let TypeOK = Invariant()
             let Correctness = Invariant()
@@ -63,17 +63,17 @@ package struct ChangRobertsModel: Sendable {
 
                 TypeOK {
                     msgs.keys == Node && initiator.keys == Node && state.keys == Node
-                    ForAll(in: Node) { node in
+                    Node.allSatisfy { node in
                         Set<ProcessState>([.candidate, .lost, .won]).contains(state[node])
-                            && ForAll(in: msgs[node]) { message in
+                            && msgs[node].allSatisfy { message in
                                 Exists(in: Node) { owner in message == Id[owner] }
                             }
                     }
                 }
                 Correctness {
-                    ForAll(in: Node) { node in
+                    Node.allSatisfy { node in
                         state[node] != ProcessState.won || (initiator[node]
-                            && ForAll(in: Node) { other in
+                            && Node.allSatisfy { other in
                                 other == node || (state[other] == ProcessState.lost
                                     && (!initiator[other] || Id[other] > Id[node]))
                             })

@@ -44,8 +44,8 @@ package struct EchoModel: Sendable {
             }
             let R = spec.parameter(as: Set<Pair<NodeID, NodeID>>.self, in: Subsets(of: pairs))
             Assume(Node.contains(initiator))
-            Assume(ForAll(in: Node) { node in !R.contains(Pair<NodeID, NodeID>.literal(node, node)) })
-            Assume(ForAll(in: pairs) { edge in
+            Assume(Node.allSatisfy { node in !R.contains(Pair<NodeID, NodeID>.literal(node, node)) })
+            Assume(pairs.allSatisfy { edge in
                 R.contains(edge) == R.contains(Pair<NodeID, NodeID>.literal(edge.second(), edge.first()))
             })
             Assume(LetRec("echoConnectedPath", taking: Triple<NodeID, NodeID, Int>.self,
@@ -58,8 +58,8 @@ package struct EchoModel: Sendable {
                                     next, endpoints.second(), endpoints.third() - 1))
                         })
                 }, in: { path in
-                    ForAll(in: Node) { from in
-                        ForAll(in: Node) { to in
+                    Node.allSatisfy { from in
+                        Node.allSatisfy { to in
                             path(Triple<NodeID, NodeID, Int>.literal(from, to, Node.count))
                         }
                     }
@@ -135,7 +135,7 @@ package struct EchoModel: Sendable {
                             R.contains(Pair<NodeID, NodeID>.literal(neighbor, selfID))
                         }
                         inbox.keys == Node.assuming(Set<NodeID>.self)
-                        ForAll(in: inbox[selfID]) { message in
+                        inbox[selfID].allSatisfy { message in
                             (message.kind == .message || message.kind == .acknowledgement)
                                 && Node.contains(message.sndr)
                                 && nbrs.contains(message.sndr)
@@ -144,7 +144,7 @@ package struct EchoModel: Sendable {
 
                     let parents = parent.family(for: NodeID.self)
                     AncestorProperties {
-                        !ForAll(in: Node) { node in Finished(node) }
+                        !Node.allSatisfy { node in Finished(node) }
                             || LetRec("ancestor", taking: Triple<NodeID, NodeID, Int>.self,
                                 { (ancestor: LocalRecursion<Triple<NodeID, NodeID, Int>, Bool>,
                                    path: WithValue<Triple<NodeID, NodeID, Int>>) in
@@ -156,11 +156,11 @@ package struct EchoModel: Sendable {
                                                         next, path.second(), path.third() - 1))
                                             })
                                 }, in: { ancestor in
-                                    ForAll(in: Node) { node in
+                                    Node.allSatisfy { node in
                                         node == initiator || ancestor(Triple<NodeID, NodeID, Int>.literal(
                                             node, initiator, Node.count))
                                     }
-                                        && ForAll(in: Node) { node in
+                                        && Node.allSatisfy { node in
                                             !ancestor(Triple<NodeID, NodeID, Int>.literal(
                                                 node, node, Node.count))
                                         }

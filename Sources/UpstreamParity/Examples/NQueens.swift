@@ -56,8 +56,8 @@ package struct NQueensModel: Sendable {
                 let validSolutions = Sequences(
                     of: IntRange(1, through: N), lengths: IntRange(N, through: N)
                 ).filter { placement in
-                    ForAll(in: IntRange(1, through: N - 1)) { row in
-                        ForAll(in: IntRange(row.expr + 1, through: N)) { other in
+                    IntRange(1, through: N - 1).allSatisfy { row in
+                        IntRange(row.expr + 1, through: N).allSatisfy { other in
                             placement.expr[row.expr] != placement.expr[other.expr]
                                 && placement.expr[row.expr] - placement.expr[other.expr] != row.expr - other.expr
                                 && placement.expr[other.expr] - placement.expr[row.expr] != row.expr - other.expr
@@ -72,15 +72,15 @@ package struct NQueensModel: Sendable {
                 Termination(.eventually(Finished()))
 
                 TypeInvariant {
-                    ForAll(in: todo.expr) { placement in
+                    todo.expr.allSatisfy { placement in
                         placement.expr.count < N
-                            && ForAll(in: IntRange(1, through: placement.expr.count)) { row in
+                            && IntRange(1, through: placement.expr.count).allSatisfy { row in
                                 IntRange(1, through: N).contains(placement.expr[row.expr])
                             }
                     }
-                    && ForAll(in: sols.expr) { placement in
+                    && sols.expr.allSatisfy { placement in
                         placement.expr.count == N
-                            && ForAll(in: IntRange(1, through: placement.expr.count)) { row in
+                            && IntRange(1, through: placement.expr.count).allSatisfy { row in
                                 IntRange(1, through: N).contains(placement.expr[row.expr])
                             }
                     }

@@ -49,9 +49,9 @@ package struct BinarySearchModel: Sendable {
                 }
 
                 let typeOK = seq.count >= 1 && seq.count <= MaxSeqLen
-                    && ForAll(in: IntRange(1, through: seq.count)) { index in
+                    && IntRange(1, through: seq.count).allSatisfy { index in
                         Values.contains(seq[index])
-                            && ForAll(in: IntRange(index + 1, through: seq.count)) { other in
+                            && IntRange(index + 1, through: seq.count).allSatisfy { other in
                                 seq[index] <= seq[other]
                             }
                     }
@@ -69,7 +69,7 @@ package struct BinarySearchModel: Sendable {
                         else: result == 0
                     )
                     !Finished() || result != 0
-                        || ForAll(in: IntRange(1, through: seq.count)) { index in seq[index] != val }
+                        || IntRange(1, through: seq.count).allSatisfy { index in seq[index] != val }
                 }
                 resultCorrect {
                     (!Finished()) || If(

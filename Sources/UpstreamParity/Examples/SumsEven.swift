@@ -8,7 +8,7 @@ package struct SumsEvenModel: Sendable {
         #spec("MC_sums_even") { scope in
             Extends(.naturals)
             let MaxNat = scope.parameter(as: Int.self, in: 0...1_000_000)
-            Assume(MaxNat >= 0 && ForAll(in: IntRange(0, through: MaxNat)) { x in
+            Assume(MaxNat >= 0 && IntRange(0, through: MaxNat).allSatisfy { x in
                 (x.expr + x.expr) % 2 == 0
             })
             let MC_sums_even = Validation {

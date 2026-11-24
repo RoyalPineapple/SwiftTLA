@@ -85,7 +85,7 @@ package struct ChameneosModel: Sendable {
             }
             TypeOK {
                 chameneoses.keys == creatureIDs
-                    && ForAll(in: creatureIDs) { id in
+                    && creatureIDs.allSatisfy { id in
                         let color = chameneoses[id.expr].first()
                         return (color == Color.first(Hue.blue)
                             || color == Color.first(Hue.red)

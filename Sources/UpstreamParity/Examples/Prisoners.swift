@@ -71,7 +71,7 @@ package struct PrisonersModel: Sendable {
                 let oneIfUp = If(switchAUp, then: 1, else: 0)
                 SetExpr<Int>.literal(total - oneIfUp, total - oneIfUp + 1).contains(count)
             }
-            Safety(.always(!done || ForAll(in: OtherPrisoner) { prisoner in
+            Safety(.always(!done || OtherPrisoner.allSatisfy { prisoner in
                 timesSwitched[prisoner] > 0
             }))
             Liveness(.eventually(done))

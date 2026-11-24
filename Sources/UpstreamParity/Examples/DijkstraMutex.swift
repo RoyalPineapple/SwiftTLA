@@ -152,8 +152,8 @@ package struct DijkstraMutexModel: Sendable {
                 }
 
                 MutualExclusion {
-                    ForAll(in: Proc) { first in
-                        ForAll(in: Proc) { second in
+                    Proc.allSatisfy { first in
+                        Proc.allSatisfy { second in
                             first == second || !(At(Label.critical, first) && At(Label.critical, second))
                         }
                     }

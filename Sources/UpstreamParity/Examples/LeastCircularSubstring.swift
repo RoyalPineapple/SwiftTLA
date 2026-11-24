@@ -73,7 +73,7 @@ package struct LeastCircularSubstringModel: Sendable {
                         && ZSequences.indices(of: b).inserting(0).contains(k)
                 }
                 Correctness {
-                    !Finished() || ForAll(in: ZSequences.rotations(of: b)) { other in
+                    !Finished() || ZSequences.rotations(of: b).allSatisfy { other in
                         ZSequences.lexicographicallyPrecedesOrEquals(
                             ZSequences.rotation(of: b, leftBy: k), other.seq)
                             && (ZSequences.rotation(of: b, leftBy: k) != other.seq || k <= other.shift)

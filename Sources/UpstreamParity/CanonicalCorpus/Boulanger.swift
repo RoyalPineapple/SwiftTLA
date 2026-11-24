@@ -144,7 +144,7 @@ package struct BoulangerModel: Sendable {
                     Inv {
                         typeOK
                             && localInvariant
-                            && ForAll(in: Procs) { (other: WithValue<Int>) -> Expr<Bool> in
+                            && Procs.allSatisfy { (other: WithValue<Int>) -> Expr<Bool> in
                                 let passedMember: Expr<Bool> = (At(Label.w1, selfID) || At(Label.w2, selfID))
                                     && !unchecked.contains(other) && other != selfID
                                 let nextCompeting = At(Label.e4, nxt) || At(Label.w1, nxt)
@@ -171,10 +171,10 @@ package struct BoulangerModel: Sendable {
                     }
                 }
 
-                StateConstraint(ForAll(in: Procs) { process in num[process] < MaxNat })
+                StateConstraint(Procs.allSatisfy { process in num[process] < MaxNat })
                 MutualExclusion {
-                    ForAll(in: Procs) { first in
-                        ForAll(in: Procs) { second in
+                    Procs.allSatisfy { first in
+                        Procs.allSatisfy { second in
                             first == second || !(At(Label.cs, first) && At(Label.cs, second))
                         }
                     }

@@ -43,8 +43,8 @@ package struct QueensModel: Sendable {
 
             let solutions = Sequences(of: IntRange(1, through: N), lengths: IntRange(N, through: N))
                 .filter { placement in
-                    ForAll(in: IntRange(1, through: N - 1)) { row in
-                        ForAll(in: IntRange(row.expr + 1, through: N)) { other in
+                    IntRange(1, through: N - 1).allSatisfy { row in
+                        IntRange(row.expr + 1, through: N).allSatisfy { other in
                             placement[row.expr] != placement[other.expr]
                                 && placement[row.expr] - placement[other.expr] != row.expr - other.expr
                                 && placement[other.expr] - placement[row.expr] != row.expr - other.expr
@@ -52,12 +52,12 @@ package struct QueensModel: Sendable {
                     }
                 }
             TypeInvariant {
-                ForAll(in: todo) { placement in
-                    placement.count < N && ForAll(in: IntRange(1, through: placement.count)) { row in
+                todo.allSatisfy { placement in
+                    placement.count < N && IntRange(1, through: placement.count).allSatisfy { row in
                         IntRange(1, through: N).contains(placement[row.expr])
                     }
-                } && ForAll(in: sols) { placement in
-                    placement.count == N && ForAll(in: IntRange(1, through: placement.count)) { row in
+                } && sols.allSatisfy { placement in
+                    placement.count == N && IntRange(1, through: placement.count).allSatisfy { row in
                         IntRange(1, through: N).contains(placement[row.expr])
                     }
                 }

@@ -32,14 +32,14 @@ package struct FindHighestModel: Sendable {
                 StateConstraint(f.count <= MaxLength)
                 TypeOK {
                     f.count <= MaxNat
-                    ForAll(in: IntRange(1, through: f.count)) { index in
+                    IntRange(1, through: f.count).allSatisfy { index in
                         f[index] >= 0 && f[index] <= MaxNat
                     }
                     i >= 1 && i <= f.count + 1 && i <= MaxNat
                     h >= -1 && h <= MaxNat
                 }
                 InductiveInvariant {
-                    ForAll(in: IntRange(1, through: i - 1)) { index in
+                    IntRange(1, through: i - 1).allSatisfy { index in
                         f[index] <= h
                     }
                 }
@@ -47,7 +47,7 @@ package struct FindHighestModel: Sendable {
                     (!Finished()) || i == f.count + 1
                 }
                 Correctness {
-                    (!Finished()) || ForAll(in: IntRange(1, through: f.count)) { index in
+                    (!Finished()) || IntRange(1, through: f.count).allSatisfy { index in
                         f[index] <= h
                     }
                 }

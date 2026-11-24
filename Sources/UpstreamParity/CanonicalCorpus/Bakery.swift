@@ -134,7 +134,7 @@ package struct BakeryModel: Sendable {
                     Inv {
                         typeOK && activeTicket && choosingFlag && distinctNext
                             && excludesSelf && observedMaximum
-                            && ForAll(in: Procs) { (other: WithValue<Int>) -> Expr<Bool> in
+                            && Procs.allSatisfy { (other: WithValue<Int>) -> Expr<Bool> in
                                 let passedMember = (At(Label.w1, selfID) || At(Label.w2, selfID))
                                     && !unchecked.contains(other) && other != selfID
                                 let criticalMember = At(Label.cs, selfID) && other != selfID
@@ -154,8 +154,8 @@ package struct BakeryModel: Sendable {
                 }
 
                 MutualExclusion {
-                    ForAll(in: Procs) { first in
-                        ForAll(in: Procs) { second in
+                    Procs.allSatisfy { first in
+                        Procs.allSatisfy { second in
                             first == second || !(At(Label.cs, first) && At(Label.cs, second))
                         }
                     }

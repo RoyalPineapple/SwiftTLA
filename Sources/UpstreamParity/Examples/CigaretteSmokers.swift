@@ -47,7 +47,7 @@ package struct CigaretteSmokersModel: Sendable {
                     ])
                 ]))
             Assume(Offers.isSubset(of: Subsets(of: Ingredients))
-                && ForAll(in: Offers) { offer in
+                && Offers.allSatisfy { offer in
                     offer.count == Ingredients.count - 1
                 })
 
@@ -67,7 +67,7 @@ package struct CigaretteSmokersModel: Sendable {
             }
             Do(Step.stopSmoking, when: dealer.isEmpty) {
                 Let(Select(from: Ingredients) { ingredient in
-                    smokers[ingredient].smoking && ForAll(in: Ingredients) { other in
+                    smokers[ingredient].smoking && Ingredients.allSatisfy { other in
                         !smokers[other].smoking || other == ingredient
                     }
                 }) { ingredient in

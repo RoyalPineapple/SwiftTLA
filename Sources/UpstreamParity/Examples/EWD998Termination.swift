@@ -17,7 +17,7 @@ package struct EWD998TerminationModel: Sendable {
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
                 initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
             let pending = scope.sharedVar(initial: Dictionary<Int, Int>.mapping(over: Node) { _ in 0 })
-            let terminated = ForAll(in: Node) { node in !active[node] && pending[node] == 0 }
+            let terminated = Node.allSatisfy { node in !active[node] && pending[node] == 0 }
             let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
 
             let TypeOK = Invariant()
@@ -49,13 +49,13 @@ package struct EWD998TerminationModel: Sendable {
 
             TypeOK {
                 Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
-                    && ForAll(in: Node) { node in pending[node] >= 0 }
+                    && Node.allSatisfy { node in pending[node] >= 0 }
                     && SetExpr<Bool>.literal(false, true).contains(terminationDetected)
             }
             Safe { !terminationDetected || terminated }
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
             Live(.leadsTo(terminated, terminationDetected))
-            Constraint(ForAll(in: Node) { node in pending[node] <= 3 })
+            Constraint(Node.allSatisfy { node in pending[node] <= 3 })
 
             let AsyncTerminationDetection = Validation { Bind(N, to: 4) }
             AsyncTerminationDetection

@@ -32,16 +32,16 @@ package struct SingleLaneBridgeModel: Sendable {
                 in: Set<Set<Int>>([Set([1, 2, 3, 4, 5, 6, 7, 8])]))
             let Cars = CarsRight.union(CarsLeft)
             let StartPos = Select(from: Positions) { candidate in
-                ForAll(in: Positions) { position in candidate <= position }
+                Positions.allSatisfy { position in candidate <= position }
             }
             let EndPos = Select(from: Positions) { candidate in
-                ForAll(in: Positions) { position in candidate >= position }
+                Positions.allSatisfy { position in candidate >= position }
             }
             let StartBridge = Select(from: Bridge) { candidate in
-                ForAll(in: Bridge) { position in candidate <= position }
+                Bridge.allSatisfy { position in candidate <= position }
             }
             let EndBridge = Select(from: Bridge) { candidate in
-                ForAll(in: Bridge) { position in candidate >= position }
+                Bridge.allSatisfy { position in candidate >= position }
             }
 
             let Location = scope.sharedVar(initial:
@@ -73,7 +73,7 @@ package struct SingleLaneBridgeModel: Sendable {
                     then: If(Location[car] > StartPos, then: Location[car] - 1, else: EndPos),
                     else: If(Location[car] < EndPos, then: Location[car] + 1, else: StartPos))
                 When(CarsInBridge.contains(car)
-                    && ForAll(in: Cars) { other in Location[other] != next })
+                    && Cars.allSatisfy { other in Location[other] != next })
                 If(CarsRight.contains(car) && next == EndBridge + 1
                     || CarsLeft.contains(car) && next == StartBridge - 1) {
                     WaitingBeforeBridge.set(WaitingBeforeBridge.appending(car))
@@ -88,10 +88,10 @@ package struct SingleLaneBridgeModel: Sendable {
                     then: If(Location[car] > StartPos, then: Location[car] - 1, else: EndPos),
                     else: If(Location[car] < EndPos, then: Location[car] + 1, else: StartPos))
                 let canFollow = !CarsInBridge.contains(car)
-                    && ForAll(in: CarsInBridge) { other in
+                    && CarsInBridge.allSatisfy { other in
                         CarsRight.contains(other) == CarsRight.contains(car)
                     }
-                    && ForAll(in: Cars) { other in Location[other] != next }
+                    && Cars.allSatisfy { other in Location[other] != next }
                 When(CarsInBridge.isEmpty || canFollow)
                 Location[car].set(next)
                 WaitingBeforeBridge.set(WaitingBeforeBridge.tail())
@@ -103,15 +103,15 @@ package struct SingleLaneBridgeModel: Sendable {
             WeakFairness(enterBridge)
 
             Invariants {
-                ForAll(in: Cars) { first in
-                    ForAll(in: Cars) { second in
+                Cars.allSatisfy { first in
+                    Cars.allSatisfy { second in
                         !(Bridge.contains(Location[first])
                             && Location[first] == Location[second]) || first == second
                     }
                 }
                 CarsInBridge.count < Bridge.count + 1
-                ForAll(in: CarsRight) { right in
-                    ForAll(in: CarsLeft) { left in
+                CarsRight.allSatisfy { right in
+                    CarsLeft.allSatisfy { left in
                         !(Bridge.contains(Location[right]) && Bridge.contains(Location[left]))
                     }
                 }

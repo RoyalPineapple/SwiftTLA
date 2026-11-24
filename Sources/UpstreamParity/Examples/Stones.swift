@@ -33,7 +33,7 @@ package struct StonesModel: Sendable {
                                        })
                             }, in: { partitions in
                                 Exists(in: partitions(Pair.literal(Array<Int>(), W))) { partition in
-                                    If(ForAll(in: IntRange(1, through: W)) { weight in
+                                    If(IntRange(1, through: W).allSatisfy { weight in
                                         Exists(in: Functions(from: IntRange(1, through: N),
                                                              to: IntRange(-1, through: 1))) { coefficients in
                                             seqSum(SequenceMapping(length: N) { index in

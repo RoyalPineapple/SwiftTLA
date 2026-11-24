@@ -27,26 +27,26 @@ package struct QuicksortModel: Sendable {
                         If(I.count == 1) {
                             U.remove(I)
                         } else: {
-                            Let(Select(from: I) { x in ForAll(in: I) { y in x <= y } }) { minimum in
-                                Let(Select(from: I) { x in ForAll(in: I) { y in x >= y } }) { maximum in
+                            Let(Select(from: I) { x in I.allSatisfy { y in x <= y } }) { minimum in
+                                Let(Select(from: I) { x in I.allSatisfy { y in x >= y } }) { maximum in
                                     With(IntRange(minimum, through: maximum - 1)) { p in
                                         With(Sequences(of: Values,
                                             lengths: IntRange(seq.count, through: seq.count)).filter { t in
-                                            ForAll(in: Values) { value in
+                                            Values.allSatisfy { value in
                                                 IntRange(1, through: seq.count).filter { i in
                                                     t.expr[i] == value
                                                 }.count == IntRange(1, through: seq.count).filter { i in
                                                     seq[i] == value
                                                 }.count
                                             }
-                                            && ForAll(in: IntRange(1, through: seq.count).subtracting(I)) { i in
+                                            && IntRange(1, through: seq.count).subtracting(I).allSatisfy { i in
                                                 t.expr[i] == seq[i]
                                             }
-                                            && ForAll(in: I) { i in
+                                            && I.allSatisfy { i in
                                                 Exists(in: I) { j in t.expr[i] == seq[j] }
                                             }
-                                            && ForAll(in: I) { i in
-                                                ForAll(in: I) { j in
+                                            && I.allSatisfy { i in
+                                                I.allSatisfy { j in
                                                     i > p || p >= j || t.expr[i] <= t.expr[j]
                                                 }
                                             }
@@ -65,12 +65,12 @@ package struct QuicksortModel: Sendable {
 
                 let typeOK = seq.count >= 1 && seq.count <= MaxSeqLen
                     && seq0.count >= 1 && seq0.count <= MaxSeqLen
-                    && ForAll(in: IntRange(1, through: seq.count)) { i in Values.contains(seq[i]) }
-                    && ForAll(in: IntRange(1, through: seq0.count)) { i in Values.contains(seq0[i]) }
-                    && ForAll(in: U) { I in
+                    && IntRange(1, through: seq.count).allSatisfy { i in Values.contains(seq[i]) }
+                    && IntRange(1, through: seq0.count).allSatisfy { i in Values.contains(seq0[i]) }
+                    && U.allSatisfy { I in
                         !I.isEmpty && I.isSubset(of: IntRange(1, through: seq0.count))
                     }
-                let permutation = seq.count == seq0.count && ForAll(in: IntRange(1, through: seq0.count)) { original in
+                let permutation = seq.count == seq0.count && IntRange(1, through: seq0.count).allSatisfy { original in
                     IntRange(1, through: seq.count).filter { i in seq[i] == seq0[original] }.count
                         == IntRange(1, through: seq0.count).filter { i in seq0[i] == seq0[original] }.count
                 }
@@ -79,8 +79,8 @@ package struct QuicksortModel: Sendable {
                     .mapping { i in Set<Int>([]).inserting(i) })
                 TypeOK { typeOK }
                 PCorrect {
-                    !Finished() || (permutation && ForAll(in: IntRange(1, through: seq.count)) { p in
-                        ForAll(in: IntRange(p + 1, through: seq.count)) { q in seq[p] <= seq[q] }
+                    !Finished() || (permutation && IntRange(1, through: seq.count).allSatisfy { p in
+                        IntRange(p + 1, through: seq.count).allSatisfy { q in seq[p] <= seq[q] }
                     })
                 }
                 Inv {
@@ -88,15 +88,15 @@ package struct QuicksortModel: Sendable {
                     !Finished() || U.isEmpty
                     permutation
                     UV.flatMapping { I in I.expr } == IntRange(1, through: seq0.count)
-                    ForAll(in: UV) { I in
+                    UV.allSatisfy { I in
                         Exists(in: IntRange(1, through: seq0.count)) { minimum in
                             Exists(in: IntRange(1, through: seq0.count)) { maximum in
                                 I == IntRange(minimum, through: maximum)
                             }
                         }
-                        && ForAll(in: UV) { J in
-                            I == J || (I.intersection(J).isEmpty && ForAll(in: I) { i in
-                                ForAll(in: J) { j in i >= j || seq[i] <= seq[j] }
+                        && UV.allSatisfy { J in
+                            I == J || (I.intersection(J).isEmpty && I.allSatisfy { i in
+                                J.allSatisfy { j in i >= j || seq[i] <= seq[j] }
                             })
                         }
                     }
