@@ -42,7 +42,15 @@ public struct SpecExpressionMacro: ExpressionMacro {
             return specCall(named: StringLiteralExprSyntax(content: "InvalidSpec"), body: closure)
         }
 
+        var hasInvariantBinding = false
         for statement in closure.statements {
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               variable.bindings.contains(where: {
+                   $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName == "Invariant"
+               }) {
+                hasInvariantBinding = true
+            }
             guard case .expr(let expression) = statement.item,
                   var call = expression.as(FunctionCallExprSyntax.self) else { continue }
             while let member = call.calledExpression.as(MemberAccessExprSyntax.self),
@@ -56,7 +64,8 @@ public struct SpecExpressionMacro: ExpressionMacro {
                     ? member?.declName.baseName.sourceIdentifierName : nil)
             if constructor == "Algorithm" || constructor == "Validation" {
                 context.diagnose(Diagnostic(node: Syntax(statement.item), message: BuilderBindingDiagnostic()))
-            } else if constructor == "Invariant", call.arguments.isEmpty, call.trailingClosure != nil {
+            } else if constructor == "Invariant", call.arguments.isEmpty, call.trailingClosure != nil,
+                      member != nil || !hasInvariantBinding {
                 context.diagnose(Diagnostic(node: Syntax(statement.item), message: PropertyBindingDiagnostic()))
             }
         }
