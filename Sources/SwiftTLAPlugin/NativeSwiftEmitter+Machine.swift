@@ -294,6 +294,9 @@ extension NativeSwiftEmitter {
             containsSourceNominal(type)
                 ? "_identityHash\(index(type))(\(value), into: &\(hasher))" : "\(hasher).combine(\(value))"
         }
+        func member(_ name: String) -> String {
+            name.hasPrefix("`") ? name : "`" + name + "`"
+        }
         let equality: String
         let hashing: String
         if let value {
@@ -301,10 +304,10 @@ extension NativeSwiftEmitter {
             hashing = hash(value, "value", into: "hasher")
         } else if cases.isEmpty {
             equality = "return " + (includingPublicState ? "(lhs.state == rhs.state) && " : "") + fields.map {
-                equal($0.type, "lhs.`" + $0.name + "`", "rhs.`" + $0.name + "`")
+                equal($0.type, "lhs." + member($0.name), "rhs." + member($0.name))
             }.joined(separator: " && ")
             hashing = (includingPublicState ? "hasher.combine(state)\n" : "")
-                + fields.map { hash($0.type, "self.`" + $0.name + "`", into: "hasher") }.joined(separator: "\n")
+                + fields.map { hash($0.type, "self." + member($0.name), into: "hasher") }.joined(separator: "\n")
         } else {
             func pattern(_ name: String, _ types: [CompiledValueType], _ prefix: String) -> String {
                 "." + name + (types.isEmpty ? "" : "(" + types.indices.map { "let \(prefix)\($0)" }.joined(separator: ", ") + ")")

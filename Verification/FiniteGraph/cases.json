@@ -2567,6 +2567,93 @@
       "moduleSHA256": "c9ee67ef8357b9912750a63a869ce1183b8ca27405a8dca8c6c423a0accf82ec",
       "cfgSHA256": "855482d3cbc6d03523a24ccb539c69cf98a9edeb70dfb18af5436b1339b27554",
       "timeoutSeconds": 60
+    },
+    {
+      "id": "span-tree",
+      "sourceModel": "span-tree",
+      "scenario": "Upstream",
+      "module": "span-tree/SpanTree.tla",
+      "configuration": "span-tree/SpanTree.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/SpanTree.tla",
+        "sha256": "528cbe07f16d42e73aac18ff0bdf679c6adc5498f8bac92772a87ae5ea7a9456"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "528cbe07f16d42e73aac18ff0bdf679c6adc5498f8bac92772a87ae5ea7a9456",
+      "cfgSHA256": "a2fbc51a44e8e1429549b8a19028e9ba1a04795c0793d50cb03b2904c1401d4c",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "span-tree-four",
+      "sourceModel": "span-tree-four",
+      "scenario": "Upstream",
+      "module": "span-tree-four/SpanTreeTest.tla",
+      "configuration": "span-tree-four/SpanTreeTest4Nodes.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/SpanTreeTest.tla",
+        "sha256": "474ae020a81dc380a89b829366db79698eaaca6afb9cafb6579748d2838c6e5c"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "474ae020a81dc380a89b829366db79698eaaca6afb9cafb6579748d2838c6e5c",
+      "cfgSHA256": "c60475ed3e88944ebf8e17d9b13eae3e49bf8cc8311ef4fee88938b48ad6047a",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ab-correctness",
+      "sourceModel": "ab-correctness",
+      "scenario": "Upstream",
+      "module": "ab-correctness/ABCorrectness.tla",
+      "configuration": "ab-correctness/ABCorrectness.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/TLC/ABCorrectness.tla",
+        "sha256": "90c960c490f9fa66e919cc025cc4f31e3036be4949f78484799874a27ac6054b"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "90c960c490f9fa66e919cc025cc4f31e3036be4949f78484799874a27ac6054b",
+      "cfgSHA256": "14d30d71a685e45968132c5dd1af1939dccc5986ede12fce3e219a28054cabad",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "mc-inner-fifo",
+      "sourceModel": "mc-inner-fifo",
+      "scenario": "Upstream",
+      "module": "mc-inner-fifo/MCInnerFIFO.tla",
+      "configuration": "mc-inner-fifo/MCInnerFIFO.cfg",
+      "imports": [
+        "mc-inner-fifo/InnerFIFOInstanced.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCInnerFIFO",
+          "importedModule": "InnerFIFOInstanced"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/FIFO/MCInnerFIFO.tla",
+        "sha256": "0307ab77efcefd78af6a5ddd2d6f382419a2b1e79112f5f16941ad83315936d7"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0307ab77efcefd78af6a5ddd2d6f382419a2b1e79112f5f16941ad83315936d7",
+      "cfgSHA256": "ec13fb4aabb7e9eddab25e86cec302b553d544ce341263eb67cd17a8f7ceab79",
+      "timeoutSeconds": 120
     }
   ]
 }

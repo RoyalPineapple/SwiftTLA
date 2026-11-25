@@ -40,3 +40,7 @@ Verification/FiniteGraph/fixtures/voucher-redeem/* whitespace=-blank-at-eol,-bla
 Verification/FiniteGraph/fixtures/voucher-transfer/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/barriers/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/ap-live-hour-clock/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/span-tree/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/span-tree-four/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/ab-correctness/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/mc-inner-fifo/* whitespace=-blank-at-eol,-blank-at-eof
