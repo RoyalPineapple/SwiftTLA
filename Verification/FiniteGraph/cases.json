@@ -538,6 +538,42 @@
       "timeoutSeconds": 600
     },
     {
+      "id": "peterson-published",
+      "sourceModel": "peterson-safety",
+      "scenario": "published",
+      "module": "auxiliary-lock/Peterson.tla",
+      "configuration": "auxiliary-lock/Peterson.cfg",
+      "imports": [
+        "auxiliary-lock/Lock.tla",
+        "boulanger/TLAPS.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Peterson",
+          "importedModule": "Lock"
+        },
+        {
+          "importingModule": "Peterson",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Lock",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/Peterson.tla",
+        "sha256": "0cad3a0a34bdf495606aa0b3a27d58d2a6568b4d1a4fe4bdc4b45d723a90cba7"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0cad3a0a34bdf495606aa0b3a27d58d2a6568b4d1a4fe4bdc4b45d723a90cba7",
+      "cfgSHA256": "59b3e1aee1c1bb778175d5a3dbe968934228c58e9b757f2ee29d142cad63c055",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "auxiliary-lockhs",
       "sourceModel": "auxiliary-lockhs",
       "scenario": "published",

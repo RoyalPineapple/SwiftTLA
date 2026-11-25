@@ -7260,8 +7260,8 @@
     {
       "path": "specifications/locks_auxiliary_vars",
       "name": "Peterson Lock Refinement With Auxiliary Variables",
-      "audit": "Lock and LockHS have registered ports for their published configurations. Both matched locally on their complete labeled graphs and selected checks.",
-      "gap": "Hosted comparison remains pending. PetersonSafety selects TypeOK and Inv. The published Peterson.cfg also selects LSpec, which remains open.",
+      "audit": "Lock, LockHS and Peterson matched their published configurations locally on complete labeled graphs and selected checks.",
+      "gap": "Hosted comparison remains pending. The additional PetersonSafety configuration selects TypeOK and Inv. Published Peterson.cfg also selects the LSpec refinement to Lock.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -7336,10 +7336,16 @@
           "module": "specifications/locks_auxiliary_vars/Peterson.tla",
           "configuration": "specifications/locks_auxiliary_vars/Peterson.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Peterson.swift",
+              "scenario": "published",
+              "caseID": "peterson-published"
+            }
+          ],
           "evidence": []
         }
       ],

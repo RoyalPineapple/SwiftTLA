@@ -27,6 +27,8 @@ package struct PetersonModel: ParameterlessGeneratedModel {
     package static var spec: TLASpec {
         #spec("Peterson") {
             Extends(.integers)
+            let TypeOK = Invariant()
+            let Inv = Invariant()
             let Peterson = Algorithm { scope in
                 let c = scope.sharedVar(initial: Function<Process, Bool>.literal(
                     (.one, false), (.two, false)
@@ -65,7 +67,7 @@ package struct PetersonModel: ParameterlessGeneratedModel {
                     }
                 }
 
-                Invariant("TypeOK") {
+                TypeOK {
                     Process.all.contains(turn)
                     Process.all.allSatisfy { process in
                         (c[process] == false || c[process] == true)
@@ -74,7 +76,7 @@ package struct PetersonModel: ParameterlessGeneratedModel {
                 }
 
                 let holders = Process.all.filter { process in process.isAt(anyOf: Step.cs, .a4) }
-                Invariant("Inv") {
+                Inv {
                     Process.all.allSatisfy { process in
                         c[process] == process.isAt(anyOf: Step.a2, .a3, .cs, .a4)
                     }
@@ -87,8 +89,23 @@ package struct PetersonModel: ParameterlessGeneratedModel {
                 }
             }
             Peterson
-            let safety = Validation(label: "PetersonSafety") {}
+            let L = Instance(of: LockModel.self) {}
+            L
+            let lockPC = Dictionary<Process, String>.mapping(over: Process.all) { process in
+                If(process.isAt(anyOf: Step.a0), then: "l0", else:
+                    If(process.isAt(anyOf: Step.a1, .a2, .a3), then: "l1", else:
+                        If(process.isAt(anyOf: Step.cs), then: "cs", else: "l2")))
+            }
+            let held = Process.all.contains { process in process.isAt(anyOf: Step.cs, .a4) }
+            let LSpec = Refinement(instance: L) {
+                Map(\.lock, from: If(held, then: 0, else: 1))
+                Map(\.pc, projecting: lockPC)
+            }
+            LSpec
+            let safety = Validation(label: "PetersonSafety") {}.checking(only: [TypeOK, Inv])
             safety
+            let published = Validation(label: "Peterson") {}
+            published
         }
     }
 }
