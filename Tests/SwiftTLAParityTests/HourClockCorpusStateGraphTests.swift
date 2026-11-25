@@ -16,6 +16,7 @@ struct HourClockCorpusStateGraphTests {
             "ap-hour-clock": "HourClock/APHourClock.tla",
             "ap-hour-clock-composing": "Composing/APHourClock.tla",
             "ap-hour-clock-liveness": "Liveness/APHourClock.tla",
+            "ap-live-hour-clock": "Liveness/APLiveHourClock.tla",
         ]
         #expect(Set(declarations.map(\.id)) == Set(upstreamPaths.keys))
         for declaration in declarations {

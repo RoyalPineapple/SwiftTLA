@@ -3336,7 +3336,7 @@
       "path": "specifications/barriers",
       "name": "Barrier Synchronization",
       "audit": "Abstract barrier and both six-process scenarios implemented; hosted comparisons pending",
-      "gap": "Barriers.tla and its concrete reusable-barrier refinement remain open. Hosted comparisons for APBarrier and Barrier are pending.",
+      "gap": "Barriers.cfg matched locally on 29,279 states, 104,514 labeled edges, five properties including BSpec, and deadlock checking. Hosted comparisons and module dispositions remain pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3361,7 +3361,9 @@
           "path": "specifications/barriers/Barriers.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Barriers.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -3402,10 +3404,16 @@
           "module": "specifications/barriers/Barriers.tla",
           "configuration": "specifications/barriers/Barriers.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Barriers.swift",
+              "scenario": "published",
+              "caseID": "barriers"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -3654,21 +3662,25 @@
       "path": "specifications/byihive",
       "name": "RFC 3506: Voucher Transaction System",
       "audit": "not audited",
-      "gap": "VoucherLifeCycle.cfg matches locally on 1 initial states, 64 reachable states, 192 labeled transitions and all selected checks. Hosted comparison is pending. The remaining family evidence and module roles need review.",
+      "gap": "VoucherLifeCycle.cfg matches locally on 1 initial states, 64 reachable states, 192 labeled transitions and all selected checks. Hosted comparison is pending. The remaining family evidence and module roles need review. Issue, Cancel and Redeem matched locally on 4,199 states each and Transfer on 4,197. All four matched on 26,847 labeled edges and their selected checks.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/byihive/VoucherCancel.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/VoucherCancel.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/byihive/VoucherIssue.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/VoucherIssue.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3691,14 +3703,18 @@
           "path": "specifications/byihive/VoucherRedeem.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/VoucherRedeem.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/byihive/VoucherTransfer.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/VoucherTransfer.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -3707,20 +3723,32 @@
           "module": "specifications/byihive/VoucherCancel.tla",
           "configuration": "specifications/byihive/VoucherCancel.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/VoucherCancel.swift",
+              "scenario": "published",
+              "caseID": "voucher-cancel"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/byihive/VoucherIssue.tla",
           "configuration": "specifications/byihive/VoucherIssue.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/VoucherIssue.swift",
+              "scenario": "published",
+              "caseID": "voucher-issue"
+            }
+          ],
           "evidence": []
         },
         {
@@ -3743,20 +3771,32 @@
           "module": "specifications/byihive/VoucherRedeem.tla",
           "configuration": "specifications/byihive/VoucherRedeem.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/VoucherRedeem.swift",
+              "scenario": "published",
+              "caseID": "voucher-redeem"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/byihive/VoucherTransfer.tla",
           "configuration": "specifications/byihive/VoucherTransfer.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/VoucherTransfer.swift",
+              "scenario": "published",
+              "caseID": "voucher-transfer"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -9311,7 +9351,7 @@
       "path": "specifications/SpecifyingSystems",
       "name": "Specs from Specifying Systems",
       "audit": "reference inputs audited",
-      "gap": "Nine of 29 published configurations have complete hosted graph and property matches on the audited SHA. Missing configurations select distinct behavior formulas, constraints, temporal properties, and refinements. PrintValues and SimpleMath are assumption-evaluation modules, not state machines. All module dispositions, helper coverage, and legacy cleanup remain open. The finite TLC configurations in Composing/APHourClock and Liveness/APHourClock each matched locally on 12 initial states, 12 reachable states, 12 labeled transitions, HCini and deadlock checking. Symbolic configurations remain separate.",
+      "gap": "Nine of 29 published configurations have complete hosted graph and property matches on the audited SHA. Missing configurations select distinct behavior formulas, constraints, temporal properties, and refinements. PrintValues and SimpleMath are assumption-evaluation modules, not state machines. All module dispositions, helper coverage, and legacy cleanup remain open. The finite TLC configurations in Composing/APHourClock and Liveness/APHourClock each matched locally on 12 initial states, 12 reachable states, 12 labeled transitions, HCini and deadlock checking. Symbolic configurations remain separate. APLiveHourClock.cfg also matched locally on 12 initial states, 12 reachable states, 12 labeled edges, HCini and deadlock checking.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -9724,7 +9764,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/APLiveHourClock.tla",
           "role": "configured root",
           "reason": "The configuration selects INIT HCini, NEXT HCnxt, and invariant HCini. It does not select LSpec or its weak fairness. Importing LiveHourClock must not silently add that fairness.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/HourClock.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10395,10 +10437,16 @@
           "module": "specifications/SpecifyingSystems/Liveness/APLiveHourClock.tla",
           "configuration": "specifications/SpecifyingSystems/Liveness/APLiveHourClock.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/HourClock.swift",
+              "scenario": "Upstream",
+              "caseID": "ap-live-hour-clock"
+            }
+          ],
           "evidence": []
         },
         {
