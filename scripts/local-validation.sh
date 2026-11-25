@@ -92,6 +92,12 @@ esac
 
 readonly common_git_dir="$(git rev-parse --git-common-dir)"
 readonly worktree_git_dir="$(git rev-parse --absolute-git-dir)"
+readonly product_lock="$worktree_git_dir/swifttla-product-cache.advisory.lock"
+prepare_products=false
+if [[ "$mode" == proof-prepare && "${proof_arguments[1]}" != compiler-expansion* ]]; then
+    prepare_products=true
+    exec 7>>"$product_lock"
+fi
 if [[ "$mode" == xcode-test ]]; then
     readonly xcode_gate="$common_git_dir/swifttla-xcode-validation.advisory.lock"
     exec 7>>"$xcode_gate"
@@ -104,7 +110,7 @@ if [[ "$mode" == xcode-test ]]; then
     package_key="$(printf '%s' "$package_dir" | shasum -a 256 | cut -d' ' -f1)"
     readonly lock_file="$common_git_dir/swifttla-xcode-package-$package_key.advisory.lock"
 elif [[ "$mode" == port-build || "$mode" == swiftpm-test ]]; then
-    readonly lock_file="$worktree_git_dir/swifttla-product-cache.advisory.lock"
+    readonly lock_file="$product_lock"
 elif [[ "$mode" == static ]]; then
     readonly lock_file="$worktree_git_dir/swifttla-static.advisory.lock"
 else
@@ -176,7 +182,7 @@ lock_started=$SECONDS
 exec 9>>"$lock_file"
 set +e
 # Block in the kernel. The lock stays on the shell's open file description.
-python3 - "$lock_wait_seconds" "$mode" <<'PYTHON'
+python3 - "$lock_wait_seconds" "$mode" "$prepare_products" <<'PYTHON'
 import fcntl
 import signal
 import sys
@@ -192,12 +198,18 @@ if sys.argv[2] == "xcode-test":
     # Repository-wide exclusive callers must drain every parallel Xcode check.
     timeout_status = 76
     fcntl.flock(7, fcntl.LOCK_SH)
+elif sys.argv[3] == "true":
+    timeout_status = 77
+    fcntl.flock(7, fcntl.LOCK_EX)
 PYTHON
 lock_status=$?
 set -e
 if [[ "$lock_status" -ne 0 ]]; then
     if [[ "$lock_status" -eq 76 ]]; then
         fail "timed out after ${lock_wait_seconds}s waiting for exclusive Xcode validation to finish ($xcode_gate)"
+    fi
+    if [[ "$lock_status" -eq 77 ]]; then
+        fail "timed out after ${lock_wait_seconds}s waiting for compiler products ($product_lock)"
     fi
     owner="$(lock_owner_diagnostics)"
     if [[ "$lock_status" -eq 75 ]]; then
@@ -313,20 +325,9 @@ run_guarded() {
     acquire_capacity_slot
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
     export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
-    if [[ "$mode" == "port-build" || "$mode" == "swiftpm-test" || ( "$mode" == "proof-prepare" && "${proof_arguments[1]}" != compiler-expansion* ) ]]; then
-        local worktree_cache
+    if [[ "$mode" == port-build || "$mode" == swiftpm-test || "$prepare_products" == true ]]; then
+        local worktree_cache="$worktree_git_dir/swifttla-product-cache"
         local cache_key cache_key_file toolchain_key toolchain_key_file macro_key macro_key_file
-        if [[ "$mode" == proof-prepare ]]; then
-            local cache_root="$common_git_dir/swifttla-local-validation-cache" worktree_key
-            [[ ! -L "$cache_root" ]] || fail "cache root must not be a symlink"
-            mkdir -p "$cache_root"
-            worktree_key="$(git rev-parse --show-toplevel | shasum -a 256 | awk '{print $1}')"
-            [[ "$worktree_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute worktree cache key"
-            worktree_cache="$cache_root/$worktree_key"
-        else
-            # Older wrappers can still be writing the original proof/build cache.
-            worktree_cache="$worktree_git_dir/swifttla-product-cache"
-        fi
         [[ ! -L "$worktree_cache" ]] || fail "worktree cache directory must not be a symlink"
         mkdir -p "$worktree_cache"
         cache_key_file="$worktree_cache/source-key"
