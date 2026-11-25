@@ -2889,15 +2889,17 @@
     {
       "path": "specifications/acp",
       "name": "Atomic Commitment Protocol",
-      "audit": "The simple-broadcast configuration with three participants matched locally across typed Swift, generated TLA and the pinned original TLC graph on 8 initial states, 54,944 reachable states and 218,120 labeled transitions. The published configuration selects Spec, leaves all properties unselected and disables deadlock checking.",
-      "gap": "Hosted validation for simple broadcast, the non-blocking variants and the separate Apalache configuration remain open.",
+      "audit": "The simple-broadcast configuration with three participants matched locally across typed Swift, generated TLA and the pinned original TLC graph on 8 initial states, 54,944 reachable states and 218,120 labeled transitions. The published configuration selects Spec, leaves all properties unselected and disables deadlock checking. The two-participant non-blocking configuration matched locally across the same three machines on 4 initial states, 4,284 reachable states and 13,924 labeled transitions. AC1, AC2, AC3_1, AC3_2, AC4_alt and AC5 held. Its deadlock check is disabled.",
+      "gap": "Hosted validation of both ports, the deliberately incorrect non-blocking variant and the separate Apalache configuration remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/acp/ACP_NB_TLC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -2909,9 +2911,11 @@
         },
         {
           "path": "specifications/acp/ACP_NB.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "imported dependency",
+          "reason": "Defines the non-blocking protocol extended by the TLC root.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -2928,7 +2932,8 @@
           "role": "imported dependency",
           "reason": "Defines the simple-broadcast protocol extended by the TLC root.",
           "implementations": [
-            "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift"
+            "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift",
+            "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift"
           ],
           "dispositionComplete": false
         },
@@ -2945,10 +2950,16 @@
           "module": "specifications/acp/ACP_NB_TLC.tla",
           "configuration": "specifications/acp/ACP_NB_TLC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift",
+              "scenario": "twoParticipants",
+              "caseID": "acp-nb"
+            }
+          ],
           "evidence": []
         },
         {

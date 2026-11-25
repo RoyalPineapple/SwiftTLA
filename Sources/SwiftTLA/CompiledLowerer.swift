@@ -1205,19 +1205,16 @@ struct CompiledLowerer {
                     nextSafeAction: "Group only steps from the same Each declaration.")
             }
             let ids = try names.map { try self.action(named: $0, at: "\(path).action") }
-            guard let first = actions[ids[0]], first.bindings.count == 1 else { throw diagnostic(path: path) }
             for id in ids {
-                guard let compiled = actions[id], compiled.bindings.count == 1 else {
-                    throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: path,
-                        expected: "actions over one process population", actual: names.joined(separator: ", "),
-                        nextSafeAction: "Group only steps from the same Each declaration.")
-                }
-                let requirements = compiled.bindings[0].domain.stateRequirements(operators: operators)
-                guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
-                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
-                        path: "\(path).domain", expected: "an immutable process fairness population",
-                        actual: "a domain that reads state or action enabledness",
-                        nextSafeAction: "Declare the process population with immutable parameters or values.")
+                guard let action = actions[id], !action.bindings.isEmpty else { throw diagnostic(path: path) }
+                for binding in action.bindings {
+                    let requirements = binding.domain.stateRequirements(operators: operators)
+                    guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
+                        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                            path: "\(path).domain", expected: "an immutable process fairness population",
+                            actual: "a domain that reads state or action enabledness",
+                            nextSafeAction: "Declare the actor and its action arguments over immutable domains.")
+                    }
                 }
             }
             return .init(scope: .eachActionGroup(ids), isStrong: condition.isStrong)

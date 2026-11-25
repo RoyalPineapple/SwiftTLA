@@ -275,6 +275,38 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "acp-nb",
+      "sourceModel": "acp-nb",
+      "scenario": "twoParticipants",
+      "module": "acp/ACP_NB_TLC.tla",
+      "configuration": "acp/ACP_NB_TLC.cfg",
+      "imports": [
+        "acp/ACP_NB.tla",
+        "acp/ACP_SB.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "ACP_NB_TLC",
+          "importedModule": "ACP_NB"
+        },
+        {
+          "importingModule": "ACP_NB",
+          "importedModule": "ACP_SB"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/acp/ACP_NB_TLC.tla",
+        "sha256": "f6b1fa054abc998a6601064d7339bdaeb9ce2f3825410ea068227db7122ecc43"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f6b1fa054abc998a6601064d7339bdaeb9ce2f3825410ea068227db7122ecc43",
+      "cfgSHA256": "141d9501efb5d97473e639c70d37134bdfb5241f11acdbed55ae0965c51cb96e",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "acp-sb",
       "sourceModel": "acp-sb",
       "scenario": "simpleBroadcast",
