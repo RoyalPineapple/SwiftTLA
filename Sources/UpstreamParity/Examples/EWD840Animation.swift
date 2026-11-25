@@ -71,8 +71,8 @@ package struct EWD840AnimationModel: Sendable {
 
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
-            let animInv = Invariant("AnimInv") { !terminationDetected || scope.checkingLevel < 20 }
-            animInv
+            let animInv = Invariant("AnimInv")
+            animInv { !terminationDetected || scope.checkingLevel < 20 }
 
             Validation("EWD840_anim") { Bind(N, to: 9) }
                 .checking(only: [animInv])

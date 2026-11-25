@@ -2,6 +2,117 @@
   "schema": "FiniteGraphCases",
   "cases": [
     {
+      "id": "turing-paxos-consensus",
+      "sourceModel": "turing-paxos-consensus",
+      "scenario": "published",
+      "module": "turing-paxos-consensus/MCConsensus.tla",
+      "configuration": "turing-paxos-consensus/MCConsensus.cfg",
+      "imports": [
+        "turing-paxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCConsensus",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/MCConsensus.tla",
+        "sha256": "5d253478994e142ec1e8576f1d339a5bca18b563fef4a447ed2f0bff902bc8e4"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "5d253478994e142ec1e8576f1d339a5bca18b563fef4a447ed2f0bff902bc8e4",
+      "cfgSHA256": "aaf88c6a64c71a5999fad00e74d4c6cbc8d177c3c6190371acae33ddd4e4b949",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-hour-clock-composing",
+      "sourceModel": "hour-clock",
+      "scenario": "Upstream",
+      "module": "ap-hour-clock-composing/APHourClock.tla",
+      "configuration": "ap-hour-clock-composing/APHourClock.cfg",
+      "imports": [
+        "ap-hour-clock-composing/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APHourClock",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Composing/APHourClock.tla",
+        "sha256": "b1ee6db9d303720f5302b73dee332afb1c9f11c29a86a7a4254c45cc895381c6"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b1ee6db9d303720f5302b73dee332afb1c9f11c29a86a7a4254c45cc895381c6",
+      "cfgSHA256": "1cae199360d6c8767bee3192ff11211d5fd091d1e3332957d55bab1dda8dd133",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-hour-clock-liveness",
+      "sourceModel": "hour-clock",
+      "scenario": "Upstream",
+      "module": "ap-hour-clock-liveness/APHourClock.tla",
+      "configuration": "ap-hour-clock-liveness/APHourClock.cfg",
+      "imports": [
+        "ap-hour-clock-liveness/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APHourClock",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Liveness/APHourClock.tla",
+        "sha256": "566751e84f3f8783b1e37b3ca978d75583af104713234000c2cc890d28f7cf54"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "566751e84f3f8783b1e37b3ca978d75583af104713234000c2cc890d28f7cf54",
+      "cfgSHA256": "1cae199360d6c8767bee3192ff11211d5fd091d1e3332957d55bab1dda8dd133",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "ap-channel",
       "sourceModel": "channel",
       "scenario": "APChannel",
@@ -525,6 +636,38 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "allocator-refinement",
+      "sourceModel": "scheduling-allocator",
+      "scenario": "refinement",
+      "module": "scheduling-allocator/AllocatorRefinement.tla",
+      "configuration": "scheduling-allocator/AllocatorRefinement.cfg",
+      "imports": [
+        "scheduling-allocator/SchedulingAllocator.tla",
+        "simple-allocator/SimpleAllocator.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "AllocatorRefinement",
+          "importedModule": "SchedulingAllocator"
+        },
+        {
+          "importingModule": "AllocatorRefinement",
+          "importedModule": "SimpleAllocator"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/allocator/AllocatorRefinement.tla",
+        "sha256": "7c3900880a1a6235440d37818e43e9a2d818af4645b2bca1964a144adc95fb74"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "7c3900880a1a6235440d37818e43e9a2d818af4645b2bca1964a144adc95fb74",
+      "cfgSHA256": "685ae012385ee06d906b81eb716b0342de9a985c610edef48ee3e4cba487242f",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "scheduling-allocator",
       "sourceModel": "scheduling-allocator",
       "scenario": "published",
@@ -632,8 +775,8 @@
         }
       ],
       "sourceInput": {
-        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/spanning/spanning.tla",
-        "sha256": "878e917b075f6cd2bfa2a2d0083c1c66e9eb47fe2baaed41dd9a0a28fbcb2c36"
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/spanning/MC_spanning.tla",
+        "sha256": "08e4703ccdcf45be11aaacb91971bf0bcbd69adc8e27b227e7085189df2d6bc5"
       },
       "exploration": {
         "maximumStateLimit": 100000,
@@ -2227,6 +2370,203 @@
       "moduleSHA256": "592100b6baef4ec24cca79c97bdb5c7b83e7f7b7f2174b7a12a3591c69a6786c",
       "cfgSHA256": "63ab878b931a5e20e455805d08ea5e0e8acf54429041a6b3667713fba71237c4",
       "timeoutSeconds": 5400
+    },
+    {
+      "id": "voucher-issue",
+      "sourceModel": "voucher-issue",
+      "scenario": "published",
+      "module": "voucher-issue/VoucherIssue.tla",
+      "configuration": "voucher-issue/VoucherIssue.cfg",
+      "imports": [
+        "voucher-life-cycle/VoucherLifeCycle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoucherIssue",
+          "importedModule": "VoucherLifeCycle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherIssue.tla",
+        "sha256": "d399e0a3159de507a0c034d942b0ae9ca7a1e7400bc1c4fcf9b193e5a63cc0e5"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "d399e0a3159de507a0c034d942b0ae9ca7a1e7400bc1c4fcf9b193e5a63cc0e5",
+      "cfgSHA256": "0644be728325f601c65e30ebb4b3eace22b4dab1add7428a1c81b83ec4e740d6",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "voucher-cancel",
+      "sourceModel": "voucher-cancel",
+      "scenario": "published",
+      "module": "voucher-cancel/VoucherCancel.tla",
+      "configuration": "voucher-cancel/VoucherCancel.cfg",
+      "imports": [
+        "voucher-life-cycle/VoucherLifeCycle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoucherCancel",
+          "importedModule": "VoucherLifeCycle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherCancel.tla",
+        "sha256": "8be98e04430febfdd779ccb6ace0d97d4a98e04a41a1ec204311c68ecf222a95"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "8be98e04430febfdd779ccb6ace0d97d4a98e04a41a1ec204311c68ecf222a95",
+      "cfgSHA256": "a4a1e44c4efae9fa606b230cf51009c82b301ca9807c99c032058f926b12d939",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "voucher-redeem",
+      "sourceModel": "voucher-redeem",
+      "scenario": "published",
+      "module": "voucher-redeem/VoucherRedeem.tla",
+      "configuration": "voucher-redeem/VoucherRedeem.cfg",
+      "imports": [
+        "voucher-life-cycle/VoucherLifeCycle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoucherRedeem",
+          "importedModule": "VoucherLifeCycle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherRedeem.tla",
+        "sha256": "ddda749e9049f736c2ddaeb4acbacc93b7c8f4bff890700a06e4d32e0e73827a"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "ddda749e9049f736c2ddaeb4acbacc93b7c8f4bff890700a06e4d32e0e73827a",
+      "cfgSHA256": "43e68c47811174fefed84e7cd93a9fecae7f26e68f84c30497677fafbfe7d00e",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "voucher-transfer",
+      "sourceModel": "voucher-transfer",
+      "scenario": "published",
+      "module": "voucher-transfer/VoucherTransfer.tla",
+      "configuration": "voucher-transfer/VoucherTransfer.cfg",
+      "imports": [
+        "voucher-life-cycle/VoucherLifeCycle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoucherTransfer",
+          "importedModule": "VoucherLifeCycle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherTransfer.tla",
+        "sha256": "0a645d46eec0b818d69924811dcd96589ac6c4d02eee2e82fc99a45c436832b8"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0a645d46eec0b818d69924811dcd96589ac6c4d02eee2e82fc99a45c436832b8",
+      "cfgSHA256": "51f4fbdc23756006b2b5e48b452f107281ebdb52482e0a6b3c40739d73817b80",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "barriers",
+      "sourceModel": "barriers",
+      "scenario": "published",
+      "module": "barriers/Barriers.tla",
+      "configuration": "barriers/Barriers.cfg",
+      "imports": [
+        "barrier/Barrier.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Barriers",
+          "importedModule": "Barrier"
+        },
+        {
+          "importingModule": "Barriers",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Barriers",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/barriers/Barriers.tla",
+        "sha256": "34883b1e21d7b3c3fb02e5343844fa29f8663f9e602da0b3fc3f50653abc68ee"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "34883b1e21d7b3c3fb02e5343844fa29f8663f9e602da0b3fc3f50653abc68ee",
+      "cfgSHA256": "de809a0a59aa9267c59705cbae0128a59f494fd2b1dc2bba105b2373e7671dee",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "ap-live-hour-clock",
+      "sourceModel": "hour-clock",
+      "scenario": "Upstream",
+      "module": "ap-live-hour-clock/APLiveHourClock.tla",
+      "configuration": "ap-live-hour-clock/APLiveHourClock.cfg",
+      "imports": [
+        "ap-live-hour-clock/LiveHourClock.tla",
+        "ap-live-hour-clock/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APLiveHourClock",
+          "importedModule": "LiveHourClock"
+        },
+        {
+          "importingModule": "LiveHourClock",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Liveness/APLiveHourClock.tla",
+        "sha256": "c9ee67ef8357b9912750a63a869ce1183b8ca27405a8dca8c6c423a0accf82ec"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c9ee67ef8357b9912750a63a869ce1183b8ca27405a8dca8c6c423a0accf82ec",
+      "cfgSHA256": "855482d3cbc6d03523a24ccb539c69cf98a9edeb70dfb18af5436b1339b27554",
+      "timeoutSeconds": 60
     }
   ]
 }

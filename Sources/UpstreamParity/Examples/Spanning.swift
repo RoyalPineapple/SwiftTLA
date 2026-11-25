@@ -51,7 +51,8 @@ package struct SpanningModel: Sendable {
             }
             WeakFairnessNext()
 
-            let typeOK = Invariant("TypeOK") {
+            let typeOK = Invariant("TypeOK")
+            typeOK {
                 Proc.allSatisfy { i in
                     prnt[i] == missing || Proc.contains { j in
                         prnt[i] == Parent.first(j) && nbrs.contains(Pair<Int, Int>.literal(i, j))
@@ -60,7 +61,6 @@ package struct SpanningModel: Sendable {
                 Functions(from: Proc, to: Bool.all).contains(rpt)
                 msg.isSubset(of: pairs)
             }
-            typeOK
             Invariant("SntMsg") {
                 Proc.allSatisfy { i in
                     i == root || prnt[i] != missing

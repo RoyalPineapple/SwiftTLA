@@ -1863,7 +1863,7 @@ public extension TLASpec {
                 }
                 return CompiledGeneratedModelBinding(fieldName: binding.fieldName,
                     value: .init(expression: expression, operators: lowerer.operators,
-                        actionDependencies: semantics.behavior.enabledActionDependencies))
+                        actionDependencies: semantics.behavior.enabledActionDependencies), projected: binding.projected)
             }
             let state = try refinement.fieldMappings.map { mapping in
                 let expression = try lowerer.refinementExpression(mapping.source,
@@ -2208,7 +2208,7 @@ private struct CanonicalSpecificationEncoder {
         let generatedInstances = spec.generatedModelInstances.map { instance in
             node("generated-instance", [instance.name, instance.targetModelType,
                 canonicalList(instance.fieldBindings.map {
-                    node("bind", [$0.fieldName, canonicalExpression($0.source)])
+                    node($0.projected ? "projected-bind" : "bind", [$0.fieldName, canonicalExpression($0.source)])
                 })])
         }
         list("generatedInstances", generatedInstances) { $0 }

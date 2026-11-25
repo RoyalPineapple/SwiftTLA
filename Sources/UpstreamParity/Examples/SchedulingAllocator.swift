@@ -73,7 +73,8 @@ package struct SchedulingAllocatorModel: Sendable {
             WeakFairness(eachOf: [allocate])
             WeakFairness(schedule)
 
-            Invariant("TypeInvariant") {
+            let typeInvariant = Invariant("TypeInvariant")
+            typeInvariant {
                 positions.allSatisfy { i in Clients.contains(sched[i]) }
                 unsat.keys == Clients
                 alloc.keys == Clients
@@ -81,12 +82,14 @@ package struct SchedulingAllocatorModel: Sendable {
                     unsat[client].isSubset(of: Resources) && alloc[client].isSubset(of: Resources)
                 }
             }
-            Invariant("ResourceMutex") {
+            let mutex = Invariant("ResourceMutex")
+            mutex {
                 Clients.allSatisfy { first in
                     Clients.allSatisfy { second in first == second || alloc[first].intersection(alloc[second]).isEmpty }
                 }
             }
-            Invariant("AllocatorInvariant") {
+            let allocatorInvariant = Invariant("AllocatorInvariant")
+            allocatorInvariant {
                 positions.allSatisfy { i in !unsat[sched[i]].isEmpty }
                 waiting.allSatisfy { client in !unsat[client].isEmpty }
                 positions.allSatisfy { i in
@@ -111,10 +114,25 @@ package struct SchedulingAllocatorModel: Sendable {
             ]) }
             let InfOftenSatisfied = Temporal()
             InfOftenSatisfied(forEach: Clients) { client in .alwaysEventually(unsat[client].isEmpty) }
+            let simple = Instance(of: SimpleAllocatorModel.self) {
+                Bind(\.Clients, projecting: Clients)
+                Bind(\.Resources, projecting: Resources)
+            }
+            simple
+            let SimpleAllocator = Refinement(instance: simple) {
+                Map(\.unsat, projecting: unsat)
+                Map(\.alloc, projecting: alloc)
+            }
+            SimpleAllocator
+
             Validation("published", label: "SchedulingAllocator") {
                 Bind(Clients, to: Set<Client>([.c1, .c2, .c3]))
                 Bind(Resources, to: Set<Resource>([.r1, .r2]))
-            }
+            }.checking(only: [typeInvariant, mutex, allocatorInvariant, ClientsWillReturn, ClientsWillObtain, InfOftenSatisfied])
+            Validation("refinement", label: "AllocatorRefinement") {
+                Bind(Clients, to: Set<Client>([.c1, .c2, .c3]))
+                Bind(Resources, to: Set<Resource>([.r1, .r2]))
+            }.checking(only: [SimpleAllocator])
         }
     }
 }

@@ -63,13 +63,13 @@ package struct MissionariesAndCannibalsModel: Sendable {
                     bank_of_boat.set(other)
                 }
             }
-            let typeOK = Invariant("TypeOK") {
+            let typeOK = Invariant("TypeOK")
+            typeOK {
                 Banks.contains(bank_of_boat)
                     && Functions(from: Banks, to: Subsets(of: People)).contains(who_is_on_bank)
             }
-            typeOK
-            let solution = Invariant("Solution") { !who_is_on_bank[Bank.E].isEmpty }
-            solution
+            let solution = Invariant("Solution")
+            solution { !who_is_on_bank[Bank.E].isEmpty }
 
             Validation("MissionariesAndCannibals") {
                 Bind(Missionaries, to: Set<Person>([.m1, .m2, .m3]))

@@ -69,11 +69,11 @@ package struct DieHardestModel: Sendable {
                     }
                 }
             }
-            let notSolved = Invariant("NotSolved") {
+            let notSolved = Invariant("NotSolved")
+            notSolved {
                 !(c1.keys.contains { j in c1[j] == Goal }
                     && c2.keys.contains { j in c2[j] == Goal })
             }
-            notSolved
             Validation("MCDieHardest") {
                 Bind(Capacities, to: [["j1": 5, "j2": 3], ["j1": 5, "j2": 3, "j3": 3]])
                 Bind(Goal, to: 4)

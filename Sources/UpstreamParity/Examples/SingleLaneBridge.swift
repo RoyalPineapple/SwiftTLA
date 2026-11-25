@@ -102,7 +102,8 @@ package struct SingleLaneBridgeModel: Sendable {
             WeakFairness(each: moveInside)
             WeakFairness(enterBridge)
 
-            let invariants = Invariant("Invariants") {
+            let invariants = Invariant("Invariants")
+            invariants {
                 Cars.allSatisfy { first in
                     Cars.allSatisfy { second in
                         !(Bridge.contains(Location[first])
@@ -116,7 +117,6 @@ package struct SingleLaneBridgeModel: Sendable {
                     }
                 }
             }
-            invariants
             Invariant("TypeOK") {
                 Functions(from: Cars, to: Positions).contains(Location)
                     && WaitingBeforeBridge.count <= Cars.count

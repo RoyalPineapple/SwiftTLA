@@ -51,7 +51,8 @@ package struct QueensModel: Sendable {
                         }
                     }
                 }
-            let typeInvariant = Invariant("TypeInvariant") {
+            let typeInvariant = Invariant("TypeInvariant")
+            typeInvariant {
                 todo.allSatisfy { placement in
                     placement.count < N && IntRange(1, through: placement.count).allSatisfy { row in
                         IntRange(1, through: N).contains(placement[row])
@@ -63,14 +64,13 @@ package struct QueensModel: Sendable {
                     }
                 }
             }
-            typeInvariant
-            let invariant = Invariant("Invariant") {
+            let invariant = Invariant("Invariant")
+            invariant {
                 sols.isSubset(of: solutions)
                 !todo.isEmpty || solutions.isSubset(of: sols)
             }
-            invariant
-            let noSolutions = Invariant("NoSolutions") { sols.isEmpty }
-            noSolutions
+            let noSolutions = Invariant("NoSolutions")
+            noSolutions { sols.isEmpty }
             Termination(.eventually(todo.isEmpty))
             Validation("FourQueens") { Bind(N, to: 4) }
                 .checking(only: [typeInvariant, invariant, noSolutions])

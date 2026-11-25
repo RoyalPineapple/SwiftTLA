@@ -34,10 +34,10 @@ package struct DieHarderModel: Sendable {
                     contents[k].set(Capacity[k])
                 }
             }
-            let typeOK = Invariant("TypeOK") { contents.keys == Jug && Jug.allSatisfy { j in contents[j] >= 0 } }
-            typeOK
-            let notSolved = Invariant("NotSolved") { Jug.allSatisfy { j in contents[j] != Goal } }
-            notSolved
+            let typeOK = Invariant("TypeOK")
+            typeOK { contents.keys == Jug && Jug.allSatisfy { j in contents[j] >= 0 } }
+            let notSolved = Invariant("NotSolved")
+            notSolved { Jug.allSatisfy { j in contents[j] != Goal } }
             Validation("MCDieHarder") {
                 Bind(Jug, to: ["j1", "j2"])
                 Bind(Capacity, to: ["j1": 3, "j2": 5])

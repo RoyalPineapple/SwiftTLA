@@ -98,9 +98,7 @@ extension NativeSwiftEmitter {
             }
             let generatedLinks = try program.generatedRefinements.map { refinement in
                 let target = refinement.targetModelType
-                let configuration = try refinement.parameters.map { binding in
-                    "\(binding.fieldName): \(try expression(binding.value.expression, state: ""))"
-                }.joined(separator: ", ")
+                let configuration = try generatedRefinementParameters(refinement)
                 func renderedBindings(_ bindings: [CompiledGeneratedModelBinding]) throws -> String {
                     try bindings.map { binding in
                         let value = try program.renderGeneratedModelValue(binding.value)

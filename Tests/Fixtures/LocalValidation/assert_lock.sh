@@ -39,7 +39,7 @@ fi
 run_validation() {
     local started=$SECONDS
     set +e
-    output="$(cd "$repo" && SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS=1 "$runner" "$@" 2>&1)"
+    output="$(cd "${probe_package:-$repo}" && SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS=1 "$runner" "$@" 2>&1)"
     status=$?
     set -e
     elapsed=$((SECONDS - started))
@@ -137,14 +137,74 @@ run_validation xcode-test Probe/test
 }
 release_lock_holder
 
+shared_lock_file="$lock_file"
 lock_file="$(dirname "$lock_file")/swifttla-xcode-validation.advisory.lock"
 start_lock_holder
 run_validation xcode-test Probe/test
-[[ "$status" -eq 64 && "$output" == *"timed out after 1s"* && "$output" != *xcode-probe-ran* ]] || {
-    echo "a second Xcode check escaped its exclusive lane: $output" >&2
-    exit 1
-}
+[[ "$status" -eq 64 && "$output" == *"waiting for exclusive Xcode validation"* && "$output" != *xcode-probe-ran* ]]
 release_lock_holder
+xcode_gate="$lock_file"
+lock_file="$shared_lock_file"
+
+# Model a four-CPU host and hold three real wrapper jobs open in different packages.
+cat > "$tmp/bin/sysctl" <<'STUB'
+#!/bin/sh
+case "$*" in
+    '-n hw.logicalcpu') echo 4 ;;
+    '-n hw.memsize') echo 103079215104 ;;
+    *) exec /usr/sbin/sysctl "$@" ;;
+esac
+STUB
+cat > "$tmp/bin/memory_pressure" <<'STUB'
+#!/bin/sh
+printf 'System-wide memory free percentage: %s%%\n' "${PROBE_FREE_PERCENT:-90}"
+STUB
+cat > "$tmp/bin/xcodebuild" <<'STUB'
+#!/bin/sh
+set -eu
+while [ "$1" != -derivedDataPath ]; do shift; done
+printf '%s\n' "$2" > started
+for i in $(seq 1 300); do
+    [ ! -f hold ] && break
+    sleep 0.1
+done
+[ ! -f hold ] && echo xcode-probe-ran
+STUB
+chmod +x "$tmp/bin/"{sysctl,memory_pressure,xcodebuild}
+probe_pids=()
+for n in 1 2 3 4; do
+    mkdir "$repo/pkg$n"
+    touch "$repo/pkg$n/Package.swift"
+done
+for n in 1 2 3; do
+    touch "$repo/pkg$n/hold"
+    (cd "$repo/pkg$n" && exec "$runner" xcode-test Probe/test) > "$tmp/pkg$n.log" 2>&1 &
+    probe_pids+=("$!")
+    for _ in {1..100}; do [[ -s "$repo/pkg$n/started" ]] && break; sleep 0.1; done
+    [[ -s "$repo/pkg$n/started" ]] || { cat "$tmp/pkg$n.log" >&2; exit 1; }
+    if [[ "$n" == 1 ]]; then
+        probe_package="$repo/pkg4" PROBE_FREE_PERCENT=10 run_validation xcode-test Probe/test
+        [[ "$status" -eq 64 && "$output" == *"waiting for Xcode capacity"* && ! -e "$repo/pkg4/started" ]]
+        mkdir "$repo/pkg1/nested"
+        probe_package="$repo/pkg1/nested" run_validation xcode-test Probe/test
+        [[ "$status" -eq 64 && "$output" == *"waiting for validation lock"* ]]
+    fi
+done
+[[ "$(sort -u "$repo"/pkg[123]/started | wc -l | tr -d ' ')" == 3 ]]
+probe_package="$repo/pkg4" run_validation xcode-test Probe/test
+[[ "$status" -eq 64 && "$output" == *"waiting for Xcode capacity"* && ! -e "$repo/pkg4/started" ]]
+rm "$repo/pkg1/hold"
+wait "${probe_pids[0]}"
+if /usr/bin/lockf -s -k -t 0 "$xcode_gate" true; then
+    echo "exclusive Xcode validation started while other packages were active" >&2
+    exit 1
+fi
+probe_package="$repo/pkg4" run_validation xcode-test Probe/test
+[[ "$status" -eq 0 && "$output" == *xcode-probe-ran* ]]
+rm "$repo/pkg2/hold" "$repo/pkg3/hold"
+wait "${probe_pids[1]}"
+wait "${probe_pids[2]}"
+rm "$tmp/bin/sysctl" "$tmp/bin/memory_pressure"
 
 mkdir -p "$repo/scripts"
 cat > "$repo/scripts/check-initial-proof-step.py" <<'PYTHON'
