@@ -428,6 +428,26 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "simple-allocator",
+      "sourceModel": "simple-allocator",
+      "scenario": "published",
+      "module": "simple-allocator/SimpleAllocator.tla",
+      "configuration": "simple-allocator/SimpleAllocator.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/allocator/SimpleAllocator.tla",
+        "sha256": "39180889fb44ea7cbba47e97c2fa727a54c43f8f7ff983caf61d67eb0a2db0e3"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "39180889fb44ea7cbba47e97c2fa727a54c43f8f7ff983caf61d67eb0a2db0e3",
+      "cfgSHA256": "584308b2df46126ebb5423d58186ec149ae5048c348b6cb48f052fb3ec5305ca",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "spanning",
       "sourceModel": "spanning",
       "scenario": "broadcast",

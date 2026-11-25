@@ -68,6 +68,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "two-phase-btm", scenarios: { try BackupTransactionManagerModel.validationScenarios() }),
     .init(id: "transaction-two-phase", scenarios: { try TwoPhaseCommitModel.validationScenarios() }),
     .init(id: "tcommit", scenarios: { try TransactionCommitModel.validationScenarios() }),
+    .init(id: "simple-allocator", scenarios: { try SimpleAllocatorModel.validationScenarios() }),
     .init(id: "spanning", scenarios: { try SpanningModel.validationScenarios() }),
     .init(id: "token-ring", scenarios: { try TokenRingModel.validationScenarios() }),
     .init(id: "peterson-safety", scenarios: { try PetersonModel.validationScenarios() }),

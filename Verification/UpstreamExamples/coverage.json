@@ -3013,7 +3013,7 @@
       "path": "specifications/allocator",
       "name": "Resource Allocator",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "The incomplete raw SimpleAllocatorModel and its declaration-only test were removed; they never represented a model-owned configuration or earned parity credit. The pinned SimpleAllocator.cfg selects per-client weak fairness for returning all held resources, per-client strong fairness for some allocation, two invariants, and three temporal properties. All four allocator configurations remain missing, including the scheduling, implementation, and refinement models. Implement the family through typed #spec, preserve each selected check and complete graph, then obtain both hosted comparisons.",
+      "gap": "SimpleAllocator matches the published configuration locally on 400 reachable states, 1,632 labeled transitions, two invariants, three liveness properties and deadlock checking. Hosted comparison is pending. SchedulingAllocator, AllocatorImplementation and AllocatorRefinement still need registered ports.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3062,7 +3062,9 @@
           "path": "specifications/allocator/SimpleAllocator.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SimpleAllocator.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -3101,10 +3103,16 @@
           "module": "specifications/allocator/SimpleAllocator.tla",
           "configuration": "specifications/allocator/SimpleAllocator.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SimpleAllocator.swift",
+              "scenario": "published",
+              "caseID": "simple-allocator"
+            }
+          ],
           "evidence": []
         }
       ],

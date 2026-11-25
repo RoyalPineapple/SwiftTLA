@@ -27,3 +27,4 @@ Verification/FiniteGraph/fixtures/tcommit/* whitespace=-blank-at-eol,-blank-at-e
 Verification/FiniteGraph/fixtures/transaction-two-phase/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/two-phase-btm/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/acp/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/simple-allocator/* whitespace=-blank-at-eol,-blank-at-eof
