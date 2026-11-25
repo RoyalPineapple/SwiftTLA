@@ -89,7 +89,16 @@ esac
 readonly common_git_dir="$(git rev-parse --git-common-dir)"
 # Xcode uses private DerivedData. SwiftPM and proof preparation share a writable build cache.
 if [[ "$mode" == xcode-test ]]; then
-    readonly lock_file="$common_git_dir/swifttla-xcode-validation.advisory.lock"
+    readonly xcode_gate="$common_git_dir/swifttla-xcode-validation.advisory.lock"
+    exec 7>>"$xcode_gate"
+    package_dir="$(pwd -P)"
+    while [[ ! -f "$package_dir/Package.swift" ]]; do
+        parent_dir="$(dirname "$package_dir")"
+        [[ "$parent_dir" != "$package_dir" ]] || fail "xcode-test requires a Swift package directory"
+        package_dir="$parent_dir"
+    done
+    package_key="$(printf '%s' "$package_dir" | shasum -a 256 | cut -d' ' -f1)"
+    readonly lock_file="$common_git_dir/swifttla-xcode-package-$package_key.advisory.lock"
 else
     readonly lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
 fi
@@ -155,24 +164,33 @@ lock_owner_diagnostics() {
     fi
 }
 
+lock_started=$SECONDS
 exec 9>>"$lock_file"
 set +e
 # Block in the kernel. The lock stays on the shell's open file description.
-python3 - "$lock_wait_seconds" <<'PYTHON'
+python3 - "$lock_wait_seconds" "$mode" <<'PYTHON'
 import fcntl
 import signal
 import sys
 
 def timeout(signum, frame):
-    sys.exit(75)
+    sys.exit(timeout_status)
 
+timeout_status = 75
 signal.signal(signal.SIGALRM, timeout)
 signal.alarm(int(sys.argv[1]))
 fcntl.flock(9, fcntl.LOCK_EX)
+if sys.argv[2] == "xcode-test":
+    # Repository-wide exclusive callers must drain every parallel Xcode check.
+    timeout_status = 76
+    fcntl.flock(7, fcntl.LOCK_SH)
 PYTHON
 lock_status=$?
 set -e
 if [[ "$lock_status" -ne 0 ]]; then
+    if [[ "$lock_status" -eq 76 ]]; then
+        fail "timed out after ${lock_wait_seconds}s waiting for exclusive Xcode validation to finish ($xcode_gate)"
+    fi
     owner="$(lock_owner_diagnostics)"
     if [[ "$lock_status" -eq 75 ]]; then
         fail "timed out after ${lock_wait_seconds}s waiting for validation lock ($lock_file); ${owner}; lock was not changed"
@@ -208,6 +226,36 @@ reclaimable_memory_mib() {
     free_percent="$(memory_pressure -Q | awk '/System-wide memory free percentage:/ { gsub(/[^0-9]/, "", $NF); print $NF }')"
     [[ "$free_percent" =~ ^[0-9]+$ ]] || return 1
     printf '%d\n' "$((total_bytes * free_percent / 100 / 1048576))"
+}
+
+acquire_xcode_slot() {
+    local cpus slots slot available file status
+    cpus="$(sysctl -n hw.logicalcpu)"
+    require_positive_integer hw.logicalcpu "$cpus"
+    slots=$((cpus > 1 ? cpus - 1 : 1))
+    while true; do
+        available="$(reclaimable_memory_mib)" || fail "cannot measure host memory for Xcode admission"
+        for ((slot=1; slot<=slots; slot++)); do
+            if ((available < min_available_mib || (slot > 1 && available < max_rss_mib + min_available_mib))); then
+                break
+            fi
+            file="$common_git_dir/swifttla-xcode-validation-$slot.advisory.lock"
+            exec 8>>"$file"
+            if python3 -c 'import fcntl, sys
+try: fcntl.flock(8, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError: sys.exit(75)'; then
+                printf '%s\n' "$$" > "$file"
+                return
+            else
+                status=$?
+                [[ "$status" -eq 75 ]] || fail "could not acquire Xcode slot $slot (flock status $status)"
+            fi
+            exec 8>&-
+        done
+        ((SECONDS - lock_started < lock_wait_seconds)) ||
+            fail "timed out waiting for Xcode capacity ($slots CPU slots, ${available} MiB reclaimable)"
+        sleep 0.25
+    done
 }
 
 watchdog() {
@@ -254,6 +302,7 @@ run_guarded() {
         return
     fi
 
+    if [[ "$mode" == xcode-test ]]; then acquire_xcode_slot; fi
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
     export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
     if [[ "$mode" == "port-build" || "$mode" == "swiftpm-test" || ( "$mode" == "proof-prepare" && "${proof_arguments[1]}" != compiler-expansion* ) ]]; then
@@ -387,12 +436,6 @@ run_guarded() {
             swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j 1 --scratch-path "$build_dir" &
             ;;
         xcode-test)
-            package_dir="$PWD"
-            while [[ ! -f "$package_dir/Package.swift" ]]; do
-                parent_dir="$(dirname "$package_dir")"
-                [[ "$parent_dir" != "$package_dir" ]] || fail "xcode-test requires a Swift package directory"
-                package_dir="$parent_dir"
-            done
             package_scheme="$(basename "$package_dir")-Package"
             (
                 cd "$package_dir"
@@ -406,7 +449,7 @@ run_guarded() {
     command_pid=$!
     command_group="$command_pid"
     # The watchdog sleep can outlive its shell during cancellation.
-    watchdog 9>&- &
+    watchdog 7>&- 8>&- 9>&- &
     watchdog_pid=$!
     wait "$command_pid" || status=$?
     terminate_group
