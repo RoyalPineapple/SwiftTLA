@@ -5598,15 +5598,17 @@
     {
       "path": "specifications/ewd426",
       "name": "EWD 426: Token Stabilization",
-      "audit": "Exhaustive six-node TokenRing port locally matched the published graph, TypeOK, and Stab.",
-      "gap": "APTokenRing symbolic checks, SimTokenRing simulation, and hosted parity remain open.",
+      "audit": "Exhaustive six-node TokenRing port locally matched the published graph, TypeOK, and Stab. APTokenRing matched its complete original TLC graph with TypeOK and deadlock checking selected.",
+      "gap": "SimTokenRing simulation and hosted parity remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/ewd426/APTokenRing.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TokenRing.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -5631,10 +5633,16 @@
           "module": "specifications/ewd426/APTokenRing.tla",
           "configuration": "specifications/ewd426/APTokenRing.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TokenRing.swift",
+              "scenario": "APTokenRing",
+              "caseID": "ap-token-ring"
+            }
+          ],
           "evidence": []
         },
         {
@@ -11237,8 +11245,8 @@
     {
       "path": "specifications/transaction_commit",
       "name": "Transaction Commit Models",
-      "audit": "The three-manager TCommit port matched the published model locally on 34 reachable states, 93 labeled transitions, TCTypeOK and TCConsistent. Its configuration disables deadlock checking. The concrete TwoPhase port matched the published three-manager configuration on one initial state, 288 reachable states and 1,145 labeled transitions. TPTypeOK held and deadlock checking found no deadlocks. The backup transaction manager matched the cached original TLC graph and generated TLA locally on one initial state, 1,245 reached states and 4,850 labeled transitions. TypeOK and Consistency held and TLC found no deadlock. The configuration omits Termination.",
-      "gap": "Hosted parity for these three ports, other configurations in this family and the TwoPhase refinement proof remain open.",
+      "audit": "The three-manager TCommit port matched the published model locally on 34 reachable states, 93 labeled transitions, TCTypeOK and TCConsistent. Its configuration disables deadlock checking. The concrete TwoPhase port matched the published three-manager configuration on one initial state, 288 reachable states and 1,145 labeled transitions. TPTypeOK held and deadlock checking found no deadlocks. The backup transaction manager matched the cached original TLC graph and generated TLA locally on one initial state, 1,245 reached states and 4,850 labeled transitions. TypeOK and Consistency held and TLC found no deadlock. The configuration omits Termination. APTCommit matched the same checks and graph dimensions with the three published string identities.",
+      "gap": "Hosted parity, PaxosCommit and the TwoPhase refinement proof remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -11254,7 +11262,9 @@
           "path": "specifications/transaction_commit/APTCommit.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TransactionCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -11325,10 +11335,16 @@
           "module": "specifications/transaction_commit/APTCommit.tla",
           "configuration": "specifications/transaction_commit/APTCommit.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TransactionCommit.swift",
+              "scenario": "APTCommit",
+              "caseID": "ap-tcommit"
+            }
+          ],
           "evidence": []
         },
         {

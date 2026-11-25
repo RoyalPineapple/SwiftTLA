@@ -3083,6 +3083,60 @@
       "moduleSHA256": "f6e7d141ed63230da2703f595cc13c9aa11e1b8278228029acb04f5355e8acad",
       "cfgSHA256": "9f8dce46e2023484234a474d200481a4822d88adebb8ab012bb1469c7ff186c2",
       "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-tcommit",
+      "sourceModel": "tcommit",
+      "scenario": "APTCommit",
+      "module": "tcommit/APTCommit.tla",
+      "configuration": "tcommit/APTCommit.cfg",
+      "imports": [
+        "tcommit/TCommit.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APTCommit",
+          "importedModule": "TCommit"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/APTCommit.tla",
+        "sha256": "c7bc5fb5728f34cc86a0f338205dca12864ffd7e6a89b561b2faea2f80ef74c0"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c7bc5fb5728f34cc86a0f338205dca12864ffd7e6a89b561b2faea2f80ef74c0",
+      "cfgSHA256": "1e5d8f155fabdc26629214b3e0b6b37380986a08ae708593e840a2a6530d8349",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-token-ring",
+      "sourceModel": "token-ring",
+      "scenario": "APTokenRing",
+      "module": "token-ring/APTokenRing.tla",
+      "configuration": "token-ring/APTokenRing.cfg",
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd426/APTokenRing.tla",
+        "sha256": "0b2f2e0ec93a3d9ae34575883f75fefd9303ca59b42c82c0a0dcf16612565724"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0b2f2e0ec93a3d9ae34575883f75fefd9303ca59b42c82c0a0dcf16612565724",
+      "cfgSHA256": "e96675fa2462e4760ccddd47e0021a42949a2246a0f6fee7aceb4eb2947e6947",
+      "timeoutSeconds": 600,
+      "imports": [
+        "token-ring/TokenRing.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APTokenRing",
+          "importedModule": "TokenRing"
+        }
+      ]
     }
   ]
 }
