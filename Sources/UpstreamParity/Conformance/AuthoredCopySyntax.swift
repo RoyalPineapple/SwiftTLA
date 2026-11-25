@@ -1000,7 +1000,7 @@ enum AuthoredCopySyntax {
 
     private static func arithmeticSourceModule(name: String, fields: Set<String>, rows: [ArithmeticRow],
                                                aliases: ArithmeticLiteralAliases,
-                                               routeDeclaration: String = "") throws -> String {
+                                               routeDeclaration: String = "", exposeEmittedColumns: Bool = false) throws -> String {
         guard let fallback = fields.sorted().first, let firstTarget = rows.first?.target else { throw unsupported }
         let countColumns = tuple(rows.map { String($0.nodes.count) })
         let kindColumns = tuple(rows.map { tuple($0.nodes.map { TLAValue.string($0.kind).description }) })
@@ -1020,6 +1020,23 @@ enum AuthoredCopySyntax {
         let literalProof = literals.isEmpty ? "" : "<1>numeric. \(equality)\n    BY ONLY SMT DEF \(literalNames)\n"
         let numericFact = literals.isEmpty ? "" : "<1>numeric, "
         let returnedDefinitions = literals.map { ", \($0.value.returned)" }.joined()
+        let emittedColumns = exposeEmittedColumns ? #"""
+        THEOREM MasterRowsProjectEmittedColumns ==
+            /\ DOMAIN MasterRows = DOMAIN MasterNodeCounts
+            /\ \A index \in DOMAIN MasterNodeCounts :
+                   /\ MasterRows[index].target = MasterTargets[index]
+                   /\ MasterRows[index].emitted.count = MasterNodeCounts[index]
+                   /\ MasterRows[index].emitted.nodes = MasterNodes(index)
+        PROOF
+        <1>domain. DOMAIN MasterRows = DOMAIN MasterNodeCounts
+            BY ONLY IsaM("simp") DEF MasterRows
+        <1>records. \A index \in DOMAIN MasterNodeCounts :
+            /\ MasterRows[index].target = MasterTargets[index]
+            /\ MasterRows[index].emitted.count = MasterNodeCounts[index]
+            /\ MasterRows[index].emitted.nodes = MasterNodes(index)
+            BY ONLY SMT DEF MasterRows
+        <1>. QED BY ONLY <1>domain, <1>records
+        """# + "\n\n" : ""
         return #"""
         ---- MODULE \#(name) ----
         EXTENDS TLAPS, Integers, Sequences
@@ -1213,8 +1230,19 @@ enum AuthoredCopySyntax {
                     <4>right. IF kind = "add" THEN right \in 1..(j - 1) /\ origins[right] = view.right[origin] ELSE right = 0
                         BY ONLY <2>index, (j \in 1..count), SMT DEF kind, right, view, origin, origins, count,
                             MasterNodeKinds, MasterNodeRight, MasterNodeCounts, MasterRetainedOrigins, MasterRetainedViews
-                    <4>. QED BY ONLY <2>projection, (j \in 1..count), <4>kind, <4>literal, <4>read, <4>left, <4>right, SMT
-                        DEF Rule!NodePayloadMatchesSource, nodes, MasterNodes, origin, kind, literal, read, left, right
+                    <4>. DEFINE cell == row.emitted.nodes[j]
+                    <4>record. cell = [kind |-> kind, payload |-> IF kind = "read" THEN read ELSE literal,
+                                       left |-> left, right |-> right]
+                        BY ONLY <2>projection, (j \in 1..count), SMT
+                            DEF cell, nodes, MasterNodes, count, kind, literal, read, left, right
+                    <4>fields. /\ cell.kind = kind /\ cell.payload = (IF kind = "read" THEN read ELSE literal)
+                               /\ cell.left = left /\ cell.right = right
+                        BY ONLY <4>record, SMT
+                    <4>payload. cell.payload = (IF kind = "literal" THEN view.literals[origin]
+                                                ELSE IF kind = "read" THEN view.reads[origin] ELSE 0)
+                        BY ONLY <4>fields, <4>kind, <4>literal, <4>read, SMT
+                    <4>. QED BY ONLY <2>projection, <4>kind, <4>fields, <4>payload, <4>left, <4>right, SMT
+                        DEF Rule!NodePayloadMatchesSource, cell, origin
                 <3>. QED BY ONLY <2>projection, <3>points, SMT DEF Rule!AllNodePayloadsMatchSource
             <2>bound. /\ Rule!TypedVisitedSourceInputs(row.view, row.emitted)
                       /\ \A j \in 1..row.emitted.count :
@@ -1233,18 +1261,48 @@ enum AuthoredCopySyntax {
             <2>. QED BY ONLY <2>types, <2>domains, <2>preorder, <2>postorder, <2>root, <2>payload, <2>bound, SMT
                 DEF row, Rule!AssignmentRhsCertificate, Rule!LiteralReadAddCertificate
         <1>. QED BY ONLY <1>shape, <1>rows, SMT DEF Rule!SupportedAssignmentList
-        ====
+        \#(emittedColumns)====
         """# + "\n"
     }
 
     struct ConditionalInput {
+        struct Initializer {
+            let literal: TLAValue
+            let type: CompiledValueType
+
+            func matches(_ parsed: VariableInitialization) -> Bool {
+                switch (literal, parsed) {
+                case (.set(let expected), .memberOf(.value(.set(let actual)))):
+                    return expected == actual
+                case (.set(let expected), .memberOf(.setLiteral(let elements))):
+                    let actual = elements.compactMap { element -> TLAValue? in
+                        guard case .value(let member) = element else { return nil }
+                        return member
+                    }
+                    return actual.count == elements.count && Set(actual) == expected
+                case (.set, _): return false
+                case (let expected, .value(let actual)), (let expected, .expression(.value(let actual))):
+                    return expected == actual
+                default: return false
+                }
+            }
+
+            func predicate(for name: String) -> String {
+                let relation: String
+                if case .set = literal { relation = "\\in" } else { relation = "=" }
+                return "\(name) \(relation) \(literal)"
+            }
+        }
+
         struct Write {
             let target: String
             let terms: [TLAValue]
             fileprivate let expression: StateExpr
         }
 
-        let fields: Set<TLAValue>
+        let declarations: [(name: String, initializer: Initializer?)]
+        var fieldOrder: [String] { declarations.map(\.name) }
+        var fields: Set<TLAValue> { Set(fieldOrder.map(TLAValue.string)) }
         let label: TLAValue
         let predicate: TLAValue
         let arms: [[Write]]
@@ -1258,7 +1316,7 @@ enum AuthoredCopySyntax {
                   step.model.statements.count == 1,
                   case .ifElse(let condition, let yes, let no)? = step.model.statements.first,
                   scalarComparison(condition) == predicate,
-                  Set(parsed.variables.map { TLAValue.string($0.name) }) == fields
+                  fieldOrder.elementsEqual(parsed.variables.map(\.name), by: { $0.utf8.elementsEqual($1.utf8) })
             else { throw unsupported }
             let authored = arms[arm]
             let returned = arm == 0 ? yes : no
@@ -1268,7 +1326,8 @@ enum AuthoredCopySyntax {
                 try arithmeticRow(target: write.target, authored: write.expression, returned: statement,
                                   fields: integerFields, aliases: &aliases)
             }
-            return try arithmeticSourceModule(name: name, fields: integerFields, rows: rows, aliases: aliases)
+            return try arithmeticSourceModule(name: name, fields: integerFields, rows: rows, aliases: aliases,
+                                              exposeEmittedColumns: true)
         }
 
         var scalarProof: TLAValue? {
@@ -1298,12 +1357,14 @@ enum AuthoredCopySyntax {
         else { return nil }
 
         var roots: [String: String] = [:]
+        var declarations: [(name: String, initializer: ConditionalInput.Initializer?)] = []
         for item in specBody.statements.dropLast() {
-            guard let (binding, explicit) = try rootDeclaration(item, in: name(parameter.name)),
-                  roots.updateValue(explicit ?? binding, forKey: binding) == nil else { return nil }
+            guard let declaration = try scopedRootDeclaration(item, in: name(parameter.name)) else { return nil }
+            let root = declaration.explicit ?? declaration.binding
+            guard roots.updateValue(root, forKey: declaration.binding) == nil else { return nil }
+            declarations.append((root, conditionalLiteralInitializer(declaration.initializer)))
         }
-        let fields = Set(roots.values.map(TLAValue.string))
-        guard fields.count == roots.count else { return nil }
+        guard Set(declarations.map { TLAValue.string($0.name) }).count == declarations.count else { return nil }
         let statements = try controlStatements(body.statements, roots: roots, resolve: { _ in throw unsupported })
         guard statements.count == 1, case .ifElse(let predicate, let yes, let no)? = statements.first,
               let guardTerm = scalarComparison(predicate) else { return nil }
@@ -1328,7 +1389,8 @@ enum AuthoredCopySyntax {
                 return .init(target: target, terms: terms, expression: expression)
             }
         }
-        return try .init(fields: fields, label: .string(declaredLabel.1 ?? label.caseName),
+        return try .init(declarations: declarations,
+                         label: .string(declaredLabel.1 ?? label.caseName),
                          predicate: guardTerm, arms: [writes(yes), writes(no)])
     }
 
@@ -1609,13 +1671,51 @@ enum AuthoredCopySyntax {
     }
 
     private static func scalarLiteralInitializer(_ initializer: LabeledExprSyntax) -> TLAValue? {
-        guard initializer.label?.text == "initial",
-              let expression = try? controlExpression(initializer.expression, roots: [:]) else { return nil }
+        guard initializer.label?.text == "initial" else { return nil }
+        return scalarLiteral(initializer.expression)
+    }
+
+    private static func scalarLiteral(_ syntax: ExprSyntax) -> TLAValue? {
+        guard let expression = try? controlExpression(syntax, roots: [:]) else { return nil }
         switch expression {
         case .value(.int(let value)): return .int(value)
         case .value(.bool(let value)): return .bool(value)
         default: return nil
         }
+    }
+
+    private static func conditionalLiteralInitializer(_ initializer: LabeledExprSyntax) -> ConditionalInput.Initializer? {
+        func role(_ literal: TLAValue) -> CompiledValueType? {
+            switch literal {
+            case .int: return .int
+            case .bool: return .bool
+            default: return nil
+            }
+        }
+        if let literal = scalarLiteralInitializer(initializer), let type = role(literal) {
+            return .init(literal: literal, type: type)
+        }
+        guard initializer.label?.text == "initiallyIn",
+              let call = initializer.expression.as(FunctionCallExprSyntax.self),
+              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              name(member.declName.baseName) == "literal", member.declName.argumentNames == nil,
+              let generic = member.base?.as(GenericSpecializationExprSyntax.self),
+              reference(generic.expression) == "SetExpr",
+              generic.genericArgumentClause.arguments.count == 1,
+              let element = generic.genericArgumentClause.arguments.first?.argument else { return nil }
+        let type: CompiledValueType
+        switch element.tokens(viewMode: .sourceAccurate).map(\.text).joined() {
+        case "Int", "Swift.Int": type = .int
+        case "Bool", "Swift.Bool": type = .bool
+        default: return nil
+        }
+        var members: Set<TLAValue> = []
+        for argument in call.arguments {
+            guard argument.label == nil, let literal = scalarLiteral(argument.expression), role(literal) == type else { return nil }
+            members.insert(literal)
+        }
+        return .init(literal: .set(members), type: type)
     }
 
     private static func enumBindings(in members: MemberBlockItemListSyntax, named enumNames: Set<String>) throws

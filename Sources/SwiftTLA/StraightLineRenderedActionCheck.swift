@@ -256,7 +256,7 @@ package enum StraightLineRenderedActionCheck {
     }
 
     private static let tokenPattern = try? NSRegularExpression(
-        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|\\o|\\in|\\cup|\\div|\.\.|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>%~#-]|="#)
+        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|\|->|/\\|\\/|\\o|\\in|\\cup|\\div|\.\.|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}\[\]+*<>%~#-]|="#)
 
     static func checkedIntegerLiteral(_ value: Int) -> String {
         let radix = 1_000_000_000

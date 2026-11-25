@@ -300,6 +300,7 @@ fileprivate struct CompiledModule: Sendable {
     var layout: CompiledLayout
     var bindings: CompiledBindingTable
     let semantics: CompiledSemantics
+    let orderedActionBodyBinderOrdinals: [ActionID: Range<Int>]
     let refinements: [CompiledRefinement]
     let generatedRefinements: [CompiledGeneratedModelRefinement]
     let authoredAlgorithm: (plan: CompiledAuthoredPlusCalAlgorithmPlan, declarations: AuthoredPlusCalDeclarationOrder)?
@@ -397,6 +398,7 @@ public struct CompiledSpecification: Sendable {
     var requiredStandardModules: Set<StandardModule> { module.requiredStandardModules }
     package var layout: CompiledLayout { module.layout }
     package var semantics: CompiledSemantics { module.semantics }
+    package var orderedActionBodyBinderOrdinals: [ActionID: Range<Int>] { module.orderedActionBodyBinderOrdinals }
     package var scalarCopyRoutes: [String: StraightLineAssignmentCheck.ScalarCopyReceipt] {
         module.metadata.scalarCopyRoutes
     }
@@ -1279,9 +1281,9 @@ public extension TLASpec {
         })
     }
 
-    package func compileRetainingAtomicBranchContinuations() throws
+    package func compileRetainingAtomicBranchContinuations(checkingBodyBinderOrdinals: Bool = false) throws
         -> (CompiledSpecification, [String: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt]) {
-        try compile(retainingScalarCopyRoutes: false, projection: { lowered in
+        try compile(retainingScalarCopyRoutes: false, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals, projection: { lowered in
             guard sourceAlgorithms.isEmpty else { return [:] }
             let roots = Set(lowered.variables.map(\.name))
             var receipts: [String: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt] = [:]
@@ -1297,14 +1299,15 @@ public extension TLASpec {
         })
     }
 
-    private func compile<Projection>(retainingScalarCopyRoutes: Bool, projection: (TLASpec) throws -> Projection) throws
+    private func compile<Projection>(retainingScalarCopyRoutes: Bool, checkingBodyBinderOrdinals: Bool = false,
+                                     projection: (TLASpec) throws -> Projection) throws
         -> (CompiledSpecification, Projection) {
         try validateSourceDeclarationNames()
         let lowered = try loweredSourceModel(retainingScalarCopyRoutes: retainingScalarCopyRoutes)
-        return (try lowered.compileLowered(), try projection(lowered))
+        return (try lowered.compileLowered(checkingBodyBinderOrdinals: checkingBodyBinderOrdinals), try projection(lowered))
     }
 
-    private func compileLowered() throws -> CompiledSpecification {
+    private func compileLowered(checkingBodyBinderOrdinals: Bool) throws -> CompiledSpecification {
         let closure = try FormalModuleClosure.resolve(root: self)
         for entry in closure.entries where entry.id != closure.root.id {
             try entry.module.validateSourceDeclarationNames()
@@ -1319,7 +1322,8 @@ public extension TLASpec {
             let visible = source.importedOperatorNames(in: closure, exports: exportedOperators, instances: [])
             let compiled = try source.compileModule(in: context.closure,
                 incomingModuleParameters: context.incomingModuleParameters, importedOperatorNames: visible,
-                moduleDeclarations: moduleDeclarations, knownModelValues: modelValues)
+                moduleDeclarations: moduleDeclarations, knownModelValues: modelValues,
+                checkingBodyBinderOrdinals: checkingBodyBinderOrdinals && entry.id == closure.root.id)
             exportedOperators[entry.module.name] = compiled.bindings.sourceOperators.mapValues {
                 compiled.bindings.operatorName($0)!
             }
@@ -1463,7 +1467,8 @@ public extension TLASpec {
         incomingModuleParameters: [FormalModuleReplacement],
         importedOperatorNames: [String: String],
         moduleDeclarations: Set<String>,
-        knownModelValues: Set<String>
+        knownModelValues: Set<String>,
+        checkingBodyBinderOrdinals: Bool
     ) throws -> CompiledModule {
         try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
@@ -1490,7 +1495,8 @@ public extension TLASpec {
         }
         var lowerer = CompiledLowerer(
             spec: self, closure: closure, layout: layout,
-            incomingModuleParameters: incomingModuleParameters, importedOperatorNames: importedOperatorNames
+            incomingModuleParameters: incomingModuleParameters, importedOperatorNames: importedOperatorNames,
+            checkingBodyBinderOrdinals: checkingBodyBinderOrdinals
         )
         var semantics = try lowerer.lower(spec: self)
         let authoredAlgorithm: (plan: CompiledAuthoredPlusCalAlgorithmPlan, declarations: AuthoredPlusCalDeclarationOrder)?
@@ -1588,6 +1594,7 @@ public extension TLASpec {
         return CompiledModule(
             metadata: .init(source: self, modelValueNames: lowerer.modelValueNames,
                 reserving: constantReservations), layout: layout, bindings: resolvedBindings, semantics: semantics,
+            orderedActionBodyBinderOrdinals: lowerer.orderedActionBodyBinderOrdinals,
             refinements: resolvedRefinements, generatedRefinements: resolvedGenerated,
             authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftTLA
 
 /// Reads physical LET operands with a separate lexical scope for each action path.
@@ -50,8 +51,155 @@ enum OrderedRHSPhysicalAction {
         }
 
         let condition: TLAValue
+        let predicate: String
         let ifTrue: Arm
         let ifFalse: Arm
+
+        func overflowProbes(in rendered: RenderedModule, actionOrdinal: Int, namedHistory: String,
+                            regions: [AlternativeFailureRegion], program: CompiledProgram)
+            -> (sites: [OverflowProbe], aggregate: String)? {
+            let paths = [ifTrue.action.captures, ifFalse.action.captures]
+            let module = rendered.renderedModuleSource
+            guard regions.count == paths.count,
+                  zip(paths, regions).enumerated().allSatisfy({ arm, pair in
+                      pair.1.armOrdinal == arm && pair.0.count == pair.1.bindings.count
+                          && zip(pair.0, pair.1.bindings).allSatisfy { capture, binding in
+                              capture.binding == program.binderNames[binding.binder]
+                          }
+                  }),
+                  let evidence = OrderedRHSPhysicalAction.overflowProbes(in: rendered, actionOrdinal: actionOrdinal,
+                      paths: paths, requiringNamedBefore: false), let aggregate = evidence.aggregate,
+                  let history = actionText(in: module, named: namedHistory)
+            else { return nil }
+
+            let entry = "<<\(program.layout.variables.map(\.formalName).joined(separator: ", "))>>"
+            func conditioned(_ condition: String, _ body: String) -> String { "(IF \(condition) THEN \(body) ELSE FALSE)" }
+            var events: [String] = []
+            for probe in evidence.sites {
+                let index = probe.row - 1
+                let captures = paths[probe.arm]
+                let region = regions[probe.arm]
+                let origin = region.bindings[index]
+                guard region.index(of: origin.binder) == index else { return nil }
+                let current = captures[index]
+                let preceding = current.additionNodes.prefix { $0 != probe.node }.map { current.guards[$0 - 1] }
+                var failed = preceding.reversed().reduce("~(\(current.guards[probe.node - 1]))") { body, guard_ in
+                    conditioned(guard_, body)
+                }
+                for capture in captures.prefix(index).reversed() {
+                    failed = "(LET \(capture.binding) == \(capture.rhs) IN \(failed))"
+                    let guards = capture.additionNodes.map { capture.guards[$0 - 1] }
+                    if let first = guards.first {
+                        let defined = guards.count == 1 ? first : guards.reversed().reduce("TRUE") { body, guard_ in
+                            conditioned(guard_, body)
+                        }
+                        failed = conditioned(defined, failed)
+                    }
+                }
+                let reached = probe.arm == 0 ? conditioned(predicate, failed) : "(IF \(predicate) THEN FALSE ELSE \(failed))"
+                guard sameTokens(probe.failed.body, reached) else { return nil }
+
+                let frame = zip(region.bindings.prefix(index), captures.prefix(index)).map { binding, capture in
+                    "[binding |-> \(binding.binder.ordinal), target |-> \(binding.target.ordinal), value |-> \(capture.binding)]"
+                }.joined(separator: ", ")
+                let before = scoped(captures.prefix(index), body: "<<\(frame)>>")
+                let payload = #"<<"integerOverflow", \#(probe.operation.body), \#(probe.operands.body)>>"#
+                let event = "[source |-> \(entry), action |-> \(actionOrdinal), branch |-> \(probe.arm), "
+                    + "site |-> \(origin.binder.ordinal), target |-> \(origin.target.ordinal), payload |-> \(payload), before |-> \(before)]"
+                events.append("(IF \(probe.failed.body) THEN <<\(event)>> ELSE <<>>)")
+            }
+            guard sameTokens(history, events.joined(separator: " \\o ")) else { return nil }
+            return (evidence.sites, aggregate)
+        }
+    }
+
+    struct Declaration {
+        let name: String
+        let body: String
+
+        fileprivate init?(_ line: String) {
+            guard let separator = line.range(of: " == ") else { return nil }
+            name = String(line[..<separator.lowerBound])
+            body = String(line[separator.upperBound...])
+        }
+    }
+
+    struct OverflowProbe {
+        let arm: Int
+        let row: Int
+        let node: Int
+        let failed: Declaration
+        let operands: Declaration
+        let operation: Declaration
+        let before: Declaration?
+    }
+
+    static func overflowProbes(in rendered: RenderedModule, actionOrdinal: Int, paths: [[Capture]],
+                               requiringNamedBefore: Bool) -> (sites: [OverflowProbe], aggregate: String?)? {
+        let locations = paths.enumerated().flatMap { arm, captures in
+            captures.enumerated().flatMap { index, capture in
+                capture.additionNodes.map { (arm: arm, row: index + 1, node: $0) }
+            }
+        }
+        let ordinal = String(actionOrdinal)
+        let roles = ["Failure", "Operands", "Operation", "Before"].map { "__SwiftTLAOverflow" + $0 }
+        let emittedRoles = requiringNamedBefore ? roles : Array(roles.dropLast())
+        let aggregate = "__SwiftTLAAnyEvaluationFailure" + ordinal
+        let actionStems = roles.map { $0 + ordinal } + [aggregate]
+        let generated = Set(rendered.evaluationFailureDeclarations)
+        let module = rendered.renderedModuleSource
+        let declarations = module.split(separator: "\n").compactMap { line -> Declaration? in
+            let text = String(line)
+            guard generated.contains(text), let declaration = Declaration(text),
+                  actionStems.contains(where: { stem in
+                      declaration.name == stem || declaration.name.hasPrefix(stem + "_")
+                  }) else { return nil }
+            return declaration
+        }
+        let expected = locations.indices.flatMap { offset in
+            let suffix = ordinal + (offset == 0 ? "" : "_\(offset)")
+            return emittedRoles.map { $0 + suffix }
+        } + (locations.isEmpty ? [] : [aggregate])
+        guard declarations.elementsEqual(expected, by: { named($0, stem: $1) }),
+              declarations.allSatisfy({ actionText(in: module, named: $0.name) == $0.body })
+        else { return nil }
+
+        var sites: [OverflowProbe] = []
+        for (offset, location) in locations.enumerated() {
+            let start = offset * emittedRoles.count
+            let failed = declarations[start], operands = declarations[start + 1], operation = declarations[start + 2]
+            let completed = requiringNamedBefore ? declarations[start + 3] : nil
+            let prefix = paths[location.arm].prefix(location.row - 1)
+            let capture = paths[location.arm][location.row - 1]
+            let node = location.node - 1
+            guard operation.body == #""addition""#,
+                  case .int(let left) = capture.plan.left[node], case .int(let right) = capture.plan.right[node],
+                  sameTokens(operands.body, scoped(prefix, body: "<<\(capture.terms[left - 1]), \(capture.terms[right - 1])>>"))
+            else { return nil }
+            if let completed {
+                let values = "<<\(prefix.map(\.binding).joined(separator: ", "))>>"
+                let projection = scoped(prefix, body: values)
+                guard sameTokens(completed.body, "(IF \(failed.name) THEN \(projection) ELSE <<>>)") else { return nil }
+            }
+            sites.append(.init(arm: location.arm, row: location.row, node: location.node, failed: failed,
+                               operands: operands, operation: operation, before: completed))
+        }
+        return (sites, declarations.last?.name)
+    }
+
+    private static func named(_ declaration: Declaration, stem: String) -> Bool {
+        declaration.name.hasPrefix(stem) && declaration.name.dropFirst(stem.count).allSatisfy { $0 == "_" }
+    }
+
+    private static func sameTokens(_ actual: String, _ expected: String) -> Bool {
+        guard let expected = StraightLineRenderedActionCheck.tokens(expected) else { return false }
+        return StraightLineRenderedActionCheck.tokens(actual) == expected
+    }
+
+    private static func scoped(_ captures: ArraySlice<Capture>, body: String) -> String {
+        captures.reversed().reduce(body) { text, capture in
+            "(LET \(capture.binding) == \(capture.rhs) IN \(text))"
+        }
     }
 
     private enum Node {
@@ -120,7 +268,7 @@ enum OrderedRHSPhysicalAction {
             try StraightLineRenderedActionCheck.verify(action.body, rendered: text, layout: program.layout,
                 binders: program.binderNames, moduleName: program.moduleName, required: true)
         } catch { return nil }
-        return .init(condition: condition, ifTrue: first, ifFalse: second)
+        return .init(condition: condition, predicate: split.condition.joined(separator: " "), ifTrue: first, ifFalse: second)
     }
 
     private static func actionText(in module: String, named action: String) -> String? {

@@ -1147,9 +1147,10 @@ package enum StraightLineAssignmentCheck {
               control == nil || (sawControlGuard && sawControlWrite) else { throw mismatch() }
     }
 
+    @discardableResult
     static func verifyCompiled(_ action: NamedAction, bindings compiledBindings: [CompiledActionBinding],
                                body: CompiledActionExpr,
-                               layout: CompiledLayout) throws {
+                               layout: CompiledLayout, bodyBinderOrdinals: Range<Int>? = nil) throws -> Range<Int>? {
         let stateIDs = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.declaration.name, $0.id)
         })
@@ -1193,41 +1194,44 @@ package enum StraightLineAssignmentCheck {
                 if case .bool = member { return true }
                 return false
             } == true
-        }) else { return }
+        }) else { return nil }
         let parameterNames = Set(action.bindings.map(\.name))
         var pendingSource = [action.body]
         var definedNames: Set<String> = []
         var readNames: Set<String> = []
+        let checkingBodyBinderOrdinals = bodyBinderOrdinals != nil
         while let node = pendingSource.popLast() {
             switch node {
             case .define(let name, let expression, let child):
-                guard definedNames.insert(name).inserted else { return }
-                guard simple(expression, reads: &readNames) else { return }
+                guard definedNames.insert(name).inserted,
+                      simple(expression, reads: &readNames, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals)
+                else { return nil }
                 pendingSource.append(child)
             case .and(let left, let right), .or(let left, let right):
                 pendingSource.append(right)
                 pendingSource.append(left)
             case .guard_(let predicate):
-                guard simple(predicate, reads: &readNames) else { return }
-            case .assign(.named, let expression):
-                guard simple(expression, reads: &readNames) else { return }
-            case .assign(.programCounter, let expression):
-                guard simple(expression, reads: &readNames) else { return }
+                guard simple(predicate, reads: &readNames, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals)
+                else { return nil }
+            case .assign(.named, let expression), .assign(.programCounter, let expression):
+                guard simple(expression, reads: &readNames, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals)
+                else { return nil }
             case .unchanged(.named):
                 break
             case .ifElse(let predicate, let yes, let no):
-                guard simple(predicate, reads: &readNames) else { return }
+                guard simple(predicate, reads: &readNames, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals)
+                else { return nil }
                 pendingSource.append(no)
                 pendingSource.append(yes)
             default:
-                return
+                return nil
             }
         }
         guard parameterNames.count == action.bindings.count,
               parameterNames.isDisjoint(with: Set(stateIDs.keys)),
               parameterNames.isDisjoint(with: definedNames),
               readNames.isSubset(of: Set(stateIDs.keys).union(definedNames).union(parameterNames))
-        else { return }
+        else { return nil }
 
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(
@@ -1245,6 +1249,10 @@ package enum StraightLineAssignmentCheck {
                 switch source {
                 case .add(let left, let right):
                     guard compiled.operation == .add, compiled.children.count == 2 else { return false }
+                    pending.append((right, compiled.children[1]))
+                    pending.append((left, compiled.children[0]))
+                case .lessThan(let left, let right) where checkingBodyBinderOrdinals:
+                    guard compiled.operation == .lessThan, compiled.children.count == 2 else { return false }
                     pending.append((right, compiled.children[1]))
                     pending.append((left, compiled.children[0]))
                 case .divide(let left, let right), .modulo(let left, let right):
@@ -1328,6 +1336,7 @@ package enum StraightLineAssignmentCheck {
         }
         var bindings = Dictionary(uniqueKeysWithValues: zip(action.bindings, compiledBindings)
             .map { ($0.name, $1.binder) })
+        var expectedBodyBinders = bodyBinderOrdinals?.makeIterator()
         var pending: [CompiledVisit] = [.pair(action.body, body)]
         while let next = pending.popLast() {
             switch next {
@@ -1339,6 +1348,7 @@ package enum StraightLineAssignmentCheck {
                       .define(let binder, let value, let compiledChild)):
                     guard bindings[name] == nil, usedBinders.insert(binder).inserted,
                           matching(expression, value, bindings: bindings) else { throw mismatch() }
+                    if checkingBodyBinderOrdinals, expectedBodyBinders?.next() != binder.ordinal { throw mismatch() }
                     bindings[name] = binder
                     pending.append(.unbind(name))
                     pending.append(.pair(child, compiledChild))
@@ -1369,9 +1379,11 @@ package enum StraightLineAssignmentCheck {
                 }
             }
         }
+        guard expectedBodyBinders?.next() == nil else { throw mismatch() }
+        return bodyBinderOrdinals
     }
 
-    private static func simple(_ expression: StateExpr, reads: inout Set<String>) -> Bool {
+    private static func simple(_ expression: StateExpr, reads: inout Set<String>, checkingBodyBinderOrdinals: Bool) -> Bool {
         var pending = [expression]
         while let node = pending.popLast() {
             switch node {
@@ -1379,6 +1391,9 @@ package enum StraightLineAssignmentCheck {
             case .value, .parameter: break
             case .add(let left, let right), .divide(let left, let right),
                  .modulo(let left, let right):
+                pending.append(right)
+                pending.append(left)
+            case .lessThan(let left, let right) where checkingBodyBinderOrdinals:
                 pending.append(right)
                 pending.append(left)
             case .equal(let left, let right), .and(let left, let right), .or(let left, let right),

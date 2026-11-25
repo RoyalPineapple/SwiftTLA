@@ -62,32 +62,11 @@ package enum OrderedRHSTLAProof {
         guard identifiers.allSatisfy(formalIdentifier), !bundle.root.tla.contains("RHSOutput"),
               ![bundle.root.name, source.name].contains(name) else { return nil }
 
-        let settings = bundle.root.tla.split(separator: "\n").compactMap { line -> String? in
-            guard let split = line.range(of: " == ") else { return nil }
-            let header = String(line[..<split.lowerBound])
-            return formalIdentifier(header) ? header : nil
-        }
-        func resolved(_ stem: String) -> String? {
-            let matches = settings.filter {
-                $0.hasPrefix(stem) && $0.dropFirst(stem.count).allSatisfy { $0 == "_" }
-            }
-            return matches.count == 1 ? matches.first : nil
-        }
-        let locations = physical.captures.enumerated().flatMap { offset, capture in
-            capture.additionNodes.map { (row: offset + 1, node: $0) }
-        }
-        var probes: [(failed: String, operands: String, operation: String, before: String)] = []
-        for offset in locations.indices {
-            let suffix = String(step.id.ordinal) + (offset == 0 ? "" : "_\(offset)")
-            guard let failure = resolved("__SwiftTLAOverflowFailure" + suffix),
-                  let operands = resolved("__SwiftTLAOverflowOperands" + suffix),
-                  let operation = resolved("__SwiftTLAOverflowOperation" + suffix),
-                  let before = resolved("__SwiftTLAOverflowBefore" + suffix)
-            else { return nil }
-            probes.append((failure, operands, operation, before))
-        }
-        let aggregate = resolved("__SwiftTLAAnyEvaluationFailure" + String(step.id.ordinal))
-        guard (aggregate == nil) == locations.isEmpty else { return nil }
+        guard let evidence = OrderedRHSPhysicalAction.overflowProbes(in: direct, actionOrdinal: step.id.ordinal,
+            paths: [physical.captures], requiringNamedBefore: true) else { return nil }
+        let probes = evidence.sites
+        let prefix = probes.compactMap(\.before)
+        guard prefix.count == probes.count else { return nil }
 
         func tuple(_ values: [String]) -> String { "<<\(values.joined(separator: ", "))>>" }
         let captures = physical.captures
@@ -109,17 +88,17 @@ package enum OrderedRHSTLAProof {
         let writeRoutes = TLAValue.function(Dictionary(uniqueKeysWithValues: physical.writes.map {
             (.string($0.key), $0.value)
         }))
-        let positions = tuple(locations.map { "<<\($0.row), \($0.node)>>" })
+        let positions = tuple(probes.map { "<<\($0.row), \($0.node)>>" })
         func definitions(_ names: [String]) -> String { names.map { ", " + $0 }.joined() }
-        let operationNames = definitions(probes.map(\.operation))
-        let operandNames = definitions(probes.map(\.operands))
-        let prefixNames = definitions(probes.map(\.before))
-        let predicateNames = definitions(probes.map(\.failed))
-        let aggregateName = definitions(aggregate.map { [$0] } ?? [])
-        let failureGuards = tuple(probes.map(\.failed))
-        let failureData = probes.map { site in
-            "(IF \(site.failed) THEN [operands |-> \(site.operands), "
-                + "operation |-> \(site.operation), prefix |-> \(site.before)] ELSE <<>>)"
+        let operationNames = definitions(probes.map(\.operation.name))
+        let operandNames = definitions(probes.map(\.operands.name))
+        let prefixNames = definitions(prefix.map(\.name))
+        let predicateNames = definitions(probes.map(\.failed.name))
+        let aggregateName = definitions(evidence.aggregate.map { [$0] } ?? [])
+        let failureGuards = tuple(probes.map(\.failed.name))
+        let failureData = zip(probes, prefix).map { site, frame in
+            "(IF \(site.failed.name) THEN [operands |-> \(site.operands.name), "
+                + "operation |-> \(site.operation.name), prefix |-> \(frame.name)] ELSE <<>>)"
         }.joined(separator: ",\n    ")
         let keys = TLAValue.set(Set(roots.map { .string($0.declaration.name) }))
         let pc = counter.formalName
@@ -210,7 +189,7 @@ package enum OrderedRHSTLAProof {
         RHSOutputEntry == \#(entryControl)
         RHSOutputExit == \#(endControl)
         RHSOutputSelected == \#(pc) = RHSOutputEntry
-        RHSOutputFailureSelected == \#(aggregate ?? "FALSE")
+        RHSOutputFailureSelected == \#(evidence.aggregate ?? "FALSE")
         RHSOutputCount == Len(RHSOutputRows)
 
         RHSOutputNodeCounts == \#(counts)
@@ -1042,7 +1021,7 @@ package enum OrderedRHSTLAProof {
         ====
 
         """#
-        return (name, Data(proof.utf8), aggregate)
+        return (name, Data(proof.utf8), evidence.aggregate)
     }
 
     private static func controlDestination(in body: CompiledActionExpr, for counter: VariableID) -> ControlLocationID? {

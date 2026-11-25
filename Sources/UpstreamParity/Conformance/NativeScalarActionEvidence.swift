@@ -718,6 +718,13 @@ func conditionalArmOperands(_ captures: [OrderedRHSPhysicalAction.Plan], writeOr
                     "failureAppendSites": .tuple(failureAppendSites.map(TLAValue.int))])
 }
 
+extension OrderedRHSPhysicalAction.Plan {
+    var integerRecord: TLAValue {
+        .record(["count": .int(kinds.count), "kinds": .tuple(kinds), "literals": .tuple(literals),
+                 "reads": .tuple(reads), "left": .tuple(left), "right": .tuple(right)])
+    }
+}
+
 struct NativeConditionalArmOutput {
     let capturePlans: [OrderedRHSPhysicalAction.Plan]
     let writeOrder: [String]
@@ -729,9 +736,31 @@ struct NativeConditionalArmOutput {
         try conditionalArmOperands(capturePlans, writeOrder: writeOrder, writes: writes, failureAppendSites: failureAppendSites)
     }
 
+    func integerTrace(count: Int) throws -> TLAValue {
+        let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
+        let output = try materialization(after: count)
+        let captures = capturePlans.prefix(count)
+        let sites = captures.enumerated().compactMap { index, plan in
+            plan.kinds.contains(.string("add")) ? index + 1 : nil
+        }
+        guard sites == failureAppendSites, sites.count == failureCalls.count else { throw invalid }
+        let callbacks = try zip(sites, failureCalls).map { site, call -> (TLAValue, TLAValue) in
+            guard call.before.count == site - 1 else { throw invalid }
+            // The visitor decoder already matched every callback local to its lexical capture.
+            let before = call.before.enumerated().map { index, binding in
+                TLAValue.record(["binding": .int(binding.binding), "target": .int(binding.target), "slot": .int(index + 1)])
+            }
+            return (.int(site), .record(["action": .int(call.action), "branch": .int(call.branch),
+                "site": .int(call.site), "target": .int(call.target), "before": .tuple(before)]))
+        }
+        return .record(["captures": .tuple(captures.map { $0.integerRecord }),
+            "callbacks": .function(Dictionary(uniqueKeysWithValues: callbacks)),
+            "suffix": output.suffix, "writes": output.writes])
+    }
+
     func materialization(after slot: Int) throws -> (suffix: TLAValue, writes: TLAValue) {
         let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
-        guard slot > 0, slot <= capturePlans.count else { throw invalid }
+        guard slot >= 0, slot <= capturePlans.count else { throw invalid }
         let suffix = try capturePlans.dropFirst(slot).map { plan -> TLAValue in
             guard plan.kinds == [.string("literal")], let value = plan.literals.first,
                   case .bool = value else { throw invalid }
@@ -1407,7 +1436,7 @@ private func checkNativeValidationActionRoute(_ functions: [FunctionDeclSyntax])
 
 /// The checked visitor has one continuation per arm. It reaches the successor
 /// wrapper only after all captures and ordered _Updates merges have succeeded.
-func conditionalNativeSuccessProof(writeOrders: [[String]]) -> (definitions: String, steps: String) {
+func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [String]) -> (definitions: String, steps: String) {
     let arms = writeOrders.indices.map { $0 + 1 }
     let suffixSteps = arms.map { arm in
         #"""
@@ -1449,10 +1478,33 @@ func conditionalNativeSuccessProof(writeOrders: [[String]]) -> (definitions: Str
     let writeRoleCases = arms.map { "<2>arm\($0)" }.joined(separator: ", ")
 
     let definitions = #"""
+    ConditionalIntegerRun(arm) ==
+        LET rows == ConditionalIntegerRows(arm)
+        IN CHOOSE history : Arithmetic!AssignmentListHistory(FALSE, ConditionalBefore, rows, history)
+    LOCAL ConditionalGeneratedIntegerRun(arm) ==
+        LET rows == ConditionalIntegerRows(arm)
+        IN CHOOSE history : Arithmetic!AssignmentListHistory(TRUE, ConditionalBefore, rows, history)
+    ConditionalIntegerTerminal(arm) == ConditionalIntegerRun(arm)[Len(ConditionalIntegerRows(arm))]
+    ConditionalNativeSelectedArm == ConditionalArmFor(ConditionalNativeComparison)
+    ConditionalNativeIntegerResult(arm) ==
+        LET visitor == ConditionalNativeRows[arm]
+        IN Arithmetic!NativeAssignmentCaptureResult(ConditionalBefore, visitor, Len(visitor.captures))
+    ConditionalNativeHistory(recording) ==
+        LET arm == ConditionalNativeSelectedArm
+            result == ConditionalNativeIntegerResult(arm)
+            calls == ConditionalNativeRows[arm].callbacks
+        IN IF ~recording \/ result.failure = <<>> THEN <<>>
+           ELSE IF result.failure.site \notin DOMAIN calls THEN <<>>
+           ELSE LET call == calls[result.failure.site]
+                    before == [i \in DOMAIN call.before |->
+                        LET capture == call.before[i]
+                        IN [binding |-> capture.binding, target |-> capture.target, value |-> result.completed[capture.slot]]]
+                IN <<[source |-> ConditionalEntry, action |-> call.action, branch |-> call.branch, site |-> call.site,
+                      target |-> call.target, payload |-> result.failure.payload, before |-> before]>>
+
     ConditionalMerge == INSTANCE NativePendingWriteFold WITH Vars <- ConditionalStateKeys, Values <- ConditionalIntValues \cup BOOLEAN, ActionLabels <- {ConditionalActionOrdinal}, FailureValues <- {}, NoFailure <- <<>>
     ConditionalNativeCompleted(arm) ==
-        LET row == ConditionalNativeRows[arm]
-        IN row.values \o <<ConditionalNativeAdd(arm).value>> \o row.suffix
+        ConditionalNativeIntegerResult(arm).completed \o ConditionalNativeRows[arm].suffix
     ConditionalNativeWrites(arm) ==
         LET raw == ConditionalNativeRows[arm].writes
             completed == ConditionalNativeCompleted(arm)
@@ -1460,21 +1512,175 @@ func conditionalNativeSuccessProof(writeOrders: [[String]]) -> (definitions: Str
             Arithmetic!CopyReferenceValue(ConditionalStateBefore, completed, raw[i][2])>>]
     ConditionalNativeStep ==
         LET arm == ConditionalNativeSelectedArm
-        IN IF ConditionalNativeAdd(arm).ok
+        IN IF ConditionalNativeIntegerResult(arm).failure = <<>>
            THEN ConditionalMerge!NativePendingMergesEmit(
                 ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter,
                 Len(ConditionalNativeRows[arm].writes), ConditionalNativeWrites(arm))
            ELSE FALSE
     """#
     let steps = #"""
+    <1>integerRuns. \A arm \in ConditionalArms :
+        LET rows == ConditionalIntegerRows(arm)
+            history == ConditionalIntegerRun(arm)
+        IN /\ Arithmetic!AssignmentListHistory(FALSE, ConditionalBefore, rows, history)
+           /\ Arithmetic!AssignmentListHistory(TRUE, ConditionalBefore, rows, history)
+        <2>. TAKE arm \in ConditionalArms
+        <2>. DEFINE rows == ConditionalIntegerRows(arm)
+                    source == ConditionalIntegerRun(arm)
+                    generated == ConditionalGeneratedIntegerRun(arm)
+        <2>supported. Arithmetic!SupportedAssignmentList(rows)
+            BY ONLY (arm \in ConditionalArms), <1>integerRows DEF rows
+        <2>exists. \E history :
+                       /\ Arithmetic!AssignmentListHistory(FALSE, ConditionalBefore, rows, history)
+                       /\ Arithmetic!AssignmentListHistory(TRUE, ConditionalBefore, rows, history)
+            BY ONLY <2>supported, <1>integerEntry, Arithmetic!CertifiedAssignmentListsConstructTheirHistories
+        <2>source. Arithmetic!AssignmentListHistory(FALSE, ConditionalBefore, rows, source)
+            BY ONLY <2>exists, SMT DEF rows, source, ConditionalIntegerRun
+        <2>generated. Arithmetic!AssignmentListHistory(TRUE, ConditionalBefore, rows, generated)
+            BY ONLY <2>exists, SMT DEF rows, generated, ConditionalGeneratedIntegerRun
+        <2>same. \A index \in 0..Len(rows) : source[index] = generated[index]
+            BY ONLY <2>supported, <1>integerEntry, <2>source, <2>generated, Arithmetic!CertifiedAssignmentListHistoriesAgree
+        <2>equal. source = generated
+            BY ONLY <2>same, <2>source, <2>generated, SMT DEF Arithmetic!AssignmentListHistory
+        <2>. QED BY ONLY <2>equal, <2>source, <2>generated DEF rows, source, generated
+    <1>integerOutcomes. \A arm \in ConditionalArms :
+        LET rows == ConditionalIntegerRows(arm)
+            raw == ConditionalIntegerTable(arm)
+            last == Len(rows)
+            history == ConditionalIntegerRun(arm)
+        IN Arithmetic!RenderedAssignmentHistoryAt(rows, ConditionalBefore, raw, history, last)
+        BY ONLY <1>integerRows, <1>integerEntry, <1>integerInventory, <1>integerRuns,
+            Arithmetic!PhysicalGuardedAssignmentTablesDetermineTheCompleteOutcome, SMT
+            DEF Arithmetic!SupportedAssignmentList
+    <1>nativePlans. \A arm \in ConditionalArms :
+        ConditionalNativeRows[arm].captures = ConditionalIntegerTable(arm).plans
+        BY ONLY <1>shape, IsaM("simp"), SMT
+            DEF ConditionalNativeRows, ConditionalIntegerTable, \#(integerDefinitions.joined(separator: ", "))
+    <1>nativeReplay. \A arm \in ConditionalArms :
+        ConditionalNativeIntegerResult(arm) = Arithmetic!NativeAssignmentPrefix(ConditionalIntegerTerminal(arm))
+        <2>. TAKE arm \in ConditionalArms
+        <2>. DEFINE rows == ConditionalIntegerRows(arm)
+                    raw == ConditionalIntegerTable(arm)
+                    plan == ConditionalNativeRows[arm]
+                    history == ConditionalIntegerRun(arm)
+        <2>known. /\ Arithmetic!SupportedAssignmentList(rows)
+                  /\ DOMAIN rows = 1..Len(rows)
+                  /\ Arithmetic!AssignmentListHistory(FALSE, ConditionalBefore, rows, history)
+                  /\ Arithmetic!RenderedAssignmentInventory(rows, ConditionalBefore, raw)
+            BY ONLY (arm \in ConditionalArms), <1>integerRows, <1>integerRuns, <1>integerInventory, SMT
+                DEF rows, raw, history, Arithmetic!SupportedAssignmentList
+        <2>routes. \A index \in 1..Len(rows) :
+            Arithmetic!PhysicalAssignmentReadsMatchRoutes(rows, index, plan.captures[index])
+            BY ONLY (arm \in ConditionalArms), <2>known, <1>nativePlans, SMT
+                DEF plan, raw, Arithmetic!RenderedAssignmentInventory
+        <2>result. Arithmetic!NativeAssignmentCaptureResult(ConditionalBefore, plan, Len(rows)) =
+            Arithmetic!NativeAssignmentPrefix(history[Len(rows)])
+            BY ONLY <2>known, <2>routes, <1>integerEntry, Arithmetic!PhysicalNativeCaptureResultUsesTheCertifiedTerminal
+        <2>domain. /\ Len(rows) \in Nat /\ DOMAIN plan.captures = 1..Len(rows)
+            BY ONLY (arm \in ConditionalArms), <2>known, <1>integerRows, <1>nativePlans, SMT
+                DEF rows, raw, plan, Arithmetic!SupportedAssignmentList
+        <2>captures. plan.captures \in [1..Len(rows) -> {plan.captures[i] : i \in DOMAIN plan.captures}]
+            BY ONLY <2>domain, SMT
+        <2>count. Len(plan.captures) = Len(rows)
+            BY ONLY <2>domain, <2>captures, SeqDef, LenProperties, SMT
+        <2>. QED BY ONLY <2>result, <2>count DEF ConditionalNativeIntegerResult, ConditionalIntegerTerminal, plan, rows, history
+    <1>nativeCallbacks. \A arm \in ConditionalArms :
+        LET calls == ConditionalNativeRows[arm].callbacks
+            plans == ConditionalNativeRows[arm].captures
+            targets == ConditionalAssignmentOrigins(arm)
+        IN /\ DOMAIN calls = {site \in DOMAIN plans : \E n \in 1..plans[site].count : plans[site].kinds[n] = "add"}
+           /\ \A site \in DOMAIN calls :
+                  LET call == calls[site]
+                  IN /\ call.action = ConditionalActionOrdinal /\ call.branch = arm - 1
+                     /\ call.site = targets[site].binding /\ call.target = targets[site].field
+                     /\ DOMAIN call.before = 1..(site - 1)
+                     /\ \A i \in DOMAIN call.before :
+                            /\ call.before[i].binding = targets[i].binding
+                            /\ call.before[i].target = targets[i].field
+                            /\ call.before[i].slot = i
+        BY ONLY <1>shape, IsaM("simp"), SMT
+            DEF ConditionalNativeRows, ConditionalAssignmentOrigins, ConditionalSourceRows, ConditionalActionOrdinal
+    <1>integerFailureSites. \A arm \in ConditionalArms :
+        LET terminal == ConditionalIntegerTerminal(arm)
+        IN terminal.failure # <<>> =>
+            /\ terminal.failure.site \in DOMAIN ConditionalNativeRows[arm].callbacks
+            /\ DOMAIN terminal.completed = 1..(terminal.failure.site - 1)
+        <2>. TAKE arm \in ConditionalArms
+        <2>. DEFINE rows == ConditionalIntegerRows(arm)
+                    raw == ConditionalIntegerTable(arm)
+                    count == Len(rows)
+                    terminal == ConditionalIntegerTerminal(arm)
+        <2>. SUFFICES ASSUME terminal.failure # <<>>
+                     PROVE /\ terminal.failure.site \in DOMAIN ConditionalNativeRows[arm].callbacks
+                           /\ DOMAIN terminal.completed = 1..(terminal.failure.site - 1)
+            OBVIOUS
+        <2>input. /\ Arithmetic!SupportedAssignmentList(rows)
+                  /\ DOMAIN rows = DOMAIN raw.plans
+                  /\ DOMAIN rows = 1..count
+                  /\ Arithmetic!RenderedAssignmentInventory(rows, ConditionalBefore, raw)
+            BY ONLY (arm \in ConditionalArms), <1>integerRows, <1>integerInventory, SMT
+                DEF rows, raw, count, Arithmetic!SupportedAssignmentList
+        <2>outcome. Arithmetic!RenderedAssignmentHistoryAt(rows, ConditionalBefore, raw, ConditionalIntegerRun(arm), count)
+            BY ONLY (arm \in ConditionalArms), <1>integerOutcomes DEF rows, raw, count
+        <2>failed. ~Arithmetic!RenderedAssignmentsPass(raw, count)
+            BY ONLY <2>outcome, (terminal.failure # <<>>), SMT
+                DEF terminal, ConditionalIntegerTerminal, rows, count, Arithmetic!RenderedAssignmentHistoryAt
+        <2>site. PICK slot \in 1..count : \E node \in 1..raw.plans[slot].count :
+                Arithmetic!RenderedAssignmentFailsAt(raw, count, slot, node)
+            BY ONLY <2>input, <2>failed, Arithmetic!WholeGuardTableHasAnExactFirstFailureSite, SMT
+        <2>node. PICK node \in 1..raw.plans[slot].count : Arithmetic!RenderedAssignmentFailsAt(raw, count, slot, node)
+            BY ONLY <2>site
+        <2>reached. /\ terminal.failure.site = slot
+                    /\ raw.plans[slot].kinds[node] = "add"
+                    /\ terminal.completed = Arithmetic!HistoryPrefix(raw.roots, slot - 1)
+            BY ONLY <2>outcome, <2>site, <2>node, SMT
+                DEF terminal, ConditionalIntegerTerminal, rows, count, Arithmetic!RenderedAssignmentHistoryAt,
+                    Arithmetic!RenderedAssignmentFailure
+        <2>. QED BY ONLY (arm \in ConditionalArms), <2>input, <2>site, <2>node, <2>reached, <1>nativePlans, <1>nativeCallbacks,
+            SMT DEF raw, Arithmetic!HistoryPrefix
+    <1>nativeHistory. ConditionalNativeHistory(TRUE) = ConditionalOrderedFailure(
+        ConditionalSelectedArm, ConditionalIntegerTerminal(ConditionalSelectedArm))
+        <2>. DEFINE arm == ConditionalSelectedArm
+                    terminal == ConditionalIntegerTerminal(arm)
+                    result == ConditionalNativeIntegerResult(arm)
+                    calls == ConditionalNativeRows[arm].callbacks
+                    origins == ConditionalAssignmentOrigins(arm)
+        <2>replay. result = Arithmetic!NativeAssignmentPrefix(terminal)
+            BY ONLY <1>selector, <1>nativeReplay DEF arm, result, terminal
+        <2>success. CASE terminal.failure = <<>>
+            BY ONLY <2>success, <2>replay, <1>selected, SMT
+                DEF arm, terminal, result, ConditionalNativeHistory, ConditionalOrderedFailure, Arithmetic!NativeAssignmentPrefix
+        <2>failure. CASE terminal.failure # <<>>
+            <3>. DEFINE slot == terminal.failure.site
+                        call == calls[slot]
+            <3>site. /\ slot \in DOMAIN calls
+                      /\ DOMAIN terminal.completed = 1..(slot - 1)
+                      /\ result.failure # <<>>
+                      /\ result.failure.site = slot
+                      /\ result.failure.payload = terminal.failure.payload
+                      /\ result.completed = terminal.completed
+                BY ONLY <2>failure, <2>replay, <1>selector, <1>integerFailureSites, SMT
+                    DEF arm, terminal, result, calls, slot, Arithmetic!NativeAssignmentPrefix
+            <3>metadata. /\ call.action = ConditionalActionOrdinal /\ call.branch = arm - 1
+                          /\ call.site = origins[slot].binding /\ call.target = origins[slot].field
+                          /\ DOMAIN call.before = DOMAIN terminal.completed
+                          /\ \A i \in DOMAIN terminal.completed :
+                                 /\ call.before[i].binding = origins[i].binding
+                                 /\ call.before[i].target = origins[i].field
+                                 /\ call.before[i].slot = i
+                BY ONLY <1>selector, <3>site, <1>nativeCallbacks, SMT DEF arm, calls, call, origins
+            <3>. QED BY ONLY <3>site, <3>metadata, <1>selected, SMT
+                DEF arm, terminal, result, call, calls, origins, slot, ConditionalNativeHistory,
+                    ConditionalOrderedFailure, ConditionalLabeledFailure, ConditionalFailurePrefix
+        <2>. QED BY ONLY <2>success, <2>failure, SMT
+
     <1>nativeSuffix. \A arm \in ConditionalArms :
         ConditionalNativeRows[arm].suffix = ConditionalSourceRows[arm].suffix
     \#(suffixSteps)
         <2>. QED BY ONLY <1>shape, \#(suffixFacts), SMT
     <1>nativeCompleted. \A arm \in ConditionalArms :
-        ConditionalNativeCompleted(arm) = ConditionalSuccessfulCaptures(arm)
-        BY ONLY <1>nativePrefix, <1>nativeSuffix, <1>nativeAdd, SMT
-            DEF ConditionalNativeCompleted, ConditionalSuccessfulCaptures, ConditionalCompleted
+        ConditionalNativeCompleted(arm) = ConditionalIntegerTerminal(arm).completed \o ConditionalSourceRows[arm].suffix
+        BY ONLY <1>nativeReplay, <1>nativeSuffix, SMT DEF ConditionalNativeCompleted, Arithmetic!NativeAssignmentPrefix
     <1>nativeWriteRoles. \A arm \in ConditionalArms :
         LET raw == ConditionalNativeRows[arm].writes
             routes == ConditionalSourceRows[arm].finalRoutes
@@ -1493,13 +1699,18 @@ func conditionalNativeSuccessProof(writeOrders: [[String]]) -> (definitions: Str
         ConditionalMerge!NativePendingMergesEmit(
             ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter,
             Len(ConditionalNativeRows[arm].writes), ConditionalNativeWrites(arm))
-        <=> ConditionalStateAfter = ConditionalSuccessfulState(arm)
+        <=> ConditionalStateAfter = Arithmetic!CopyMaterializedState(
+            ConditionalStateKeys, ConditionalStateBefore,
+            ConditionalIntegerTerminal(arm).completed \o ConditionalSourceRows[arm].suffix,
+            ConditionalSourceRows[arm].finalRoutes)
         <2>. TAKE arm \in ConditionalArms
         <2>. DEFINE raw == ConditionalNativeRows[arm].writes
                     writes == ConditionalNativeWrites(arm)
                     count == Len(raw)
                     targets == ConditionalMerge!PendingWriteKeys(writes, count)
-                    expected == ConditionalSuccessfulState(arm)
+                    expected == Arithmetic!CopyMaterializedState(ConditionalStateKeys, ConditionalStateBefore,
+                        ConditionalIntegerTerminal(arm).completed \o ConditionalSourceRows[arm].suffix,
+                        ConditionalSourceRows[arm].finalRoutes)
                     routes == ConditionalSourceRows[arm].finalRoutes
                     constraints == ConditionalMerge!NativePendingWriteConstraints(
                         ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter, count, writes)
@@ -1511,15 +1722,13 @@ func conditionalNativeSuccessProof(writeOrders: [[String]]) -> (definitions: Str
             BY ONLY <2>columns, ConditionalMerge!PendingMergeFoldMaterializesExactlyTheCompatibleWrites, SMT DEF constraints
         <2>written. \A i \in 1..count : expected[writes[i][1]] = writes[i][2]
             BY ONLY (arm \in ConditionalArms), <1>nativeWriteRoles, <1>nativeCompleted, <2>columns, SMT
-                DEF expected, count, raw, writes, routes, ConditionalNativeWrites, ConditionalSuccessfulState,
-                    Arithmetic!CopyMaterializedState
+                DEF expected, count, raw, writes, routes, ConditionalNativeWrites, Arithmetic!CopyMaterializedState
         <2>preserved. \A key \in ConditionalStateKeys \ targets : expected[key] = ConditionalStateBefore[key]
             BY ONLY (arm \in ConditionalArms), <1>nativeWriteRoles, <2>columns, SMT
-                DEF expected, count, raw, routes, targets, ConditionalMerge!PendingWriteKeys, ConditionalSuccessfulState,
-                    Arithmetic!CopyMaterializedState, Arithmetic!CopyReferenceValue
+                DEF expected, count, raw, routes, targets, ConditionalMerge!PendingWriteKeys, Arithmetic!CopyMaterializedState, Arithmetic!CopyReferenceValue
         <2>frames. /\ expected = [key \in ConditionalStateKeys |-> expected[key]]
                    /\ ConditionalStateAfter = [key \in ConditionalStateKeys |-> ConditionalStateAfter[key]]
-            BY ONLY SMT DEF expected, ConditionalSuccessfulState, ConditionalStateAfter, Arithmetic!CopyMaterializedState
+            BY ONLY SMT DEF expected, ConditionalStateAfter, Arithmetic!CopyMaterializedState
         <2>forward. ASSUME constraints PROVE ConditionalStateAfter = expected
             <3>frame. \A key \in ConditionalStateKeys : ConditionalStateAfter[key] = expected[key]
                 <4>. TAKE key \in ConditionalStateKeys
@@ -1536,9 +1745,10 @@ func conditionalNativeSuccessProof(writeOrders: [[String]]) -> (definitions: Str
         <2>reverse. ConditionalStateAfter = expected => constraints
             BY ONLY <2>written, <2>preserved, SMT DEF constraints, targets, ConditionalMerge!NativePendingWriteConstraints
         <2>. QED BY ONLY <2>fold, <2>forward, <2>reverse, SMT
-    <1>nativeSuccess. ConditionalNativeStep <=> ConditionalSourceStep
-        BY ONLY <1>nativeMaterialized, <1>selected, <1>selector, <1>nativeAdd, SMT
-            DEF ConditionalNativeStep, ConditionalSourceStep
+    <1>nativeSuccess. ConditionalNativeStep <=>
+        ConditionalOrderedStep(ConditionalSelectedArm, ConditionalIntegerTerminal(ConditionalSelectedArm))
+        BY ONLY <1>nativeMaterialized, <1>selected, <1>selector, <1>nativeReplay, SMT
+            DEF ConditionalNativeStep, ConditionalOrderedStep, Arithmetic!NativeAssignmentPrefix
     """#
     return (definitions, steps)
 }

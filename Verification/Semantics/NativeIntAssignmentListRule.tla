@@ -247,22 +247,20 @@ NativeAssignmentPrefix(prefix) ==
 NativeAssignmentProjectedHistory(shared, count) ==
     [index \in 0..count |-> NativeAssignmentPrefix(shared[index])]
 
-THEOREM PhysicalNativeCapturesUseTheCertifiedAssignmentHistory ==
+THEOREM PhysicalNativeCapturePlansUseTheCertifiedAssignmentHistory ==
     ASSUME NEW rows, SupportedAssignmentList(rows), NEW before \in AssignmentBindings,
-           NEW raw, NEW names, NEW counter, NEW entry, NEW destination,
-           NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
+           NEW plan,
+           \A index \in 1..Len(rows) : PhysicalAssignmentReadsMatchRoutes(rows, index, plan.captures[index]),
            NEW shared, AssignmentListHistory(FALSE, before, rows, shared)
-    PROVE NativeAssignmentCaptureHistory(before, NativeAssignmentRekey(raw, names, counter), Len(rows),
+    PROVE NativeAssignmentCaptureHistory(before, plan, Len(rows),
               NativeAssignmentProjectedHistory(shared, Len(rows)))
     PROOF
     <1>. DEFINE count == Len(rows)
-                plan == NativeAssignmentRekey(raw, names, counter)
                 native == NativeAssignmentProjectedHistory(shared, count)
     <1>shape. /\ count \in Nat
               /\ shared \in [0..count -> AssignmentPrefixStates]
-              /\ \A index \in 1..count : PhysicalAssignmentReadsNameWriters(rows, index, plan.captures[index])
-        BY SMT DEF AssignmentListHistory, SupportedAssignmentList,
-            NativeAssignmentsNameTheirOperandsAndWrites, plan, count
+              /\ \A index \in 1..count : PhysicalAssignmentReadsMatchRoutes(rows, index, plan.captures[index])
+        BY SMT DEF AssignmentListHistory, SupportedAssignmentList, count
     <1>prefixes. \A index \in 0..count : AssignmentPrefixMeaning(before, rows, shared, index)
         BY ONLY (SupportedAssignmentList(rows)), (before \in AssignmentBindings),
             AssignmentListHistory(FALSE, before, rows, shared),
@@ -291,7 +289,7 @@ THEOREM PhysicalNativeCapturesUseTheCertifiedAssignmentHistory ==
                 BY ONLY <2>first, <2>rows, <1>prefixes, <1>shape, (index \in 1..count), SMT
                     DEF AssignmentPrefixMeaning, AssignmentPrefixStates, previous
             <3>decoded. PhysicalAssignmentReadsMatchRoutes(rows, index, rhs)
-                BY ONLY <1>shape, (index \in 1..count), NamedAssignmentOperandsMatchTheirRoutes, SMT DEF rhs, count
+                BY ONLY <1>shape, (index \in 1..count), SMT DEF rhs
             <3>rhs. PhysicalAssignmentRhs(rhs, before, previous.completed) =
                       SourceAssignmentRHS(rows[index], previous.bindings)
                 BY ONLY (SupportedAssignmentList(rows)), (before \in AssignmentBindings), <3>decoded,
@@ -302,7 +300,26 @@ THEOREM PhysicalNativeCapturesUseTheCertifiedAssignmentHistory ==
             BY ONLY <2>stopped, <2>source, <2>rows, SMT
                 DEF NativeAssignmentStep, AssignmentListStep, NativeAssignmentPrefix
         <2>. QED BY ONLY <2>first, <2>stopped, SMT
-    <1>. QED BY ONLY <1>seed, <1>step DEF NativeAssignmentCaptureHistory, native, plan, count
+    <1>. QED BY ONLY <1>seed, <1>step DEF NativeAssignmentCaptureHistory, native, count
+
+THEOREM PhysicalNativeCapturesUseTheCertifiedAssignmentHistory ==
+    ASSUME NEW rows, SupportedAssignmentList(rows), NEW before \in AssignmentBindings,
+           NEW raw, NEW names, NEW counter, NEW entry, NEW destination,
+           NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
+           NEW shared, AssignmentListHistory(FALSE, before, rows, shared)
+    PROVE NativeAssignmentCaptureHistory(before, NativeAssignmentRekey(raw, names, counter), Len(rows),
+              NativeAssignmentProjectedHistory(shared, Len(rows)))
+    PROOF
+    <1>. DEFINE plan == NativeAssignmentRekey(raw, names, counter)
+    <1>named. /\ Len(rows) \in Nat
+              /\ \A index \in 1..Len(rows) : PhysicalAssignmentReadsNameWriters(rows, index, plan.captures[index])
+        BY ONLY (SupportedAssignmentList(rows)),
+            NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination), SMT
+            DEF SupportedAssignmentList, NativeAssignmentsNameTheirOperandsAndWrites, plan
+    <1>matches. \A index \in 1..Len(rows) : PhysicalAssignmentReadsMatchRoutes(rows, index, plan.captures[index])
+        BY ONLY <1>named, NamedAssignmentOperandsMatchTheirRoutes, SMT
+    <1>. QED BY ONLY <1>matches, (SupportedAssignmentList(rows)), (before \in AssignmentBindings),
+        AssignmentListHistory(FALSE, before, rows, shared), PhysicalNativeCapturePlansUseTheCertifiedAssignmentHistory DEF plan
 
 THEOREM NativeAssignmentCaptureHistoriesAgree ==
     ASSUME NEW before, NEW plan, NEW count \in Nat, NEW left, NEW right,
@@ -341,6 +358,31 @@ THEOREM NativeAssignmentCaptureHistoriesAgree ==
             BY ONLY <1>step, <2>bounds, <2>prior, SMT
         <2>. QED BY ONLY <2>bounds, <2>equal, PTL
     <1>. QED BY ONLY <1>all DEF agrees
+
+NativeAssignmentCaptureResult(before, plan, count) ==
+    LET history == CHOOSE history : NativeAssignmentCaptureHistory(before, plan, count, history)
+    IN history[count]
+
+THEOREM PhysicalNativeCaptureResultUsesTheCertifiedTerminal ==
+    ASSUME NEW rows, SupportedAssignmentList(rows), NEW before \in AssignmentBindings,
+           NEW plan,
+           \A index \in 1..Len(rows) : PhysicalAssignmentReadsMatchRoutes(rows, index, plan.captures[index]),
+           NEW shared, AssignmentListHistory(FALSE, before, rows, shared)
+    PROVE NativeAssignmentCaptureResult(before, plan, Len(rows)) = NativeAssignmentPrefix(shared[Len(rows)])
+    PROOF
+    <1>. DEFINE count == Len(rows)
+                expected == NativeAssignmentProjectedHistory(shared, count)
+                actual == CHOOSE history : NativeAssignmentCaptureHistory(before, plan, count, history)
+    <1>length. count \in Nat /\ count \in 0..count
+        BY ONLY (SupportedAssignmentList(rows)), SMT DEF SupportedAssignmentList, count
+    <1>history. NativeAssignmentCaptureHistory(before, plan, count, expected)
+        BY PhysicalNativeCapturePlansUseTheCertifiedAssignmentHistory DEF count, expected
+    <1>selected. NativeAssignmentCaptureHistory(before, plan, count, actual)
+        BY ONLY <1>history, SMT DEF actual
+    <1>same. actual[count] = expected[count]
+        BY ONLY <1>length, <1>history, <1>selected, NativeAssignmentCaptureHistoriesAgree, SMT
+    <1>. QED BY ONLY <1>length, <1>same, SMT
+        DEF actual, expected, count, NativeAssignmentCaptureResult, NativeAssignmentProjectedHistory
 
 THEOREM PhysicalNativePrefixAgreesWithTheCertifiedAssignments ==
     ASSUME NEW rows, SupportedAssignmentList(rows), NEW before \in AssignmentBindings,

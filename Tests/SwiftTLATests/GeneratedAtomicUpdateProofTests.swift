@@ -10,7 +10,7 @@ import SwiftTLAMacros
 
 @Suite("Generated atomic update proof input")
 struct GeneratedAtomicUpdateProofTests {
-    @Test("Conditional overflow keeps only the selected arm and its preceding writes")
+    @Test("Conditional overflow records the first failing addition and its preceding writes")
     func conditionalOverflowKeepsTheSelectedArmHistory() throws {
         let owner = packageRoot().appendingPathComponent(
             "Sources/UpstreamParity/ValidationModels/GeneratedScalarConditionalProofModel.swift")
@@ -25,15 +25,16 @@ struct GeneratedAtomicUpdateProofTests {
             \(selectedField)
             let increment = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(0, 1))
             """)
-        for (flag, prefix, local, target, operand) in [
-            ("true", ["Assign(left, to: 13)"], "left", "right", "increment"),
-            ("false", ["Assign(right, to: 9223372036854775807)", "Assign(left, to: 17)"], "right", "left", "2"),
+        for (flag, prefix, local, target, expression) in [
+            ("true", ["Assign(left, to: 13)"], "left", "right", "left + increment"),
+            ("false", ["Assign(right, to: 9223372036854775807)", "Assign(left, to: increment + 17)"],
+             "right", "left", "(right + increment) + 2"),
         ] {
             let finalWrite = "Assign(selected, to: \(flag))"
             try #require(authored.components(separatedBy: finalWrite).count == 2)
             let writes = prefix + [
                 "Assign(\(local), to: 9223372036854775807)",
-                "Assign(\(target), to: \(local) + \(operand))",
+                "Assign(\(target), to: \(expression))",
                 finalWrite,
             ]
             authored = authored.replacingOccurrences(of: finalWrite, with: writes.joined(separator: "\n                    "))
@@ -64,16 +65,17 @@ struct GeneratedAtomicUpdateProofTests {
                         print("success \(transition.after == expected && machine.state == expected)")
                         continue
                     }
-                    if machine.state.increment == 0 { continue }
                     let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
                         checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { _ in }
-                    let amount = machine.state.left < machine.state.right ? 1 : 2
+                    let amount = machine.state.increment == 0 ? 2 : 1
                     let expected = NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, amount])
-                    print("entry \(machine.state.left) edges \(outcome.edges) overflow \(outcome.completion == .evaluationFailure(expected))")
+                    print("entry \(machine.state.left) increment \(machine.state.increment) edges \(outcome.edges) overflow \(outcome.completion == .evaluationFailure(expected))")
                     for event in outcome.orderedActionFailureHistory ?? [] {
                         let f = event.failure
                         let before = f.before.map { "\($0.target)=\($0.value)" }.joined(separator: ",")
-                        print("branch \(f.branch) target \(f.target) before \(before) reason \(f.reason == expected)")
+                        let bindings = f.before.map(\.binding)
+                        let orderedBindings = f.site >= bindings.count && bindings.elementsEqual((f.site - bindings.count)..<f.site)
+                        print("branch \(f.branch) target \(f.target) before \(before) ordered \(orderedBindings) reason \(f.reason == expected)")
                     }
                 }
             }
@@ -82,8 +84,12 @@ struct GeneratedAtomicUpdateProofTests {
         try #require(client.status == 0, Comment(rawValue: client.output))
         #expect(client.output.split(separator: "\n").map(String.init) == [
             "success true",
-            "entry 2 edges 0 overflow true", "branch 0 target 1 before 0=13,0=\(Int.max) reason true",
-            "entry 4 edges 0 overflow true", "branch 1 target 0 before 1=\(Int.max),0=17,1=\(Int.max) reason true",
+            "entry 2 increment 1 edges 0 overflow true",
+            "branch 0 target 1 before 0=13,0=\(Int.max) ordered true reason true",
+            "entry 4 increment 0 edges 0 overflow true",
+            "branch 1 target 0 before 1=\(Int.max),0=17,1=\(Int.max) ordered true reason true",
+            "entry 4 increment 1 edges 0 overflow true",
+            "branch 1 target 0 before 1=\(Int.max),0=18,1=\(Int.max) ordered true reason true",
         ])
         var emitter = NativeSwiftEmitter(model: compilation)
         let native = try emitter.machineMembers().map(\.description).joined(separator: "\n")
@@ -100,6 +106,33 @@ struct GeneratedAtomicUpdateProofTests {
         let proof = try ConditionalActionEvidence.arithmeticHistoryProof(authoredSource: authored, modelName: modelName,
             parsed: parsed, program: program, rendered: rendered, nativeSource: native, operations: operations, checking: checking)
 
+        try #require(proof.configured.name == proof.name + "ConfiguredProof")
+
+        let rightInitializer = "scope.sharedVar(initial: 3)"
+        try #require(authored.components(separatedBy: rightInitializer).count == 2)
+        let changedInitial = authored.replacingOccurrences(of: rightInitializer, with: "scope.sharedVar(initial: 5)")
+        let changedInput = try #require(try AuthoredCopySyntax.conditionalProofInput(source: changedInitial, modelName: modelName))
+        let changedRight = try #require(changedInput.declarations.first { $0.name == "right" })
+        #expect(changedRight.initializer?.literal == .int(5))
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try ConditionalActionEvidence.arithmeticHistoryProof(authoredSource: changedInitial, modelName: modelName,
+                parsed: parsed, program: program, rendered: rendered, nativeSource: native, operations: operations, checking: checking)
+        }
+
+        // A reordered source has the same field names but assigns different failure-target ordinals.
+        var lines = authored.components(separatedBy: "\n")
+        let leftFields = lines.indices.filter { lines[$0].contains("let left = scope.sharedVar(") }
+        let rightFields = lines.indices.filter { lines[$0].contains("let right = scope.sharedVar(") }
+        try #require(leftFields.count == 1 && rightFields.count == 1)
+        lines.swapAt(leftFields[0], rightFields[0])
+        let reordered = lines.joined(separator: "\n")
+        let reorderedInput = try #require(try AuthoredCopySyntax.conditionalProofInput(source: reordered, modelName: modelName))
+        #expect(reorderedInput.fieldOrder == ["right", "left", "selected", "increment"])
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try ConditionalActionEvidence.arithmeticHistoryProof(authoredSource: reordered, modelName: modelName,
+                parsed: parsed, program: program, rendered: rendered, nativeSource: native, operations: operations, checking: checking)
+        }
+
         let action = try #require(program.behavior.actions.first)
         let label = try #require(program.layout.actions.first { $0.id == action.id }?.renderedName)
         let physical = try #require(OrderedRHSPhysicalAction.decodeConditional(in: tla, action: action, program: program))
@@ -107,16 +140,48 @@ struct GeneratedAtomicUpdateProofTests {
         try #require(captures.count == 5)
         let earlier = captures[0], latest = captures[2], addition = captures[3]
         try #require(earlier.plan.literals == [.int(Int.max)] && latest.plan.literals == earlier.plan.literals)
+        try #require(addition.additionNodes == [3, 5])
         try #require(addition.plan.reads.first == .tuple([.string("capture"), .int(3)]))
 
         // Redirect only the evaluated RHS. The earlier writer has the same value.
         let declarationText = try #require(tla.split(separator: "\n").first { $0.hasPrefix("\(label) == ") })
-        let rhs = "LET \(addition.binding) == (\(latest.binding) + 2) IN"
+        let increment = try #require(program.layout.variables.first { $0.declaration.name == "increment" }).formalName
+        let rhs = "LET \(addition.binding) == ((\(latest.binding) + \(increment)) + 2) IN"
         try #require(declarationText.components(separatedBy: rhs).count == 2)
         let occurrence = try #require(declarationText.range(of: rhs))
-        let redirected = "LET \(addition.binding) == (\(earlier.binding) + 2) IN"
+        let redirected = "LET \(addition.binding) == ((\(earlier.binding) + \(increment)) + 2) IN"
         let corrupted = tla.replacingCharacters(in: occurrence, with: redirected)
         #expect(OrderedRHSPhysicalAction.decodeConditional(in: corrupted, action: action, program: program) == nil)
+
+        func nativeLocal(_ binding: String) throws -> String {
+            let binder = try #require(program.binderNames.first { $0.value == binding }?.key)
+            return "_\(binding)_\(binder.ordinal)"
+        }
+        let earlierLocal = try nativeLocal(earlier.binding)
+        let latestLocal = try nativeLocal(latest.binding)
+        let operand = "let _arithmetic0: \(nativeIntTypeTokens.joined()) = "
+        try #require(native.components(separatedBy: operand + latestLocal).count == 2)
+        let corruptedNative = native.replacingOccurrences(of: operand + latestLocal, with: operand + earlierLocal)
+        let predicate = Parser.parse(source: "(state.state.left < state.state.right)")
+            .tokens(viewMode: .sourceAccurate).filter { $0.tokenKind != .endOfFile }.map(\.text)
+        let decoded = try nativeConditionalActionPlans(native, program: program, predicate: predicate)
+        let redirectedNative = try nativeConditionalActionPlans(corruptedNative, program: program, predicate: predicate)
+        #expect(decoded.ifFalse.capturePlans[3].reads.first == .tuple([.string("capture"), .int(3)]))
+        #expect(redirectedNative.ifFalse.capturePlans[3].reads.first == .tuple([.string("capture"), .int(1)]))
+
+        let visitor = try #require(Parser.parse(source: corruptedNative).statements.compactMap { $0.item.as(DeclSyntax.self) }
+            .first { $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates\(action.id.ordinal)" })
+        let parts = try emitter.actionFunctions(action)
+        do {
+            try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+            Issue.record("The generated Swift operand read an earlier writer with the same value")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+            #expect(diagnostic.expected == "the captured value reads its compiled source")
+            #expect(diagnostic.actual.contains("expected \(latestLocal), actual \(earlierLocal) "))
+        }
+
         Attachment.record(Array(authored.utf8), named: "\(modelName).swift")
         Attachment.record(Array(native.utf8), named: "\(modelName)NativeMembers.swift")
         Attachment.record(Array(tla.utf8), named: "\(modelName).tla")
@@ -1454,7 +1519,7 @@ struct GeneratedAtomicUpdateProofTests {
         try #require(source.components(separatedBy: no).count == 2)
         let changed = source
             .replacingOccurrences(of: yes, with: """
-                Assign(left, to: right + 1)
+                Assign(left, to: (right + 1) + 2)
                 Assign(left, to: left + 2)
                 Assign(right, to: left + 3)
                 \(yes)
@@ -1471,7 +1536,8 @@ struct GeneratedAtomicUpdateProofTests {
         let compilation = try TLASpecVerifier.parseAndVerify(declaration)
         let program = compilation.program
         let action = try #require(program.behavior.actions.first)
-        let tla = try program.renderModule().renderedModuleSource
+        let rendered = try program.renderModule()
+        let tla = rendered.renderedModuleSource
         let decoded = try #require(OrderedRHSPhysicalAction.decodeConditional(in: tla, action: action, program: program))
         let first = decoded.ifTrue.action
         let second = decoded.ifFalse.action
@@ -1480,33 +1546,15 @@ struct GeneratedAtomicUpdateProofTests {
             #expect(arm.captures[0].plan.reads.first == .tuple([.string("state"), .string(original)]))
             #expect(arm.captures[1].plan.reads.first == .tuple([.string("capture"), .int(1)]))
             #expect(arm.captures[2].plan.reads.first == .tuple([.string("capture"), .int(2)]))
-            #expect(arm.captures.map(\.additionNodes) == [[3], [3], [3], []])
             #expect(arm.writes[final] == .tuple([.string("capture"), .int(2)]))
             #expect(arm.writes[original] == .tuple([.string("capture"), .int(3)]))
         }
-        let history = try #require(tla.split(separator: "\n").first {
-            $0.hasPrefix("__SwiftTLAActionFailureHistory\(action.id.ordinal) == ")
-        })
-        let probes = tla.split(separator: "\n").filter { $0.hasPrefix("__SwiftTLAOverflowFailure\(action.id.ordinal)") }
-        try #require(probes.count == 6)
-        for (index, declaration) in probes.enumerated() {
-            let separator = try #require(declaration.range(of: " == "))
-            let body = declaration[separator.upperBound...]
-            #expect(body.hasPrefix(index < 3 ? "(IF (left < right) THEN " : "(IF (left < right) THEN FALSE ELSE "))
-            #expect(history.contains("(IF \(body) THEN <<"))
-        }
-        for (branch, arm, repeated, destination) in [(0, first, "left", "right"), (1, second, "right", "left")] {
-            let target = try #require(program.layout.variables.first { $0.declaration.name == repeated }?.id.ordinal)
-            let result = try #require(program.layout.variables.first { $0.declaration.name == destination }?.id.ordinal)
-            let binders = try arm.captures.prefix(3).map { capture in
-                try #require(program.binderNames.first { $0.value == capture.binding }?.key.ordinal)
-            }
-            let assignment = "branch |-> \(branch), site |-> \(binders[2]), target |-> \(result)"
-            let before = "<<[binding |-> \(binders[0]), target |-> \(target), value |-> \(arm.captures[0].binding)], "
-                + "[binding |-> \(binders[1]), target |-> \(target), value |-> \(arm.captures[1].binding)]>>"
-            #expect(history.contains(assignment))
-            #expect(history.contains(before))
-        }
+        let evidence = try #require(decoded.overflowProbes(in: rendered, actionOrdinal: action.id.ordinal,
+            namedHistory: "__SwiftTLAActionFailureHistory\(action.id.ordinal)",
+            regions: action.body.orderedAlternativeFailureRegions, program: program))
+        #expect(evidence.sites.map(\.arm) == [0, 0, 0, 0, 1, 1, 1])
+        #expect(evidence.sites.map(\.row) == [1, 1, 2, 3, 1, 2, 3])
+        #expect(evidence.sites.map(\.node) == [3, 5, 3, 3, 3, 3, 3])
         let local = "left' = \(second.captures[2].binding)"
         try #require(tla.components(separatedBy: local).count == 2)
         let wrong = tla.replacingOccurrences(of: local, with: "left' = \(first.captures[0].binding)")

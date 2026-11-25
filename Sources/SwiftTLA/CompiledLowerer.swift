@@ -62,6 +62,7 @@ struct CompiledLowerer {
     private let reservedRenderedNames: Set<String>
     private let rootOperators: [String: OperatorID]
     private let importedOperatorIDs: Set<OperatorID>
+    private let checkingBodyBinderOrdinals: Bool
     private var operatorArities: [OperatorID: Int]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal: Int
@@ -72,16 +73,19 @@ struct CompiledLowerer {
     private(set) var operators = CompiledOperators()
     private(set) var modelValueNames: Set<String> = []
     private(set) var requiredStandardModules: Set<StandardModule> = []
+    private(set) var orderedActionBodyBinderOrdinals: [ActionID: Range<Int>] = [:]
 
     init(
         spec: TLASpec,
         closure: FormalModuleClosure,
         layout: CompiledLayout,
         incomingModuleParameters: [FormalModuleReplacement] = [],
-        importedOperatorNames: [String: String] = [:]
+        importedOperatorNames: [String: String] = [:],
+        checkingBodyBinderOrdinals: Bool = false
     ) {
         self.closure = closure
         self.layout = layout
+        self.checkingBodyBinderOrdinals = checkingBodyBinderOrdinals
         nextBinderOrdinal = layout.parameters.count
         binderNames = Dictionary(uniqueKeysWithValues: layout.parameters.map { ($0.binder, $0.reference.name) })
         knownBinderNames = Set(binderNames.values)
@@ -1260,10 +1264,13 @@ struct CompiledLowerer {
         }
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
+        let firstBodyBinder = nextBinderOrdinal
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope,
             displacedAssignmentTargets: action.displacedAssignmentTargets)
-        try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
-            body: body, layout: layout)
+        let bodyBinderOrdinals = checkingBodyBinderOrdinals ? firstBodyBinder..<nextBinderOrdinal : nil
+        let ordered = try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
+            body: body, layout: layout, bodyBinderOrdinals: bodyBinderOrdinals)
+        if let ordered { orderedActionBodyBinderOrdinals[id] = ordered }
         try body.verifyBranchwiseContinuation(at: "actions.\(action.name).body")
         return CompiledAction(
             id: id,
