@@ -1491,6 +1491,9 @@ final class ParserSession {
             guard let memberSyntax = call.arguments.first?.expression,
                   let member = decodeTypedFacadeValue(memberSyntax, scope: scope, expectedEnumType: elementEnumType)
             else { return nil }
+            if case .array = baseType {
+                return formalSequenceContains(base, member)
+            }
             let receiver = unparenthesized(baseSyntax)
             if receiver.is(SequenceExprSyntax.self) || receiver.is(InfixOperatorExprSyntax.self),
                case .integerRange(.value(.int(let lower)), .value(.int(let upper))) = base,

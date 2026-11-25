@@ -890,7 +890,29 @@ extension TypedExpression where ExpressionValue: FormalSetValue {
 
 }
 
+package func formalSequenceContains(_ sequence: StateExpr, _ element: StateExpr) -> StateExpr {
+  let names = sequence.freeVariableNames.union(element.freeVariableNames)
+  let values = StateExpr.freshBoundName("__sequence", avoiding: names)
+  let sought = StateExpr.freshBoundName("__element", avoiding: names)
+  let index = StateExpr.freshBoundName("__index", avoiding: names)
+  let positions = StateExpr.integerRange(.int(1), .tupleLength(.variable(values)))
+  let match = StateExpr.equal(.tupleDynamicAccess(.variable(values), .variable(index)), .variable(sought))
+  // Singleton domains evaluate the receiver, then the argument, even for an empty sequence.
+  return .exists(.setLiteral([sequence]), values,
+    .exists(.setLiteral([element]), sought, .exists(positions, index, match)))
+}
+
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  @_disfavoredOverload
+  public func contains(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<Bool> {
+    Expr(formalSequenceContains(stateExpr, element.stateExpr))
+  }
+
+  @_disfavoredOverload
+  public func contains(_ element: ExpressionValue.Element) -> Expr<Bool> {
+    contains(element.expr)
+  }
+
   public func prepending(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<ExpressionValue> {
     Expr(.tupleConcatenate(.tupleLiteral([element.stateExpr]), stateExpr))
   }

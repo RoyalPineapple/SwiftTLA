@@ -4,13 +4,16 @@ import SwiftTLAMacros
 @TLAModel
 package struct ReadersWritersModel {
     package enum Step: String, CaseIterable {
-        case tryRead = "TryRead", tryWrite = "TryWrite", readOrWrite = "ReadOrWrite", stop = "Stop"
+        case tryRead = "TryRead", tryWrite = "TryWrite", readOrWrite = "ReadOrWrite"
+        case stop = "Stop", stopActivity = "StopActivity"
     }
 
     package static var spec: TLASpec {
         #spec("ReadersWriters") { scope in
             Extends(.finiteSets, .naturals, .sequences)
             let NumActors = scope.parameter(as: Int.self, in: 3...3)
+            // The AP instance exposes StopActivity(actor); MC observes the enclosing Stop action.
+            let exposeStoppingActor = scope.parameter(as: Bool.self)
             let actors = IntRange(1, through: NumActors)
             let readers = scope.sharedVar(initial: Set<Int>())
             let writers = scope.sharedVar(initial: Set<Int>())
@@ -18,13 +21,13 @@ package struct ReadersWritersModel {
 
             let tryRead = Do(Step.tryRead, over: actors) { actor in
                 let request = Pair<String, Int>.literal("read", actor)
-                When(!IntRange(1, through: waiting.count).contains { i in waiting[i] == request })
+                When(!waiting.contains(request))
                 waiting.append(request)
             }
             tryRead
             let tryWrite = Do(Step.tryWrite, over: actors) { actor in
                 let request = Pair<String, Int>.literal("write", actor)
-                When(!IntRange(1, through: waiting.count).contains { i in waiting[i] == request })
+                When(!waiting.contains(request))
                 waiting.append(request)
             }
             tryWrite
@@ -39,16 +42,23 @@ package struct ReadersWritersModel {
                 waiting.set(waiting.tail())
             }
             readOrWrite
-            let stop = Do(Step.stop) {
+            let finishActivity = Macro { (actor: MacroParameter<Int>) in
+                If(readers.contains(actor)) {
+                    readers.remove(actor)
+                } else: {
+                    writers.remove(actor)
+                }
+            }
+            let stop = Do(Step.stop, when: !exposeStoppingActor) {
                 With(readers.union(writers)) { actor in
-                    If(readers.contains(actor)) {
-                        readers.remove(actor)
-                    } else: {
-                        writers.remove(actor)
-                    }
+                    finishActivity(actor)
                 }
             }
             stop
+            Do(Step.stopActivity, over: actors) { actor in
+                When(exposeStoppingActor && (readers.contains(actor) || writers.contains(actor)))
+                finishActivity(actor)
+            }
 
             WeakFairness(each: tryRead)
             WeakFairness(each: tryWrite)
@@ -76,10 +86,15 @@ package struct ReadersWritersModel {
                 .alwaysEventually(!readers.contains(actor)), .alwaysEventually(!writers.contains(actor)),
             ]) }
 
-            let APReadersWriters = Validation { Bind(NumActors, to: 3) }
-                .behavior(.initialAndNext).checking(only: [safety])
+            let APReadersWriters = Validation {
+                Bind(NumActors, to: 3)
+                Bind(exposeStoppingActor, to: true)
+            }.behavior(.initialAndNext).checking(only: [safety])
             APReadersWriters
-            let MC = Validation { Bind(NumActors, to: 3) }.checking(only: [typeOK, safety, Liveness])
+            let MC = Validation {
+                Bind(NumActors, to: 3)
+                Bind(exposeStoppingActor, to: false)
+            }.checking(only: [typeOK, safety, Liveness])
             MC
         }
     }
