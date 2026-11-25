@@ -91,7 +91,7 @@ case "$mode" in
 esac
 
 readonly common_git_dir="$(git rev-parse --git-common-dir)"
-# Xcode uses private DerivedData. SwiftPM and proof preparation share a writable build cache.
+readonly worktree_git_dir="$(git rev-parse --absolute-git-dir)"
 if [[ "$mode" == xcode-test ]]; then
     readonly xcode_gate="$common_git_dir/swifttla-xcode-validation.advisory.lock"
     exec 7>>"$xcode_gate"
@@ -103,6 +103,10 @@ if [[ "$mode" == xcode-test ]]; then
     done
     package_key="$(printf '%s' "$package_dir" | shasum -a 256 | cut -d' ' -f1)"
     readonly lock_file="$common_git_dir/swifttla-xcode-package-$package_key.advisory.lock"
+elif [[ "$mode" == port-build || "$mode" == swiftpm-test ]]; then
+    readonly lock_file="$worktree_git_dir/swifttla-product-cache.advisory.lock"
+elif [[ "$mode" == static ]]; then
+    readonly lock_file="$worktree_git_dir/swifttla-static.advisory.lock"
 else
     readonly lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
 fi
@@ -232,13 +236,13 @@ reclaimable_memory_mib() {
     printf '%d\n' "$((total_bytes * free_percent / 100 / 1048576))"
 }
 
-acquire_xcode_slot() {
+acquire_capacity_slot() {
     local cpus slots slot available file status
     cpus="$(sysctl -n hw.logicalcpu)"
     require_positive_integer hw.logicalcpu "$cpus"
     slots=$((cpus > 1 ? cpus - 1 : 1))
     while true; do
-        available="$(reclaimable_memory_mib)" || fail "cannot measure host memory for Xcode admission"
+        available="$(reclaimable_memory_mib)" || fail "cannot measure host memory for validation admission"
         for ((slot=1; slot<=slots; slot++)); do
             if ((available < min_available_mib || (slot > 1 && available < max_rss_mib + min_available_mib))); then
                 break
@@ -252,12 +256,12 @@ except BlockingIOError: sys.exit(75)'; then
                 return
             else
                 status=$?
-                [[ "$status" -eq 75 ]] || fail "could not acquire Xcode slot $slot (flock status $status)"
+                [[ "$status" -eq 75 ]] || fail "could not acquire validation slot $slot (flock status $status)"
             fi
             exec 8>&-
         done
         ((SECONDS - lock_started < lock_wait_seconds)) ||
-            fail "timed out waiting for Xcode capacity ($slots CPU slots, ${available} MiB reclaimable)"
+            fail "timed out waiting for validation capacity ($slots CPU slots, ${available} MiB reclaimable)"
         sleep 0.25
     done
 }
@@ -306,19 +310,23 @@ run_guarded() {
         return
     fi
 
-    if [[ "$mode" == xcode-test ]]; then acquire_xcode_slot; fi
+    acquire_capacity_slot
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
     export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
     if [[ "$mode" == "port-build" || "$mode" == "swiftpm-test" || ( "$mode" == "proof-prepare" && "${proof_arguments[1]}" != compiler-expansion* ) ]]; then
-        local cache_root="$common_git_dir/swifttla-local-validation-cache"
-        local worktree_key worktree_cache
+        local worktree_cache
         local cache_key cache_key_file toolchain_key toolchain_key_file macro_key macro_key_file
-        [[ ! -L "$cache_root" ]] || fail "cache root must not be a symlink"
-        mkdir -p "$cache_root"
-        # SwiftPM build records include checkout paths, so isolate worktree builds.
-        worktree_key="$(git rev-parse --show-toplevel | shasum -a 256 | awk '{print $1}')"
-        [[ "$worktree_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute worktree cache key"
-        worktree_cache="$cache_root/$worktree_key"
+        if [[ "$mode" == proof-prepare ]]; then
+            local cache_root="$common_git_dir/swifttla-local-validation-cache" worktree_key
+            [[ ! -L "$cache_root" ]] || fail "cache root must not be a symlink"
+            mkdir -p "$cache_root"
+            worktree_key="$(git rev-parse --show-toplevel | shasum -a 256 | awk '{print $1}')"
+            [[ "$worktree_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute worktree cache key"
+            worktree_cache="$cache_root/$worktree_key"
+        else
+            # Older wrappers can still be writing the original proof/build cache.
+            worktree_cache="$worktree_git_dir/swifttla-product-cache"
+        fi
         [[ ! -L "$worktree_cache" ]] || fail "worktree cache directory must not be a symlink"
         mkdir -p "$worktree_cache"
         cache_key_file="$worktree_cache/source-key"

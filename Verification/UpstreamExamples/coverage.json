@@ -9253,15 +9253,17 @@
     {
       "path": "specifications/SpanningTree",
       "name": "Span Tree Exercise",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "SpanTree and SpanTreeTest4Nodes matched their pinned originals locally on initial states, reachable states, labeled transitions, TypeOK, Safety and Liveness.",
+      "gap": "The symbolic APSpanTree configuration matched its pinned original locally using TLC on its four reachable states and TypeOK. SpanTreeRandom and SpanTreeTest5Nodes remain open. Hosted parity for these ports is pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/SpanningTree/APSpanTree.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APSpanTree.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9275,7 +9277,10 @@
           "path": "specifications/SpanningTree/SpanTree.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/PublishedSpanTree.swift",
+            "Sources/UpstreamParity/Examples/APSpanTree.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9289,7 +9294,9 @@
           "path": "specifications/SpanningTree/SpanTreeTest.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AllFourNodeSpanTrees.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -9298,20 +9305,32 @@
           "module": "specifications/SpanningTree/APSpanTree.tla",
           "configuration": "specifications/SpanningTree/APSpanTree.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/APSpanTree.swift",
+              "scenario": "Upstream",
+              "caseID": "ap-span-tree"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/SpanningTree/SpanTree.tla",
           "configuration": "specifications/SpanningTree/SpanTree.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/PublishedSpanTree.swift",
+              "scenario": "Upstream",
+              "caseID": "span-tree"
+            }
+          ],
           "evidence": []
         },
         {
@@ -9328,10 +9347,16 @@
           "module": "specifications/SpanningTree/SpanTreeTest.tla",
           "configuration": "specifications/SpanningTree/SpanTreeTest4Nodes.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/AllFourNodeSpanTrees.swift",
+              "scenario": "Upstream",
+              "caseID": "span-tree-four"
+            }
+          ],
           "evidence": []
         },
         {
@@ -9699,15 +9724,19 @@
         {
           "path": "specifications/SpecifyingSystems/FIFO/InnerFIFOInstanced.tla",
           "role": "behavior dependency",
-          "reason": "This module manually expands both Channel instances and defines SSend, BufRcv, BufSend, and RRcv over in, out, and an unbounded queue q. APInnerFIFOInstanced depends on it. Its explanatory comment about old TLC INSTANCE support does not change the declared behavior. No Swift implementation exists; no queue constraint may be inferred.",
-          "implementations": [],
+          "reason": "This module manually expands both Channel instances and defines SSend, BufRcv, BufSend, and RRcv over in, out, and an unbounded queue q. APInnerFIFOInstanced depends on it. Its explanatory comment about old TLC INSTANCE support does not change the declared behavior. MCInnerFIFO supplies the queue constraint for its checked configuration. The underlying InnerFIFOInstanced module leaves the queue unbounded.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/BoundedFIFO.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/MCInnerFIFO.tla",
           "role": "configured root",
           "reason": "The configuration binds three Message model values and qLen=3. It selects Spec, TypeInvariant, and state constraint qConstraint. Constraint semantics must match TLC without removing the selected check.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/BoundedFIFO.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10036,7 +10065,10 @@
           "path": "specifications/SpecifyingSystems/TLC/ABCorrectness.tla",
           "role": "configured root",
           "reason": "The configuration binds two Data model values and selects ABCSpec with invariant TypeInv. It is distinct from the queue-bounded MCAlternatingBit configuration.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/ABCorrectness.swift",
+            "Sources/UpstreamParity/Examples/AlternatingBit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10049,8 +10081,10 @@
         {
           "path": "specifications/SpecifyingSystems/TLC/AlternatingBit.tla",
           "role": "behavior dependency",
-          "reason": "ABSpec combines seven message/acknowledgment send, receive, resend, and loss action families with weak fairness for resend/ack send and strong fairness for message/ack receive. Message and acknowledgment queues are unbounded in the base module. MCAlternatingBit supplies the selected queue constraint and refinement/progress checks. No Swift implementation establishes this behavior.",
-          "implementations": [],
+          "reason": "ABSpec combines seven message/acknowledgment send, receive, resend, and loss action families with weak fairness for resend/ack send and strong fairness for message/ack receive. Message and acknowledgment queues are unbounded in the base module. MCAlternatingBit supplies the selected queue constraint and refinement/progress checks. The published MCAlternatingBit port matched its bounded configuration locally on its labeled graph, refinement, progress property and invariant.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AlternatingBit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10071,7 +10105,9 @@
           "path": "specifications/SpecifyingSystems/TLC/MCAlternatingBit.tla",
           "role": "configured root",
           "reason": "The configuration binds two Data model values, msgQLen=2, and ackQLen=2. It selects ABSpec, ABTypeInv, SeqConstraint, ABCSpec, and SentLeadsToRcvd. DataPerm symmetry and the extra temporal directives are commented out.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AlternatingBit.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -10314,10 +10350,16 @@
           "module": "specifications/SpecifyingSystems/FIFO/MCInnerFIFO.tla",
           "configuration": "specifications/SpecifyingSystems/FIFO/MCInnerFIFO.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/BoundedFIFO.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-inner-fifo"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10503,20 +10545,32 @@
           "module": "specifications/SpecifyingSystems/TLC/ABCorrectness.tla",
           "configuration": "specifications/SpecifyingSystems/TLC/ABCorrectness.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ABCorrectness.swift",
+              "scenario": "Upstream",
+              "caseID": "ab-correctness"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/SpecifyingSystems/TLC/MCAlternatingBit.tla",
           "configuration": "specifications/SpecifyingSystems/TLC/MCAlternatingBit.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/AlternatingBit.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-alternating-bit"
+            }
+          ],
           "evidence": []
         }
       ],
