@@ -69,10 +69,10 @@ private struct RecordUnionFieldModel {
 
     struct Payload: Hashable, Sendable {
         let type: String
-        let src: Int
+        let src: OneOf<Token, Int>
     }
 
-    private enum Step: String, CaseIterable { case consume }
+    private enum Step: String, CaseIterable { case consume, inspect }
 
     static var spec: TLASpec {
         #spec("RecordUnionField") { scope in
@@ -81,7 +81,11 @@ private struct RecordUnionFieldModel {
             Do(Step.consume) {
                 When(message.recordFields.contains("q"))
                 Assign(message, to: OneOf<Token, Payload>.second(
-                    Payload.expression(type: "pl", src: 2)))
+                    Payload.expression(type: "pl", src: OneOf<Token, Int>.first(Token.expression(type: "original", q: 2)))))
+            }
+            Do(Step.inspect) {
+                When(message.recordFields.contains("src"))
+                When(message.assuming(Payload.self).src.assuming(Token.self).q == 2)
             }
         }
     }
@@ -116,7 +120,8 @@ struct FormalUnionTests {
         var machine = try RecordUnionFieldModel.makeMachine()
         #expect(try machine.isEnabled(.consume))
         _ = try machine.send(.consume)
-        #expect(machine.state.message == .second(.init(type: "pl", src: 2)))
+        #expect(machine.state.message == .second(.init(type: "pl", src: .first(.init(type: "original", q: 2)))))
+        #expect(try machine.isEnabled(.inspect))
         #expect(try !machine.isEnabled(.consume))
     }
 }

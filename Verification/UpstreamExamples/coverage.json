@@ -9411,7 +9411,9 @@
           "path": "specifications/SpecifyingSystems/AdvancedExamples/InnerSerial.tla",
           "role": "behavior dependency",
           "reason": "This model records operations with different record shapes, chosen read sources, and a growing partial operation order. UpdateOpOrder nondeterministically chooses a relation whose primed state is serializable; Spec adds response-group and ordering fairness. MCInnerSerial supplies InitMem and the finite Nat override. No Swift implementation covers these relation choices, primed predicates, and fairness bindings.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InnerSerial.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9425,14 +9427,18 @@
           "path": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.tla",
           "role": "configured root",
           "reason": "The configuration binds one register, one address, two values, two processes, InitWr, Done, and MaxQLen=1. It replaces InitMem and Nat. Spec, AlwaysResponds, Constraint, and DataInvariant remain required.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InnerSerial.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/RegisterInterface.tla",
           "role": "interface dependency",
           "reason": "This module declares Adr, Val, Proc, Reg and the regFile variable. Read, write, and free-register values share adr/val/op fields, with distinct operation tags. RegFileTypeInvariant requires nested process/register functions. InnerSequential and InnerSerial consume the interface; no Swift implementation exists.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InnerSerial.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9510,14 +9516,18 @@
           "path": "specifications/SpecifyingSystems/CachingMemory/InternalMemory.tla",
           "role": "behavior dependency",
           "reason": "ISpec starts from IInit and interleaves Req, Do, and Rsp for each process. buf holds requests, returned values, or NoVal; memory and control use finite function domains. Send and Reply remain supplied operators. No Swift implementation exists. The CachingMemory copy has a different source blob from the other three copies, so each published input identity must remain pinned separately.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.tla",
           "role": "configured root",
           "reason": "The configuration selects ISpec and TypeInvariant. It binds two processes, three addresses, two values, and NoVal. Send, Reply, and InitMemInt use the published MC replacements.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9538,7 +9548,9 @@
           "path": "specifications/SpecifyingSystems/CachingMemory/MemoryInterface.tla",
           "role": "interface dependency",
           "reason": "This interface declares four-argument Send and Reply operator constants, InitMemInt, and Proc/Adr/Val domains. MReq is the union of read and write record shapes; NoVal is chosen outside Val. All four copies have Git blob 4dbed39777baa271154a04d9378fa3d25c36d336. No Swift implementation covers these operator bindings and typed request alternatives.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10126,10 +10138,16 @@
           "module": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.tla",
           "configuration": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/InnerSerial.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-inner-serial"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10247,10 +10265,16 @@
           "module": "specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.tla",
           "configuration": "specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/InternalMemory.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-internal-memory"
+            }
+          ],
           "evidence": []
         },
         {

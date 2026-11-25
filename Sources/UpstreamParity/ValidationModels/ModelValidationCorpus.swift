@@ -73,6 +73,8 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "span-tree-four", scenarios: { try AllFourNodeSpanTreesModel.validationScenarios() }),
     .init(id: "ap-span-tree", scenarios: { try APSpanTreeModel.validationScenarios() }),
     .init(id: "mc-alternating-bit", scenarios: { try AlternatingBitModel.validationScenarios() }),
+    .init(id: "mc-inner-serial", scenarios: { try InnerSerialModel.validationScenarios() }),
+    .init(id: "mc-internal-memory", scenarios: { try InternalMemoryModel.validationScenarios() }),
     .init(id: "ab-correctness", scenarios: { try ABCorrectnessModel.validationScenarios() }),
     .init(id: "mc-inner-fifo", scenarios: { try BoundedFIFOModel.validationScenarios() }),
     .init(id: "voucher-issue", scenarios: { try VoucherIssueModel.validationScenarios() }),

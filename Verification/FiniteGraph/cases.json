@@ -2713,6 +2713,70 @@
       "moduleSHA256": "b97edf65c80c0d0a116d1016fc2a95bf51a2e008bb1768bde2c52e828f08785a",
       "cfgSHA256": "190795a2fe770b019c73ca8b7c6e97901eccfbb7915cde72ec4bdfe46afe78fb",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "mc-inner-serial",
+      "sourceModel": "mc-inner-serial",
+      "scenario": "Upstream",
+      "module": "mc-inner-serial/MCInnerSerial.tla",
+      "configuration": "mc-inner-serial/MCInnerSerial.cfg",
+      "imports": [
+        "mc-inner-serial/InnerSerial.tla",
+        "mc-inner-serial/RegisterInterface.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCInnerSerial",
+          "importedModule": "InnerSerial"
+        },
+        {
+          "importingModule": "InnerSerial",
+          "importedModule": "RegisterInterface"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.tla",
+        "sha256": "4b0322e0e3795bd1e63201b4876ac7b84e8acbe4fe56308ea7d57b64b084dc28"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "4b0322e0e3795bd1e63201b4876ac7b84e8acbe4fe56308ea7d57b64b084dc28",
+      "cfgSHA256": "ca70ba8f305c4759112511237a65dc42cd0da53d5bce1be69880c19e192ae630",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "mc-internal-memory",
+      "sourceModel": "mc-internal-memory",
+      "scenario": "Upstream",
+      "module": "mc-internal-memory/MCInternalMemory.tla",
+      "configuration": "mc-internal-memory/MCInternalMemory.cfg",
+      "imports": [
+        "mc-internal-memory/InternalMemory.tla",
+        "mc-internal-memory/MemoryInterface.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCInternalMemory",
+          "importedModule": "InternalMemory"
+        },
+        {
+          "importingModule": "InternalMemory",
+          "importedModule": "MemoryInterface"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.tla",
+        "sha256": "67deb792930526267e556009d41a4eb6bf9ce663d6224d8c745b67acb2faffe2"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "67deb792930526267e556009d41a4eb6bf9ce663d6224d8c745b67acb2faffe2",
+      "cfgSHA256": "f25a41db5f6d7c2e1644a19595b8b72ca48b2b1ae654d28f9f8ad05a41b9eb98",
+      "timeoutSeconds": 120
     }
   ]
 }

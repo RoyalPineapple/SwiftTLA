@@ -16,6 +16,16 @@ extension NativeSwiftEmitter {
     func checkedView(_ value: String, from source: CompiledValueType, to target: CompiledValueType) throws -> String {
         if program.canProject(source: source, to: target) { return try projected(value, from: source, to: target) }
         if source.unionAlternatives != nil { return try unionProjection(value, from: source, to: target, checked: true) }
+        if let fields = source.recordFields, let alternatives = target.unionAlternatives {
+            let keys = Set(fields.map(\.name))
+            let matches = alternatives.indices.filter { index in
+                alternatives[index].recordFields.map { Set($0.map(\.name)) == keys } == true
+            }
+            if matches.count == 1, let index = matches.first {
+                let payload = try checkedView(value, from: source, to: alternatives[index])
+                return try unionValue(payload, type: target, index: index)
+            }
+        }
         if case .finite(let members) = source {
             let cases = members.indices.map { index in
                 let result: String
