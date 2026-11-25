@@ -44,3 +44,5 @@ Verification/FiniteGraph/fixtures/span-tree/* whitespace=-blank-at-eol,-blank-at
 Verification/FiniteGraph/fixtures/span-tree-four/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/ab-correctness/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/mc-inner-fifo/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/ap-span-tree/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/mc-alternating-bit/* whitespace=-blank-at-eol,-blank-at-eof

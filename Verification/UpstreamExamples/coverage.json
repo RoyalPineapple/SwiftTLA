@@ -9254,14 +9254,16 @@
       "path": "specifications/SpanningTree",
       "name": "Span Tree Exercise",
       "audit": "SpanTree and SpanTreeTest4Nodes matched their pinned originals locally on initial states, reachable states, labeled transitions, TypeOK, Safety and Liveness.",
-      "gap": "APSpanTree, SpanTreeRandom and SpanTreeTest5Nodes remain open. Hosted parity for the two registered configurations is pending.",
+      "gap": "The symbolic APSpanTree configuration matched its pinned original locally using TLC on its four reachable states and TypeOK. SpanTreeRandom and SpanTreeTest5Nodes remain open. Hosted parity for these ports is pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/SpanningTree/APSpanTree.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APSpanTree.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9276,7 +9278,8 @@
           "role": "configured root",
           "reason": "Published configuration binding.",
           "implementations": [
-            "Sources/UpstreamParity/Examples/PublishedSpanTree.swift"
+            "Sources/UpstreamParity/Examples/PublishedSpanTree.swift",
+            "Sources/UpstreamParity/Examples/APSpanTree.swift"
           ],
           "dispositionComplete": false
         },
@@ -9302,10 +9305,16 @@
           "module": "specifications/SpanningTree/APSpanTree.tla",
           "configuration": "specifications/SpanningTree/APSpanTree.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/APSpanTree.swift",
+              "scenario": "Upstream",
+              "caseID": "ap-span-tree"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10057,7 +10066,8 @@
           "role": "configured root",
           "reason": "The configuration binds two Data model values and selects ABCSpec with invariant TypeInv. It is distinct from the queue-bounded MCAlternatingBit configuration.",
           "implementations": [
-            "Sources/UpstreamParity/Examples/ABCorrectness.swift"
+            "Sources/UpstreamParity/Examples/ABCorrectness.swift",
+            "Sources/UpstreamParity/Examples/AlternatingBit.swift"
           ],
           "dispositionComplete": false
         },
@@ -10071,8 +10081,10 @@
         {
           "path": "specifications/SpecifyingSystems/TLC/AlternatingBit.tla",
           "role": "behavior dependency",
-          "reason": "ABSpec combines seven message/acknowledgment send, receive, resend, and loss action families with weak fairness for resend/ack send and strong fairness for message/ack receive. Message and acknowledgment queues are unbounded in the base module. MCAlternatingBit supplies the selected queue constraint and refinement/progress checks. No Swift implementation establishes this behavior.",
-          "implementations": [],
+          "reason": "ABSpec combines seven message/acknowledgment send, receive, resend, and loss action families with weak fairness for resend/ack send and strong fairness for message/ack receive. Message and acknowledgment queues are unbounded in the base module. MCAlternatingBit supplies the selected queue constraint and refinement/progress checks. The published MCAlternatingBit port matched its bounded configuration locally on its labeled graph, refinement, progress property and invariant.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AlternatingBit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10093,7 +10105,9 @@
           "path": "specifications/SpecifyingSystems/TLC/MCAlternatingBit.tla",
           "role": "configured root",
           "reason": "The configuration binds two Data model values, msgQLen=2, and ackQLen=2. It selects ABSpec, ABTypeInv, SeqConstraint, ABCSpec, and SentLeadsToRcvd. DataPerm symmetry and the extra temporal directives are commented out.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AlternatingBit.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -10547,10 +10561,16 @@
           "module": "specifications/SpecifyingSystems/TLC/MCAlternatingBit.tla",
           "configuration": "specifications/SpecifyingSystems/TLC/MCAlternatingBit.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/AlternatingBit.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-alternating-bit"
+            }
+          ],
           "evidence": []
         }
       ],
