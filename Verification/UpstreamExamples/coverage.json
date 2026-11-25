@@ -6737,22 +6737,26 @@
     {
       "path": "specifications/glowingRaccoon",
       "name": "PCR Testing for Snippets of DNA",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "All five configurations matched the pinned original TLC graphs and selected checks locally. The staged machine checked its refinement to clean, and product checked its refinement to stages. The two symbolic configurations exercised their published inputs through TLC.",
+      "gap": "Hosted parity and review of the upstream proof companions remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/glowingRaccoon/APclean.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingClean.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/glowingRaccoon/APstages.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingStages.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -6766,14 +6770,20 @@
           "path": "specifications/glowingRaccoon/clean.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingClean.swift",
+            "Sources/UpstreamParity/Examples/GlowingStages.swift",
+            "Sources/UpstreamParity/Examples/GlowingProduct.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/glowingRaccoon/product.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingProduct.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -6787,7 +6797,10 @@
           "path": "specifications/glowingRaccoon/stages.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingStages.swift",
+            "Sources/UpstreamParity/Examples/GlowingProduct.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -6796,50 +6809,80 @@
           "module": "specifications/glowingRaccoon/APclean.tla",
           "configuration": "specifications/glowingRaccoon/APclean.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingClean.swift",
+              "scenario": "APclean",
+              "caseID": "glowing-ap-clean"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/glowingRaccoon/APstages.tla",
           "configuration": "specifications/glowingRaccoon/APstages.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingStages.swift",
+              "scenario": "APstages",
+              "caseID": "glowing-ap-stages"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/glowingRaccoon/clean.tla",
           "configuration": "specifications/glowingRaccoon/clean.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingClean.swift",
+              "scenario": "Upstream",
+              "caseID": "glowing-clean"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/glowingRaccoon/product.tla",
           "configuration": "specifications/glowingRaccoon/product.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingProduct.swift",
+              "scenario": "Upstream",
+              "caseID": "glowing-product"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/glowingRaccoon/stages.tla",
           "configuration": "specifications/glowingRaccoon/stages.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingStages.swift",
+              "scenario": "Upstream",
+              "caseID": "glowing-stages"
+            }
+          ],
           "evidence": []
         }
       ],

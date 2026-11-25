@@ -2945,6 +2945,144 @@
       "moduleSHA256": "40fe5524348094ba798effb2c0abd80c91f089f5f6b1aa62cac8a85547888c13",
       "cfgSHA256": "e62536c56344905f04964b168b002ec635bf980025a851e3e654c62197505285",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "glowing-clean",
+      "sourceModel": "glowing-clean",
+      "scenario": "Upstream",
+      "module": "glowing-raccoon/clean.tla",
+      "configuration": "glowing-raccoon/clean.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/clean.tla",
+        "sha256": "48ba67d167d158f4e34238e13b135ad83cb705ea12d842c0a3506ff851990d73"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "48ba67d167d158f4e34238e13b135ad83cb705ea12d842c0a3506ff851990d73",
+      "cfgSHA256": "2b7080287e3d0b68acc3c9c6ee647ab8f9d5814cb7899a88d7c5c12ead8bd3d8",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "glowing-ap-clean",
+      "sourceModel": "glowing-clean",
+      "scenario": "APclean",
+      "module": "glowing-raccoon/APclean.tla",
+      "configuration": "glowing-raccoon/APclean.cfg",
+      "imports": [
+        "glowing-raccoon/clean.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APclean",
+          "importedModule": "clean"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/APclean.tla",
+        "sha256": "d11d3186ab9403c013dc12b78935021f769f9aba036047cf801a04a676a88d70"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "d11d3186ab9403c013dc12b78935021f769f9aba036047cf801a04a676a88d70",
+      "cfgSHA256": "b3ab8d4f26222781edb189df79e8d01fbe5cb9afbaadc73e47c2e4535eb0d57b",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "glowing-stages",
+      "sourceModel": "glowing-stages",
+      "scenario": "Upstream",
+      "module": "glowing-raccoon/stages.tla",
+      "configuration": "glowing-raccoon/stages.cfg",
+      "imports": [
+        "glowing-raccoon/clean.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "stages",
+          "importedModule": "clean"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/stages.tla",
+        "sha256": "dcd17e4a4d968f8cdae866b673052219afb88b9af0055cb24c1f75670bdf3a17"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "dcd17e4a4d968f8cdae866b673052219afb88b9af0055cb24c1f75670bdf3a17",
+      "cfgSHA256": "dc42ba24d36df34cea3ec40dfafbf383856049683b66a0a851d43233f652d5fe",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "glowing-ap-stages",
+      "sourceModel": "glowing-stages",
+      "scenario": "APstages",
+      "module": "glowing-raccoon/APstages.tla",
+      "configuration": "glowing-raccoon/APstages.cfg",
+      "imports": [
+        "glowing-raccoon/stages.tla",
+        "glowing-raccoon/clean.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APstages",
+          "importedModule": "stages"
+        },
+        {
+          "importingModule": "stages",
+          "importedModule": "clean"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/APstages.tla",
+        "sha256": "1a977e6718c316b30e8b570db81dda842535d463e05de46e5bbe413a34058a7f"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "1a977e6718c316b30e8b570db81dda842535d463e05de46e5bbe413a34058a7f",
+      "cfgSHA256": "4820d9245365ce6cac8db4338d78acd68dc711c4f00c20bd3d1d2d37f3b6112d",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "glowing-product",
+      "sourceModel": "glowing-product",
+      "scenario": "Upstream",
+      "module": "glowing-raccoon/product.tla",
+      "configuration": "glowing-raccoon/product.cfg",
+      "imports": [
+        "glowing-raccoon/stages.tla",
+        "glowing-raccoon/clean.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "product",
+          "importedModule": "stages"
+        },
+        {
+          "importingModule": "stages",
+          "importedModule": "clean"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/product.tla",
+        "sha256": "f6e7d141ed63230da2703f595cc13c9aa11e1b8278228029acb04f5355e8acad"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f6e7d141ed63230da2703f595cc13c9aa11e1b8278228029acb04f5355e8acad",
+      "cfgSHA256": "9f8dce46e2023484234a474d200481a4822d88adebb8ab012bb1469c7ff186c2",
+      "timeoutSeconds": 60
     }
   ]
 }
