@@ -8592,15 +8592,17 @@
     {
       "path": "specifications/PaxosHowToWinATuringAward",
       "name": "Paxos (How to Win a Turing Award)",
-      "audit": "not audited",
-      "gap": "MCConsensus matched locally on one initial state, four reachable states, three labeled transitions and Inv, with deadlock checking disabled. Other configurations and hosted evidence remain open.",
+      "audit": "MCConsensus and MCVoting matched their original graphs and selected properties locally, including the Voting refinement to Consensus.",
+      "gap": "Both MCPaxos configurations and hosted evidence remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/PaxosHowToWinATuringAward/Consensus.tla",
           "role": "unclassified",
           "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringConsensus.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8623,7 +8625,9 @@
           "path": "specifications/PaxosHowToWinATuringAward/MCVoting.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringVoting.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8644,7 +8648,9 @@
           "path": "specifications/PaxosHowToWinATuringAward/Voting.tla",
           "role": "unclassified",
           "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringVoting.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -8689,10 +8695,16 @@
           "module": "specifications/PaxosHowToWinATuringAward/MCVoting.tla",
           "configuration": "specifications/PaxosHowToWinATuringAward/MCVoting.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TuringVoting.swift",
+              "scenario": "published",
+              "caseID": "turing-paxos-voting"
+            }
+          ],
           "evidence": []
         }
       ],

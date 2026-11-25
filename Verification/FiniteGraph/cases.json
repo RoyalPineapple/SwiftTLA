@@ -3137,6 +3137,72 @@
           "importedModule": "TokenRing"
         }
       ]
+    },
+    {
+      "id": "turing-paxos-voting",
+      "sourceModel": "turing-paxos-voting",
+      "scenario": "published",
+      "module": "turing-paxos-consensus/MCVoting.tla",
+      "configuration": "turing-paxos-consensus/MCVoting.cfg",
+      "imports": [
+        "turing-paxos-consensus/Voting.tla",
+        "turing-paxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCVoting",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/MCVoting.tla",
+        "sha256": "ae2a1c05f63e8e49ff6b330410bb65b5ee8090b1e8528d398281d46a25236abc"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "ae2a1c05f63e8e49ff6b330410bb65b5ee8090b1e8528d398281d46a25236abc",
+      "cfgSHA256": "f54a258a36d38b839260cf27a2f986163baa5be829bb96b88216b3025cf0216a",
+      "timeoutSeconds": 120
     }
   ]
 }
