@@ -57,7 +57,7 @@ package struct SpanningModel: Sendable {
                         prnt[i] == Parent.first(j) && nbrs.contains(Pair<Int, Int>.literal(i, j))
                     }
                 }
-                Functions(from: Proc, to: Set<Bool>([false, true])).contains(rpt)
+                Functions(from: Proc, to: Bool.all).contains(rpt)
                 msg.isSubset(of: pairs)
             }
             typeOK

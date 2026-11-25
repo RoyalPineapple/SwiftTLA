@@ -16,7 +16,7 @@ package struct SyncTerminationDetectionModel: Sendable {
             let N = scope.parameter(as: Int.self, in: Int.all)
             Assume(N > 0)
             let Node = 0..<N
-            let active = scope.sharedVar(initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+            let active = scope.sharedVar(initiallyIn: Functions(from: Node, to: Bool.all))
             let terminated = Node.allSatisfy { node in !active[node] }
             let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
 
@@ -41,8 +41,8 @@ package struct SyncTerminationDetectionModel: Sendable {
             WeakFairness(detectTermination)
 
             let typeOK = Invariant("TypeOK") {
-                Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
-                    && SetExpr<Bool>.literal(false, true).contains(terminationDetected)
+                Functions(from: Node, to: Bool.all).contains(active)
+                    && Bool.all.contains(terminationDetected)
             }
             typeOK
             let TDCorrect = Invariant { !terminationDetected || terminated }

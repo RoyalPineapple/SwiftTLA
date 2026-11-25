@@ -428,7 +428,7 @@ final class ParserSession {
     }
 
     func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
-        if let domain = decodeIntegerDomain(expression) { return domain }
+        if let domain = builtinDomain(expression, scope: sourceScope) { return domain.value }
         if let enabled = decodeStepEnabledness(expression, scope: sourceScope) { return enabled }
         if let integer = SourceIntegerLiteral.value(expression) { return .value(.int(integer)) }
         if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
@@ -657,12 +657,17 @@ final class ParserSession {
         return label
     }
 
-    private func decodeIntegerDomain(_ expression: ExprSyntax) -> StateExpr? {
+    private func builtinDomain(_ expression: ExprSyntax, scope: TypedFacadeScope)
+        -> (value: StateExpr, type: CompiledValueType)? {
         guard let member = expression.as(MemberAccessExprSyntax.self),
               member.declName.baseName.sourceIdentifierName == "all",
-              member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Int"
-        else { return nil }
-        return .integerSet
+              let base = member.base?.as(DeclReferenceExprSyntax.self),
+              scope.value(for: base) == nil else { return nil }
+        switch base.baseName.sourceIdentifierName {
+        case "Int": return (Int.all.stateExpr, .set(.int))
+        case "Bool": return (Bool.all.stateExpr, .set(.bool))
+        default: return nil
+        }
     }
 
     private func decodeSequenceDomain(
@@ -907,7 +912,7 @@ final class ParserSession {
         expectedEnumType: String? = nil
     ) -> StateExpr? {
         if let checking = decodeCheckingExpression(expression, scope: scope) { return checking }
-        if let domain = decodeIntegerDomain(expression) { return domain }
+        if let domain = builtinDomain(expression, scope: scope) { return domain.value }
         if let member = expression.as(MemberAccessExprSyntax.self),
            let type = terminalTypeName(in: member.base), enumDefinition(named: type) != nil {
             if let domain = finiteAlgorithmDomain(expression) {
@@ -2087,7 +2092,7 @@ final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> CompiledValueType? {
-        if decodeIntegerDomain(expression) != nil { return .set(.int) }
+        if let domain = builtinDomain(expression, scope: scope) { return domain.type }
         if let checking = decodeCheckingExpression(expression, scope: scope) {
             if case .checkingLevel = checking { return .int }
             if case .checkingDiameter = checking { return .int }

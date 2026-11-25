@@ -55,7 +55,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
 
             Invariant("TypeOK") {
                 IntRange(1, through: VictoryThreshold + 1).contains(count)
-                    && SetExpr<Bool>.literal(false, true).contains(announced)
+                    && Bool.all.contains(announced)
                     && Functions(from: NormalPrisoner, to: IntRange(0, through: 2)).contains(signalled)
                     && SetExpr<Light>.literal(.off, .on).contains(light)
                     && has_visited.isSubset(of: Prisoner)

@@ -260,6 +260,13 @@ extension Int {
   public static var all: Expr<Set<Int>> { Expr(.integerSet) }
 }
 
+extension Bool {
+  /// Both values a Boolean state variable can take.
+  public static var all: Expr<Set<Bool>> {
+    Expr(.setLiteral([false.stateExpr, true.stateExpr]))
+  }
+}
+
 /// All subsets of the supplied formal set.
 public func Subsets<Domain: FormalSetValue>(
   of values: some TypedExpression<Domain>

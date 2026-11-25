@@ -26,7 +26,7 @@ package struct EWD840Model: Sendable {
             let Node = 0..<N
             let colors = SetExpr<Color>.literal(.white, .black)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+                initiallyIn: Functions(from: Node, to: Bool.all))
             let color: SharedVariable<[Int: Color]> = scope.sharedVar(initiallyIn: Functions(from: Node, to: colors))
             let tpos = scope.sharedVar(initiallyIn: Node)
             let tcolor = scope.sharedVar(initial: Color.black)
@@ -70,7 +70,7 @@ package struct EWD840Model: Sendable {
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
             let typeOK = Invariant("TypeOK") {
-                Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
+                Functions(from: Node, to: Bool.all).contains(active)
                     && Functions(from: Node, to: colors).contains(color)
                     && Node.contains(tpos) && colors.contains(tcolor)
             }
