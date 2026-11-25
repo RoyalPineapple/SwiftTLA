@@ -47,7 +47,7 @@ package struct InternalMemoryModel: Sendable {
                     ctl[p].set("busy")
                 }
             }
-            Do(Step.perform, over: Proc) { p in
+            let perform = Do(Step.perform, over: Proc) { p in
                 When(ctl[p] == "busy")
                 let isWrite = writeMessages.contains(buf[p])
                 let reply = If(isWrite, then: Message.second(NoVal),
@@ -58,24 +58,44 @@ package struct InternalMemoryModel: Sendable {
                 buf[p].set(reply)
                 ctl[p].set("done")
             }
-            Do(Step.respond, over: Proc) { p in
+            perform
+            let respond = Do(Step.respond, over: Proc) { p in
                 When(ctl[p] == "done")
                 memInt.set(Pair<Atom, Message>.literal(p, buf[p]))
                 ctl[p].set("rdy")
             }
-            Invariant("TypeInvariant") {
+            respond
+            WeakFairness(eachOf: [perform, respond])
+            let TypeInvariant = Invariant()
+            TypeInvariant {
                 mem.keys == Adr && Adr.allSatisfy { a in Val.contains(mem[a]) }
                     && ctl.keys == Proc && buf.keys == Proc
                     && Proc.allSatisfy { p in Set<String>(["rdy","busy","done"]).contains(ctl[p])
                         && requestMessages.union(replyValues).contains(buf[p])
                     }
             }
+            let LivenessProperty = Temporal()
+            LivenessProperty(forEach: Proc) { p in .leadsTo(ctl[p] == "busy", ctl[p] == "rdy") }
+            let Liveness = Temporal()
+            Liveness(forEach: Proc) { p in .all([
+                .leadsTo(ctl[p] == "busy", ctl[p] != "busy"),
+                .leadsTo(ctl[p] == "done", ctl[p] != "done")
+            ]) }
+            // ISpec has no fairness clauses. LISpec adds one grouped obligation per processor.
+            let ISpec = FairnessProfile(excluding: [Step.perform, Step.respond])
+            ISpec
             Validation("Upstream") {
                 Bind(Proc, to: Set<Atom>([Atom.p1, Atom.p2]))
                 Bind(Adr, to: Set<Atom>([Atom.a1, Atom.a2, Atom.a3]))
                 Bind(Val, to: Set<Atom>([Atom.v1, Atom.v2]))
                 Bind(NoVal, to: Atom.noVal)
-            }
+            }.usingFairness(ISpec).checking(only: [TypeInvariant])
+            Validation("Live") {
+                Bind(Proc, to: Set<Atom>([Atom.p1, Atom.p2]))
+                Bind(Adr, to: Set<Atom>([Atom.a1, Atom.a2, Atom.a3]))
+                Bind(Val, to: Set<Atom>([Atom.v1, Atom.v2]))
+                Bind(NoVal, to: Atom.noVal)
+            }.checking(only: [LivenessProperty, Liveness])
         }
     }
 }

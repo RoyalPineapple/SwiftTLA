@@ -9837,7 +9837,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/InternalMemory.tla",
           "role": "behavior dependency",
           "reason": "ISpec starts from IInit and interleaves Req, Do, and Rsp for each process. buf holds requests, returned values, or NoVal; memory and control use finite function domains. Send and Reply remain supplied operators. No Swift implementation exists. The CachingMemory copy has a different source blob from the other three copies, so each published input identity must remain pinned separately.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9851,7 +9853,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/LiveInternalMemory.tla",
           "role": "behavior dependency",
           "reason": "LISpec combines ISpec with per-process weak fairness for the union Do(p) or Rsp(p), not separate action fairness. The module also declares the separate-action Liveness formula and the busy-leads-to-ready LivenessProperty; MCLiveInternalMemory selects both as properties. The DSL must preserve group fairness and distinguish assumptions from checked temporal claims. No Swift implementation exists.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9872,7 +9876,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.tla",
           "role": "configured root",
           "reason": "The configuration selects LISpec, LivenessProperty, and Liveness. It binds two processes, three addresses, two values, and NoVal. Send, Reply, and InitMemInt use MC replacements.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9893,7 +9899,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/MemoryInterface.tla",
           "role": "interface dependency",
           "reason": "This interface declares four-argument Send and Reply operator constants, InitMemInt, and Proc/Adr/Val domains. MReq is the union of read and write record shapes; NoVal is chosen outside Val. All four copies have Git blob 4dbed39777baa271154a04d9378fa3d25c36d336. No Swift implementation covers these operator bindings and typed request alternatives.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10529,10 +10537,16 @@
           "module": "specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.tla",
           "configuration": "specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/InternalMemory.swift",
+              "scenario": "Live",
+              "caseID": "mc-live-internal-memory"
+            }
+          ],
           "evidence": []
         },
         {

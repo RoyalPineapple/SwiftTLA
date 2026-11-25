@@ -48,3 +48,4 @@ Verification/FiniteGraph/fixtures/ap-span-tree/* whitespace=-blank-at-eol,-blank
 Verification/FiniteGraph/fixtures/mc-alternating-bit/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/mc-inner-serial/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/mc-internal-memory/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/mc-live-internal-memory/* whitespace=-blank-at-eol,-blank-at-eof

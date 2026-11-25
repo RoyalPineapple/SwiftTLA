@@ -2777,6 +2777,43 @@
       "moduleSHA256": "67deb792930526267e556009d41a4eb6bf9ce663d6224d8c745b67acb2faffe2",
       "cfgSHA256": "f25a41db5f6d7c2e1644a19595b8b72ca48b2b1ae654d28f9f8ad05a41b9eb98",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "mc-live-internal-memory",
+      "sourceModel": "mc-internal-memory",
+      "scenario": "Live",
+      "module": "mc-live-internal-memory/MCLiveInternalMemory.tla",
+      "configuration": "mc-live-internal-memory/MCLiveInternalMemory.cfg",
+      "imports": [
+        "mc-live-internal-memory/LiveInternalMemory.tla",
+        "mc-live-internal-memory/InternalMemory.tla",
+        "mc-live-internal-memory/MemoryInterface.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCLiveInternalMemory",
+          "importedModule": "LiveInternalMemory"
+        },
+        {
+          "importingModule": "LiveInternalMemory",
+          "importedModule": "InternalMemory"
+        },
+        {
+          "importingModule": "InternalMemory",
+          "importedModule": "MemoryInterface"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.tla",
+        "sha256": "46b09f1b84b763e366cc98a7af4a072b4371c5cdd06ef5396ebba49233490af8"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "46b09f1b84b763e366cc98a7af4a072b4371c5cdd06ef5396ebba49233490af8",
+      "cfgSHA256": "7c78a0ad30883f1f292981a03a98cbe41ea5e01ddfcd4db604e73f19b3c4ee4e",
+      "timeoutSeconds": 120
     }
   ]
 }
