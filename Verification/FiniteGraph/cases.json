@@ -2836,6 +2836,28 @@
       "moduleSHA256": "2fc09bd878a02b2e756b149b364352cc5c738d1266ca0323479baa2fcf6e95cd",
       "cfgSHA256": "d74105971509736e380040d40c08e52e544004fb314452c2f488513de895c06a",
       "timeoutSeconds": 600
+    },
+    {
+      "id": "print-values-0",
+      "sourceModel": "print-values",
+      "scenario": "Upstream",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "print-values/PrintValues.tla",
+      "configuration": "print-values/PrintValues.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.tla",
+        "sha256": "3b71af5a55d460f6580dc26e66ff537b22f6d0e2d2cfe0924e5376597aafd080"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "3b71af5a55d460f6580dc26e66ff537b22f6d0e2d2cfe0924e5376597aafd080",
+      "cfgSHA256": "3bc8a6308f224fca254461dd1f02f6d8118f3c4f80561eb48553fbcc1afa9f0e",
+      "timeoutSeconds": 600
     }
   ]
 }

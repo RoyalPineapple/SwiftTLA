@@ -50,3 +50,4 @@ Verification/FiniteGraph/fixtures/mc-inner-serial/* whitespace=-blank-at-eol,-bl
 Verification/FiniteGraph/fixtures/mc-internal-memory/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/mc-live-internal-memory/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/simple-math/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/print-values/* whitespace=-blank-at-eol,-blank-at-eof

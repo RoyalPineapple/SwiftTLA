@@ -2568,6 +2568,10 @@ package struct CompiledTypeChecker: Sendable {
             let value = try checkOperand(expression.children[0])
             let predicate = try checkOperand(expression.children[1], expected: .bool)
             return try checkedType(.bool, expected: expected, children: [value, predicate])
+        case .printReturning:
+            let value = try checkOperand(expression.children[0])
+            let result = try checkOperand(expression.children[1], expected: expected)
+            return try checkedType(result.resultType, expected: expected, children: [value, result])
         case .printT:
             let value = try checkOperand(expression.children[0])
             return try checkedType(.bool, expected: expected, children: [value])

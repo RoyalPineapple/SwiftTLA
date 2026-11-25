@@ -711,7 +711,7 @@ struct NativeSwiftEmitter {
                 bound.insert(binder)
             case .foldFunction(let binders): bound.formUnion(binders)
             case .stateVariable, .checkingRegister, .setCheckingRegister, .checkingLevel, .checkingDiameter,
-                 .enabledAction, .nextState, .stutteringStep, .printT, .call,
+                 .enabledAction, .nextState, .stutteringStep, .printT, .printReturning, .call,
                  .checkedCall, .operatorReference, .operatorApplication, .letIn,
                  .integerSet:
                 return false
@@ -728,7 +728,7 @@ struct NativeSwiftEmitter {
     ) throws -> String {
         switch id.operation {
         case .checkingRegister, .setCheckingRegister, .integerSet, .checkingLevel,
-             .checkingDiameter, .stutteringStep, .printT, .nextState:
+             .checkingDiameter, .stutteringStep, .printT, .printReturning, .nextState:
             return try contextExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate:
             return try arithmeticExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
@@ -800,13 +800,21 @@ struct NativeSwiftEmitter {
             let after = try expression(id.children[0], state: "nextState.", substitutions: substitutions, activeFunctions: activeFunctions)
             let predicate = try expression(id.children[1], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
             return "((\(before) == \(after)) ? true : \(predicate))"
-        case .printT:
-            guard let printTOutputName else { throw unsupported("PrintT outside generated evaluation") }
+        case .printT, .printReturning:
+            guard let printTOutputName else { throw unsupported("Print outside generated evaluation") }
             let value = try expression(id.children[0], state: state, substitutions: substitutions,
                 activeFunctions: activeFunctions)
             let projected = containsSourceNominal(id.children[0].resultType)
                 ? try formalValue("printed", type: id.children[0].resultType) : "printed.tlaValue"
-            return "(try { () throws -> \(nativeBoolType) in let printed = \(value); \(printTOutputName).append(\(projected)); return true }())"
+            if id.operation == .printT {
+                return "(try { () throws -> \(nativeBoolType) in let printed = \(value); \(printTOutputName).append(.value(\(projected))); return true }())"
+            }
+            let result = try expression(id.children[1], state: state, substitutions: substitutions,
+                activeFunctions: activeFunctions)
+            let returned = containsSourceNominal(id.children[1].resultType)
+                ? try formalValue("returned", type: id.children[1].resultType) : "returned.tlaValue"
+            let type = try swiftType(id.children[1].resultType)
+            return "(try { () throws -> \(type) in let printed = \(value); let returned = \(result); \(printTOutputName).append(.returning(\(projected), \(returned))); return returned }())"
         case .nextState:
             guard state != "nextState." else { throw unsupported("nested successor-state read") }
             return try expression(id.children[0], state: "nextState.", substitutions: substitutions,

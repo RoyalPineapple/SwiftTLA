@@ -1572,7 +1572,7 @@ struct CompiledTLARenderer {
                     schedule([.expression(expression.children[0]), .text(" : "),
                         .expression(expression.children[1]),
                         .text("} IN (CHOOSE \(member) \\in \(candidates) : (\\A \(other) \\in \(candidates) : \(least))))")])
-                case .add, .subtract, .multiply, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .randomElement, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
+                case .add, .subtract, .multiply, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .randomElement, .setSum, .integerRange, .negate, .not, .printT, .printReturning, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 
                 }
@@ -1848,6 +1848,7 @@ extension CompiledOperation {
         case .negate: ("(-", "", ")")
         case .nextState: ("(", "", ")'")
         case .not: ("(~", "", ")")
+        case .printReturning: ("Print(", ", ", ")")
         case .printT: ("PrintT(", "", ")")
         case .cardinality: ("Cardinality(", "", ")")
         case .powerSet: ("SUBSET (", "", ")")

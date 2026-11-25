@@ -130,14 +130,36 @@ public protocol ModelValidationScenario: Sendable {
     func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> Bool?
 }
 
+/// One call to TLC PrintT or Print, in evaluation order.
+public enum AssumptionPrint<Value: Sendable>: Sendable {
+    case value(Value)
+    case returning(Value, Value)
+}
+
+extension AssumptionPrint: Equatable where Value: Equatable {}
+
 /// The product result for a configured module with no state machine.
 public struct AssumptionEvaluation: Sendable {
     public let satisfied: Bool
-    public let evaluatedValues: [TLAValue]
+    public let prints: [AssumptionPrint<TLAValue>]
+
+    public var evaluatedValues: [TLAValue] {
+        prints.flatMap { event in
+            switch event {
+            case .value(let value): [value]
+            case .returning(let value, let result): [value, result]
+            }
+        }
+    }
 
     public init(satisfied: Bool, evaluatedValues: [TLAValue]) {
         self.satisfied = satisfied
-        self.evaluatedValues = evaluatedValues
+        self.prints = evaluatedValues.map(AssumptionPrint.value)
+    }
+
+    public init(satisfied: Bool, prints: [AssumptionPrint<TLAValue>]) {
+        self.satisfied = satisfied
+        self.prints = prints
     }
 }
 

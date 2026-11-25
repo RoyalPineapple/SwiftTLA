@@ -28,7 +28,7 @@ struct AssumptionOnlyValidationTests {
         #expect(scenarios.map(\.name) == ["solution", "fallback"])
         let results = try scenarios.map { try $0.evaluateAssumptions() }
         #expect(results.map(\.satisfied) == [true, true])
-        #expect(results.map(\.evaluatedValues) == [[.int(2)], [.string("No solution")]])
+        #expect(results.map(\.prints) == [[.value(.int(2))], [.returning(.string("No solution"), .int(3))]])
         #expect(try scenarios[0].render().tlaBundle.tla.contains("PrintT("))
     }
 }

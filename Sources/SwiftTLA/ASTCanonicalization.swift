@@ -495,6 +495,8 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
                 tasks.append(.bind(.choose(preferredType), variable: variable, body: predicate, environment: environment))
                 tasks.append(.expression(set, environment: environment))
             case .enabledAction(let name): parts.append("enabled(\(name))")
+            case .printReturning(let value, let result):
+                schedule([value, result], environment: environment) { "print(\($0[0]),\($0[1]))" }
             case .printT(let value):
                 schedule([value], environment: environment) { "printT(\($0[0]))" }
             case .foldFunction(let operation, let initial, let sequence):

@@ -9502,7 +9502,9 @@
           "path": "specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.tla",
           "role": "configured root",
           "reason": "The empty configuration runs assumption evaluation. PrintVal prints an arithmetic result and an updated record in conjunction order. This module has no state variables or transition specification. Evaluation evidence remains missing, not excluded.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/PrintValues.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10265,10 +10267,16 @@
           "module": "specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.tla",
           "configuration": "specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/PrintValues.swift",
+              "scenario": "Upstream",
+              "caseID": "print-values-0"
+            }
+          ],
           "evidence": []
         },
         {
