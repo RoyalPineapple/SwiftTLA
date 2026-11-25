@@ -417,7 +417,8 @@ package enum InitialFailureEvidence {
                 "<<\(occurrenceSizes)>>")
     }
 
-    static func sourceSyntaxView(_ certificate: StraightLineAssignmentCheck.OrderedIntCertificate) throws
+    static func sourceSyntaxView(_ certificate: StraightLineAssignmentCheck.OrderedIntCertificate,
+                                 sourceLiteral: (Int) -> String = InitialFailureEvidence.binaryLiteral) throws
         -> (view: String, rankView: String, origins: String, indices: String, nodes: [String],
             emitted: [(kind: String, payload: String, left: Int, right: Int)]) {
         var kinds: [String] = [], literals: [String] = [], names: [String] = []
@@ -427,7 +428,7 @@ package enum InitialFailureEvidence {
             var lhs = 0, rhs = 0
             switch node {
             case .literal(let value):
-                kinds.append("\"literal\""); literal = binaryLiteral(value)
+                kinds.append("\"literal\""); literal = sourceLiteral(value)
             case .read(let variable):
                 kinds.append("\"read\""); name = TLAValue.string(variable).description
             case .add(let first, let second):
