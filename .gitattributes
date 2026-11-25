@@ -24,3 +24,4 @@ Verification/FiniteGraph/fixtures/barrier/* whitespace=-blank-at-eol,-blank-at-e
 Verification/FiniteGraph/fixtures/token-ring/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/spanning/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/tcommit/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/transaction-two-phase/* whitespace=-blank-at-eol,-blank-at-eof

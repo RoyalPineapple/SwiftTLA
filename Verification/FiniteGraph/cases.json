@@ -275,6 +275,33 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "transaction-two-phase",
+      "sourceModel": "transaction-two-phase",
+      "scenario": "threeManagers",
+      "module": "transaction-two-phase/TwoPhase.tla",
+      "configuration": "transaction-two-phase/TwoPhase.cfg",
+      "imports": [
+        "tcommit/TCommit.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "TwoPhase",
+          "importedModule": "TCommit"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/TwoPhase.tla",
+        "sha256": "e6e72ed0097cca55e80b97af33c3bc54792a504bcbdf639d6d9c666f49c17817"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e6e72ed0097cca55e80b97af33c3bc54792a504bcbdf639d6d9c666f49c17817",
+      "cfgSHA256": "6f443b596657a26c817ee130a89c0ba84aa1cd06a60d07db449d06382de4fd87",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "tcommit",
       "sourceModel": "tcommit",
       "scenario": "threeManagers",
