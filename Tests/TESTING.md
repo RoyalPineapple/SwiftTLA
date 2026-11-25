@@ -5,8 +5,7 @@ takes the repository-wide lock, isolates build artifacts, and stops unsafe
 memory pressure. Hosted CI remains the admission authority; local runs are
 diagnostic.
 
-`SwiftTLATests` is the fast semantic-core target. It has no dependency on
-`UpstreamParity`; use it for parser, scope, operator, simultaneous-update,
+`SwiftTLATests` is the fast semantic-core target. Use it for parser, scope, operator, simultaneous-update,
 structured-value, runtime, and generated-machine work:
 
 ```sh
@@ -18,6 +17,19 @@ does. SwiftPM still builds every test target before running the selected
 suites. The wrapper keeps SwiftPM's incremental build cache under the common
 Git directory and records a source-content key; it retains the repository-wide
 lock and memory guard. Per-run scratch files stay outside the working tree.
+
+During the corpus migration, build the validation CLI once per batch:
+
+```sh
+cli="$(./scripts/local-validation.sh port-build)" || exit 1
+"$cli" native list
+```
+
+This builds the debug `tlc-validate` product and its dependencies in the
+same guarded cache. Build output goes to stderr. Stdout gives the executable
+path. Use that executable for each case with separate output directories.
+Finish comparisons before another build replaces the executable, or retain a
+copy for the batch. Run focused tests before publication. Remove this mode and its documentation when the migration ends.
 
 `SwiftTLAParityTests` contains the slower upstream corpus, finite-graph,
 and temporal/symmetry conformance checks:

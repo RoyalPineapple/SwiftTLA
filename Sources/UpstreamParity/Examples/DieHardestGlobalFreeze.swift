@@ -83,11 +83,10 @@ package struct DieHardestGlobalFreezeModel: Sendable {
                     && c2.keys.contains { j in c2[j] == Goal })
             }
             notSolved
-            let NextParallelGlobalFreeze = Validation {
+            Validation("NextParallelGlobalFreeze") {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])
                 Bind(Goal, to: 2)
             }.checkingMode(.decisiveCounterexample).expect(notSolved, .violated)
-            NextParallelGlobalFreeze
         }
     }
 }

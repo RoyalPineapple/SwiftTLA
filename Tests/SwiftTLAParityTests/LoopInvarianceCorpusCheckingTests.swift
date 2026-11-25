@@ -102,14 +102,17 @@ struct LoopInvarianceCorpusCheckingTests {
         #expect(scenario.name == "MCBinarySearch")
         let initial = try scenario.initialMachines()
         #expect(initial.count == 6_430)
-        #expect(initial.allSatisfy { machine in
+        let validInputs = initial.allSatisfy { machine in
             let state = machine.state
-            return (1...8).contains(state.seq.count)
-                && state.seq == state.seq.sorted()
-                && state.seq.allSatisfy { (1...5).contains($0) }
-                && (1...5).contains(state.val)
-                && state.low == 1 && state.high == state.seq.count && state.result == 0
-        })
+            let sequence = state.seq
+            let validLength = (1...8).contains(sequence.count)
+            let validElements = sequence.allSatisfy { (1...5).contains($0) }
+            let sorted = sequence == sequence.sorted()
+            let validTarget = (1...5).contains(state.val)
+            let fullSearchRange = state.low == 1 && state.high == sequence.count
+            return validLength && validElements && sorted && validTarget && fullSearchRange && state.result == 0
+        }
+        #expect(validInputs)
         let rendered = try scenario.render()
         #expect(Set(rendered.checkNames) == Set(["resultCorrect", "TypeOK", "Inv", "Termination"]))
         #expect(rendered.checksDeadlock)

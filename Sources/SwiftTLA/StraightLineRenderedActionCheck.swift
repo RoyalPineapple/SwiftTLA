@@ -1525,7 +1525,7 @@ package enum StraightLineRenderedActionCheck {
                   behavior.actions[id.ordinal].bindings.isEmpty else { return nil }
             return layout.actions[id.ordinal].renderedName
         }
-        let specifications = [("Spec", behavior.fairness)]
+        let specifications = [(layout.specificationName, behavior.fairness)]
             + behavior.fairnessProfiles.map { ($0.operatorName, $0.fairness) }
         // shortcut: projected and bound fairness tails still need independent constructor rules.
         for (name, fairness) in specifications {

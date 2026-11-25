@@ -38,18 +38,16 @@ package struct DieHarderModel: Sendable {
             typeOK
             let notSolved = Invariant("NotSolved") { Jug.allSatisfy { j in contents[j] != Goal } }
             notSolved
-            let MCDieHarder = Validation {
-                Bind(Jug, to: Set<String>(["j1", "j2"]))
+            Validation("MCDieHarder") {
+                Bind(Jug, to: ["j1", "j2"])
                 Bind(Capacity, to: ["j1": 3, "j2": 5])
                 Bind(Goal, to: 4)
             }.expect(notSolved, .violated)
-            MCDieHarder
-            let APDieHarder = Validation {
-                Bind(Jug, to: Set<String>(["small_OF_JUG", "big_OF_JUG"]))
+            Validation("APDieHarder") {
+                Bind(Jug, to: ["small_OF_JUG", "big_OF_JUG"])
                 Bind(Capacity, to: ["small_OF_JUG": 3, "big_OF_JUG": 5])
                 Bind(Goal, to: 4)
             }.checking(only: [typeOK])
-            APDieHarder
         }
     }
 }

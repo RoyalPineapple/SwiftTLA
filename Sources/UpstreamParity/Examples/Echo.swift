@@ -173,7 +173,7 @@ package struct EchoModel: Sendable {
                 }
             }
             Echo
-            let MCEcho = Validation {
+            Validation("MCEcho") {
                 Bind(Node, to: Set<NodeID>([.a, .b, .c]))
                 Bind(initiator, to: NodeID.a)
                 Bind(R, to: Set<Pair<NodeID, NodeID>>([
@@ -185,7 +185,6 @@ package struct EchoModel: Sendable {
                 .expect(TypeOK, .satisfied)
                 .expect(AncestorProperties, .satisfied)
                 .expectDeadlock(.satisfied)
-            MCEcho
         }
     }
 }

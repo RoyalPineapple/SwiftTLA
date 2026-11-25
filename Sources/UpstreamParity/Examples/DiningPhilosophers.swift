@@ -123,7 +123,7 @@ package struct DiningPhilosophersModel: Sendable {
                             || forks[philosopher].holder == .four
                             || forks[philosopher].holder == .five)
                             && (hungry == true || hungry == false)
-                            && (At(Step.loop, philosopher) || At(Step.think, philosopher) || At(Step.eat, philosopher))
+                            && philosopher.isAt(anyOf: Step.loop, .think, .eat)
                     }
                 }
 
@@ -142,12 +142,10 @@ package struct DiningPhilosophersModel: Sendable {
                 }
             }
             DiningPhilosophers
-            let NP5 = Validation {}
-            NP5
-            let apNP5 = Validation(label: "AP NP5") {}
+            Validation("NP5") {}
+            Validation("apNP5", label: "AP NP5") {}
                 .checking(only: [TypeOK, ExclusiveAccess])
                 .behavior(.initialAndNext)
-            apNP5
         }
     }
 }

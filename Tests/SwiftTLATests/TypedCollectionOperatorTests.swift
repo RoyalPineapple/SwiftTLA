@@ -575,6 +575,28 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(ordered) == .int(3))
     }
 
+    @Test("Sequence membership finds a value at any position and evaluates the argument on an empty sequence")
+    func sequenceContainsValue() throws {
+        let queue = Expr<[Int]>(.variable("__element"))
+        let request = Expr<Int>(.variable("__index"))
+        for values in [[], [3, 5, 3]] {
+            for sought in [3, 5, 7] {
+                let ordinary = values.contains(sought)
+                #expect(try compiledValue(queue.contains(request).stateExpr, values: [
+                    ("__element", .tuple(values.map(TLAValue.int))), ("__index", .int(sought))
+                ]) == .bool(ordinary))
+            }
+        }
+        let invalid = Expr<Int>(.integerDivide(.int(1), .int(0)))
+        #expect(throws: EvalError.divisionByZero) {
+            try compiledValue(Expr<[Int]>(.tupleLiteral([])).contains(invalid).stateExpr)
+        }
+        let invalidQueue = Expr<[Int]>(.tuplePrefix(.tupleLiteral([]), .int(1)))
+        #expect(throws: EvalError.indexOutOfBounds(1, 0)) {
+            try compiledValue(invalidQueue.contains(invalid).stateExpr)
+        }
+    }
+
     @Test("Sequence prefixes preserve position and render as SubSeq")
     func sequencePrefixIsPositional() throws {
         let values = TupleExpr<Int>.literal(2, 1, 2)

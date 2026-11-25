@@ -2,6 +2,36 @@ public protocol FiniteTLAValueDomain: TLAValueType, Hashable, Sendable {
   static var finiteValues: [Self] { get }
 }
 
+/// Uses the upstream string "none" for a missing value of this enum.
+public protocol NoneEncodedOptionalElement: CaseIterable, RawRepresentable where RawValue == String {}
+
+extension NoneEncodedOptionalElement where Self: TLAValueType {
+  static var presentValueShape: FormalValueShape {
+    .finite(typeName: String(describing: Self.self), values: allCases.map(\.tlaValue))
+  }
+}
+
+extension Optional: TLAValueType, TLAValueConvertible, TypedExpression, StateExprConvertible where Wrapped: NoneEncodedOptionalElement & TLAValueType {
+  public static var defaultValue: Self { nil }
+  public static var formalValueShape: FormalValueShape {
+    .finite(typeName: "\(Wrapped.self)?", values: [.string("none")] + Wrapped.allCases.map(\.tlaValue))
+  }
+  public var tlaValue: TLAValue { map(\.tlaValue) ?? .string("none") }
+  public var sourceIssue: SourceModelIssue? {
+    if Wrapped.allCases.contains(where: { $0.tlaValue == .string("none") }) {
+      return .formalDeclaration(kind: "optional", name: String(describing: Wrapped.self),
+        problem: "a wrapped value uses the reserved formal string \"none\"")
+    }
+    return flatMap(\.sourceIssue)
+  }
+  public init?(formalValue: TLAValue) {
+    if formalValue == .string("none") { self = nil }
+    else if let value = Wrapped(formalValue: formalValue), value.preservesFormalValue(formalValue) { self = value }
+    else { return nil }
+    guard sourceIssue == nil else { return nil }
+  }
+}
+
 extension FiniteTLAValueDomain {
   public static var formalValueShape: FormalValueShape {
     .finite(typeName: String(describing: Self.self), values: tlaValues)
@@ -228,6 +258,13 @@ public func Sum<Mapping: FormalDictionaryValue, Domain: FormalSetValue>(
 /// The mathematical integer domain, rendered as TLA+ `Int`.
 extension Int {
   public static var all: Expr<Set<Int>> { Expr(.integerSet) }
+}
+
+extension Bool {
+  /// Both values a Boolean state variable can take.
+  public static var all: Expr<Set<Bool>> {
+    Expr(.setLiteral([false.stateExpr, true.stateExpr]))
+  }
 }
 
 /// All subsets of the supplied formal set.
@@ -860,7 +897,29 @@ extension TypedExpression where ExpressionValue: FormalSetValue {
 
 }
 
+package func formalSequenceContains(_ sequence: StateExpr, _ element: StateExpr) -> StateExpr {
+  let names = sequence.freeVariableNames.union(element.freeVariableNames)
+  let values = StateExpr.freshBoundName("__sequence", avoiding: names)
+  let sought = StateExpr.freshBoundName("__element", avoiding: names)
+  let index = StateExpr.freshBoundName("__index", avoiding: names)
+  let positions = StateExpr.integerRange(.int(1), .tupleLength(.variable(values)))
+  let match = StateExpr.equal(.tupleDynamicAccess(.variable(values), .variable(index)), .variable(sought))
+  // Singleton domains evaluate the receiver, then the argument, even for an empty sequence.
+  return .exists(.setLiteral([sequence]), values,
+    .exists(.setLiteral([element]), sought, .exists(positions, index, match)))
+}
+
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  @_disfavoredOverload
+  public func contains(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<Bool> {
+    Expr(formalSequenceContains(stateExpr, element.stateExpr))
+  }
+
+  @_disfavoredOverload
+  public func contains(_ element: ExpressionValue.Element) -> Expr<Bool> {
+    contains(element.expr)
+  }
+
   public func prepending(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<ExpressionValue> {
     Expr(.tupleConcatenate(.tupleLiteral([element.stateExpr]), stateExpr))
   }
@@ -1014,6 +1073,23 @@ extension TypedExpression {
   ) -> Expr<PartialFunction<Domain, Range>> where ExpressionValue == PartialFunction<Domain, Range> {
     overriding(index, with: value.expr)
   }
+}
+
+/// The formal integer domain starting at the lower bound and excluding the upper bound.
+@_disfavoredOverload
+public func ..< (lower: some TypedExpression<Int>, upper: some TypedExpression<Int>) -> Expr<Set<Int>> {
+  Expr(formalHalfOpenRange(lower.stateExpr, upper.stateExpr))
+}
+
+package func formalHalfOpenRange(_ lower: StateExpr, _ upper: StateExpr) -> StateExpr {
+  let names = lower.freeVariableNames.union(upper.freeVariableNames)
+  let first = StateExpr.freshBoundName("__rangeStart", avoiding: names)
+  let end = StateExpr.freshBoundName("__rangeEnd", avoiding: names)
+  // Evaluate both endpoints once. Only a nonempty domain needs a predecessor.
+  return .letValue(first, lower, .letValue(end, upper,
+    .ifThenElse(.lessThan(.variable(first), .variable(end)),
+      .integerRange(.variable(first), .subtract(.variable(end), .int(1))),
+      .integerRange(.int(1), .int(0)))))
 }
 
 /// A bounded, inclusive TLA+ integer set whose endpoints can depend on state.

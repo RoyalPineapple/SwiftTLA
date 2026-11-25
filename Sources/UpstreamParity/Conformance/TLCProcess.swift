@@ -17,7 +17,7 @@ package enum TLCExecutionOutcome: Equatable, Sendable {
   case assertionViolation
   case failed(exitStatus: Int32)
 
-  fileprivate init(process: TLCProcessResult, invocation: TLCInvocationKind) {
+  init(process: TLCProcessResult, invocation: TLCInvocationKind) {
     let exitStatus = process.status
     // The pinned TLC maps EC.TLC_LIVE_FORMULA_TAUTOLOGY (2253) to status 77.
     // This proves a temporal claim, not completion of state-space exploration.
@@ -614,7 +614,7 @@ package func bundleInputJSON(_ bundle: TLAModuleBundle) -> [[String: String]] {
   return inputs
 }
 
-private func pinJSON(_ pin: TLCReferencePin) -> [String: Any] {
+func pinJSON(_ pin: TLCReferencePin) -> [String: Any] {
   [
     "tag": pin.tag,
     "commit": pin.commit,

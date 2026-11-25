@@ -4,6 +4,9 @@ import UpstreamParity
 
 let args = Array(CommandLine.arguments.dropFirst())
 switch args.first {
+case "reference":
+    do { try runReference(arguments: Array(args.dropFirst())); exit(0) }
+    catch { fputs("reference: \(error)\n", stderr); exit(2) }
 case "native": runNative(arguments: Array(args.dropFirst()))
 case "oracle": runOracle(arguments: Array(args.dropFirst()))
 case "compare": runCompare(arguments: Array(args.dropFirst()))
@@ -13,6 +16,7 @@ case "initial-failure": runInitialFailure(arguments: Array(args.dropFirst()))
 default:
     fputs("""
     Usage: tlc-validate <command>
+      reference capture|compare --case <id> --module <root.tla> --config <model.cfg> --output <new-directory> [--native <directory>] [Importer=path/to/Import.tla ...]
       native list | run --case <id-or-all> --output <directory> --maximum-states <positive-integer>
       oracle run --case <id-or-all> --output <directory> --maximum-states <positive-integer>
       oracle cache-key --case <id> --maximum-states <positive-integer>

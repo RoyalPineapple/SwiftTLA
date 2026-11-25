@@ -39,6 +39,23 @@ package enum ValidationEvidenceComparison {
         return try body()
     }
 
+    /// Compare an executable port against an independently captured complete upstream graph.
+    package static func compareNativeReferenceGraph(caseID: String, native: URL, reference: URL,
+        actions: [RenderedAction], in directory: URL) throws -> String? {
+        let fm = FileManager.default
+        let swiftRoot = directory.appendingPathComponent("native-spool")
+        let tlcRoot = directory.appendingPathComponent("reference-spool")
+        try fm.createDirectory(at: swiftRoot, withIntermediateDirectories: false)
+        defer { try? fm.removeItem(at: swiftRoot) }
+        try fm.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
+        defer { try? fm.removeItem(at: tlcRoot) }
+        let swift = try readNative(native.appendingPathComponent("machine.bin.gz"), caseID: caseID,
+            expectedComplete: true, actions: actions, in: swiftRoot)
+        let tlc = try readTLC(reference, caseID: caseID, actions: actions, in: tlcRoot)
+        guard swift.stateCount > 0, swift.stateCount == tlc.stateCount else { return "complete state set" }
+        return try compareGraph(swiftGraph: swift, tlcGraph: tlc, swiftRoot: swiftRoot, tlcRoot: tlcRoot)
+    }
+
     package static func compareTLCGraphs(
         caseID: String, generated: URL, reference: URL,
         actions: [RenderedAction], in directory: URL, spoolExecutable: URL? = nil

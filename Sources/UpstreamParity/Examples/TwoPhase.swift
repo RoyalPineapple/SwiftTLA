@@ -29,8 +29,7 @@ package struct TwoPhaseModel: Sendable {
                 phases.contains(p)
                 phases.contains(c)
             }
-            let MCTwoPhase = Validation {}
-            MCTwoPhase
+            Validation("MCTwoPhase") {}
         }
     }
 }

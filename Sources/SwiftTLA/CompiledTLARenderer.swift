@@ -1262,18 +1262,30 @@ struct CompiledTLARenderer {
             }
             return result
         case .eachActionGroup(let ids):
-            guard let first = ids.first else { throw missing("process fairness group", 0) }
-            let bindings = actions[first.ordinal].bindings
-            let parameters = try bindings.map { try binderName($0.binder) }
-            let invocation = ids.map { id in
-                layout.actions[id.ordinal].renderedName + "(" + parameters.joined(separator: ", ") + ")"
-            }.joined(separator: " \\/ ")
-            let group = ids.count == 1 ? invocation : "(\(invocation))"
-            var result = "\(condition.isStrong ? "SF" : "WF")_\(vars)(\(group))"
-            for (parameter, binding) in zip(parameters, bindings).reversed() {
-                result = "(\\A \(parameter) \\in \(try state(binding.domain)): \(result))"
+            guard let first = ids.first, let actor = actions[first.ordinal].bindings.first else {
+                throw missing("process fairness group", 0)
             }
-            return result
+            let actorName = try binderName(actor.binder)
+            let suffixNames = try ids.flatMap { id in
+                try actions[id.ordinal].bindings.dropFirst().map { try binderName($0.binder) }
+            }
+            let outer = suffixNames.contains(actorName)
+                ? StateExpr.freshBoundName(actorName, avoiding: reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values))
+                : actorName
+            let calls = try ids.map { id in
+                let arguments = actions[id.ordinal].bindings
+                let names = try arguments.map { try binderName($0.binder) }
+                var call = layout.actions[id.ordinal].renderedName + "(" + ([outer] + names.dropFirst()).joined(separator: ", ") + ")"
+                for (name, binding) in zip(names, arguments).dropFirst().reversed() {
+                    call = "(\\E \(name) \\in \(try state(binding.domain)): \(call))"
+                }
+                if arguments.count > 1, names[0] != outer {
+                    call = "(LET \(names[0]) == \(outer) IN \(call))"
+                }
+                return call
+            }
+            let group = calls.count == 1 ? calls[0] : "(" + calls.joined(separator: " \\/ ") + ")"
+            return "(\\A \(outer) \\in \(try state(actor.domain)): \(condition.isStrong ? "SF" : "WF")_\(vars)(\(group)))"
         }
         return "\(condition.isStrong ? "SF" : "WF")_\(vars)(\(action))"
     }

@@ -62,7 +62,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
             let constructor = reference?.baseName.sourceIdentifierName
                 ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
                     ? member?.declName.baseName.sourceIdentifierName : nil)
-            if constructor == "Algorithm" || constructor == "Validation" {
+            if constructor == "Algorithm" || (constructor == "Validation" && inlineValidationName(in: call) == nil) {
                 context.diagnose(Diagnostic(node: Syntax(statement.item), message: BuilderBindingDiagnostic()))
             } else if constructor == "Invariant", call.arguments.isEmpty, call.trailingClosure != nil,
                       member != nil || !hasInvariantBinding {
@@ -423,9 +423,15 @@ private final class DSLRewriter: SyntaxRewriter {
     }
 
     private func addingBuilderBindingName(to call: FunctionCallExprSyntax, name: String) -> FunctionCallExprSyntax? {
-        if let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
+        let path = ParserSession.sourceTypePath(call.calledExpression)
+        if let constructor = path?.last, path == [constructor] || path == ["SwiftTLA", constructor],
            constructor == "Algorithm" || constructor == "Validation" {
-            guard call.arguments.first?.label != nil || call.arguments.isEmpty else { return nil }
+            guard call.arguments.first?.label != nil || call.arguments.isEmpty else {
+                if constructor == "Validation" {
+                    context.diagnose(Diagnostic(node: Syntax(call), message: BuilderBindingDiagnostic()))
+                }
+                return nil
+            }
             let labels = call.arguments.filter { $0.label?.text == "label" }
             if labels.count > 1 || (labels.first != nil
                 && labels.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue?.isEmpty != false) {
@@ -515,7 +521,7 @@ private struct PropertyBindingDiagnostic: DiagnosticMessage {
 private struct BuilderBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-builder-binding")
     let severity: DiagnosticSeverity = .error
-    let message = "Algorithm and Validation require an immutable named let binding inside #spec."
+    let message = "Use an immutable let binding for Algorithm or Validation, or write Validation(\"Name\") directly inside #spec."
 }
 
 private struct InstanceBindingDiagnostic: DiagnosticMessage {

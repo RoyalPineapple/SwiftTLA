@@ -9,7 +9,7 @@ extension CompiledAuthoredPlusCalAlgorithmPlan {
                     return step.label
                 })
                 return .init(name: process.name, binder: process.binder, swiftType: process.swiftType,
-                    domain: process.domain, fairness: process.fairness,
+                    fixedID: process.fixedID, domain: process.domain, fairness: process.fairness,
                     fairnessExcludedSteps: process.fairnessExcludedSteps.union(excluded),
                     locals: process.locals, steps: process.steps)
             }, sequentialSteps: sequentialSteps, properties: properties,
@@ -59,7 +59,7 @@ extension CompiledAuthoredPlusCalAlgorithmPlan {
                     locals: $0.locals.map(state), steps: $0.steps.map(step))
             }, processes: processes.map {
                 try .init(name: $0.name, binder: $0.binder, swiftType: $0.swiftType,
-                    domain: transform($0.domain), fairness: $0.fairness,
+                    fixedID: $0.fixedID.map(transform), domain: transform($0.domain), fairness: $0.fairness,
                     fairnessExcludedSteps: $0.fairnessExcludedSteps,
                     locals: $0.locals.map(state), steps: $0.steps.map(step))
             }, sequentialSteps: sequentialSteps.map(step), properties: properties,

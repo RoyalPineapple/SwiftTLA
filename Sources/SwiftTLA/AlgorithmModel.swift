@@ -147,7 +147,7 @@ package struct AlgorithmModel: Sendable {
                 return .step(.init(label: step.label, statements: statements, loopCondition: step.loopCondition,
                     displacedAssignmentTargets: displacedTargets))
             case .process(let process):
-                return .process(.init(typeName: process.typeName, name: process.name, domain: process.domain,
+                return .process(.init(typeName: process.typeName, name: process.name, population: process.population,
                     fairness: process.fairness, components: process.components.map(component),
                     resolvedElementType: process.resolvedElementType,
                     fairnessExcludedLabels: process.fairnessExcludedLabels))
@@ -256,7 +256,7 @@ package struct AlgorithmModel: Sendable {
                     .init(
                         typeName: process.typeName,
                         name: process.name,
-                        domain: expression(process.domain),
+                        population: process.population.map(expression),
                         fairness: process.fairness,
                         components: process.components.map(component),
                         resolvedElementType: process.resolvedElementType,
@@ -403,6 +403,7 @@ internal struct AuthoredPlusCalProcessPlan: Sendable {
     let name: String
     let owner: ControlOwner
     let swiftType: String
+    let fixedID: StateExpr?
     let domain: StateExpr
     let fairness: AlgorithmFairness
     let fairnessExcludedLabels: [AlgorithmLabelModel]
@@ -413,6 +414,7 @@ internal struct AuthoredPlusCalProcessPlan: Sendable {
         self.name = name
         self.owner = owner
         swiftType = process.typeName
+        fixedID = process.population.fixedID
         domain = process.domain
         fairness = process.fairness
         fairnessExcludedLabels = process.fairnessExcludedLabels
@@ -457,6 +459,7 @@ internal struct CompiledAuthoredPlusCalProcess: Sendable {
     let name: String
     let binder: BinderID
     let swiftType: String
+    let fixedID: CompiledExpression?
     let domain: CompiledExpression
     let fairness: AlgorithmFairness
     let fairnessExcludedSteps: Set<ControlLocationID>
@@ -608,11 +611,36 @@ package struct AlgorithmProcedureParameterModel: Sendable {
     }
 }
 
+package enum AlgorithmProcessPopulation: Sendable {
+    case family(StateExpr)
+    case fixed(StateExpr)
+
+    var domain: StateExpr {
+        switch self {
+        case .family(let set): set
+        case .fixed(let id): .setLiteral([id])
+        }
+    }
+
+    var fixedID: StateExpr? {
+        guard case .fixed(let id) = self else { return nil }
+        return id
+    }
+
+    func map(_ transform: (StateExpr) -> StateExpr) -> Self {
+        switch self {
+        case .family(let set): .family(transform(set))
+        case .fixed(let id): .fixed(transform(id))
+        }
+    }
+}
+
 package struct AlgorithmProcessModel: Sendable {
     package let typeName: String
     package let name: String?
     package let resolvedElementType: CompiledValueType?
-    package let domain: StateExpr
+    package let population: AlgorithmProcessPopulation
+    package var domain: StateExpr { population.domain }
     package let fairness: AlgorithmFairness
     package let fairnessExcludedLabels: [AlgorithmLabelModel]
     package let components: [AlgorithmComponentModel]
@@ -624,13 +652,13 @@ package struct AlgorithmProcessModel: Sendable {
         }
     }
 
-    package init(typeName: String, name: String? = nil, domain: StateExpr, fairness: AlgorithmFairness,
+    package init(typeName: String, name: String? = nil, population: AlgorithmProcessPopulation, fairness: AlgorithmFairness,
         components: [AlgorithmComponentModel], resolvedElementType: CompiledValueType? = nil,
         fairnessExcludedLabels: [AlgorithmLabelModel] = []) {
         self.typeName = typeName
         self.name = name
         self.resolvedElementType = resolvedElementType
-        self.domain = domain
+        self.population = population
         self.fairness = fairness
         self.fairnessExcludedLabels = fairnessExcludedLabels
         self.components = components

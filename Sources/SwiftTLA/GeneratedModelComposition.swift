@@ -111,6 +111,13 @@ public func Map<State: GeneratedModelFields, Target: TLAValueType, Source: TLAVa
     return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: true)
 }
 
+/// Uses the target key path to infer the type of the checked formal projection.
+public func Map<State: GeneratedModelFields, Target: TLAValueType, Source: TLAValueType>(
+    _ target: KeyPath<State, Target>, projecting source: some TypedExpression<Source>, _fieldName: String = ""
+) -> GeneratedModelStateMapping<State> {
+    Map(target, from: source, projecting: Target.self, _fieldName: _fieldName)
+}
+
 /// Projects a generated concrete field with the same complete formal value as the abstract field.
 public func Map<State: GeneratedModelFields, Concrete: GeneratedModelFields,
     Target: TLAValueType, Source: TLAValueType>(
@@ -163,14 +170,14 @@ public struct GeneratedModelRefinement<Model: ConfiguredGeneratedModel>: Generat
     public let reference: PropertyReference
     public let behavior: ModelBehavior
     package let instance: GeneratedModelInstance<Model>
-    package let mappings: [GeneratedModelStateMapping<Model.State>]
+    package let mappings: [GeneratedModelStateMapping<Model.RefinementState>]
     package var instanceName: String { instance.name }
     package var fieldMappings: [GeneratedModelFieldBinding] {
         mappings.map { .init(fieldName: $0.fieldName, source: $0.source, projected: $0.projected) }
     }
 
     package init(name: String, label: String?, instance: GeneratedModelInstance<Model>, behavior: ModelBehavior,
-        mappings: [GeneratedModelStateMapping<Model.State>]) {
+        mappings: [GeneratedModelStateMapping<Model.RefinementState>]) {
         self.name = name
         reference = .init(name: name, displayLabel: label)
         self.behavior = behavior
@@ -182,7 +189,7 @@ public struct GeneratedModelRefinement<Model: ConfiguredGeneratedModel>: Generat
 public func Refinement<Model: ConfiguredGeneratedModel>(
     _name: String = "", instance: GeneratedModelInstance<Model>, behavior: ModelBehavior = .specification,
     label: String? = nil,
-    @GeneratedModelStateMappingBuilder<Model.State> _ mappings: () -> [GeneratedModelStateMapping<Model.State>]
+    @GeneratedModelStateMappingBuilder<Model.RefinementState> _ mappings: () -> [GeneratedModelStateMapping<Model.RefinementState>]
 ) -> GeneratedModelRefinement<Model> {
     .init(name: _name, label: label, instance: instance, behavior: behavior, mappings: mappings())
 }

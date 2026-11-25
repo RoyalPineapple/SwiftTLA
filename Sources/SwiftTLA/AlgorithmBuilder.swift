@@ -869,6 +869,21 @@ public struct Algorithm: Sendable, SpecComponent {
     }
 }
 
+/// Declares one independently scheduled process identified by a literal or model parameter.
+public func Process<ID: TLAValueType>(
+    id: some TypedExpression<ID>,
+    fairness: ProcessFairness = .none,
+    @AlgorithmBuilder _ body: () -> [AlgorithmElement]
+) -> AlgorithmElement {
+    AlgorithmElement(model: .process(.init(
+        typeName: swiftSurfaceTypeName(for: ID.self),
+        population: .fixed(id.stateExpr),
+        fairness: fairness.model,
+        components: body().map(\.model),
+        fairnessExcludedLabels: fairness.excludedLabels
+    )))
+}
+
 /// Declares one independently scheduled process for every member of `domain`.
 public func Each<Domain: FormalSetValue>(
     _ domain: some TypedExpression<Domain>,
@@ -897,7 +912,7 @@ public func Each<Domain: FormalSetValue>(
     let components = body(identifier, scope)
     return AlgorithmElement(model: .process(.init(
         typeName: swiftSurfaceTypeName(for: Domain.Element.self),
-        domain: domain.stateExpr,
+        population: .family(domain.stateExpr),
         fairness: fairness.model,
         components: scope.declarations.map(\.model) + components.map(\.model),
         fairnessExcludedLabels: fairness.excludedLabels
@@ -916,7 +931,7 @@ public func Each<Name: CaseIterable & RawRepresentable & Sendable, Domain: Forma
     return AlgorithmElement(model: .process(.init(
         typeName: swiftSurfaceTypeName(for: Domain.Element.self),
         name: name.rawValue,
-        domain: domain.stateExpr,
+        population: .family(domain.stateExpr),
         fairness: fairness.model,
         components: scope.declarations.map(\.model) + components.map(\.model),
         fairnessExcludedLabels: fairness.excludedLabels
@@ -935,7 +950,7 @@ private func process<Domain: FormalSetValue>(
             AlgorithmProcessModel(
                 typeName: swiftSurfaceTypeName(for: Domain.Element.self),
                 name: name,
-                domain: domain.stateExpr,
+                population: .family(domain.stateExpr),
                 fairness: fairness.model,
                 components: body(identifier).map(\.model),
                 fairnessExcludedLabels: fairness.excludedLabels
@@ -1464,7 +1479,14 @@ public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: TLAValu
     ))
 }
 
-
+extension TypedExpression {
+    /// True when the process is at any of the named algorithm steps.
+    public func isAt<Label: CaseIterable & RawRepresentable & Sendable>(
+        anyOf first: Label, _ rest: Label...
+    ) -> Expr<Bool> where Label.RawValue == String {
+        rest.reduce(At(first, self)) { $0 || At($1, self) }
+    }
+}
 
 /// A writable model location with a statically known value type.
 public protocol AssignmentTarget<Value>: TypedExpression where ExpressionValue == Value {
@@ -1483,6 +1505,10 @@ extension MacroParameter: AssignmentTarget {}
 extension AssignmentTarget {
     /// Writes the new value when the modeled step executes.
     public func set(_ value: Value) -> StepStatement { Assign(self, to: value) }
+
+    public func set<Element: NoneEncodedOptionalElement & TLAValueType>(_ expression: some TypedExpression<Element>) -> StepStatement where Value == Element? {
+        Assign(self, to: Expr<Value>(.assertView(expression.stateExpr, Element.presentValueShape)))
+    }
 
     public func set(_ expression: some TypedExpression<Value>) -> StepStatement {
         Assign(self, to: expression)
@@ -1512,6 +1538,14 @@ extension AssignmentTarget {
         let base = algorithmLValue
         return AlgorithmLValue(model: .function(base: base.model, key: index.stateExpr), sourceIssue: base.sourceIssue)
     }
+}
+
+extension AssignmentTarget where Value: FormalSequenceValue {
+    public func append(_ element: some TypedExpression<Value.Element>) -> StepStatement {
+        set(appending(element))
+    }
+
+    public func append(_ element: Value.Element) -> StepStatement { append(element.expr) }
 }
 
 extension AssignmentTarget where Value: FormalSetValue {
@@ -1837,6 +1871,12 @@ package enum AlgorithmValidator {
         let processAnchor = AlgorithmDiagnosticAnchor.process(index)
         if let name = process.name {
             validateName(name, at: processAnchor, diagnostics: &diagnostics)
+        }
+        if let id = process.population.fixedID {
+            switch id {
+            case .value, .parameter: break
+            default: diagnostics.append(.init(.invalidFixedProcessID, at: processAnchor))
+            }
         }
         if let members = process.domain.literalSetMembers {
             validateDomain(members, at: processAnchor, diagnostics: &diagnostics)

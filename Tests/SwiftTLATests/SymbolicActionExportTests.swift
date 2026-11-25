@@ -13,6 +13,7 @@ struct SymbolicActionExportTests {
             ])
         ])
         spec.parameters = [.init(reference: reference, swiftType: "Int", domain: .integerRange(.int(0), .int(3)))]
+        spec.fairness = [.weakFairnessEachActionGroup(["select"])]
         let compilation = try spec.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let action = try #require(program.behavior.actions.first)
@@ -24,6 +25,9 @@ struct SymbolicActionExportTests {
         #expect(module.symbolicActions == [action.id])
         #expect(module.renderedActions.isEmpty)
         #expect(module.renderedModuleSource.contains("Next == (\\E \(member) \\in 1..\(limit): (\\E \(other) \\in 1..\(member): select(\(member), \(other))))"))
+        let fairness = try #require(module.renderedModuleSource.split(separator: "\n").first { $0.contains("WF_") })
+        #expect(fairness.contains("\\A \(member) \\in 1..\(limit)"))
+        #expect(fairness.contains("(\\E \(other) \\in 1..\(member): select(\(member), \(other)))"))
         #expect(!module.renderedModuleSource.contains("select__"))
         #expect(throws: CompilationDiagnostic.self) { try compilation.render() }
 

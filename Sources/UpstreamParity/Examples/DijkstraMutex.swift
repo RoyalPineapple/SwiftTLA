@@ -162,14 +162,12 @@ package struct DijkstraMutexModel: Sendable {
             Mutex
             let NonCriticalMayStutter = FairnessProfile(excluding: [Label.nonCritical])
             NonCriticalMayStutter
-            let Safety4Processors = Validation {
+            Validation("Safety4Processors") {
                 Bind(Proc, to: Set<Process>([.one, .two, .three, .four]))
             }.checking(only: [MutualExclusion])
-            Safety4Processors
-            let Liveness3Processors = Validation {
+            Validation("Liveness3Processors") {
                 Bind(Proc, to: Set<Process>([.one, .two, .three]))
             }.usingFairness(NonCriticalMayStutter).checking(only: [MutualExclusion, DeadlockFreedom])
-            Liveness3Processors
         }
     }
 }

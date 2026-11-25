@@ -207,7 +207,7 @@ package enum AssumptionValidationEvidence {
             bundle: reference, id: id, maximumStates: maximumStates, timeout: timeout,
             tools: tools, pin: pin, workRoot: work, retained: referenceOutput,
             invocation: .propertyCheck, renderedActions: [], process: process,
-            captureEvaluations: true)
+            captureEvaluations: true, referenceCache: .readThrough)
         let left = try verdict(generated, id: id)
         let right = try verdict(upstream, id: id)
         let generatedSHA = SHA256.hex(Data(rendered.tlaBundle.tla.utf8))

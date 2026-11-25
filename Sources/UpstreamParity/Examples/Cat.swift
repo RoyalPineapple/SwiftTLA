@@ -51,15 +51,12 @@ package struct CatModel: Sendable {
             let Victory = Temporal()
             Victory(.eventually(observed_box == cat_box))
 
-            let CatEvenBoxes = Validation { Bind(Number_Of_Boxes, to: 6) }
+            Validation("CatEvenBoxes") { Bind(Number_Of_Boxes, to: 6) }
                 .expect(typeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
-            CatEvenBoxes
-            let CatOddBoxes = Validation { Bind(Number_Of_Boxes, to: 5) }
+            Validation("CatOddBoxes") { Bind(Number_Of_Boxes, to: 5) }
                 .expect(typeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
-            CatOddBoxes
-            let APCat = Validation { Bind(Number_Of_Boxes, to: 4) }
+            Validation("APCat") { Bind(Number_Of_Boxes, to: 4) }
                 .checking(only: [typeOK]).expect(typeOK, .satisfied).expectDeadlock(.satisfied)
-            APCat
         }
     }
 }

@@ -25,7 +25,7 @@ package struct EWD840AnimationModel: Sendable {
             let Node = IntRange(0, through: N - 1)
             let colors = SetExpr<Color>.literal(.white, .black)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+                initiallyIn: Functions(from: Node, to: Bool.all))
             let color: SharedVariable<[Int: Color]> = scope.sharedVar(initiallyIn: Functions(from: Node, to: colors))
             let tpos = scope.sharedVar(initial: N - 1)
             let tcolor = scope.sharedVar(initial: Color.black)
@@ -74,12 +74,11 @@ package struct EWD840AnimationModel: Sendable {
             let animInv = Invariant("AnimInv") { !terminationDetected || scope.checkingLevel < 20 }
             animInv
 
-            let EWD840_anim = Validation { Bind(N, to: 9) }
+            Validation("EWD840_anim") { Bind(N, to: 9) }
                 .checking(only: [animInv])
                 .checkingDeadlock(false)
                 .simulating(traces: 100)
                 .expect(animInv, .violated)
-            EWD840_anim
         }
     }
 }

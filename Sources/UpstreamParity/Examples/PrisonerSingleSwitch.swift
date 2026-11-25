@@ -18,7 +18,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
             Extends(.finiteSets, .naturals)
             let Prisoner = scope.parameter(as: Set<String>.self,
                 in: Set<Set<String>>([Set(["Alice"]), Set(["Alice", "Bob", "Eve"])]))
-            let Light_Unknown = scope.parameter(as: Bool.self, in: Set<Bool>([false, true]))
+            let Light_Unknown = scope.parameter(as: Bool.self)
             let DesignatedCounter = Select(from: Prisoner) { _ in true }
             let NormalPrisoner = Prisoner.removing(DesignatedCounter)
             let SignalLimit = If(Light_Unknown, then: 2, else: 1)
@@ -55,7 +55,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
 
             Invariant("TypeOK") {
                 IntRange(1, through: VictoryThreshold + 1).contains(count)
-                    && SetExpr<Bool>.literal(false, true).contains(announced)
+                    && Bool.all.contains(announced)
                     && Functions(from: NormalPrisoner, to: IntRange(0, through: 2)).contains(signalled)
                     && SetExpr<Light>.literal(.off, .on).contains(light)
                     && has_visited.isSubset(of: Prisoner)
@@ -63,26 +63,22 @@ package struct PrisonerSingleSwitchModel: Sendable {
             Invariant("VictoryOK") { !announced || has_visited == Prisoner }
             Terminating(.eventually(announced))
 
-            let prisonerValidation = Validation(label: "Prisoner") {
-                Bind(Prisoner, to: Set<String>(["Alice", "Bob", "Eve"]))
+            Validation("prisonerValidation", label: "Prisoner") {
+                Bind(Prisoner, to: ["Alice", "Bob", "Eve"])
                 Bind(Light_Unknown, to: false)
             }
-            prisonerValidation
-            let PrisonerLightUnknown = Validation {
-                Bind(Prisoner, to: Set<String>(["Alice", "Bob", "Eve"]))
+            Validation("PrisonerLightUnknown") {
+                Bind(Prisoner, to: ["Alice", "Bob", "Eve"])
                 Bind(Light_Unknown, to: true)
             }
-            PrisonerLightUnknown
-            let PrisonerSolo = Validation {
-                Bind(Prisoner, to: Set<String>(["Alice"]))
+            Validation("PrisonerSolo") {
+                Bind(Prisoner, to: ["Alice"])
                 Bind(Light_Unknown, to: false)
             }
-            PrisonerSolo
-            let PrisonerSoloLightUnknown = Validation {
-                Bind(Prisoner, to: Set<String>(["Alice"]))
+            Validation("PrisonerSoloLightUnknown") {
+                Bind(Prisoner, to: ["Alice"])
                 Bind(Light_Unknown, to: true)
             }
-            PrisonerSoloLightUnknown
         }
     }
 }

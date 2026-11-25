@@ -49,7 +49,7 @@ extension NativeSwiftEmitter {
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("unresolved formal enum: \(name)") }
             return switching(try members.map {
-                "case .`\($0.name)`: return \(try formalLiteral($0.value))"
+                "case .\(enumMember($0.name, of: name)): return \(try formalLiteral($0.value))"
             })
         case .finite(let members):
             return switching(try members.indices.map {
@@ -105,7 +105,7 @@ extension NativeSwiftEmitter {
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("unresolved formal enum: \(name)") }
             let choices = try members.map { member in
-                "if \(value) == \(try formalJSONLiteral(member.value)) { return .`\(member.name)` }"
+                "if \(value) == \(try formalJSONLiteral(member.value)) { return .\(enumMember(member.name, of: name)) }"
             }.joined(separator: "\n")
             return decode("\(choices)\n\(invalid)")
         case .finite(let members):

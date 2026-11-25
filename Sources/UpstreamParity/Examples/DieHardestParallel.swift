@@ -14,7 +14,7 @@ package struct DieHardestParallelModel: Sendable {
             let Capacities = scope.parameter(as: [[String: Int]].self,
                 in: Set<[[String: Int]]>([[["j1": 9, "j2": 10], ["j1": 1, "j2": 3]]]))
             let Goal = scope.parameter(as: Int.self, in: Set<Int>([2]))
-            let Freeze = scope.parameter(as: Bool.self, in: Set<Bool>([false, true]))
+            let Freeze = scope.parameter(as: Bool.self)
             let c1 = scope.sharedVar(initial: Dictionary<String, Int>.mapping(over: Capacities[1].keys) { _ in 0 })
             let c2 = scope.sharedVar(initial: Dictionary<String, Int>.mapping(over: Capacities[2].keys) { _ in 0 })
             let s1 = scope.sharedVar(initial: 0)
@@ -89,18 +89,16 @@ package struct DieHardestParallelModel: Sendable {
                     && c2.keys.contains { j in c2[j] == Goal })
             }
             notSolved
-            let NextParallel = Validation {
+            Validation("NextParallel") {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])
                 Bind(Goal, to: 2)
                 Bind(Freeze, to: false)
             }.expect(notSolved, .violated)
-            NextParallel
-            let NextParallelFreeze = Validation {
+            Validation("NextParallelFreeze") {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])
                 Bind(Goal, to: 2)
                 Bind(Freeze, to: true)
             }.expect(notSolved, .violated)
-            NextParallelFreeze
         }
     }
 }

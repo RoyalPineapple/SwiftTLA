@@ -37,10 +37,16 @@ extension CompiledSpecification {
             }
             if case .eachActionGroup(let ids) = condition.scope {
                 let group = Set(ids)
-                let arguments = Set(calls.filter { group.contains($0.action) }.map(\.arguments))
-                    .sorted { $0.lexicographicallyPrecedes($1) }
-                return arguments.map { values in
-                    .init(scope: .actionCallGroup(ids.map { .init(action: $0, arguments: values) }),
+                let byActor = Dictionary(grouping: calls.filter { group.contains($0.action) }) { $0.arguments.first }
+                return byActor.keys.compactMap { $0 }.sorted().map { actor in
+                    let observed = byActor[actor] ?? []
+                    let invocations = ids.flatMap { id -> [CompiledActionCall] in
+                        if semantics.behavior.actions[id.ordinal].bindings.count == 1 {
+                            return [.init(action: id, arguments: [actor])]
+                        }
+                        return observed.filter { $0.action == id }
+                    }
+                    return .init(scope: .actionCallGroup(invocations),
                         isStrong: condition.isStrong, projection: condition.projection,
                         enabledActions: condition.enabledActions)
                 }

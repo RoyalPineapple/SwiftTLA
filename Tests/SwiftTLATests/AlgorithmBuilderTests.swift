@@ -1510,6 +1510,37 @@ struct AlgorithmBuilderTests {
         #expect(rendered.components(separatedBy: "same(").count == 2)
     }
 
+    @Test("a fixed process keeps its identity in control state and executes a parameterless fair action")
+    func fixedProcessControlsItsOwnStep() throws {
+        let algorithm = Algorithm("FixedWorker", scoped: { scope in
+            let count = scope.sharedVar(_name: "count", initial: 0)
+            Process(id: 10, fairness: .weak) {
+                Do(TestControlLabel.advance) { count += 1 }
+            }
+        })
+        let spec = try loweredSourceSpecification(algorithm)
+        #expect(spec.fairness == [.weakFairnessActionGroup(["advance"])])
+        let plusCal = try renderedSourceAlgorithmPlusCal(algorithm)
+        #expect(plusCal.components(separatedBy: "\n").contains {
+            $0.contains("fair process (") && $0.hasSuffix(" = 10)")
+        })
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "advance", in: compilation, from: initial)
+        #expect(try value(named: "count", in: next, compilation: compilation) == .int(1))
+        #expect(try value(named: "pc", in: next, compilation: compilation) == .function([.int(10): .string("Done")]))
+    }
+
+    @Test("a process identity cannot follow mutable state")
+    func rejectsMutableProcessID() {
+        let algorithm = Algorithm("MovingWorker", scoped: { scope in
+            let count = scope.sharedVar(_name: "count", initial: 0)
+            Process(id: count) {
+                Do(TestControlLabel.advance) { count += 1 }
+            }
+        })
+        #expect(algorithm.validate().contains { $0.code == .invalidFixedProcessID })
+    }
+
     @Test("When, Assert, With, and process fairness lower as formal semantics")
     func lowersMechanicalPlusCalStatements() throws {
         let algorithm = Algorithm("Mechanical", scoped: { scope in

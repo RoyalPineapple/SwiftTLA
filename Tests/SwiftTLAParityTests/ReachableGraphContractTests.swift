@@ -12,6 +12,7 @@ import UpstreamParity
   @Test("Chameneos configured machine retains initial choices and upstream checks")
   func chameneosConfiguredInitialStatesAndChecks() throws {
     let scenario = try #require(ChameneosModel.validationScenarios().first)
+    #expect(scenario.name == "Chameneos")
     let configuration = scenario.configuration
     let rendered = try scenario.render()
     #expect(rendered.checkNames == ["TypeOK", "SumMet"])

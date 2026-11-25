@@ -3,7 +3,7 @@
 ## Host Safety
 
 - GitHub Actions / SwiftTLA-ValidationEvidence remains the admission authority.
-- Local validation is diagnostic-only and allowed only through `scripts/local-validation.sh`: `static`, a focused `swiftpm-test <filter>`, or a focused `xcode-test <identifier>`.
+- Local validation is diagnostic-only and allowed only through `scripts/local-validation.sh`: `static`, `port-build` for the local corpus CLI, a focused `swiftpm-test <filter>`, or a focused `xcode-test <identifier>`.
 - The wrapper allows one focused Xcode test with private DerivedData alongside one other validation command. Each lane is exclusive across worktrees. SwiftPM tests and proof preparation share the original lane and build-cache protection. Keep the per-process-tree and system memory guards enabled. Do not invoke local `swift test`, `xcodebuild test`, `make ci*`, TLC, or broad compiler/test commands directly.
 - Any mode outside the wrapper requires explicit user authorization for the exact command.
 

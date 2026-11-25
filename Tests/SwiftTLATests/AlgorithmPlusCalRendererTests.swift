@@ -264,6 +264,29 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("Termination ==") == false)
     }
 
+    @Test("translator termination must cover the fixed process and every family member", arguments: [false, true])
+    func checksMixedProcessTermination(includeCoordinator: Bool) throws {
+        let algorithm = Algorithm("MixedTermination") {
+            Each(Node.all) { _ in
+                Do(ProcessStep.repeat) { Stop() }
+            }
+            Process(id: 10) {
+                Do(ProcessStep.done) { Stop() }
+            }
+            Eventually("Termination", includeCoordinator
+                ? Finished(10) && ForAll(Node.all) { Finished($0) }
+                : ForAll(Node.all) { Finished($0) })
+        }
+
+        if includeCoordinator {
+            #expect(try !renderedSourceAlgorithmPlusCal(algorithm).contains("Termination =="))
+        } else {
+            #expect(throws: CompilationDiagnostic.self) {
+                try renderedSourceAlgorithmPlusCal(algorithm)
+            }
+        }
+    }
+
     @Test("compilation leaves standard sequential termination to the PlusCal translator")
     func plansSequentialTranslatorTermination() throws {
         let algorithm = Algorithm("SequentialTermination") {

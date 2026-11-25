@@ -71,18 +71,16 @@ package struct MissionariesAndCannibalsModel: Sendable {
             let solution = Invariant("Solution") { !who_is_on_bank[Bank.E].isEmpty }
             solution
 
-            let MissionariesAndCannibals = Validation {
+            Validation("MissionariesAndCannibals") {
                 Bind(Missionaries, to: Set<Person>([.m1, .m2, .m3]))
                 Bind(Cannibals, to: Set<Person>([.c1, .c2, .c3]))
             }.checking(only: [typeOK, solution])
                 .expect(solution, .violated)
-            MissionariesAndCannibals
-            let APMissionariesAndCannibals = Validation {
+            Validation("APMissionariesAndCannibals") {
                 Bind(Missionaries, to: Set<Person>([.apM1, .apM2, .apM3]))
                 Bind(Cannibals, to: Set<Person>([.apC1, .apC2, .apC3]))
             }.checking(only: [typeOK, solution])
                 .expect(solution, .violated)
-            APMissionariesAndCannibals
         }
     }
 }

@@ -41,6 +41,9 @@ struct EncodedEnumDomain {
                         else: value == Datum.text && value != Datum.first && value != Datum.second))
             }
             Invariant("ParameterMember") { nominal == Datum.first || nominal == Datum.second }
+            Invariant("RawValueSpelling") {
+                value.rawValue == If(value == Datum.first, then: "d1", else: If(value == Datum.second, then: "d2", else: "é"))
+            }
             Invariant("RawTextPreserved") {
                 Dictionary<String, Int>.mapping(over: texts) { _ in 1 }.keys.cardinality == 2
                     && texts.cardinality == 2 && rawText != "é"

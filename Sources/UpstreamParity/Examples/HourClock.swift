@@ -20,8 +20,7 @@ package struct HourClockModel: Sendable {
                 Invariant("HCini") { (1...12).contains(hr) }
             }
             Clock
-            let Upstream = Validation {}
-            Upstream
+            Validation("Upstream") {}
         }
     }
 }

@@ -74,8 +74,7 @@ package struct TeachingSimpleRegularN8Model: Sendable {
                 }
             }
             SimpleRegular
-            let simpleRegularValidation = Validation(label: "SimpleRegular") {}
-            simpleRegularValidation
+            Validation("simpleRegularValidation", label: "SimpleRegular") {}
         }
     }
 }

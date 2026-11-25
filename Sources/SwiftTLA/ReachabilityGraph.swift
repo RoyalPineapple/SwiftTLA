@@ -87,10 +87,29 @@ public protocol GeneratedModelFields: Sendable {
 public protocol ConfiguredGeneratedModel: StateMachine {
     associatedtype Configuration: Hashable & GeneratedModelFields
     associatedtype State: Hashable & GeneratedModelFields
+    associatedtype RefinementState: GeneratedModelFields = State
     var state: State { get }
     static func initialMachines(configuration: Configuration) throws -> [Self]
     static func makeMachine(_ initial: State, configuration: Configuration) throws -> Self
     static func render(configuration: Configuration) throws -> RenderedSpecification
+}
+
+public struct EmptyModelConfiguration: Hashable, GeneratedModelFields {
+    public init() {}
+    public static var fieldIdentities: [PartialKeyPath<Self>: GeneratedModelFieldIdentity] { [:] }
+}
+
+/// A generated machine that can be linked without binding any model parameters.
+public protocol ParameterlessGeneratedModel: ConfiguredGeneratedModel where Configuration == EmptyModelConfiguration {
+    static func initialMachines() throws -> [Self]
+    static func makeMachine(_ initial: State) throws -> Self
+    static func render() throws -> RenderedSpecification
+}
+
+extension ParameterlessGeneratedModel {
+    public static func initialMachines(configuration: Configuration) throws -> [Self] { try initialMachines() }
+    public static func makeMachine(_ initial: State, configuration: Configuration) throws -> Self { try makeMachine(initial) }
+    public static func render(configuration: Configuration) throws -> RenderedSpecification { try render() }
 }
 
 extension StateMachine {

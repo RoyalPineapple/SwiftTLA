@@ -111,7 +111,7 @@ extension NativeSwiftEmitter {
                 _rendered = try _rendered.addingGeneratedRefinement(
                     \(String(reflecting: refinement.name)),
                     instance: \(String(reflecting: refinement.instanceName)), of: \(target).self,
-                    configuration: try \(target).Configuration(\(configuration)),
+                    configuration: \(configuration.isEmpty ? "" : "try ")\(target).Configuration(\(configuration)),
                     behavior: .\(refinement.behavior.rawValue),
                     parameters: [\(try renderedBindings(refinement.parameters))],
                     state: [\(try renderedBindings(refinement.state))])
@@ -138,6 +138,7 @@ extension NativeSwiftEmitter {
                 actions: _actions, _generatedPlusCal: \(plusCal),
                 _generatedPlusCalProfiles: \(plusCalProfiles.isEmpty ? "[:]" : "[" + plusCalProfiles.joined(separator: ", ") + "]"),
                 _assumptionsOnly: \(module.configuration.assumptionsOnly),
+                _behaviorSpecificationName: \(String(reflecting: module.configuration.specificationName)),
                 _generatedParameters: [\(parameterBindings.joined(separator: ", "))],
                 _generatedImports: [\(imports)], _generatedDependencies: [\(dependencies)],
                 _generatedFairnessProfileOperators: \(program.behavior.fairnessProfiles.isEmpty ? "[:]" : "[" + program.behavior.fairnessProfiles.map {

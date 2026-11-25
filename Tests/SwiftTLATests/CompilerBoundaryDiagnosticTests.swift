@@ -1026,15 +1026,26 @@ struct CompilerBoundaryDiagnosticTests {
         #expect(parsed.sourceAlgorithms.map(\.model.name) == ["counter"])
         #expect(parsed.validationScenarios.map(\.name) == ["complete"])
         #expect(try parsed.compile().identity == labelled.compile().identity)
+
+        let inlineSource = source.replacingOccurrences(of: "let complete = Validation {}\n    complete",
+            with: #"SwiftTLA.Validation("complete", label: "Complete") {}"#)
+        let inlineClosure = try #require(Parser.parse(source: inlineSource)
+            .statements.first?.item.as(ClosureExprSyntax.self))
+        let inline = SpecParser.parseSpecClosure(named: "BoundBuilders", inlineClosure, sourceTypes: metadata)
+        #expect(inline.diagnostics.isEmpty)
+        #expect(inline.validationScenarios.map(\.displayLabel) == ["Complete"])
+        #expect(try inline.compile().identity == parsed.compile().identity)
     }
 
-    @Test("Algorithm and Validation require immutable bindings without positional names")
+    @Test("Implicit builder identities require immutable bindings and inline validation names are literal")
     func buildersRequireImmutableIdentityBindings() throws {
         for body in [
             "Algorithm {}",
             "Validation {}",
             "Algorithm(\"Named\") {}",
-            "Validation(\"Named\") {}",
+            "Validation(\"\") {}",
+            "Validation(name) {}",
+            "Validation(\"bad \\(name)\") {}",
             "let algorithm = Algorithm(\"Named\") {}",
             "let validation = Validation(\"Named\") {}",
             "let algorithm = Algorithm(_name: \"Faked\") {}",
@@ -1054,12 +1065,12 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
-    @Test("#spec rejects inline Algorithm and Validation builders")
+    @Test("#spec rejects inline Algorithm and unnamed Validation builders")
     func macroRejectsInlineBuilders() throws {
         let build = try buildExternalConsumer("InvalidInlineSpecBuilder")
 
         #expect(build.status != 0)
-        #expect(build.output.contains("Algorithm and Validation require an immutable named let binding inside #spec."))
+        #expect(build.output.contains("Use an immutable let binding for Algorithm or Validation"))
         for line in [5, 9, 13] {
             #expect(build.output.contains("main.swift:\(line):"))
         }

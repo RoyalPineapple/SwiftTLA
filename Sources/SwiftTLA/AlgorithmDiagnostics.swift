@@ -25,6 +25,7 @@ package enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
     case invalidName
     case emptyDomain
     case duplicateDomainMember
+    case invalidFixedProcessID
     case duplicateLabel
     case duplicateFairnessExemption
     case invalidFairnessExemption

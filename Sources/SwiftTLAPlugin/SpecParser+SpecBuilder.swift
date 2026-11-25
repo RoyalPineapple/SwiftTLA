@@ -1013,6 +1013,30 @@ extension ParserSession {
             ))
             return
         }
+        if let propertyName = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
+           let handle = specBindings.properties[propertyName] as? TemporalPropertyHandle,
+           call.arguments.first?.label?.text == "forEach" {
+            guard call.arguments.count == 1, let domainSyntax = call.arguments.first?.expression,
+                  let domain = decodeTypedFacadeValue(domainSyntax, scope: sourceScope),
+                  let closure = call.trailingClosure, call.additionalTrailingClosures.isEmpty,
+                  closure.statements.count == 1, case .expr(let body) = closure.statements.first?.item else {
+                components.diagnostics.append(.init(message: "A temporal property for each member requires one domain and one condition.", source: call))
+                return
+            }
+            let parameters = closureParameterNames(in: closure)
+            let binder = generatedBinderName(line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
+            let scope = sourceScope.extending(binding: parameters.first ?? "$0", to: .variable(binder),
+                shape: typedFacadeValueType(domainSyntax, scope: sourceScope)?.selectedElement)
+            guard parameters.count == 1 || closure.signature?.parameterClause == nil,
+                  let condition = decodeTemporalCondition(body, scope: scope) else {
+                components.diagnostics.append(.init(message: "The temporal condition must use a single domain member.", source: closure))
+                return
+            }
+            recordTemporalDeclaration(named: propertyName, at: call)
+            components.temporalProperties.append(.init(name: propertyName, expr: condition,
+                bindings: [.init(name: binder, domain: domain, generatedSwiftType: nil)], reference: handle.reference))
+            return
+        }
         if let temporal = parseBoundTemporal(call, scope: sourceScope) {
             registerProperty(temporal, into: &components)
             return

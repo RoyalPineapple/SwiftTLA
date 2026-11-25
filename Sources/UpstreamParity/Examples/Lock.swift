@@ -4,7 +4,7 @@ import SwiftTLAMacros
 /// The two-process lock example from the PlusCal auxiliary-variables
 /// collection. `l2` explicitly returns to `l0`, mirroring the source loop.
 @TLAModel
-package struct LockModel: Sendable {
+package struct LockModel: ParameterlessGeneratedModel {
     package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
@@ -53,17 +53,18 @@ package struct LockModel: Sendable {
 
                 Invariant("TypeOK") {
                     (0...1).contains(lock)
+                    Process.all.allSatisfy { process in
+                        process.isAt(anyOf: Step.l0, .l1, .cs, .l2)
+                    }
+                }
+                let holders = Process.all.filter { process in process.isAt(anyOf: Step.cs, .l2) }
+                Invariant("LockInv") {
+                    holders.count <= 1
+                    holders.isEmpty || lock == 0
                 }
             }
             Lock
+            Validation("twoProcess", label: "Lock") {}
         }
     }
-}
-
-extension Example {
-    package static let lockTwoProcess = FiniteModelFixture(
-        expectedDistinct: 12,
-        maximumStateLimit: 50_000,
-        spec: LockModel.spec,
-    )
 }

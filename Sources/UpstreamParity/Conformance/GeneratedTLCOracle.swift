@@ -390,7 +390,7 @@ package enum GeneratedTLCOracle {
         retained: URL, invocation: TLCInvocationKind, renderedActions: [RenderedAction],
         process: TLCProcessAdapter, captureEvaluations: Bool = false,
         supplementalJar: PinnedTLCModuleJar? = nil,
-        arguments: [String] = ["-workers", "1", "-fp", "1"]
+        arguments: [String] = ["-workers", "1", "-fp", "1"], referenceCache: ReferenceCachePolicy = .disabled
     ) throws -> TLCExecutionOutcome {
         let work = workRoot.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
@@ -409,6 +409,11 @@ package enum GeneratedTLCOracle {
             evaluationOutput: captureEvaluations ? work.appendingPathComponent("evaluations.bin") : nil,
             workingDirectory: work, finiteGraphCase: launch, runID: UUID(),
             timeout: timeout, invocation: invocation, referenceArtifacts: tools.artifacts)
+        if referenceCache != .disabled, let cache = ProcessInfo.processInfo.environment["SWIFTTLA_UPSTREAM_REFERENCE_CACHE"], !cache.isEmpty {
+            return try UpstreamReferenceCache.run(request, process: process, retainingIn: retained,
+                cache: URL(fileURLWithPath: cache, isDirectory: true), requireHit: referenceCache == .requireHit)
+        }
+        guard referenceCache != .requireHit else { throw Error.invalidOutcome("reference cache required") }
         return try process.run(request, retainingIn: retained)
     }
 

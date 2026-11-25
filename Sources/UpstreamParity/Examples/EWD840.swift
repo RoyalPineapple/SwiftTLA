@@ -23,10 +23,10 @@ package struct EWD840Model: Sendable {
             Extends(.naturals)
             let N = scope.parameter(as: Int.self, in: Int.all)
             Assume(N > 0)
-            let Node = IntRange(0, through: N - 1)
+            let Node = 0..<N
             let colors = SetExpr<Color>.literal(.white, .black)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+                initiallyIn: Functions(from: Node, to: Bool.all))
             let color: SharedVariable<[Int: Color]> = scope.sharedVar(initiallyIn: Functions(from: Node, to: colors))
             let tpos = scope.sharedVar(initiallyIn: Node)
             let tcolor = scope.sharedVar(initial: Color.black)
@@ -70,7 +70,7 @@ package struct EWD840Model: Sendable {
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
             let typeOK = Invariant("TypeOK") {
-                Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
+                Functions(from: Node, to: Bool.all).contains(active)
                     && Functions(from: Node, to: colors).contains(color)
                     && Node.contains(tpos) && colors.contains(tcolor)
             }
@@ -97,18 +97,15 @@ package struct EWD840Model: Sendable {
             }
             TDSpec
 
-            let EWD840 = Validation { Bind(N, to: 3) }
+            Validation("EWD840") { Bind(N, to: 3) }
                 .checking(only: [typeOK, terminationDetection, inv, Liveness, TDSpec])
                 .checkingDeadlock(false)
-            EWD840
-            let APEWD840 = Validation { Bind(N, to: 3) }
+            Validation("APEWD840") { Bind(N, to: 3) }
                 .checking(only: [typeOK, terminationDetection])
                 .checkingDeadlock(false)
-            APEWD840
-            let EWD840_json = Validation { Bind(N, to: 4) }
+            Validation("EWD840_json") { Bind(N, to: 4) }
                 .checking(only: [jsonInv])
                 .checkingDeadlock(false)
-            EWD840_json
         }
     }
 }

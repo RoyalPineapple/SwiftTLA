@@ -136,8 +136,7 @@ package struct TLCMCModel: Sendable {
                 Invariant("BFSLevel") { initialIndex >= 1 }
             }
             ModelChecker
-            let TLCMC = Validation {}.checking(only: [])
-            TLCMC
+            Validation("TLCMC") {}.checking(only: [])
         }
     }
 }

@@ -205,7 +205,7 @@ struct ProcedureLoweringTests {
                 ])), swiftTypeName: "Function<Worker, Int>")),
                 .process(.init(
                     typeName: "Worker",
-                    domain: .setLiteral(workers.map(StateExpr.value)),
+                    population: .family(.setLiteral(workers.map(StateExpr.value))),
                     fairness: .none,
                     components: [
                         .step(.init(label: .init(name: "start"), statements: [

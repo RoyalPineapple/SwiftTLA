@@ -2889,43 +2889,54 @@
     {
       "path": "specifications/acp",
       "name": "Atomic Commitment Protocol",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "The simple-broadcast configuration with three participants matched locally across typed Swift, generated TLA and the pinned original TLC graph on 8 initial states, 54,944 reachable states and 218,120 labeled transitions. The published configuration selects Spec, leaves all properties unselected and disables deadlock checking. The two-participant non-blocking configuration matched locally across the same three machines on 4 initial states, 4,284 reachable states and 13,924 labeled transitions. AC1, AC2, AC3_1, AC3_2, AC4_alt and AC5 held. Its deadlock check is disabled. The early-decision variant violated its sole selected property AC1. The Swift machine replayed the 12 published actions and reached commit for one participant and abort for the other. A separate exhaustive graph comparison matched 4 initial states, 13,756 reachable states and 44,984 labeled transitions across Swift, generated TLA and the pinned original.",
+      "gap": "Hosted validation of the atomic-commit ports and the separate Apalache configuration remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/acp/ACP_NB_TLC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/acp/ACP_NB_WRONG_TLC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/acp/ACP_NB.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "imported dependency",
+          "reason": "Defines the non-blocking protocol extended by the TLC root.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/acp/ACP_SB_TLC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/acp/ACP_SB.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "imported dependency",
+          "reason": "Defines the simple-broadcast protocol extended by the TLC root.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift",
+            "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -2941,30 +2952,48 @@
           "module": "specifications/acp/ACP_NB_TLC.tla",
           "configuration": "specifications/acp/ACP_NB_TLC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift",
+              "scenario": "twoParticipants",
+              "caseID": "acp-nb"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/acp/ACP_NB_WRONG_TLC.tla",
           "configuration": "specifications/acp/ACP_NB_WRONG_TLC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift",
+              "scenario": "earlyDecision",
+              "caseID": "acp-nb-wrong"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/acp/ACP_SB_TLC.tla",
           "configuration": "specifications/acp/ACP_SB_TLC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift",
+              "scenario": "simpleBroadcast",
+              "caseID": "acp-sb"
+            }
+          ],
           "evidence": []
         },
         {
@@ -2984,7 +3013,7 @@
       "path": "specifications/allocator",
       "name": "Resource Allocator",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "The incomplete raw SimpleAllocatorModel and its declaration-only test were removed; they never represented a model-owned configuration or earned parity credit. The pinned SimpleAllocator.cfg selects per-client weak fairness for returning all held resources, per-client strong fairness for some allocation, two invariants, and three temporal properties. All four allocator configurations remain missing, including the scheduling, implementation, and refinement models. Implement the family through typed #spec, preserve each selected check and complete graph, then obtain both hosted comparisons.",
+      "gap": "SimpleAllocator matches the published configuration locally on 400 reachable states, 1,632 labeled transitions, two invariants, three liveness properties and deadlock checking. Hosted comparison is pending. SchedulingAllocator.cfg matches locally on 1 initial states, 1,690 reachable states, 5,853 labeled transitions and all selected checks. Hosted comparison is pending. AllocatorImplementation and AllocatorRefinement still need registered ports.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3019,7 +3048,9 @@
           "path": "specifications/allocator/SchedulingAllocator.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SchedulingAllocator.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3033,7 +3064,9 @@
           "path": "specifications/allocator/SimpleAllocator.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SimpleAllocator.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -3062,20 +3095,32 @@
           "module": "specifications/allocator/SchedulingAllocator.tla",
           "configuration": "specifications/allocator/SchedulingAllocator.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SchedulingAllocator.swift",
+              "scenario": "published",
+              "caseID": "scheduling-allocator"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/allocator/SimpleAllocator.tla",
           "configuration": "specifications/allocator/SimpleAllocator.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SimpleAllocator.swift",
+              "scenario": "published",
+              "caseID": "simple-allocator"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -3282,22 +3327,26 @@
     {
       "path": "specifications/barriers",
       "name": "Barrier Synchronization",
-      "audit": "pinned source, manifest, and three published configurations inspected; implementation and hosted parity pending",
-      "gap": "APBarrier and Barrier select N = 6 and abstract TypeOK; Barrier also checks BarrierProperty. Barriers selects N = 6, four invariants, and BSpec refinement over its 13-location reusable-barrier algorithm. All three configured roots need model-owned scenarios, complete comparison, and hosted evidence. No existing Swift implementation or evidence is credited.",
+      "audit": "Abstract barrier and both six-process scenarios implemented; hosted comparisons pending",
+      "gap": "Barriers.tla and its concrete reusable-barrier refinement remain open. Hosted comparisons for APBarrier and Barrier are pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/barriers/APBarrier.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Barrier.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/barriers/Barrier.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Barrier.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3313,20 +3362,32 @@
           "module": "specifications/barriers/APBarrier.tla",
           "configuration": "specifications/barriers/APBarrier.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Barrier.swift",
+              "scenario": "APBarrier",
+              "caseID": "ap-barrier"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/barriers/Barrier.tla",
           "configuration": "specifications/barriers/Barrier.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Barrier.swift",
+              "scenario": "Barrier",
+              "caseID": "barrier"
+            }
+          ],
           "evidence": []
         },
         {
@@ -3524,7 +3585,7 @@
       "path": "specifications/btree",
       "name": "B-trees",
       "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "gap": "kvstore.cfg matches locally on 1 initial states, 2,641 reachable states, 28,584 labeled transitions and all selected checks. Hosted comparison is pending. The remaining family evidence and module roles need review.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3538,7 +3599,9 @@
           "path": "specifications/btree/kvstore.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/KeyValueStore.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3564,10 +3627,16 @@
           "module": "specifications/btree/kvstore.tla",
           "configuration": "specifications/btree/kvstore.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/KeyValueStore.swift",
+              "scenario": "published",
+              "caseID": "btree-kvstore"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -3577,7 +3646,7 @@
       "path": "specifications/byihive",
       "name": "RFC 3506: Voucher Transaction System",
       "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "gap": "VoucherLifeCycle.cfg matches locally on 1 initial states, 64 reachable states, 192 labeled transitions and all selected checks. Hosted comparison is pending. The remaining family evidence and module roles need review.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3605,7 +3674,9 @@
           "path": "specifications/byihive/VoucherLifeCycle.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/VoucherLifeCycle.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3648,10 +3719,16 @@
           "module": "specifications/byihive/VoucherLifeCycle.tla",
           "configuration": "specifications/byihive/VoucherLifeCycle.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/VoucherLifeCycle.swift",
+              "scenario": "published",
+              "caseID": "voucher-life-cycle"
+            }
+          ],
           "evidence": []
         },
         {
@@ -3681,7 +3758,7 @@
       "path": "specifications/byzpaxos",
       "name": "Byzantizing Paxos by Refinement",
       "audit": "reference inputs audited",
-      "gap": "VoteProof and Consensus replace upstream model values with strings and lack model-owned scenarios. Their configurations explicitly disable deadlock checking. The reduced Consensus Swift fixture's generated checker reaches three terminal deadlocks, so its local four-state count and temporal result do not establish upstream configuration parity. Consensus selects LiveSpec, unlike the other three configurations. BPConProof and PConProof have no exact Swift cases. BPConProof has an unknown published outcome, not an assumed success.",
+      "gap": "Consensus matches the published LiveSpec configuration locally, including the complete labeled graph, TypeOK, Inv and Success. Hosted comparison is pending. The reduced VoteProof port uses strings for model values and lacks the published model-owned scenario. BPConProof and PConProof still need exact ports. The published BPConProof outcome is unknown.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3694,7 +3771,7 @@
         {
           "path": "specifications/byzpaxos/Consensus.tla",
           "role": "configured root",
-          "reason": "The configuration binds three model values and selects LiveSpec, TypeOK, Inv, and Success with deadlock checking disabled. LiveSpec adds weak fairness to the safety specification. ConsensusModel remains a partial port.",
+          "reason": "The configuration binds three model values and selects LiveSpec, TypeOK, Inv, and Success with deadlock checking disabled. LiveSpec adds weak fairness to the safety specification.",
           "implementations": [
             "Sources/UpstreamParity/Examples/Consensus.swift"
           ],
@@ -3732,10 +3809,16 @@
           "module": "specifications/byzpaxos/Consensus.tla",
           "configuration": "specifications/byzpaxos/Consensus.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Consensus.swift",
+              "scenario": "published",
+              "caseID": "byzpaxos-consensus"
+            }
+          ],
           "evidence": []
         },
         {
@@ -5467,8 +5550,8 @@
     {
       "path": "specifications/ewd426",
       "name": "EWD 426: Token Stabilization",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Exhaustive six-node TokenRing port locally matched the published graph, TypeOK, and Stab.",
+      "gap": "APTokenRing symbolic checks, SimTokenRing simulation, and hosted parity remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5489,7 +5572,9 @@
           "path": "specifications/ewd426/TokenRing.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TokenRing.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -5518,10 +5603,16 @@
           "module": "specifications/ewd426/TokenRing.tla",
           "configuration": "specifications/ewd426/TokenRing.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TokenRing.swift",
+              "scenario": "sixNodes",
+              "caseID": "token-ring"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -7207,29 +7298,35 @@
     {
       "path": "specifications/locks_auxiliary_vars",
       "name": "Peterson Lock Refinement With Auxiliary Variables",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Lock, LockHS and Peterson matched their published configurations locally on complete labeled graphs and selected checks.",
+      "gap": "Hosted comparison remains pending. The additional PetersonSafety configuration selects TypeOK and Inv. Published Peterson.cfg also selects the LSpec refinement to Lock.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/locks_auxiliary_vars/Lock.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Lock.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/locks_auxiliary_vars/LockHS.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/LockHS.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/locks_auxiliary_vars/Peterson.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Peterson.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -7245,34 +7342,58 @@
           "module": "specifications/locks_auxiliary_vars/Lock.tla",
           "configuration": "specifications/locks_auxiliary_vars/Lock.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Lock.swift",
+              "scenario": "twoProcess",
+              "caseID": "auxiliary-lock"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/locks_auxiliary_vars/LockHS.tla",
           "configuration": "specifications/locks_auxiliary_vars/LockHS.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/LockHS.swift",
+              "scenario": "published",
+              "caseID": "auxiliary-lockhs"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/locks_auxiliary_vars/Peterson.tla",
           "configuration": "specifications/locks_auxiliary_vars/Peterson.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Peterson.swift",
+              "scenario": "published",
+              "caseID": "peterson-published"
+            }
+          ],
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [
+        {
+          "caseID": "peterson-safety",
+          "implementation": "Sources/UpstreamParity/Examples/Peterson.swift",
+          "reason": "PetersonSafety.cfg selects both published invariants. The published Peterson.cfg also checks the LSpec refinement."
+        }
+      ]
     },
     {
       "path": "specifications/LoopInvariance",
@@ -8281,7 +8402,7 @@
       "path": "specifications/Paxos",
       "name": "The Paxos Protocol",
       "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "gap": "MCConsensus.cfg matches locally on 4 initial states, 4 reachable states, 3 labeled transitions and all selected checks. Hosted comparison is pending. The remaining family evidence and module roles need review.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -8295,7 +8416,9 @@
           "path": "specifications/Paxos/MCConsensus.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/PaxosInductiveConsensus.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8332,10 +8455,16 @@
           "module": "specifications/Paxos/MCConsensus.tla",
           "configuration": "specifications/Paxos/MCConsensus.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/PaxosInductiveConsensus.swift",
+              "scenario": "published",
+              "caseID": "paxos-mc-consensus"
+            }
+          ],
           "evidence": []
         },
         {
@@ -8662,22 +8791,26 @@
     {
       "path": "specifications/ReadersWriters",
       "name": "The Readers-Writers Problem",
-      "audit": "pinned source, manifest, and both published configurations inspected; implementation and hosted parity pending",
-      "gap": "APReadersWriters selects NumActors = 3, INIT/NEXT, and Safety only. MC binds NumActors through n = 3 and selects fair Spec, TypeOK, Safety, and Liveness; the manifest reports 21,527 distinct states. Queue ordering, per-actor weak fairness, and universal recurring-progress checks need exact native and TLC parity. No implementation or evidence is credited.",
+      "audit": "typed source and both published configurations registered; hosted comparison pending",
+      "gap": "Both scenarios use the same authored model. AP selects Safety under Init/Next. MC selects TypeOK, Safety and per-actor recurring Liveness under fair Spec. Independent hosted comparisons remain pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/ReadersWriters/APReadersWriters.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/ReadersWriters.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ReadersWriters/MC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/ReadersWriters.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8691,7 +8824,9 @@
           "path": "specifications/ReadersWriters/ReadersWriters.tla",
           "role": "shared model dependency",
           "reason": "MC extends this base module and APReadersWriters instantiates it. The manifest gives it no standalone configuration; its Init, Next, fairness, invariants, and liveness are covered by the two configured roots, not an invented third model.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/ReadersWriters.swift"
+          ],
           "dispositionComplete": true
         }
       ],
@@ -8700,20 +8835,32 @@
           "module": "specifications/ReadersWriters/APReadersWriters.tla",
           "configuration": "specifications/ReadersWriters/APReadersWriters.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ReadersWriters.swift",
+              "scenario": "APReadersWriters",
+              "caseID": "ap-readers-writers"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/ReadersWriters/MC.tla",
           "configuration": "specifications/ReadersWriters/MC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ReadersWriters.swift",
+              "scenario": "MC",
+              "caseID": "readers-writers"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -8980,8 +9127,8 @@
     {
       "path": "specifications/spanning",
       "name": "Spanning Tree Broadcast Algorithm",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "The three-process MC_spanning port matched all 16 reachable states and 40 labeled transitions locally. TypeOK failed as published, SntMsg held, and no deadlock occurred.",
+      "gap": "APspanning symbolic checks and hosted MC_spanning parity remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -8995,7 +9142,9 @@
           "path": "specifications/spanning/MC_spanning.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Spanning.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9007,9 +9156,11 @@
         },
         {
           "path": "specifications/spanning/spanning.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "MC_spanning extends this module for the broadcast behavior and invariants.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Spanning.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -9028,10 +9179,16 @@
           "module": "specifications/spanning/MC_spanning.tla",
           "configuration": "specifications/spanning/MC_spanning.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Spanning.swift",
+              "scenario": "broadcast",
+              "caseID": "spanning"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -10823,15 +10980,17 @@
     {
       "path": "specifications/transaction_commit",
       "name": "Transaction Commit Models",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "The three-manager TCommit port matched the published model locally on 34 reachable states, 93 labeled transitions, TCTypeOK and TCConsistent. Its configuration disables deadlock checking. The concrete TwoPhase port matched the published three-manager configuration on one initial state, 288 reachable states and 1,145 labeled transitions. TPTypeOK held and deadlock checking found no deadlocks. The backup transaction manager matched the cached original TLC graph and generated TLA locally on one initial state, 1,245 reached states and 4,850 labeled transitions. TypeOK and Consistency held and TLC found no deadlock. The configuration omits Termination.",
+      "gap": "Hosted parity for these three ports, other configurations in this family and the TwoPhase refinement proof remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/transaction_commit/2PCwithBTM.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/BackupTransactionManager.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10866,7 +11025,9 @@
           "path": "specifications/transaction_commit/TCommit.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TransactionCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10880,7 +11041,9 @@
           "path": "specifications/transaction_commit/TwoPhase.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TwoPhaseCommit.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -10889,10 +11052,16 @@
           "module": "specifications/transaction_commit/2PCwithBTM.tla",
           "configuration": "specifications/transaction_commit/2PCwithBTM.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/BackupTransactionManager.swift",
+              "scenario": "threeManagers",
+              "caseID": "two-phase-btm"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10919,20 +11088,32 @@
           "module": "specifications/transaction_commit/TCommit.tla",
           "configuration": "specifications/transaction_commit/TCommit.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TransactionCommit.swift",
+              "scenario": "threeManagers",
+              "caseID": "tcommit"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/transaction_commit/TwoPhase.tla",
           "configuration": "specifications/transaction_commit/TwoPhase.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TwoPhaseCommit.swift",
+              "scenario": "threeManagers",
+              "caseID": "transaction-two-phase"
+            }
+          ],
           "evidence": []
         }
       ],

@@ -1747,25 +1747,41 @@ extension NativeSwiftEmitter {
                 continue
             case .eachActionGroup(let ids):
                 guard let first = ids.first else { throw unsupported("empty process fairness group") }
-                let bindings = program[first].bindings
-                var loops: [String] = []
-                for binding in bindings {
-                    try program.requireImmutableDomain(binding.domain, path: "fairness.\(first.ordinal).domain")
-                    loops.append("for \(binder(binding.binder)) in \(try actionDomain(binding, state: "")) {")
-                }
-                let values = ids.map { id -> String in
+                let actor = program[first].bindings[0]
+                let outer = binder(actor.binder)
+                var members: [String] = []
+                for id in ids {
                     let action = model.api.actions.first { $0.compiledAction == id }!
-                    let arguments = zip(action.bindings, bindings).compactMap { binding, value -> String? in
-                        binding.isPublic ? "\(binding.swiftIdentifier): \(binder(value.binder))" : nil
+                    let bindings = program[id].bindings
+                    for binding in bindings {
+                        try program.requireImmutableDomain(binding.domain, path: "fairness.\(id.ordinal).domain")
                     }
-                    return ".\(action.swiftIdentifier)" + (arguments.isEmpty ? "" : "(\(arguments.joined(separator: ", ")))")
+                    let values = [outer] + bindings.dropFirst().map { binder($0.binder) }
+                    let arguments = zip(action.bindings, values).compactMap { binding, value in
+                        binding.isPublic ? "\(binding.swiftIdentifier): \(value)" : nil
+                    }
+                    let call = ".\(action.swiftIdentifier)" + (arguments.isEmpty ? "" : "(\(arguments.joined(separator: ", ")))")
+                    var add = "_actions.append(\(call))"
+                    for binding in bindings.dropFirst().reversed() {
+                        let domain = try actionDomain(binding, state: "")
+                        let order = try ordering(program.bindingTypes[binding.binder]!)
+                        add = "for \(binder(binding.binder)) in (\(domain)).sorted(by: \(order)) {\n\(add)\n}"
+                    }
+                    if bindings.count > 1, bindings[0].binder != actor.binder {
+                        let local = binder(bindings[0].binder)
+                        add = "do {\nlet \(local) = \(outer)\n_ = \(local)\n\(add)\n}"
+                    }
+                    members.append(add)
                 }
-                configuredFairness.append(loops.joined(separator: "\n") + "\n" + """
-                \(bindings.map { "_ = \(binder($0.binder))" }.joined(separator: "\n"))
-                let _actions: [Action] = [\(values.joined(separator: ", "))]
-                _fairness.append((name: try _actions.map { try formalCall(for: $0).description }.joined(separator: " or "),
-                    isStrong: \(condition.isStrong), matches: { [ _actions ] in _actions.contains($0) }, changes: \(changes)))
-                """ + String(repeating: "\n}", count: loops.count))
+                configuredFairness.append("""
+                for \(outer) in \(try actionDomain(actor, state: "")) {
+                    _ = \(outer)
+                    var _actions: [Action] = []
+                    \(members.joined(separator: "\n"))
+                    _fairness.append((name: try _actions.map { try formalCall(for: $0).description }.joined(separator: " or "),
+                        isStrong: \(condition.isStrong), matches: { [ _actions ] in _actions.contains($0) }, changes: \(changes)))
+                }
+                """)
                 continue
             }
             fairness.append("(name: \(String(reflecting: name + (condition.projection == nil ? "" : " [projection \(index)]"))), isStrong: \(condition.isStrong), matches: \(matcher), changes: \(changes))")

@@ -722,6 +722,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ReachableDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ValidationDeclaration) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessProfileDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: QuantifiedTemporalDeclaration) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
@@ -926,6 +927,7 @@ public func WeakFairness(_ step: AtomicStep) -> FairnessDecl {
 public func WeakFairness(anyOf steps: [AtomicStep]) -> FairnessDecl {
   FairnessDecl(.weakFairnessActionGroup(steps.map { $0.model.label.name }))
 }
+/// Groups enabled steps by their first argument (the actor), across all remaining argument choices.
 public func WeakFairness(eachOf steps: [AtomicStep]) -> FairnessDecl {
   FairnessDecl(.weakFairnessEachActionGroup(steps.map { $0.model.label.name }))
 }
@@ -935,6 +937,7 @@ public func StrongFairness(_ step: AtomicStep) -> FairnessDecl {
 public func StrongFairness(anyOf steps: [AtomicStep]) -> FairnessDecl {
   FairnessDecl(.strongFairnessActionGroup(steps.map { $0.model.label.name }))
 }
+/// Groups enabled steps by their first argument (the actor), across all remaining argument choices.
 public func StrongFairness(eachOf steps: [AtomicStep]) -> FairnessDecl {
   FairnessDecl(.strongFairnessEachActionGroup(steps.map { $0.model.label.name }))
 }

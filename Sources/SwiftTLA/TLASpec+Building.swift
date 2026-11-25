@@ -70,6 +70,8 @@ extension TLASpec {
         initialInvariantSelections.append(initial.invariant)
       } else if let property = comp as? ReachableDecl {
         reachabilityProperties.append(.init(name: property.name, body: property.body, reference: property.reference))
+      } else if let quantified = comp as? QuantifiedTemporalDeclaration {
+        temporalProperties.append(quantified.property)
       } else if let t = comp as? TemporalDecl {
         temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr, bindings: [], reference: t.reference))
       } else if let f = comp as? FairnessDecl {

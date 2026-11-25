@@ -40,6 +40,10 @@ public func >=(_ lhs: some TypedExpression<Int>, _ rhs: some TypedExpression<Int
 }
 
 extension ClosedRange where Bound == Int {
+    public func contains(_ value: some TypedExpression<Int>) -> Expr<Bool> {
+        IntRange(lowerBound, through: upperBound).contains(value)
+    }
+
     public func contains(_ field: SharedVariable<Int>) -> Expr<Bool> {
         Expr(boundsCheck(for: field.stateExpr))
     }
@@ -79,6 +83,22 @@ public func !=<Expression: TypedExpression>(_ lhs: Expression, _ rhs: Expression
 
 public func !=<Expression: TypedExpression>(_ lhs: Expression.ExpressionValue, _ rhs: Expression) -> Expr<Bool> {
     Expr(.notEqual(lhs.stateExpr, rhs.stateExpr))
+}
+
+public func ==<Element: NoneEncodedOptionalElement & TLAValueType>(_ lhs: some TypedExpression<Element?>, _ rhs: some TypedExpression<Element>) -> Expr<Bool> {
+    Expr(.equal(lhs.stateExpr, .assertView(rhs.stateExpr, Element.presentValueShape)))
+}
+
+public func ==<Element: NoneEncodedOptionalElement & TLAValueType>(_ lhs: some TypedExpression<Element>, _ rhs: some TypedExpression<Element?>) -> Expr<Bool> {
+    Expr(.equal(.assertView(lhs.stateExpr, Element.presentValueShape), rhs.stateExpr))
+}
+
+public func !=<Element: NoneEncodedOptionalElement & TLAValueType>(_ lhs: some TypedExpression<Element?>, _ rhs: some TypedExpression<Element>) -> Expr<Bool> {
+    Expr(.notEqual(lhs.stateExpr, .assertView(rhs.stateExpr, Element.presentValueShape)))
+}
+
+public func !=<Element: NoneEncodedOptionalElement & TLAValueType>(_ lhs: some TypedExpression<Element>, _ rhs: some TypedExpression<Element?>) -> Expr<Bool> {
+    Expr(.notEqual(.assertView(lhs.stateExpr, Element.presentValueShape), rhs.stateExpr))
 }
 
 public func &&(_ lhs: some TypedExpression<Bool>, _ rhs: some TypedExpression<Bool>) -> Expr<Bool> {

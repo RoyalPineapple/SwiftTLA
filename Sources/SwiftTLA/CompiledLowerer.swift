@@ -750,6 +750,7 @@ struct CompiledLowerer {
                     name: process.name,
                     binder: try bound("self", in: scope, at: "\(path).binders"),
                     swiftType: process.swiftType,
+                    fixedID: try process.fixedID.map { try lower($0, at: "\(path).id", scope: rootScope) },
                     domain: domain,
                     fairness: process.fairness,
                     fairnessExcludedSteps: Set(try process.fairnessExcludedLabels.map {
@@ -797,17 +798,34 @@ struct CompiledLowerer {
                     return false
                 }
             }
-            guard algorithm.processes.count == 1,
-                  case .forAll(let domain, let binding, let predicate) = expression,
-                  domain == algorithm.processes[0].domain
-            else { return false }
-            switch predicate {
-            case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),
-                 .equal(.controlLocation(let location), .functionApply(.programCounter, .variable(let process))):
-                return location.sourceName == CompilerControlSymbol.done.rawValue && process == binding
-            default:
-                return false
+            func finishedProcess(in predicate: StateExpr) -> StateExpr? {
+                switch predicate {
+                case .equal(.functionApply(.programCounter, let id), .controlLocation(let location)),
+                     .equal(.controlLocation(let location), .functionApply(.programCounter, let id)):
+                    return location.sourceName == CompilerControlSymbol.done.rawValue ? id : nil
+                default:
+                    return nil
+                }
             }
+
+            var remaining = Set(algorithm.processes.map(\.domain))
+            var predicates = [expression]
+            while let predicate = predicates.popLast() {
+                let domain: StateExpr
+                switch predicate {
+                case .and(let lhs, let rhs):
+                    predicates.append(contentsOf: [lhs, rhs])
+                    continue
+                case .forAll(let set, let binding, let body):
+                    guard finishedProcess(in: body) == .variable(binding) else { return false }
+                    domain = set
+                default:
+                    guard let id = finishedProcess(in: predicate) else { return false }
+                    domain = .setLiteral([id])
+                }
+                guard remaining.remove(domain) != nil else { return false }
+            }
+            return remaining.isEmpty
         }
 
         func property(
@@ -1187,19 +1205,16 @@ struct CompiledLowerer {
                     nextSafeAction: "Group only steps from the same Each declaration.")
             }
             let ids = try names.map { try self.action(named: $0, at: "\(path).action") }
-            guard let first = actions[ids[0]], first.bindings.count == 1 else { throw diagnostic(path: path) }
             for id in ids {
-                guard let compiled = actions[id], compiled.bindings.count == 1 else {
-                    throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: path,
-                        expected: "actions over one process population", actual: names.joined(separator: ", "),
-                        nextSafeAction: "Group only steps from the same Each declaration.")
-                }
-                let requirements = compiled.bindings[0].domain.stateRequirements(operators: operators)
-                guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
-                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
-                        path: "\(path).domain", expected: "an immutable process fairness population",
-                        actual: "a domain that reads state or action enabledness",
-                        nextSafeAction: "Declare the process population with immutable parameters or values.")
+                guard let action = actions[id], !action.bindings.isEmpty else { throw diagnostic(path: path) }
+                for binding in action.bindings {
+                    let requirements = binding.domain.stateRequirements(operators: operators)
+                    guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
+                        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                            path: "\(path).domain", expected: "an immutable process fairness population",
+                            actual: "a domain that reads state or action enabledness",
+                            nextSafeAction: "Declare the actor and its action arguments over immutable domains.")
+                    }
                 }
             }
             return .init(scope: .eachActionGroup(ids), isStrong: condition.isStrong)

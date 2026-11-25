@@ -106,13 +106,12 @@ package struct ChameneosModel: Sendable {
                 numMeetings != N || total == 2 * N
             }
 
-            let Chameneos = Validation {
+            Validation("Chameneos") {
                 Bind(N, to: 4)
                 Bind(M, to: 4)
                 Bind(Faded, to: FadedToken.faded)
                 Bind(MeetingPlaceEmpty, to: EmptyMeetingPlace.empty)
             }.checkingDeadlock(false)
-            Chameneos
         }
     }
 }

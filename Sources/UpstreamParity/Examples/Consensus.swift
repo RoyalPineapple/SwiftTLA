@@ -1,7 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The published PlusCal consensus safety model.
+/// The three-value PlusCal consensus model from the Byzantine Paxos example.
 ///
 /// The model states the core safety boundary: one nondeterministically
 /// selected value may be chosen, and every execution preserves that choice.
@@ -9,7 +9,7 @@ import SwiftTLAMacros
 /// scoped `with`.
 @TLAModel
 package struct ConsensusModel: Sendable {
-    package enum Value: String, CaseIterable, FiniteTLAValueDomain {
+    package enum Choice: String, CaseIterable, FiniteTLAValueDomain {
         case one = "v1"
         case two = "v2"
         case three = "v3"
@@ -17,23 +17,25 @@ package struct ConsensusModel: Sendable {
         package static var defaultValue: Self { .one }
         package static let finiteValues = allCases
 
-        package var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
-        case choose = "lbl"
+        // TLC exposes the translated single loop body as Next.
+        case choose = "Next"
     }
 
     package static var spec: TLASpec {
-        #spec("Consensus") {
+        #spec("Consensus") { configuration in
             Extends(.finiteSets)
             Extends(.integers)
+            let Value = configuration.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.one, .two, .three])]))
             let Consensus = Algorithm(fairness: .weak) { scope in
-                let chosen = scope.sharedVar(initial: SetExpr<Value>())
+                let chosen = scope.sharedVar(initial: Set<Choice>())
 
                 let choose = Macro {
                     When(chosen.isEmpty)
-                    With(Value.all) { value in
+                    With(Value) { value in
                         chosen.insert(value)
                     }
                 }
@@ -42,15 +44,18 @@ package struct ConsensusModel: Sendable {
                     choose()
                 }
 
-                Invariant("TypeOK") {
-                    chosen.isSubset(of: SetExpr<Value>.literal(.one, .two, .three))
-                }
+                let wellTyped = chosen.isSubset(of: Value)
+                Invariant("TypeOK") { wellTyped }
                 Invariant("Inv") {
+                    wellTyped
                     chosen.count <= 1
                 }
                 Eventually("Success", !chosen.isEmpty)
             }
             Consensus
+            Validation("published", label: "Consensus") {
+                Bind(Value, to: Set<Choice>([.one, .two, .three]))
+            }.checkingDeadlock(false)
         }
     }
 }

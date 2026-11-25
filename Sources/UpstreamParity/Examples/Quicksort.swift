@@ -101,11 +101,10 @@ package struct QuicksortModel: Sendable {
                 Termination(.eventually(Finished()))
             }
             Quicksort
-            let MCQuicksort = Validation {
+            Validation("MCQuicksort") {
                 Bind(Values, to: Set<Int>([1, 2, 3]))
                 Bind(MaxSeqLen, to: 4)
             }
-            MCQuicksort
         }
     }
 }

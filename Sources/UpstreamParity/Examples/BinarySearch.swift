@@ -57,22 +57,21 @@ package struct BinarySearchModel: Sendable {
                     && high >= 0 && high <= seq.count
                     && result >= 0 && result <= seq.count
                 Invariant("TypeOK") { typeOK }
+                let containsValue = seq.contains(val)
                 Invariant("Inv") {
                     typeOK
                     result == 0 || (seq.count > 0 && seq[result] == val)
                     Finished() || If(
-                        IntRange(1, through: seq.count).contains { index in seq[index] == val },
+                        containsValue,
                         then: IntRange(low, through: high).contains { index in seq[index] == val },
                         else: result == 0
                     )
                     !Finished() || result != 0
-                        || IntRange(1, through: seq.count).allSatisfy { index in seq[index] != val }
+                        || !containsValue
                 }
                 Invariant("resultCorrect") {
                     (!Finished()) || If(
-                        IntRange(1, through: seq.count).contains { index in
-                            seq[index.expr] == val
-                        },
+                        containsValue,
                         then: seq[result] == val,
                         else: result == 0
                     )
@@ -80,11 +79,10 @@ package struct BinarySearchModel: Sendable {
                 Termination(.eventually(Finished()))
             }
             BinarySearch
-            let MCBinarySearch = Validation {
+            Validation("MCBinarySearch") {
                 Bind(Values, to: Set<Int>([1, 2, 3, 4, 5]))
                 Bind(MaxSeqLen, to: 8)
             }
-            MCBinarySearch
         }
     }
 }

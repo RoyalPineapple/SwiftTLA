@@ -62,7 +62,7 @@ package struct SingleLaneBridgeModel: Sendable {
                 When(!Bridge.contains(next))
                 If(CarsRight.contains(car) && next == EndBridge + 1
                     || CarsLeft.contains(car) && next == StartBridge - 1) {
-                    WaitingBeforeBridge.set(WaitingBeforeBridge.appending(car))
+                    WaitingBeforeBridge.append(car)
                 }
                 Location[car].set(next)
             }
@@ -76,7 +76,7 @@ package struct SingleLaneBridgeModel: Sendable {
                     && Cars.allSatisfy { other in Location[other] != next })
                 If(CarsRight.contains(car) && next == EndBridge + 1
                     || CarsLeft.contains(car) && next == StartBridge - 1) {
-                    WaitingBeforeBridge.set(WaitingBeforeBridge.appending(car))
+                    WaitingBeforeBridge.append(car)
                 }
                 Location[car].set(next)
             }
@@ -135,13 +135,12 @@ package struct SingleLaneBridgeModel: Sendable {
                 (!Bridge.contains(Location[Car.leftTwo])).leadsTo(Bridge.contains(Location[Car.leftTwo])),
             ]))
 
-            let MC = Validation {
+            Validation("MC") {
                 Bind(CarsRight, to: Set<Car>([.rightOne, .rightTwo]))
                 Bind(CarsLeft, to: Set<Car>([.leftOne, .leftTwo]))
                 Bind(Bridge, to: Set<Int>([4, 5]))
                 Bind(Positions, to: Set<Int>([1, 2, 3, 4, 5, 6, 7, 8]))
             }.checking(only: [invariants, CarsInBridgeExitBridge, CarsEnterBridge])
-            MC
         }
     }
 }
