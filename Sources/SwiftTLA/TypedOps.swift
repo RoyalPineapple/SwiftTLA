@@ -40,6 +40,10 @@ public func >=(_ lhs: some TypedExpression<Int>, _ rhs: some TypedExpression<Int
 }
 
 extension ClosedRange where Bound == Int {
+    public func contains(_ value: some TypedExpression<Int>) -> Expr<Bool> {
+        IntRange(lowerBound, through: upperBound).contains(value)
+    }
+
     public func contains(_ field: SharedVariable<Int>) -> Expr<Bool> {
         Expr(boundsCheck(for: field.stateExpr))
     }

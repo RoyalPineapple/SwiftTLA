@@ -743,7 +743,9 @@ struct NativeSwiftEmitter {
              .assertView, .convert, .equal, .notEqual,
              .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual:
             return try scalarExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .setLiteral, .tupleLiteral, .in, .subset, .union,
+        case .in:
+            return try membershipExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .setLiteral, .tupleLiteral, .subset, .union,
              .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
              .setMap, .forAll, .exists, .choose, .sequenceFromSet, .sequenceFromFunction,
              .powerSet, .sequenceSet, .unionAll, .functionSet, .randomSubset, .randomElement, .setSum:
@@ -993,6 +995,55 @@ struct NativeSwiftEmitter {
         return "(\(try emit(0)) ? \(try emit(1)) : \(try emit(2)))"
     }
 
+    private mutating func membershipExpression(
+        _ node: CompiledExpression, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<ResolvedFunctionID>
+    ) throws -> String {
+        func emit(_ index: Int) throws -> String {
+            try expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        if let members = try nominalSetElements(node.children[1], state: state,
+            substitutions: substitutions, activeFunctions: activeFunctions) {
+            guard case .set(let element) = node.children[1].resultType else { throw unsupported("record membership") }
+            let candidateType = node.children[0].resultType
+            let order = try crossOrdering(element, candidateType)
+            let reverse = element == candidateType ? "_recordOrder" : try crossOrdering(candidateType, element)
+            return """
+            (try { () throws -> \(nativeBoolType) in
+                let _recordDomain = \(members)
+                let _recordCandidate = \(try emit(0))
+                let _recordOrder = \(order)
+                return _recordDomain.contains { _recordMember in
+                    !(_recordOrder(_recordMember, _recordCandidate) || (\(reverse))(_recordCandidate, _recordMember))
+                }
+            }())
+            """
+        }
+        if hasSymbolicMembership(node.children[1]) {
+            let ownsDepth = !hasDepthScope
+            hasDepthScope = true
+            defer { if ownsDepth { hasDepthScope = false } }
+            var pending = [node]
+            var needsDepth = false
+            while ownsDepth, let expression = pending.popLast() {
+                if case .call = expression.operation { needsDepth = true; break }
+                pending += expression.children
+            }
+            let predicate = try membershipPredicate(node.children[1], state: state,
+                substitutions: substitutions, activeFunctions: activeFunctions, membershipFunctions: [])
+            return """
+            (try { () throws -> \(nativeBoolType) in
+                \(needsDepth ? "var _nativeDepth = 0" : "")
+                \(predicate.declaration)
+                let contains = \(predicate.call)
+                let candidate = \(try emit(0))
+                return contains(candidate)
+            }())
+            """
+        }
+        return "(\(try emit(1)).contains(\(try emit(0))))"
+    }
+
     private mutating func collectionExpression(
         _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
@@ -1044,46 +1095,6 @@ struct NativeSwiftEmitter {
                 return "\(try swiftType(result))(\(try node.children.indices.map { index in "\(fieldName(result, index: index, escaped: false)): \(try emit(index))" }.joined(separator: ", ")))"
             default: throw unsupported("tuple literal")
             }
-        case .in:
-            if let members = try nominalSetElements(node.children[1], state: state,
-                substitutions: substitutions, activeFunctions: activeFunctions) {
-                guard case .set(let element) = node.children[1].resultType else { throw unsupported("record membership") }
-                let order = try crossOrdering(element, childType(0))
-                let reverse = element == childType(0) ? "_recordOrder" : try crossOrdering(childType(0), element)
-                return """
-                (try { () throws -> \(nativeBoolType) in
-                    let _recordDomain = \(members)
-                    let _recordCandidate = \(try emit(0))
-                    let _recordOrder = \(order)
-                    return _recordDomain.contains { _recordMember in
-                        !(_recordOrder(_recordMember, _recordCandidate) || (\(reverse))(_recordCandidate, _recordMember))
-                    }
-                }())
-                """
-            }
-            if hasSymbolicMembership(node.children[1]) {
-                let ownsDepth = !hasDepthScope
-                hasDepthScope = true
-                defer { if ownsDepth { hasDepthScope = false } }
-                var pending = [node]
-                var needsDepth = false
-                while ownsDepth, let expression = pending.popLast() {
-                    if case .call = expression.operation { needsDepth = true; break }
-                    pending += expression.children
-                }
-                let predicate = try membershipPredicate(node.children[1], state: state,
-                    substitutions: substitutions, activeFunctions: activeFunctions, membershipFunctions: [])
-                return """
-                (try { () throws -> \(nativeBoolType) in
-                    \(needsDepth ? "var _nativeDepth = 0" : "")
-                    \(predicate.declaration)
-                    let contains = \(predicate.call)
-                    let candidate = \(try emit(0))
-                    return contains(candidate)
-                }())
-                """
-            }
-            return "(\(try emit(1)).contains(\(try emit(0))))"
         case .subset:
             if hasSymbolicMembership(node.children[1]) {
                 let subsets = CompiledExpression(operation: .powerSet,

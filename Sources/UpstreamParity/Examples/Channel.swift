@@ -50,8 +50,8 @@ package struct ChannelModel: Sendable {
             }
             Invariant("TypeInvariant") {
                 Data.contains(chan.val)
-                    && IntRange(0, through: 1).contains(chan.rdy)
-                    && IntRange(0, through: 1).contains(chan.ack)
+                    && (0...1).contains(chan.rdy)
+                    && (0...1).contains(chan.ack)
             }
             let Upstream = Validation { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
             Upstream
