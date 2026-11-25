@@ -106,6 +106,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "teaching-simple", scenarios: { try TeachingSimpleN5Model.validationScenarios() }),
     .init(id: "teaching-simple-regular", scenarios: { try TeachingSimpleRegularN8Model.validationScenarios() }),
     .init(id: "hour-clock", scenarios: { try HourClockModel.validationScenarios() }),
+    .init(id: "published-hour-clock-2", scenarios: { try PublishedHourClock2Model.validationScenarios() }),
     .init(id: "hour-clock-2", scenarios: { try HourClock2Model.validationScenarios() }),
     .init(id: "least-circular-substring", scenarios: { try LeastCircularSubstringModel.validationScenarios() }),
     .init(id: "find-highest", scenarios: { try FindHighestModel.validationScenarios() }),

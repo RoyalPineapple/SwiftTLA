@@ -6,6 +6,7 @@ extension NativeSwiftEmitter {
         let hidden = program.layout.variables.filter { $0.declaration.origin != .source }
         if hidden.isEmpty {
             return try nativeDeclarations("""
+            public typealias Configuration = SwiftTLA.EmptyModelConfiguration
             public static func _machineForRefinement(_ state: State, configuration: SwiftTLA.EmptyModelConfiguration) throws -> Self {
                 _machineForRefinement(state)
             }

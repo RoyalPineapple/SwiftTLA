@@ -9783,7 +9783,8 @@
           "role": "configured root",
           "reason": "Published configuration binding.",
           "implementations": [
-            "Sources/UpstreamParity/Examples/HourClock.swift"
+            "Sources/UpstreamParity/Examples/HourClock.swift",
+            "Sources/UpstreamParity/Examples/PublishedHourClock2.swift"
           ],
           "dispositionComplete": false
         },
@@ -9791,7 +9792,9 @@
           "path": "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
           "role": "configured root",
           "reason": "HourClock2.cfg selects HC as the behavior and HC2 as the property. APHourClock2 instead selects HC2 with invariant HCini. These selections require separate evidence despite their equivalent clock transitions.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/PublishedHourClock2.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10495,10 +10498,16 @@
           "module": "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
           "configuration": "specifications/SpecifyingSystems/HourClock/HourClock2.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/PublishedHourClock2.swift",
+              "scenario": "Upstream",
+              "caseID": "published-hour-clock-2"
+            }
+          ],
           "evidence": []
         },
         {

@@ -2858,6 +2858,33 @@
       "moduleSHA256": "3b71af5a55d460f6580dc26e66ff537b22f6d0e2d2cfe0924e5376597aafd080",
       "cfgSHA256": "3bc8a6308f224fca254461dd1f02f6d8118f3c4f80561eb48553fbcc1afa9f0e",
       "timeoutSeconds": 600
+    },
+    {
+      "id": "published-hour-clock-2",
+      "sourceModel": "published-hour-clock-2",
+      "scenario": "Upstream",
+      "module": "hour-clock/HourClock2.tla",
+      "configuration": "hour-clock/HourClock2.cfg",
+      "imports": [
+        "hour-clock/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "HourClock2",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/HourClock/HourClock2.tla",
+        "sha256": "dfbb3e62e0ad33edec7d7dd5db8eba8a57f18778bf7c3adf1e5e4fe8dd6b69ca"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "dfbb3e62e0ad33edec7d7dd5db8eba8a57f18778bf7c3adf1e5e4fe8dd6b69ca",
+      "cfgSHA256": "5ea057d4e02ac8f55b36f0b7a17f9ea23acbbe5d5696e98404197cf2a9e798fc",
+      "timeoutSeconds": 60
     }
   ]
 }
