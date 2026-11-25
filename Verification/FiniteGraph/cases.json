@@ -275,6 +275,33 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "spanning",
+      "sourceModel": "spanning",
+      "scenario": "broadcast",
+      "module": "spanning/MC_spanning.tla",
+      "configuration": "spanning/MC_spanning.cfg",
+      "imports": [
+        "spanning/spanning.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC_spanning",
+          "importedModule": "spanning"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/spanning/spanning.tla",
+        "sha256": "878e917b075f6cd2bfa2a2d0083c1c66e9eb47fe2baaed41dd9a0a28fbcb2c36"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "08e4703ccdcf45be11aaacb91971bf0bcbd69adc8e27b227e7085189df2d6bc5",
+      "cfgSHA256": "a97ff67b862219417ee44f435538b2976b693bcb72c5774191a30b473905d009",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "token-ring",
       "sourceModel": "token-ring",
       "scenario": "sixNodes",

@@ -9038,8 +9038,8 @@
     {
       "path": "specifications/spanning",
       "name": "Spanning Tree Broadcast Algorithm",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "The three-process MC_spanning port matched all 16 reachable states and 40 labeled transitions locally. TypeOK failed as published, SntMsg held, and no deadlock occurred.",
+      "gap": "APspanning symbolic checks and hosted MC_spanning parity remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -9053,7 +9053,9 @@
           "path": "specifications/spanning/MC_spanning.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Spanning.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9065,9 +9067,11 @@
         },
         {
           "path": "specifications/spanning/spanning.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "MC_spanning extends this module for the broadcast behavior and invariants.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Spanning.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -9086,10 +9090,16 @@
           "module": "specifications/spanning/MC_spanning.tla",
           "configuration": "specifications/spanning/MC_spanning.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Spanning.swift",
+              "scenario": "broadcast",
+              "caseID": "spanning"
+            }
+          ],
           "evidence": []
         }
       ],

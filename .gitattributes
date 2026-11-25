@@ -22,3 +22,4 @@ Verification/FiniteGraph/fixtures/echo/* whitespace=-blank-at-eol,-blank-at-eof
 Tools/TLAPS/packaging.patch whitespace=-blank-at-eol,-space-before-tab
 Verification/FiniteGraph/fixtures/barrier/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/token-ring/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/spanning/* whitespace=-blank-at-eol,-blank-at-eof
