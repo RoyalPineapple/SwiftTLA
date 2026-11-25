@@ -10891,15 +10891,17 @@
     {
       "path": "specifications/transaction_commit",
       "name": "Transaction Commit Models",
-      "audit": "The three-manager TCommit port matched the published model locally on 34 reachable states, 93 labeled transitions, TCTypeOK and TCConsistent. Its configuration disables deadlock checking. The concrete TwoPhase port matched the published three-manager configuration on one initial state, 288 reachable states and 1,145 labeled transitions. TPTypeOK held and deadlock checking found no deadlocks.",
-      "gap": "Hosted parity for both ports, other configurations in this family and the TwoPhase refinement proof remain open.",
+      "audit": "The three-manager TCommit port matched the published model locally on 34 reachable states, 93 labeled transitions, TCTypeOK and TCConsistent. Its configuration disables deadlock checking. The concrete TwoPhase port matched the published three-manager configuration on one initial state, 288 reachable states and 1,145 labeled transitions. TPTypeOK held and deadlock checking found no deadlocks. The backup transaction manager matched the cached original TLC graph and generated TLA locally on one initial state, 1,245 reached states and 4,850 labeled transitions. TypeOK and Consistency held and TLC found no deadlock. The configuration omits Termination.",
+      "gap": "Hosted parity for these three ports, other configurations in this family and the TwoPhase refinement proof remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/transaction_commit/2PCwithBTM.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/BackupTransactionManager.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10961,10 +10963,16 @@
           "module": "specifications/transaction_commit/2PCwithBTM.tla",
           "configuration": "specifications/transaction_commit/2PCwithBTM.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/BackupTransactionManager.swift",
+              "scenario": "threeManagers",
+              "caseID": "two-phase-btm"
+            }
+          ],
           "evidence": []
         },
         {
