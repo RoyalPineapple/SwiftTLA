@@ -275,6 +275,26 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "two-phase-btm",
+      "sourceModel": "two-phase-btm",
+      "scenario": "threeManagers",
+      "module": "two-phase-btm/2PCwithBTM.tla",
+      "configuration": "two-phase-btm/2PCwithBTM.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/2PCwithBTM.tla",
+        "sha256": "ea518313d91f44080ddd8a062439e24be52c6851173952558436124f35227198"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "ea518313d91f44080ddd8a062439e24be52c6851173952558436124f35227198",
+      "cfgSHA256": "3da95f63bdd374311f671f5cda8c0504517fa910811f7491ac9c96482c3a55d7",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "transaction-two-phase",
       "sourceModel": "transaction-two-phase",
       "scenario": "threeManagers",

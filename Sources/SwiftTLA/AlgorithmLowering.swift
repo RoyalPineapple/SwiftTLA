@@ -336,26 +336,27 @@ enum AlgorithmLowerer {
                 } else {
                     body = loweredStatements.action
                 }
+                let guarded = requiresProgramCounter
+                    ? ActionExpr.and(.guard_(.equal(
+                        .functionApply(.programCounter, .variable(processBinding.rawValue)),
+                        control.location(atomic.label.name))), body)
+                    : body
+                let bindings: [ActionBinding]
+                let action: ActionExpr
+                switch process.population {
+                case .fixed(let id):
+                    bindings = []
+                    action = guarded.substitutingVariable(processBinding.rawValue, with: id)
+                case .family(let domain):
+                    bindings = [ActionBinding(name: processBinding.rawValue, domain: domain,
+                        generatedSwiftType: process.typeName)]
+                    action = guarded
+                }
                 let generatedAction = NamedAction(
                     name: requiresProgramCounter ? atomic.label.name : processNames[processIndex],
-                    body: try ActionNormalization.checkedComplete(
-                        requiresProgramCounter
-                            ? .and(
-                                .guard_(.equal(
-                                .functionApply(.programCounter, .variable(processBinding.rawValue)),
-                                    control.location(atomic.label.name)
-                                )),
-                                body
-                            )
-                            : body,
-                        variables: variables,
-                        at: "actions.\(atomic.label.name).normalization"
-                    ),
-                    bindings: [ActionBinding(
-                        name: processBinding.rawValue,
-                        domain: process.domain,
-                        generatedSwiftType: process.typeName
-                    )]
+                    body: try ActionNormalization.checkedComplete(action, variables: variables,
+                        at: "actions.\(atomic.label.name).normalization"),
+                    bindings: bindings
                 )
                 if requiresProgramCounter {
                     let atStep = StateExpr.equal(
@@ -1086,8 +1087,8 @@ enum AlgorithmLowerer {
         let names = actions.map(\.name)
         return switch policy {
         case .none: []
-        case .weak: [.weakFairnessEachActionGroup(names)]
-        case .strong: [.strongFairnessEachActionGroup(names)]
+        case .weak: [actions[0].bindings.isEmpty ? .weakFairnessActionGroup(names) : .weakFairnessEachActionGroup(names)]
+        case .strong: [actions[0].bindings.isEmpty ? .strongFairnessActionGroup(names) : .strongFairnessEachActionGroup(names)]
         }
     }
 

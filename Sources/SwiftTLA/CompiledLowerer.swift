@@ -750,6 +750,7 @@ struct CompiledLowerer {
                     name: process.name,
                     binder: try bound("self", in: scope, at: "\(path).binders"),
                     swiftType: process.swiftType,
+                    fixedID: try process.fixedID.map { try lower($0, at: "\(path).id", scope: rootScope) },
                     domain: domain,
                     fairness: process.fairness,
                     fairnessExcludedSteps: Set(try process.fairnessExcludedLabels.map {
@@ -797,17 +798,34 @@ struct CompiledLowerer {
                     return false
                 }
             }
-            guard algorithm.processes.count == 1,
-                  case .forAll(let domain, let binding, let predicate) = expression,
-                  domain == algorithm.processes[0].domain
-            else { return false }
-            switch predicate {
-            case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),
-                 .equal(.controlLocation(let location), .functionApply(.programCounter, .variable(let process))):
-                return location.sourceName == CompilerControlSymbol.done.rawValue && process == binding
-            default:
-                return false
+            func finishedProcess(in predicate: StateExpr) -> StateExpr? {
+                switch predicate {
+                case .equal(.functionApply(.programCounter, let id), .controlLocation(let location)),
+                     .equal(.controlLocation(let location), .functionApply(.programCounter, let id)):
+                    return location.sourceName == CompilerControlSymbol.done.rawValue ? id : nil
+                default:
+                    return nil
+                }
             }
+
+            var remaining = Set(algorithm.processes.map(\.domain))
+            var predicates = [expression]
+            while let predicate = predicates.popLast() {
+                let domain: StateExpr
+                switch predicate {
+                case .and(let lhs, let rhs):
+                    predicates.append(contentsOf: [lhs, rhs])
+                    continue
+                case .forAll(let set, let binding, let body):
+                    guard finishedProcess(in: body) == .variable(binding) else { return false }
+                    domain = set
+                default:
+                    guard let id = finishedProcess(in: predicate) else { return false }
+                    domain = .setLiteral([id])
+                }
+                guard remaining.remove(domain) != nil else { return false }
+            }
+            return remaining.isEmpty
         }
 
         func property(

@@ -93,10 +93,14 @@ internal struct AlgorithmPlusCalRenderer {
         case .weak: fairness = "fair "
         case .strong: fairness = "fair+ "
         }
-        // The header identifier names the process set. `self` names its
-        // current member inside the process body.
-        let domain = try process.domain.literalSetMembers.map(set) ?? formalRenderer.state(process.domain)
-        var lines = ["", "\(fairness)process (\(process.name) \\in \(domain))"]
+        let header: String
+        if let id = process.fixedID {
+            header = "\(process.name) = \(try formalRenderer.state(id))"
+        } else {
+            let domain = try process.domain.literalSetMembers.map(set) ?? formalRenderer.state(process.domain)
+            header = "\(process.name) \\in \(domain)"
+        }
+        var lines = ["", "\(fairness)process (\(header))"]
         if process.locals.isEmpty == false {
             lines.append("variables")
             lines += try declarations(process.locals, indent: "  ", terminator: ";")

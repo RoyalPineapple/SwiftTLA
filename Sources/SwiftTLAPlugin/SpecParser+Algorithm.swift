@@ -26,6 +26,7 @@ private enum AlgorithmSourceConstruct: Equatable {
     case scopedState(AlgorithmStateDeclarationKind, scope: String)
     case procedure
     case each
+    case fixedProcess
     case doStep
     case whileStep
     case loopStep
@@ -102,6 +103,7 @@ private enum AlgorithmSourceConstruct: Equatable {
         case "Macro": self = .macro
         case "Procedure": self = .procedure
         case "Each": self = .each
+        case "Process": self = .fixedProcess
         case "Do": self = .doStep
         case "While": self = .whileStep
         case "Loop": self = .loopStep
@@ -538,8 +540,8 @@ extension ParserSession {
             return nil
         case .procedure:
             return parseProcedure(call, macros: macros, scope: scope)
-        case .each:
-            let component = parseEach(call, macros: macros, scope: scope)
+        case .each, .fixedProcess:
+            let component = parseProcess(call, fixed: construct == .fixedProcess, macros: macros, scope: scope)
             if component == nil, algorithmParseFailure == nil {
                 algorithmParseFailure = "Each requires a finite enum domain and a decodable process body."
             }
@@ -812,8 +814,9 @@ extension ParserSession {
         return .init(name: name, body: body, reference: reference)
     }
 
-    private func parseEach(
+    private func parseProcess(
         _ call: FunctionCallExprSyntax,
+        fixed: Bool,
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
@@ -825,11 +828,21 @@ extension ParserSession {
             algorithmParseFailure = "Each could not resolve its finite domain. Known finite domains: \(known)."
             return nil
         }
-        let domain: StateExpr
+        let population: AlgorithmProcessPopulation
         let typeName: String
         let elementType: CompiledValueType
-        if let finite = finiteAlgorithmDomain(domainSyntax) {
-            domain = .setLiteral(finite.values.map(StateExpr.value))
+        if fixed {
+            guard call.arguments.first?.label?.text == "id", closureParameterNames(in: closure).isEmpty,
+                  let type = typedFacadeValueType(domainSyntax, scope: scope), type.resolved,
+                  let id = decodeTypedFacadeValue(domainSyntax, scope: scope) else {
+                algorithmParseFailure = "Process requires a typed id and a parameterless body."
+                return nil
+            }
+            population = .fixed(id)
+            typeName = type.swiftType
+            elementType = type
+        } else if let finite = finiteAlgorithmDomain(domainSyntax) {
+            population = .family(.setLiteral(finite.values.map(StateExpr.value)))
             typeName = finite.typeName
             do {
                 elementType = try sourceTypeResolver.resolve(typeName)
@@ -840,7 +853,7 @@ extension ParserSession {
         } else if case .set(let element)? = typedFacadeValueType(domainSyntax, scope: scope),
                   element.resolved,
                   let expression = decodeTypedFacadeValue(domainSyntax, scope: scope) {
-            domain = expression
+            population = .family(expression)
             typeName = element.swiftType
             elementType = element
         } else {
@@ -850,7 +863,7 @@ extension ParserSession {
         let closureParameters = closureParameterNames(in: closure)
         let parameter = closureParameters.first ?? "self"
         let declarationScope = closureParameters.count > 1 ? closureParameters.last : nil
-        var processScope = scope.extending(binding: parameter,
+        var processScope = fixed ? scope : scope.extending(binding: parameter,
             to: .currentProcess, shape: elementType)
         var components: [AlgorithmComponentModel] = []
         var processMacros = macros
@@ -980,7 +993,7 @@ extension ParserSession {
             fairness = .none
         }
         processDomainOffsets.append(domainSyntax.positionAfterSkippingLeadingTrivia.utf8Offset)
-        return .process(.init(typeName: typeName, name: name, domain: domain, fairness: fairness,
+        return .process(.init(typeName: typeName, name: name, population: population, fairness: fairness,
             components: components, resolvedElementType: elementType,
             fairnessExcludedLabels: fairnessExcludedLabels))
     }

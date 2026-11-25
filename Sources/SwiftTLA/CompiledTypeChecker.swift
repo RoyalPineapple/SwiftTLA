@@ -573,7 +573,7 @@ package struct CompiledTypeChecker: Sendable {
             bindings[process.binder] = try element(domain.resultType)
             actionBinders.insert(process.binder)
             return try CompiledAuthoredPlusCalProcess(name: process.name, binder: process.binder, swiftType: process.swiftType,
-                domain: domain, fairness: process.fairness,
+                fixedID: process.fixedID.map { try checkOperand($0, expected: member) }, domain: domain, fairness: process.fairness,
                 fairnessExcludedSteps: process.fairnessExcludedSteps,
                 locals: process.locals.map { try checkAuthoredState($0) },
                 steps: process.steps.map { try checkAuthoredStep($0, procedures: plan.procedures) })
@@ -2034,6 +2034,13 @@ package struct CompiledTypeChecker: Sendable {
                     else if expected.unionAlternatives != nil,
                             inputs.types.canProjectRead(left, to: expected),
                             inputs.types.canProjectRead(right, to: expected) { context = expected }
+                    else if case .union = ancestors.last?.operation,
+                            case .set(let a) = left, case .set(let b) = right,
+                            a.resolved, b.resolved,
+                            !inputs.types.canProjectRead(a, to: b), !inputs.types.canProjectRead(b, to: a),
+                            let disjoint = try? CompiledValueType.preservingUnion(a, b, namedDomains: namedDomains) {
+                        context = .set(disjoint)
+                    }
                     else if let common = try? Self.operandContext(left, right) { context = common }
                     else if left.recordFields != nil && right.recordFields != nil {
                         context = try CompiledValueType.preservingUnion(left, right, namedDomains: namedDomains)
