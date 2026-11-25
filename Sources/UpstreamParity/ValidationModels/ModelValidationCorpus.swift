@@ -89,6 +89,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "paxos-mc-consensus", scenarios: { try PaxosInductiveConsensusModel.validationScenarios() }),
     .init(id: "simple-allocator", scenarios: { try SimpleAllocatorModel.validationScenarios() }),
     .init(id: "spanning", scenarios: { try SpanningModel.validationScenarios() }),
+    .init(id: "ap-spanning", scenarios: { try APSpanningModel.validationScenarios() }),
     .init(id: "token-ring", scenarios: { try TokenRingModel.validationScenarios() }),
     .init(id: "peterson-safety", scenarios: { try PetersonModel.validationScenarios() }),
     .init(id: "auxiliary-lockhs", scenarios: { try LockHSModel.validationScenarios() }),

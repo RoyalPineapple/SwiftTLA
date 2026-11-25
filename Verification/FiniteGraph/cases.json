@@ -2885,6 +2885,66 @@
       "moduleSHA256": "dfbb3e62e0ad33edec7d7dd5db8eba8a57f18778bf7c3adf1e5e4fe8dd6b69ca",
       "cfgSHA256": "5ea057d4e02ac8f55b36f0b7a17f9ea23acbbe5d5696e98404197cf2a9e798fc",
       "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-mc-inner-fifo",
+      "sourceModel": "mc-inner-fifo",
+      "scenario": "APMCInnerFIFO",
+      "module": "mc-inner-fifo/APMCInnerFIFO.tla",
+      "configuration": "mc-inner-fifo/APMCInnerFIFO.cfg",
+      "imports": [
+        "mc-inner-fifo/MCInnerFIFO.tla",
+        "mc-inner-fifo/InnerFIFOInstanced.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APMCInnerFIFO",
+          "importedModule": "MCInnerFIFO"
+        },
+        {
+          "importingModule": "MCInnerFIFO",
+          "importedModule": "InnerFIFOInstanced"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.tla",
+        "sha256": "fb588810f2c4ada66cfb2f1b3547685f93e446aa95fe183455eb7a84093be36f"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "fb588810f2c4ada66cfb2f1b3547685f93e446aa95fe183455eb7a84093be36f",
+      "cfgSHA256": "1806923e7c779eae03bd3a1ec1d284fd429e2f641c1dd3327bafa2b0d5c5bd61",
+      "timeoutSeconds": 120,
+      "comparisonMode": "decisive-counterexample"
+    },
+    {
+      "id": "ap-spanning",
+      "sourceModel": "ap-spanning",
+      "scenario": "APspanning",
+      "module": "spanning/APspanning.tla",
+      "configuration": "spanning/APspanning.cfg",
+      "imports": [
+        "spanning/spanning.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APspanning",
+          "importedModule": "spanning"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/spanning/APspanning.tla",
+        "sha256": "40fe5524348094ba798effb2c0abd80c91f089f5f6b1aa62cac8a85547888c13"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "40fe5524348094ba798effb2c0abd80c91f089f5f6b1aa62cac8a85547888c13",
+      "cfgSHA256": "e62536c56344905f04964b168b002ec635bf980025a851e3e654c62197505285",
+      "timeoutSeconds": 120
     }
   ]
 }

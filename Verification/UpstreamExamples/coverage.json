@@ -9191,7 +9191,9 @@
           "path": "specifications/spanning/APspanning.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APSpanning.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9215,7 +9217,8 @@
           "role": "behavior dependency",
           "reason": "MC_spanning extends this module for the broadcast behavior and invariants.",
           "implementations": [
-            "Sources/UpstreamParity/Examples/Spanning.swift"
+            "Sources/UpstreamParity/Examples/Spanning.swift",
+            "Sources/UpstreamParity/Examples/APSpanning.swift"
           ],
           "dispositionComplete": false
         }
@@ -9225,10 +9228,16 @@
           "module": "specifications/spanning/APspanning.tla",
           "configuration": "specifications/spanning/APspanning.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/APSpanning.swift",
+              "scenario": "APspanning",
+              "caseID": "ap-spanning"
+            }
+          ],
           "evidence": []
         },
         {
@@ -9695,7 +9704,9 @@
           "path": "specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.tla",
           "role": "configured root",
           "reason": "The configuration replaces Message with MessageVal, binds qLen=3, and selects Spec and ChannelTypeInvariants. Unlike MCInnerFIFO.cfg, it does not select qConstraint. The parameter alone must not imply a checking constraint.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/BoundedFIFO.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10385,10 +10396,16 @@
           "module": "specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.tla",
           "configuration": "specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/BoundedFIFO.swift",
+              "scenario": "APMCInnerFIFO",
+              "caseID": "ap-mc-inner-fifo"
+            }
+          ],
           "evidence": []
         },
         {
