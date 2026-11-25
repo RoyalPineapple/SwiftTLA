@@ -188,6 +188,7 @@ struct GeneratedAtomicUpdateProofTests {
         Attachment.record(Array(proof.configuration.utf8), named: "\(modelName).cfg")
         Attachment.record(Array(proof.bytes), named: "\(proof.name).tla")
         Attachment.record(Array(proof.configured.bytes), named: "\(proof.configured.name).tla")
+        Attachment.record(Array(proof.domain.bytes), named: "\(proof.domain.name).tla")
         for arm in proof.arms {
             Attachment.record(Array(arm.bytes), named: "\(arm.name).tla")
         }

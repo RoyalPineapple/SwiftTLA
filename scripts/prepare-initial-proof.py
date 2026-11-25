@@ -897,8 +897,9 @@ def main():
             variant_configured = variant_proof + "ConfiguredProof.tla"
             variant_members = f"{variant}NativeMembers.swift"
             arm_sources = [f"SwiftTLAArithmeticAssignmentSource{variant}Arm{arm}.tla" for arm in (1, 2)]
+            domain_source = f"SwiftTLAArithmeticAssignmentSource{variant}Domain.tla"
             variant_names = {variant + ".swift", variant + ".tla", variant_cfg, variant_members,
-                             variant_proof + ".tla", variant_configured, *arm_sources}
+                             variant_proof + ".tla", variant_configured, domain_source, *arm_sources}
             if not variant_names.issubset(attached):
                 raise ValueError("missing the selected conditional source, members, module, configuration, or proof")
             variant_files = {name: attached.pop(name) for name in variant_names}
@@ -922,6 +923,7 @@ def main():
                 "fixture": conditional_model, "fixtureSHA256": inputs[conditional_model],
                 "authoredVariant": variant_source.name, "proof": variant_proof + ".tla",
                 "configuration": variant_cfg, "configuredProof": variant_configured, "armSources": arm_sources,
+                "domainSource": domain_source,
                 "files": {name: digest(path) for name, path in variant_files.items()},
                 "compiledMembersSHA256": digest(retained_expansion), "sourceOrigin": origin,
                 "matchingSourceAccurateTokens": True,

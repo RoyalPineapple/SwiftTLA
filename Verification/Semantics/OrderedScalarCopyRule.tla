@@ -278,6 +278,69 @@ THEOREM DirectCopyRoutesFollowEveryCapture ==
         <2>. QED BY <2>bounds, <2>writers, SMT DEF routes, DirectCopyRoutes, DirectCopyReference, CopyReplace, count
     <1>. QED BY <1>step, <1>seed DEF routes, count
 
+THEOREM DirectCopyRoutesAgreeWithRecordedPrefixes ==
+    ASSUME NEW keys, NEW copies, Len(copies) \in Nat,
+           NEW count \in 0..Len(copies), NEW maps,
+           maps[1] = CopyEntryRoutes(keys),
+           \A position \in 1..count :
+               maps[position + 1] = CopyReplace(keys, maps[position], copies[position].target, <<"capture", position>>),
+           NEW index \in 1..(count + 1)
+    PROVE DirectCopyRoutes(keys, copies)[index - 1] = maps[index]
+PROOF
+<1>. DEFINE routes == DirectCopyRoutes(keys, copies)
+            agrees(position) == routes[position] = maps[position + 1]
+<1>count. count \in Nat
+    BY ONLY (Len(copies) \in Nat), (count \in 0..Len(copies)), SMT
+<1>routes. /\ routes[0] = CopyEntryRoutes(keys)
+           /\ \A position \in 1..Len(copies) :
+                  routes[position] = CopyReplace(keys, routes[position - 1], copies[position].target, <<"capture", position>>)
+    BY ONLY (Len(copies) \in Nat), DirectCopyRoutesFollowEveryCapture DEF routes
+<1>entry. agrees(0)
+    BY ONLY <1>routes, (maps[1] = CopyEntryRoutes(keys)), SMT DEF agrees
+<1>advance. ASSUME NEW position \in 1..count, \A prior \in 0..(position - 1) : agrees(prior)
+             PROVE agrees(position)
+    <2>bounds. /\ position - 1 \in 0..(position - 1)
+               /\ (position - 1) + 1 = position
+               /\ position \in 1..Len(copies)
+        BY ONLY (Len(copies) \in Nat), (count \in 0..Len(copies)), <1>count, (position \in 1..count), SMT
+    <2>prior. routes[position - 1] = maps[position]
+        BY ONLY <2>bounds, (\A prior \in 0..(position - 1) : agrees(prior)), SMT DEF agrees
+    <2>scheduled. routes[position] =
+        CopyReplace(keys, routes[position - 1], copies[position].target, <<"capture", position>>)
+        BY ONLY <2>bounds, <1>routes, SMT
+    <2>recorded. maps[position + 1] = CopyReplace(keys, maps[position], copies[position].target, <<"capture", position>>)
+        BY ONLY (position \in 1..count),
+            (\A step \in 1..count : maps[step + 1] = CopyReplace(keys, maps[step], copies[step].target, <<"capture", step>>)), SMT
+    <2>. QED BY ONLY <2>prior, <2>scheduled, <2>recorded, SMT DEF agrees
+<1>. HIDE DEF agrees
+<1>. DEFINE flags == [position \in 0..count |-> IF agrees(position) THEN TRUE ELSE FALSE]
+<1>flagType. flags \in [0..count -> BOOLEAN]
+    BY ONLY SMT DEF flags
+<1>flagValue. \A position \in 0..count : flags[position] <=> agrees(position)
+    BY ONLY SMT DEF flags
+<1>flagSeed. flags[0]
+    BY ONLY <1>count, <1>entry, <1>flagValue, SMT
+<1>flagStep. \A position \in 1..count :
+    (\A prior \in 0..(position - 1) : flags[prior]) => flags[position]
+    <2>. SUFFICES ASSUME NEW position \in 1..count,
+                         \A prior \in 0..(position - 1) : flags[prior]
+                 PROVE flags[position]
+        OBVIOUS
+    <2>bounds. 0..(position - 1) \subseteq 0..count /\ position \in 0..count
+        BY ONLY <1>count, (position \in 1..count), SMT
+    <2>prior. \A prior \in 0..(position - 1) : agrees(prior)
+        BY ONLY <2>bounds, <1>flagValue, (\A prior \in 0..(position - 1) : flags[prior]), SMT
+    <2>. QED BY ONLY <2>bounds, <2>prior, <1>advance, <1>flagValue, (position \in 1..count), SMT
+<1>allFlags. \A position \in 0..count : flags[position]
+    BY ONLY <1>count, <1>flagType, <1>flagSeed, <1>flagStep, FiniteBooleanPrefixProperty
+<1>all. \A position \in 0..count : agrees(position)
+    BY ONLY <1>allFlags, <1>flagValue, SMT
+<1>index. /\ index - 1 \in 0..count /\ (index - 1) + 1 = index
+    BY ONLY <1>count, (index \in 1..(count + 1)), SMT
+<1>prior. agrees(index - 1)
+    BY ONLY <1>all, <1>index, SMT DEF agrees
+<1>. QED BY ONLY <1>prior, <1>index, SMT DEF agrees, routes
+
 \* Projection of the production loop at each visitation boundary. Captures are
 \* numbered by the iteration that appended their binder, independent of its spelling.
 DirectCopySchedulerStart(keys) == [reads |-> <<>>, writes |-> CopyEntryRoutes(keys)]

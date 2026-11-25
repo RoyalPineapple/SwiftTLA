@@ -194,7 +194,7 @@ package enum ConditionalActionEvidence {
                                        program: CompiledProgram, rendered: RenderedModule,
                                        nativeSource: String, operations: String, checking: String)
         throws -> (name: String, bytes: Data, configuration: String, configured: (name: String, bytes: Data),
-                   arms: [(name: String, bytes: Data)]) {
+                   arms: [(name: String, bytes: Data)], domain: (name: String, bytes: Data)) {
         let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
         let (compilation, continuations) = try parsed.compileRetainingAtomicBranchContinuations(checkingBodyBinderOrdinals: true)
         guard compilation.identity == program.identity,
@@ -231,7 +231,8 @@ package enum ConditionalActionEvidence {
         let integers = zip(fields, roles).compactMap { field, role in role == .int ? field : nil }
         let booleans = zip(fields, roles).compactMap { field, role in role == .bool ? field : nil }
         let names = Dictionary(uniqueKeysWithValues: fields.map { ($0.declaration.name, $0) })
-        let keys = Set(integers.map { TLAValue.string($0.declaration.name) })
+        let keys = Set(fields.filter { program.variableTypes[$0.id] == .int }
+            .map { TLAValue.string($0.declaration.name) })
         guard fields.enumerated().allSatisfy({ index, field in
                   field.id.ordinal == index && field.declaration.origin == .source
               }),
@@ -247,7 +248,11 @@ package enum ConditionalActionEvidence {
         try verifyConditionalHistoryHelpers(operations: operations, checking: checking)
         let native = try nativeConditionalActionPlans(nativeSource, program: program, predicate: conditionWords)
         let nativeComparison = try conditionalNativeComparison(native.predicate, integers: integers)
-        let integerFields = Set(integers.map(\.declaration.name))
+        let integerFields = Set(zip(source.declarations, roles).compactMap { declaration, role in
+            role == .int ? declaration.name : nil
+        })
+        let integerModule = "SwiftTLAArithmeticAssignmentSource" + modelName
+        let integerDomain = integerModule + "Domain"
         let regions = action.body.orderedAlternativeFailureRegions
         guard regions.count == source.arms.count else { throw invalid }
         let sourceFieldOrdinals = Dictionary(uniqueKeysWithValues: zip(source.fieldOrder, source.fieldOrder.indices))
@@ -267,9 +272,9 @@ package enum ConditionalActionEvidence {
             }
             let count = ordered.prefix { $0.type == .int }.count
             guard count > 0 else { throw invalid }
-            let sourceName = "SwiftTLAArithmeticAssignmentSource" + modelName + "Arm\(arm + 1)"
+            let sourceName = integerModule + "Arm" + String(arm + 1)
             let sourceModule = try source.integerPrefixProof(arm: arm, through: count - 1, parsed: parsed,
-                integerFields: integerFields, name: sourceName)
+                integerFields: integerFields, name: sourceName, domain: integerDomain, prefix: integerSourcePrefixes[arm])
             let integerCaptures = Array(emitted.captures.prefix(count))
             let suffix = try ordered.indices.dropFirst(count).map { index in
                 let plan = emitted.captures[index].plan
@@ -290,7 +295,7 @@ package enum ConditionalActionEvidence {
             let targets = ordered.map { TLAValue.record(["target": .string($0.write.target), "field": .int($0.field)]) }
             let finalRoutes = TLAValue.function(authoredRoutes)
             return .init(integerInput: (sourceName, Data(sourceModule.utf8)), integerCaptures: integerCaptures,
-                         physicalRoutes: physicalRoutes, row: .record(["suffix": .tuple(suffix), "targets": .tuple(targets), "finalRoutes": finalRoutes]))
+                         physicalRoutes: physicalRoutes, suffix: .tuple(suffix), targets: .tuple(targets), finalRoutes: finalRoutes)
         }
         guard expectedBinders.next() == nil else { throw invalid }
         let nativeRows = try zip([native.ifTrue, native.ifFalse], descriptors).map { arm, descriptor in
@@ -331,7 +336,7 @@ package enum ConditionalActionEvidence {
         let state = fields.map(\.formalName).joined(separator: ", ")
         let types = integers.map { "\($0.formalName) \\in ConditionalIntValues" }
             + booleans.map { "\($0.formalName) \\in BOOLEAN" }
-        let proof = conditionalOverflowProof(name: proofName, model: rendered.moduleName,
+        let proof = conditionalOverflowProof(name: proofName, model: rendered.moduleName, integerDomain: integerDomain,
             history: history, probes: evidence.sites, aggregate: evidence.aggregate,
             evaluationCheck: selection.checking, ordinal: ordinal, firstBodyBinder: bodyBinderOrdinals.lowerBound,
             keys: .set(keys), before: stateCases(integers), state: state,
@@ -347,7 +352,8 @@ package enum ConditionalActionEvidence {
         let configured = conditionalConfiguredProof(name: configuredName, actionProof: proofName, cfgProof: selection.proof,
                                                      initialPredicate: initialPredicate)
         return (proofName, Data(proof.utf8), configuration, (configuredName, Data(configured.utf8)),
-                descriptors.map(\.integerInput))
+                descriptors.map(\.integerInput),
+                (integerDomain, Data(AuthoredCopySyntax.conditionalIntegerDomain(name: integerDomain, fields: integerFields).utf8)))
     }
 
     private static func conditionalNativeComparison(_ tokens: [String], integers: [CompiledVariableLayout]) throws
@@ -381,15 +387,22 @@ package enum ConditionalActionEvidence {
         return declared
     }
 
+    private static let integerSourcePrefixes = ["ConditionalFirstIntegerSource", "ConditionalSecondIntegerSource"]
+
     private struct ConditionalOverflowArm {
         let integerInput: (name: String, bytes: Data)
         let integerCaptures: [OrderedRHSPhysicalAction.Capture]
         let physicalRoutes: TLAValue
-        let row: TLAValue
+        let suffix: TLAValue
+        let targets: TLAValue
+        let finalRoutes: TLAValue
+        var row: TLAValue {
+            .record(["suffix": suffix, "targets": targets, "finalRoutes": finalRoutes])
+        }
     }
 
     private static func conditionalOverflowProof(
-        name: String, model: String, history: String, probes: [OrderedRHSPhysicalAction.OverflowProbe],
+        name: String, model: String, integerDomain: String, history: String, probes: [OrderedRHSPhysicalAction.OverflowProbe],
         aggregate: String, evaluationCheck: String, ordinal: Int, firstBodyBinder: Int, keys: TLAValue,
         before: String, state: String, typed: String, predicate: TLAValue, actionName: String,
         stateKeys: TLAValue, fullBefore: String, after: String, nativeComparison: TLAValue, nativeRows: TLAValue,
@@ -404,6 +417,7 @@ package enum ConditionalActionEvidence {
         let certified = conditionalIntegerHistoryProof(
             descriptors, firstBodyBinder: firstBodyBinder, probes: probes, history: history,
             tables: tables, planNames: planNames, native: native)
+        let sourceModules = ([integerDomain] + descriptors.map { $0.integerInput.name }).joined(separator: ", ")
         let guards = probes.map(\.failed.name).joined(separator: ", ")
         let stepCases = tables.indices.map { arm in
             #"""
@@ -424,13 +438,13 @@ package enum ConditionalActionEvidence {
         let noSuccessorLabels = probes.indices.map { "<2>probe\($0 + 1)" }.joined(separator: ", ")
         return #"""
         ---- MODULE \#(name) ----
-        EXTENDS \#(model), TLAPS, Sequences
+        EXTENDS \#(model), TLAPS, Sequences, \#(sourceModules)
         LOCAL INSTANCE SequenceTheorems
 
-        ConditionalIntKeys == \#(keys)
+        LOCAL ConditionalLayoutIntKeys == \#(keys)
         ConditionalIntValues == \#(TLAValue.int(Int.min))..\#(TLAValue.int(Int.max))
         ConditionalTypedState == \#(typed)
-        ConditionalBefore == [key \in ConditionalIntKeys |-> CASE \#(before) [] OTHER -> 0]
+        ConditionalBefore == [key \in ConditionalLayoutIntKeys |-> CASE \#(before) [] OTHER -> 0]
         ConditionalEntry == <<\#(state)>>
         ConditionalStateKeys == \#(stateKeys)
         ConditionalStateBefore == [key \in ConditionalStateKeys |-> CASE \#(fullBefore) [] OTHER -> 0]
@@ -441,9 +455,6 @@ package enum ConditionalActionEvidence {
         ConditionalNativeRows == \#(nativeRows)
         ConditionalActionOrdinal == \#(ordinal)
         ConditionalArms == 1..Len(ConditionalSourceRows)
-        Arithmetic == INSTANCE OrderedAssignmentOutputRules WITH Keys <- ConditionalIntKeys,
-            SwiftIntMin <- \#(TLAValue.int(Int.min)), SwiftIntMax <- \#(TLAValue.int(Int.max)),
-            Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>
 
         ConditionalArmFor(comparison) ==
             LET operand(pair) == Arithmetic!CopyReferenceValue(ConditionalBefore, <<>>, pair)
@@ -481,7 +492,7 @@ package enum ConditionalActionEvidence {
         <1>tableStep. ConditionalPhysicalStep <=> ConditionalTableStep(ConditionalSelectedArm)
             <2>select. (ConditionalSelectedArm = 1) <=> \#(comparison)
                 BY ONLY SMT DEF ConditionalSelectedArm, ConditionalArmFor, ConditionalSourceComparison,
-                    ConditionalBefore, ConditionalIntKeys, Arithmetic!CopyReferenceValue
+                    ConditionalBefore, ConditionalLayoutIntKeys, Arithmetic!CopyReferenceValue
             \#(stepCases)
             <2>. QED BY ONLY <1>shape, <1>selector, <2>arm1, <2>arm2, SMT
         \#(certified.steps)
@@ -550,17 +561,16 @@ package enum ConditionalActionEvidence {
                     <1>probeEmpty, SMT DEF ConditionalExportedHistory
             """#
         }.joined(separator: "\n    ")
-        let sources = ["ConditionalFirstIntegerSource", "ConditionalSecondIntegerSource"]
-        let names = zip(sources, arms).map { "\($0) == INSTANCE \($1.integerInput.name)" }
+        let sources = integerSourcePrefixes
         let actual = tables.indices.map { raw(tables[$0], arms[$0].integerCaptures, planNames[$0]) }
         let tableDefinitions = tables + planNames.flatMap { $0 }
         let physicalTables = tableDefinitions.joined(separator: ", ")
         let evaluatedTables = (tableDefinitions + tables.map { $0 + "Values" }).joined(separator: ", ")
         let sourceDefinitions = sources.flatMap { name in
-            ["MasterRows", "MasterNodes", "MasterNodeCounts", "MasterNodeKinds", "MasterNodeLiterals",
-             "MasterNodeReadKeys", "MasterNodeLeft", "MasterNodeRight", "MasterTargets"].map { "\(name)!\($0)" }
+            ["Rows", "Nodes", "NodeCounts", "NodeKinds", "NodeLiterals",
+             "NodeReadKeys", "NodeLeft", "NodeRight", "Targets"].map { "\(name)\($0)" }
         }.joined(separator: ",\n                ")
-        let supported = sources.map { "\($0)!MasterAssignmentsAreSupported" }.joined(separator: ", ")
+        let supported = sources.map { "\($0)AssignmentsAreSupported" }.joined(separator: ", ")
         let routedReads = sources.indices.map { arm -> (prefixes: [String], proof: String) in
             let source = sources[arm]
             let table = tables[arm]
@@ -569,7 +579,7 @@ package enum ConditionalActionEvidence {
                 count == 0
                     ? "LOCAL \(name) == Arithmetic!CopyEntryRoutes(ConditionalIntKeys)"
                     : "LOCAL \(name) == Arithmetic!CopyReplace(ConditionalIntKeys, \(names[count - 1]), "
-                        + "\(source)!MasterTargets[\(count)], <<\"capture\", \(count)>>)"
+                        + "\(source)Targets[\(count)], <<\"capture\", \(count)>>)"
             }
             let physicalPlans = tuple(planNames[arm])
             let physicalPlanDefinitions = planNames[arm].joined(separator: ", ")
@@ -578,71 +588,40 @@ package enum ConditionalActionEvidence {
                 <4>range. Len(rows) = \#(names.count) /\ index \in 1..\#(names.count)
                     BY ONLY <3>arm\#(arm + 1), <1>integerRows, <2>shape, (arm \in ConditionalArms),
                         (index \in DOMAIN rows), SMT DEF rows
-                <4>targets. \A position \in 1..Len(rows) : rows[position].target = \#(source)!MasterTargets[position]
-                    BY ONLY <3>arm\#(arm + 1), <2>shape, \#(source)!MasterRowsProjectEmittedColumns, SMT
+                <4>targets. \A position \in 1..Len(rows) : rows[position].target = \#(source)Targets[position]
+                    BY ONLY <3>arm\#(arm + 1), <2>shape, \#(source)RowsProjectEmittedColumns, SMT
                         DEF rows, ConditionalIntegerRows
                 <4>. DEFINE maps == \#(tuple(names))
                 <4>transitions. /\ maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
                                 /\ \A position \in 1..prefixCount :
                                     maps[position + 1] = Arithmetic!CopyReplace(ConditionalIntKeys, maps[position],
-                                        \#(source)!MasterTargets[position], <<"capture", position>>)
+                                        \#(source)Targets[position], <<"capture", position>>)
                     BY ONLY <4>range, IsaM("simp"), SMT DEF maps, prefixCount, \#(names.joined(separator: ", "))
                 <4>indexed. routes[index - 1] = maps[index]
                     BY ONLY <3>aligned, <4>transitions, <4>targets, SMT DEF routeTable, prefixCount
-                <4>columns. /\ rows[index].emitted.count = \#(source)!MasterNodeCounts[index]
-                             /\ rows[index].emitted.nodes = \#(source)!MasterNodes(index)
+                <4>columns. /\ rows[index].emitted.count = \#(source)NodeCounts[index]
+                             /\ rows[index].emitted.nodes = \#(source)Nodes(index)
                     BY ONLY <3>arm\#(arm + 1), (index \in DOMAIN rows),
-                        \#(source)!MasterRowsProjectEmittedColumns, SMT DEF rows, ConditionalIntegerRows
-                <4>sourceReads. /\ expected.count = \#(source)!MasterNodeCounts[index]
+                        \#(source)RowsProjectEmittedColumns, SMT DEF rows, ConditionalIntegerRows
+                <4>sourceReads. /\ expected.count = \#(source)NodeCounts[index]
                                  /\ \A node \in 1..expected.count : expected.kinds[node] = "read" =>
-                                       /\ \#(source)!MasterNodeKinds[index][node] = "read"
-                                       /\ expected.reads[node] = \#(source)!MasterNodeReadKeys[index][node]
+                                       /\ \#(source)NodeKinds[index][node] = "read"
+                                       /\ expected.reads[node] = \#(source)NodeReadKeys[index][node]
                     BY ONLY <4>columns, SMT DEF expected, Arithmetic!AssignmentRhsPlan,
-                        Arithmetic!ExtractedNodePlan, \#(source)!MasterNodes
+                        Arithmetic!ExtractedNodePlan, \#(source)Nodes
                 <4>physicalReads. plan.reads = \#(physicalPlans)[index].reads
                     BY ONLY <3>arm\#(arm + 1), <4>range, IsaM("simp"), SMT
                         DEF plan, raw, ConditionalIntegerTable, \#(table)
-                <4>lookup. \A node \in 1..\#(source)!MasterNodeCounts[index] : \#(source)!MasterNodeKinds[index][node] = "read" =>
-                    LET key == \#(source)!MasterNodeReadKeys[index][node]
+                <4>lookup. \A node \in 1..\#(source)NodeCounts[index] : \#(source)NodeKinds[index][node] = "read" =>
+                    LET key == \#(source)NodeReadKeys[index][node]
                     IN /\ key \in ConditionalIntKeys
                        /\ \#(physicalPlans)[index].reads[node] = maps[index][key]
                     BY ONLY <4>range, IsaM("simp"), SMT DEF maps, \#(physicalPlanDefinitions), ConditionalIntKeys, Arithmetic!CopyEntryRoutes,
-                        Arithmetic!CopyReplace, \#(source)!MasterNodeKinds, \#(source)!MasterNodeCounts,
-                        \#(source)!MasterNodeReadKeys, \#(source)!MasterTargets, \#(names.joined(separator: ", "))
+                        Arithmetic!CopyReplace, \#(source)NodeKinds, \#(source)NodeCounts,
+                        \#(source)NodeReadKeys, \#(source)Targets, \#(names.joined(separator: ", "))
                 <4>. QED BY ONLY <4>indexed, <4>sourceReads, <4>physicalReads, <4>lookup, SMT
             """#)
         }
-        let supportProofs = sources.enumerated().map { index, source in
-            #"""
-            <3>same\#(index + 1). \A candidate : Arithmetic!SupportedAssignmentList(candidate) <=>
-                \#(source)!Rule!SupportedAssignmentList(candidate)
-                <4>keys. ConditionalIntKeys = \#(source)!MasterFields
-                    BY ONLY SMT DEF ConditionalIntKeys, \#(source)!MasterFields
-                <4>range. \A value : Arithmetic!InRange(value) <=> \#(source)!Rule!InRange(value)
-                    BY ONLY SMT DEF Arithmetic!InRange, \#(source)!Rule!InRange
-                <4>arrays. \A emitted : Arithmetic!NodeEmissionArrays(emitted) <=> \#(source)!Rule!NodeEmissionArrays(emitted)
-                    BY ONLY SMT DEF Arithmetic!NodeEmissionArrays, \#(source)!Rule!NodeEmissionArrays
-                <4>node. \A view, emitted, position :
-                    Arithmetic!NodePayloadMatchesSource(view, emitted, position) <=>
-                        \#(source)!Rule!NodePayloadMatchesSource(view, emitted, position)
-                    BY ONLY SMT DEF Arithmetic!NodePayloadMatchesSource, \#(source)!Rule!NodePayloadMatchesSource
-                <4>payloads. \A view, emitted :
-                    Arithmetic!AllNodePayloadsMatchSource(view, emitted) <=>
-                        \#(source)!Rule!AllNodePayloadsMatchSource(view, emitted)
-                    BY ONLY <4>node, SMT DEF Arithmetic!AllNodePayloadsMatchSource, \#(source)!Rule!AllNodePayloadsMatchSource
-                <4>inputs. \A view, emitted :
-                    Arithmetic!TypedVisitedSourceInputs(view, emitted) <=>
-                        \#(source)!Rule!TypedVisitedSourceInputs(view, emitted)
-                    BY ONLY <4>keys, <4>range, SMT DEF Arithmetic!TypedVisitedSourceInputs, \#(source)!Rule!TypedVisitedSourceInputs
-                <4>rows. \A row : Arithmetic!AssignmentRhsCertificate(row) <=> \#(source)!Rule!AssignmentRhsCertificate(row)
-                    BY ONLY <4>keys, <4>arrays, <4>payloads, <4>inputs, SMT
-                        DEF Arithmetic!AssignmentRhsCertificate, Arithmetic!LiteralReadAddCertificate,
-                            \#(source)!Rule!AssignmentRhsCertificate, \#(source)!Rule!LiteralReadAddCertificate
-                <4>. QED BY ONLY <4>keys, <4>rows, SMT
-                    DEF Arithmetic!SupportedAssignmentList, \#(source)!Rule!SupportedAssignmentList
-            """#
-        }.joined(separator: "\n        ")
-        let supportFacts = sources.indices.map { "<3>same\($0 + 1)" }.joined(separator: ", ")
         let ranges = arms.map { "1..\($0.integerCaptures.count)" }
         let domainProofs = sources.indices.map { index in
             let arm = index + 1
@@ -650,9 +629,9 @@ package enum ConditionalActionEvidence {
             let table = tables[index]
             let range = ranges[index]
             return #"""
-            <3>source\#(arm). DOMAIN \#(source)!MasterRows = \#(range)
-                BY ONLY \#(source)!MasterRowsProjectEmittedColumns, IsaM("simp"), SMT
-                    DEF \#(source)!MasterNodeCounts
+            <3>source\#(arm). DOMAIN \#(source)Rows = \#(range)
+                BY ONLY \#(source)RowsProjectEmittedColumns, IsaM("simp"), SMT
+                    DEF \#(source)NodeCounts
             <3>plans\#(arm). DOMAIN \#(table).plans = \#(range)
                 BY ONLY SMT DEF \#(table)
             """#
@@ -662,25 +641,26 @@ package enum ConditionalActionEvidence {
             let source = sources[index]
             let range = ranges[index]
             return #"""
-            <3>authored\#(arm). /\ DOMAIN \#(source)!MasterRows = \#(range)
-                            /\ \A i \in DOMAIN \#(source)!MasterRows :
-                                   \#(source)!MasterRows[i].target = \#(source)!MasterTargets[i]
-                BY ONLY \#(source)!MasterRowsProjectEmittedColumns, IsaM("simp"), SMT
-                    DEF \#(source)!MasterNodeCounts
-            <3>keys\#(arm). \A i \in \#(range) :
-                ConditionalSourceRows[\#(arm)].targets[i].target = \#(source)!MasterTargets[i]
-                BY ONLY IsaM("simp"), SMT DEF ConditionalSourceRows, \#(source)!MasterTargets
+            <3>authored\#(arm). /\ DOMAIN \#(source)Rows = \#(range)
+                            /\ \A i \in DOMAIN \#(source)Rows :
+                                   \#(source)Rows[i].target = \#(source)Targets[i]
+                BY ONLY \#(source)RowsProjectEmittedColumns, IsaM("simp"), SMT
+                    DEF \#(source)NodeCounts
+            <3>. DEFINE writes\#(arm) == \#(arms[index].targets)
+            <3>project\#(arm). ConditionalSourceRows[\#(arm)].targets = writes\#(arm)
+                BY ONLY IsaM("simp") DEF ConditionalSourceRows, writes\#(arm)
+            <3>keys\#(arm). \A i \in \#(range) : writes\#(arm)[i].target = \#(source)Targets[i]
+                BY ONLY SMT DEF writes\#(arm), \#(source)Targets
             <3>arm\#(arm). CASE arm = \#(arm)
-                BY ONLY <3>arm\#(arm), <3>authored\#(arm), <3>keys\#(arm), SMT
+                BY ONLY <3>arm\#(arm), <3>authored\#(arm), <3>project\#(arm), <3>keys\#(arm), SMT
                     DEF rows, ConditionalIntegerRows
             """#
         }.joined(separator: "\n        ")
         return (#"""
-        \#(names.joined(separator: "\n"))
         \#(actual.joined(separator: "\n"))
         \#(routedReads.flatMap(\.prefixes).joined(separator: "\n"))
         ConditionalIntegerRows(arm) ==
-            IF arm = 1 THEN \#(sources[0])!MasterRows ELSE \#(sources[1])!MasterRows
+            IF arm = 1 THEN \#(sources[0])Rows ELSE \#(sources[1])Rows
         ConditionalIntegerTable(arm) ==
             IF arm = 1 THEN \#(tables[0]) ELSE \#(tables[1])
         ConditionalAssignmentOrigins(arm) ==
@@ -743,9 +723,14 @@ package enum ConditionalActionEvidence {
                    /\ (ConditionalPhysicalStep <=> ConditionalOrderedStep(arm, terminal))
                    /\ (ConditionalNativeStep <=> ConditionalOrderedStep(arm, terminal))
         """#, #"""
+        <1>integerKeys. /\ ConditionalIntKeys = ConditionalLayoutIntKeys
+                         /\ \#(sources[0])Fields = ConditionalLayoutIntKeys
+                         /\ \#(sources[1])Fields = ConditionalLayoutIntKeys
+            BY ONLY SMT DEF ConditionalIntKeys, ConditionalLayoutIntKeys,
+                \#(sources[0])Fields, \#(sources[1])Fields
         <1>integerEntry. ConditionalBefore \in Arithmetic!AssignmentBindings
-            BY ONLY ConditionalTypedState, SMT DEF ConditionalTypedState, ConditionalBefore,
-                ConditionalIntKeys, ConditionalIntValues, Arithmetic!AssignmentBindings, Arithmetic!AssignmentIntValues
+            BY ONLY ConditionalTypedState, <1>integerKeys, SMT DEF ConditionalTypedState, ConditionalBefore,
+                ConditionalLayoutIntKeys, ConditionalIntValues, Arithmetic!AssignmentBindings, Arithmetic!AssignmentIntValues
         <1>integerRows. \A arm \in ConditionalArms :
             LET rows == ConditionalIntegerRows(arm)
                 raw == ConditionalIntegerTable(arm)
@@ -759,12 +744,11 @@ package enum ConditionalActionEvidence {
             <2>cases. arm = 1 \/ arm = 2
                 BY ONLY <1>shape, (arm \in ConditionalArms), SMT
             <2>support. Arithmetic!SupportedAssignmentList(rows)
-                \#(supportProofs)
-                <3>. QED BY ONLY <2>cases, \#(supportFacts), \#(supported), SMT DEF rows, ConditionalIntegerRows
+                BY ONLY <2>cases, \#(supported), SMT DEF rows, ConditionalIntegerRows
             <2>length. Len(rows) = IF arm = 1 THEN \#(arms[0].integerCaptures.count) ELSE \#(arms[1].integerCaptures.count)
                 BY ONLY <2>cases, \#(supported), SMT DEF rows, ConditionalIntegerRows,
-                    \#(sources[0])!MasterRows, \#(sources[0])!MasterNodeCounts,
-                    \#(sources[1])!MasterRows, \#(sources[1])!MasterNodeCounts
+                    \#(sources[0])Rows, \#(sources[0])NodeCounts,
+                    \#(sources[1])Rows, \#(sources[1])NodeCounts
             <2>domains. DOMAIN rows = DOMAIN raw.plans
                 \#(domainProofs)
                 <3>source. DOMAIN rows = IF arm = 1 THEN \#(ranges[0]) ELSE \#(ranges[1])
@@ -809,34 +793,18 @@ package enum ConditionalActionEvidence {
             <2>reads. \A node \in 1..expected.count : expected.kinds[node] = "read" =>
                 /\ expected.reads[node] \in ConditionalIntKeys
                 /\ plan.reads[node] = routes[index - 1][expected.reads[node]]
-                <3>recurrence. /\ routes[0] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
-                                /\ \A position \in 1..Len(rows) :
-                                     routes[position] = Arithmetic!CopyReplace(ConditionalIntKeys,
-                                         routes[position - 1], rows[position].target, <<"capture", position>>)
-                    BY ONLY <2>shape, Arithmetic!DirectCopyRoutesFollowEveryCapture, SMT DEF routes
                 <3>. DEFINE prefixCount == Len(rows) - 1
                             routeTable(maps) ==
                                 /\ maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
                                 /\ \A position \in 1..prefixCount :
                                     maps[position + 1] = Arithmetic!CopyReplace(ConditionalIntKeys, maps[position],
                                         rows[position].target, <<"capture", position>>)
-                <3>bounds. /\ prefixCount \in Nat /\ index - 1 \in 0..prefixCount
+                <3>bounds. /\ prefixCount \in 0..Len(rows) /\ index \in 1..(prefixCount + 1)
                     BY ONLY <2>shape, (index \in DOMAIN rows), SMT DEF prefixCount
                 <3>aligned. ASSUME NEW maps, routeTable(maps)
                             PROVE routes[index - 1] = maps[index]
-                    <4>. DEFINE agrees(position) == routes[position] = maps[position + 1]
-                    <4>entry. agrees(0)
-                        BY ONLY <3>recurrence, routeTable(maps), SMT DEF agrees, routeTable
-                    <4>advance. ASSUME NEW position \in 1..prefixCount,
-                                        \A earlier \in 0..(position - 1) : agrees(earlier)
-                                 PROVE agrees(position)
-                        BY ONLY <3>recurrence, routeTable(maps), (position \in 1..prefixCount),
-                            (\A earlier \in 0..(position - 1) : agrees(earlier)), SMT
-                            DEF agrees, routeTable, prefixCount
-                    <4>. HIDE DEF agrees
-                    <4>all. \A position \in 0..prefixCount : agrees(position)
-                        BY ONLY <3>bounds, <4>entry, <4>advance, Arithmetic!FiniteIndexedPrefixProperty, Isa
-                    <4>. QED BY ONLY <4>all, <3>bounds, SMT DEF agrees
+                    BY ONLY <2>shape, <3>bounds, routeTable(maps), Arithmetic!DirectCopyRoutesAgreeWithRecordedPrefixes,
+                        SMT DEF routes, routeTable
                 \#(routedReads.map(\.proof).joined(separator: "\n        "))
                 <3>. QED BY ONLY <2>cases, <3>arm1, <3>arm2, SMT
             <2>matches. Arithmetic!PhysicalAssignmentReadsMatchRoutes(rows, index, plan)
@@ -844,7 +812,7 @@ package enum ConditionalActionEvidence {
             <2>terms. Arithmetic!RenderedRhsTerms(plan, ConditionalBefore, completed, raw.starts[index], raw.terms[index])
                 BY ONLY <2>cases, <2>shape, (index \in DOMAIN rows), <1>integerEntry, SMT
                     DEF plan, raw, completed, ConditionalIntegerTable, \#(evaluatedTables),
-                        ConditionalBefore, ConditionalIntKeys, Arithmetic!AssignmentBindings, Arithmetic!AssignmentIntValues,
+                        ConditionalBefore, ConditionalLayoutIntKeys, Arithmetic!AssignmentBindings, Arithmetic!AssignmentIntValues,
                         Arithmetic!RenderedRhsTerms, Arithmetic!PhysicalRhsBindings, Arithmetic!CopyReferenceValue,
                         Arithmetic!HistoryPrefix
             <2>guards. Arithmetic!RenderedRhsGuards(plan, raw.terms[index], raw.guards[index])
@@ -880,7 +848,7 @@ package enum ConditionalActionEvidence {
                    Arithmetic!RenderedAssignmentFailsAt(raw, count, place[2], place[3]))
             BY ONLY <1>shape, <1>integerRows, <1>probeSlots, SMT DEF
                 ConditionalProbePositions, ConditionalProbeGuards, ConditionalIntegerTable, ConditionalIntegerRows,
-                ConditionalSelectedArm, ConditionalArmFor, ConditionalSourceComparison, ConditionalBefore, ConditionalIntKeys,
+                ConditionalSelectedArm, ConditionalArmFor, ConditionalSourceComparison, ConditionalBefore, ConditionalLayoutIntKeys,
                 Arithmetic!CopyReferenceValue, Arithmetic!RenderedAssignmentFailsAt, Arithmetic!RenderedAssignmentsPass,
                 Arithmetic!FirstRejectedRenderedGuard, Arithmetic!EveryRenderedGuardPasses,
                 \#(evaluatedTables), \#(sourceDefinitions), \#(guardNames.joined(separator: ", "))
