@@ -102,10 +102,8 @@ package struct PetersonModel: ParameterlessGeneratedModel {
                 Map(\.pc, projecting: lockPC)
             }
             LSpec
-            let safety = Validation(label: "PetersonSafety") {}.checking(only: [TypeOK, Inv])
-            safety
-            let published = Validation(label: "Peterson") {}
-            published
+            Validation("safety", label: "PetersonSafety") {}.checking(only: [TypeOK, Inv])
+            Validation("published", label: "Peterson") {}
         }
     }
 }

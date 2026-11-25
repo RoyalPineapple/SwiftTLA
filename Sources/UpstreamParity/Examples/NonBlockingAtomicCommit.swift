@@ -211,16 +211,14 @@ package struct NonBlockingAtomicCommitModel: Sendable {
                     || participant[member].faulty
             }))
 
-            let twoParticipants = Validation {
+            Validation("twoParticipants") {
                 Bind(participants, to: Set<Member>([.p0, .p1]))
                 Bind(decideBeforeForwarding, to: false)
             }.checking(only: [AC1, AC2, AC3_1, AC4_alt, AC3_2, AC5]).checkingDeadlock(false)
-            twoParticipants
-            let earlyDecision = Validation {
+            Validation("earlyDecision") {
                 Bind(participants, to: Set<Member>([.p0, .p1]))
                 Bind(decideBeforeForwarding, to: true)
             }.checking(only: [AC1]).checkingDeadlock(false).expect(AC1, .violated)
-            earlyDecision
         }
     }
 }

@@ -63,26 +63,22 @@ package struct PrisonerSingleSwitchModel: Sendable {
             Invariant("VictoryOK") { !announced || has_visited == Prisoner }
             Terminating(.eventually(announced))
 
-            let prisonerValidation = Validation(label: "Prisoner") {
+            Validation("prisonerValidation", label: "Prisoner") {
                 Bind(Prisoner, to: ["Alice", "Bob", "Eve"])
                 Bind(Light_Unknown, to: false)
             }
-            prisonerValidation
-            let PrisonerLightUnknown = Validation {
+            Validation("PrisonerLightUnknown") {
                 Bind(Prisoner, to: ["Alice", "Bob", "Eve"])
                 Bind(Light_Unknown, to: true)
             }
-            PrisonerLightUnknown
-            let PrisonerSolo = Validation {
+            Validation("PrisonerSolo") {
                 Bind(Prisoner, to: ["Alice"])
                 Bind(Light_Unknown, to: false)
             }
-            PrisonerSolo
-            let PrisonerSoloLightUnknown = Validation {
+            Validation("PrisonerSoloLightUnknown") {
                 Bind(Prisoner, to: ["Alice"])
                 Bind(Light_Unknown, to: true)
             }
-            PrisonerSoloLightUnknown
         }
     }
 }

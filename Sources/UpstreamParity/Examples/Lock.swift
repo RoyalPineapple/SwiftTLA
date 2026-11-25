@@ -64,8 +64,7 @@ package struct LockModel: ParameterlessGeneratedModel {
                 }
             }
             Lock
-            let twoProcess = Validation(label: "Lock") {}
-            twoProcess
+            Validation("twoProcess", label: "Lock") {}
         }
     }
 }

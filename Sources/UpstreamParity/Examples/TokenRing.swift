@@ -39,11 +39,10 @@ package struct TokenRingModel: Sendable {
                     && (split..<N).allSatisfy { i in c[i] == (c[0] - 1) % M }
             }
             Stab(uniqueToken)
-            let sixNodes = Validation {
+            Validation("sixNodes") {
                 Bind(N, to: 6)
                 Bind(M, to: 6)
             }.checkingDeadlock(false)
-            sixNodes
         }
     }
 }

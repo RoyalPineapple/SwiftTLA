@@ -93,12 +93,11 @@ package struct BackupTransactionManagerModel: Sendable {
                 Termination(.eventually(RM.allSatisfy { manager in Finished(manager) } && Finished(0) && Finished(10)))
             }
             protocolSteps
-            let threeManagers = Validation {
+            Validation("threeManagers") {
                 Bind(RM, to: Set<Manager>([.rm1, .rm2, .rm3]))
                 Bind(RMMAYFAIL, to: true)
                 Bind(TMMAYFAIL, to: true)
             }.checking(only: [TypeOK, Consistency])
-            threeManagers
         }
     }
 }

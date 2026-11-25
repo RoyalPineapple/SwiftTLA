@@ -97,18 +97,15 @@ package struct EWD840Model: Sendable {
             }
             TDSpec
 
-            let EWD840 = Validation { Bind(N, to: 3) }
+            Validation("EWD840") { Bind(N, to: 3) }
                 .checking(only: [typeOK, terminationDetection, inv, Liveness, TDSpec])
                 .checkingDeadlock(false)
-            EWD840
-            let APEWD840 = Validation { Bind(N, to: 3) }
+            Validation("APEWD840") { Bind(N, to: 3) }
                 .checking(only: [typeOK, terminationDetection])
                 .checkingDeadlock(false)
-            APEWD840
-            let EWD840_json = Validation { Bind(N, to: 4) }
+            Validation("EWD840_json") { Bind(N, to: 4) }
                 .checking(only: [jsonInv])
                 .checkingDeadlock(false)
-            EWD840_json
         }
     }
 }

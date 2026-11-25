@@ -29,3 +29,7 @@ Verification/FiniteGraph/fixtures/two-phase-btm/* whitespace=-blank-at-eol,-blan
 Verification/FiniteGraph/fixtures/acp/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/simple-allocator/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/byzpaxos-consensus/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/scheduling-allocator/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/voucher-life-cycle/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/btree-kvstore/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/paxos-mc-consensus/* whitespace=-blank-at-eol,-blank-at-eof

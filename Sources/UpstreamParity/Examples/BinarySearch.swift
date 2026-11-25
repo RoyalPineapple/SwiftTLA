@@ -79,11 +79,10 @@ package struct BinarySearchModel: Sendable {
                 Termination(.eventually(Finished()))
             }
             BinarySearch
-            let MCBinarySearch = Validation {
+            Validation("MCBinarySearch") {
                 Bind(Values, to: Set<Int>([1, 2, 3, 4, 5]))
                 Bind(MaxSeqLen, to: 8)
             }
-            MCBinarySearch
         }
     }
 }

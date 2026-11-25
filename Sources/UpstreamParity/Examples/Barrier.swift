@@ -38,10 +38,8 @@ package struct BarrierModel {
                 }
             })
 
-            let APBarrier = Validation { Bind(N, to: 6) }.checking(only: [typeOK])
-            APBarrier
-            let Barrier = Validation { Bind(N, to: 6) }.checking(only: [typeOK, BarrierProperty])
-            Barrier
+            Validation("APBarrier") { Bind(N, to: 6) }.checking(only: [typeOK])
+            Validation("Barrier") { Bind(N, to: 6) }.checking(only: [typeOK, BarrierProperty])
         }
     }
 }

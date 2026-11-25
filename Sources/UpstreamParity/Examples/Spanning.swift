@@ -67,13 +67,12 @@ package struct SpanningModel: Sendable {
                         || Proc.allSatisfy { j in !msg.contains(Pair<Int, Int>.literal(i, j)) }
                 }
             }
-            let broadcast = Validation {
+            Validation("broadcast") {
                 Bind(Proc, to: Set<Int>([1, 2, 3]))
                 Bind(NoPrnt, to: MissingParent.none)
                 Bind(root, to: 1)
                 Bind(nbrs, to: Set<Pair<Int, Int>>([Pair(first: 1, second: 2), Pair(first: 1, second: 3)]))
             }.expect(typeOK, .violated)
-            broadcast
         }
     }
 }

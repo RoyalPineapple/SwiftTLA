@@ -49,11 +49,10 @@ package struct FindHighestModel: Sendable {
                 }
             }
             Highest
-            let MCFindHighest = Validation {
+            Validation("MCFindHighest") {
                 Bind(MaxLength, to: 3)
                 Bind(MaxNat, to: 4)
             }
-            MCFindHighest
         }
     }
 }

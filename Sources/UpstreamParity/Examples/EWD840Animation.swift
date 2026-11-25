@@ -74,12 +74,11 @@ package struct EWD840AnimationModel: Sendable {
             let animInv = Invariant("AnimInv") { !terminationDetected || scope.checkingLevel < 20 }
             animInv
 
-            let EWD840_anim = Validation { Bind(N, to: 9) }
+            Validation("EWD840_anim") { Bind(N, to: 9) }
                 .checking(only: [animInv])
                 .checkingDeadlock(false)
                 .simulating(traces: 100)
                 .expect(animInv, .violated)
-            EWD840_anim
         }
     }
 }

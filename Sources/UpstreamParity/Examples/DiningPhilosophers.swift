@@ -142,12 +142,10 @@ package struct DiningPhilosophersModel: Sendable {
                 }
             }
             DiningPhilosophers
-            let NP5 = Validation {}
-            NP5
-            let apNP5 = Validation(label: "AP NP5") {}
+            Validation("NP5") {}
+            Validation("apNP5", label: "AP NP5") {}
                 .checking(only: [TypeOK, ExclusiveAccess])
                 .behavior(.initialAndNext)
-            apNP5
         }
     }
 }

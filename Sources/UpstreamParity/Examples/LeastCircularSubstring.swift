@@ -90,16 +90,14 @@ package struct LeastCircularSubstringModel: Sendable {
                 }
             }
             LeastCircularSubstring
-            let Small = Validation {
+            Validation("Small") {
                 Bind(CharSetSize, to: 2)
                 Bind(MaxStringLength, to: 6)
             }
-            Small
-            let Medium = Validation {
+            Validation("Medium") {
                 Bind(CharSetSize, to: 3)
                 Bind(MaxStringLength, to: 8)
             }
-            Medium
         }
     }
 }

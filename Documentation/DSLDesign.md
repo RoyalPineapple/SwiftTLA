@@ -141,11 +141,12 @@ Generate valid, unambiguous TLA+ identifiers from declaration identities and
 source names. A display label containing spaces or punctuation must not become
 an unchecked formal identifier.
 
-`Algorithm` and `Validation` require immutable `let` bindings inside `#spec`.
-The binding is their stable identity; the builder expression is registered by
-referencing that binding. For example,
-`let protocolAlgorithm = Algorithm(label: "Protocol") { ... }; protocolAlgorithm`
-and `let exhaustive = Validation(label: "Exhaustive check") { ... }; exhaustive`.
+Write a validation scenario directly inside `#spec`, for example
+`Validation("exhaustive", label: "Exhaustive check") {}.checkingDeadlock(false)`.
+The first string literal names the scenario. An algorithm takes its identity
+from an immutable binding, as in `let protocolAlgorithm = Algorithm { ... }; protocolAlgorithm`.
+A validation declared with `let exhaustive = Validation { ... }; exhaustive` takes
+its name from the binding too.
 The nonempty literal `label:` is optional and only for presentation;
 interpolation is rejected.
 Duplicate labels are allowed; generated scenario `name` remains the identity
@@ -1820,7 +1821,7 @@ Hosted equivalence is separate from settling the syntax and semantics.
 | ID | Decision |
 | --- | --- |
 | B-01 | Settled: typed parameter-dependent domains and model-owned finite scenario bindings use the same resolved parameter identities and generated `Configuration`; `Each` and dictionary state use stable member IDs, not application objects. Runner limits stop validation and never constrain the model. The fixed `ModelCollection` authoring API is removed. Acceptance still requires source-aligned tests and hosted parity for applicable configurations |
-| B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` and `Validation` require explicit registration by bound reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
+| B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` registers through its bound reference. `Validation("name")` registers inline, and bound validation scenarios register through their reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Settled for this DSL surface: only the explicit bound-step, `Next`, process-member, and projected fairness forms above declare obligations; inner process steps have no independent handles. Finite symmetry is opt-in for a registered, immutable binding, and only a safety-only TLC scenario may select it. Native checking remains unreduced. Unsupported scopes and reductions fail rather than silently changing meaning; independent parity evidence is still required |
 | B-05 | Bounded current contract: ordinary supported Swift values and the typed operations above retain their types; immutable local expressions and bound `Macro` statements are the supported reuse forms, not arbitrary Swift function bodies. Inference must resolve completely before emission; checked `Int` arithmetic and other specified evaluation failures must agree in generated Swift and TLA+, including failure identity and evaluation order. Reachable overflow is a checking failure, not a compile-time rejection. One-based DSL sequence indices apply. Additional value or helper forms require a named case and a new native/formal contract |
@@ -1843,12 +1844,15 @@ Algorithm.init(label: String? = nil, fairness: SequentialAlgorithmFairness = .no
     @AlgorithmBuilder _ body: () -> [AlgorithmElement])
 Algorithm.init(label: String? = nil, fairness: SequentialAlgorithmFairness = .none,
     @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement])
+Validation(_ name: String, label: String? = nil,
+    @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration
 Validation(label: String? = nil,
     @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration
 ```
 
-The macro supplies their internal `_name` from an immutable `let` binding. The
-author registers each by referencing that binding.
+An inline call such as `Validation("exhaustive") {}` declares and registers
+the scenario. For declarations that use an immutable `let` binding, the macro
+supplies the internal `_name` and the author registers the binding.
 `let algorithm = Algorithm { Do(Step.start) { Stop() } }; algorithm`
 and `let exhaustive = Validation {}; exhaustive` are positive examples.
 `Algorithm { Do(Step.start) { Stop() } }` without a binding, and

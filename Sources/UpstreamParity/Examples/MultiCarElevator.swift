@@ -88,8 +88,7 @@ package struct MultiCarElevator: Sendable {
                     && cars[car].floor == floor)
                 cars[car].rider.set(nil)
             }
-            let MultiCarElevator = Validation {}.checkingDeadlock(false)
-            MultiCarElevator
+            Validation("MultiCarElevator") {}.checkingDeadlock(false)
         }
     }
 }

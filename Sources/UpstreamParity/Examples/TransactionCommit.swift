@@ -50,10 +50,9 @@ package struct TransactionCommitModel: Sendable {
             Invariant("TCConsistent") {
                 noneCommitted || !RM.contains { manager in rmState[manager] == Phase.aborted }
             }
-            let threeManagers = Validation {
+            Validation("threeManagers") {
                 Bind(RM, to: Set<Manager>([.r1, .r2, .r3]))
             }.checkingDeadlock(false)
-            threeManagers
         }
     }
 }

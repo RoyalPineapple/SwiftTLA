@@ -72,11 +72,10 @@ package struct QueensModel: Sendable {
             let noSolutions = Invariant("NoSolutions") { sols.isEmpty }
             noSolutions
             Termination(.eventually(todo.isEmpty))
-            let FourQueens = Validation { Bind(N, to: 4) }
+            Validation("FourQueens") { Bind(N, to: 4) }
                 .checking(only: [typeInvariant, invariant, noSolutions])
                 .checkingDeadlock(false)
                 .expect(noSolutions, .violated)
-            FourQueens
         }
     }
 }

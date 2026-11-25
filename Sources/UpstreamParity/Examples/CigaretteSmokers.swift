@@ -87,7 +87,7 @@ package struct CigaretteSmokersModel: Sendable {
                 Ingredients.filter { ingredient in smokers[ingredient].smoking }.count <= 1
             }
 
-            let CigaretteSmokers = Validation {
+            Validation("CigaretteSmokers") {
                 Bind(Ingredients, to: Set<Ingredient>([.matches, .paper, .tobacco]))
                 Bind(Offers, to: Set<Set<Ingredient>>([
                     Set<Ingredient>([.matches, .paper]),
@@ -95,8 +95,7 @@ package struct CigaretteSmokersModel: Sendable {
                     Set<Ingredient>([.paper, .tobacco])
                 ]))
             }
-            CigaretteSmokers
-            let APCigaretteSmokers = Validation {
+            Validation("APCigaretteSmokers") {
                 Bind(Ingredients, to: Set<Ingredient>([.apMatches, .apPaper, .apTobacco]))
                 Bind(Offers, to: Set<Set<Ingredient>>([
                     Set<Ingredient>([.apMatches, .apPaper]),
@@ -104,7 +103,6 @@ package struct CigaretteSmokersModel: Sendable {
                     Set<Ingredient>([.apPaper, .apTobacco])
                 ]))
             }
-            APCigaretteSmokers
         }
     }
 }

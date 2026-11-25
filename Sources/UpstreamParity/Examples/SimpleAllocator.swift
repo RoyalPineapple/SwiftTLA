@@ -73,11 +73,10 @@ package struct SimpleAllocatorModel: Sendable {
             ]) }
             let InfOftenSatisfied = Temporal()
             InfOftenSatisfied(forEach: Clients) { client in .alwaysEventually(unsat[client].isEmpty) }
-            let published = Validation(label: "SimpleAllocator") {
+            Validation("published", label: "SimpleAllocator") {
                 Bind(Clients, to: Set<Client>([.c1, .c2, .c3]))
                 Bind(Resources, to: Set<Resource>([.r1, .r2]))
             }
-            published
         }
     }
 }

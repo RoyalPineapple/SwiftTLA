@@ -85,8 +85,7 @@ package struct NQueensModel: Sendable {
                 }
             }
             Queens
-            let FourQueens = Validation { Bind(N, to: 4) }.expect(NoSolutions, .violated)
-            FourQueens
+            Validation("FourQueens") { Bind(N, to: 4) }.expect(NoSolutions, .violated)
         }
     }
 }

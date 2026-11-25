@@ -86,16 +86,14 @@ package struct ReadersWritersModel {
                 .alwaysEventually(!readers.contains(actor)), .alwaysEventually(!writers.contains(actor)),
             ]) }
 
-            let APReadersWriters = Validation {
+            Validation("APReadersWriters") {
                 Bind(NumActors, to: 3)
                 Bind(exposeStoppingActor, to: true)
             }.behavior(.initialAndNext).checking(only: [safety])
-            APReadersWriters
-            let MC = Validation {
+            Validation("MC") {
                 Bind(NumActors, to: 3)
                 Bind(exposeStoppingActor, to: false)
             }.checking(only: [typeOK, safety, Liveness])
-            MC
         }
     }
 }

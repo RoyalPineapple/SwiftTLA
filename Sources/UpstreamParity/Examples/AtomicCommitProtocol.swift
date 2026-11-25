@@ -130,10 +130,9 @@ package struct AtomicCommitProtocolModel: Sendable {
             WeakFairness(eachOf: [sendVote, abortOnVote, abortOnTimeoutRequest, decide])
             WeakFairness(anyOf: [makeDecision, request, getVote, detectFault, coordBroadcast])
 
-            let simpleBroadcast = Validation {
+            Validation("simpleBroadcast") {
                 Bind(participants, to: Set<Member>([.p0, .p1, .p2]))
             }.checkingDeadlock(false)
-            simpleBroadcast
         }
     }
 }

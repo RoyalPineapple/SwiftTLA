@@ -12,6 +12,7 @@ readonly lock_wait_seconds="${SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS:-30}"
 usage() {
     cat >&2 <<'EOF'
 usage: scripts/local-validation.sh static
+       scripts/local-validation.sh port-build
        scripts/local-validation.sh swiftpm-test <test-filter>
        scripts/local-validation.sh xcode-test <test-identifier>
        scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]]
@@ -40,7 +41,7 @@ require_positive_integer() {
 
 mode="${1:-}"
 case "$mode" in
-    static|proof-tools)
+    static|port-build|proof-tools)
         [[ $# -eq 1 ]] || usage
         ;;
     swiftpm-test|xcode-test)
@@ -216,7 +217,7 @@ run_guarded() {
 
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
     export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
-    if [[ "$mode" == "swiftpm-test" || ( "$mode" == "proof-prepare" && "${proof_arguments[1]}" != compiler-expansion* ) ]]; then
+    if [[ "$mode" == "port-build" || "$mode" == "swiftpm-test" || ( "$mode" == "proof-prepare" && "${proof_arguments[1]}" != compiler-expansion* ) ]]; then
         local cache_root="$common_git_dir/swifttla-local-validation-cache"
         local worktree_key worktree_cache
         local cache_key cache_key_file toolchain_key toolchain_key_file macro_key macro_key_file
@@ -315,6 +316,15 @@ run_guarded() {
         proof-prepare)
             python3 scripts/prepare-initial-proof.py "$scratch_dir" "$build_dir" "${proof_arguments[@]}" &
             ;;
+        port-build)
+            (
+                options=(-Xswiftc -warnings-as-errors --disable-automatic-resolution -j 1 --scratch-path "$build_dir")
+                swift build "${options[@]}" --product tlc-validate >&2 || exit $?
+                bin_dir="$(swift build "${options[@]}" --show-bin-path)" || exit $?
+                [[ -x "$bin_dir/tlc-validate" ]] || fail "built tlc-validate missing from $bin_dir"
+                printf '%s\n' "$bin_dir/tlc-validate"
+            ) &
+            ;;
         swiftpm-test)
             swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j 1 --scratch-path "$build_dir" &
             ;;
@@ -348,5 +358,5 @@ run_guarded() {
 }
 
 case "$mode" in
-    static|swiftpm-test|xcode-test|proof-step|proof-tools|proof-prepare) run_guarded ;;
+    static|port-build|swiftpm-test|xcode-test|proof-step|proof-tools|proof-prepare) run_guarded ;;
 esac

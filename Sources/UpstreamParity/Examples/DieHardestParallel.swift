@@ -89,18 +89,16 @@ package struct DieHardestParallelModel: Sendable {
                     && c2.keys.contains { j in c2[j] == Goal })
             }
             notSolved
-            let NextParallel = Validation {
+            Validation("NextParallel") {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])
                 Bind(Goal, to: 2)
                 Bind(Freeze, to: false)
             }.expect(notSolved, .violated)
-            NextParallel
-            let NextParallelFreeze = Validation {
+            Validation("NextParallelFreeze") {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])
                 Bind(Goal, to: 2)
                 Bind(Freeze, to: true)
             }.expect(notSolved, .violated)
-            NextParallelFreeze
         }
     }
 }

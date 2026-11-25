@@ -1,6 +1,17 @@
 import SwiftSyntax
 import SwiftTLA
 
+func inlineValidationName(in call: FunctionCallExprSyntax) -> String? {
+    guard let first = call.arguments.first, first.label == nil,
+          let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue, !name.isEmpty,
+          call.trailingClosure != nil else { return nil }
+    let remaining = call.arguments.dropFirst()
+    guard remaining.isEmpty || (remaining.count == 1 && remaining.first?.label?.text == "label"
+        && remaining.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue?.isEmpty == false)
+    else { return nil }
+    return name
+}
+
 extension ParserSession {
     func validationRoot(_ call: FunctionCallExprSyntax) -> FunctionCallExprSyntax? {
         var root = call
@@ -24,11 +35,14 @@ extension ParserSession {
         }
         guard compilerGrammarName(in: root.calledExpression) == "Validation" else { return false }
         func declaration() throws(SourceParseDiagnostic) -> ValidationDeclaration {
-            guard let name = boundName,
-                  root.arguments.allSatisfy({ $0.label != nil }),
-                  !root.arguments.contains(where: { $0.label?.text == "_name" }),
+            guard let name = boundName ?? inlineValidationName(in: root),
+                  boundName == nil || root.arguments.allSatisfy({ $0.label?.text == "label" }),
                   let body = root.trailingClosure else {
-                throw SourceParseDiagnostic(message: "Validation requires an immutable let binding and typed parameter bindings.", source: root)
+                throw SourceParseDiagnostic(message: "Validation requires a nonempty inline name literal or an immutable let binding, followed by typed parameter bindings.", source: root)
+            }
+            if boundName == nil, let argument = root.arguments.first {
+                propertyDeclarationOffsets["validation.\(name)", default: []].append(
+                    argument.expression.positionAfterSkippingLeadingTrivia.utf8Offset)
             }
             let displayLabel = try declarationDisplayLabel(root, kind: "validation")
             var bindings: [ValidationBinding] = []

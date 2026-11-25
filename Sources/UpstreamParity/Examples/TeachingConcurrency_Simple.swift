@@ -53,8 +53,7 @@ package struct TeachingSimpleN5Model: Sendable {
                 }
             }
             Simple
-            let simpleValidation = Validation(label: "Simple") {}
-            simpleValidation
+            Validation("simpleValidation", label: "Simple") {}
         }
     }
 }

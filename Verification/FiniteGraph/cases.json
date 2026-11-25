@@ -448,6 +448,123 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "paxos-mc-consensus",
+      "sourceModel": "paxos-mc-consensus",
+      "scenario": "published",
+      "module": "paxos-mc-consensus/MCConsensus.tla",
+      "configuration": "paxos-mc-consensus/MCConsensus.cfg",
+      "imports": [
+        "paxos-mc-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCConsensus",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Paxos/MCConsensus.tla",
+        "sha256": "13dafc53b46105ad249952d400fed103b5066a455db1925140bb73dec631fd46"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "13dafc53b46105ad249952d400fed103b5066a455db1925140bb73dec631fd46",
+      "cfgSHA256": "1620b91d86fa51daafc390875d0029e8f16ac39f9559a9ef85396dcc801e7b28",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "btree-kvstore",
+      "sourceModel": "btree-kvstore",
+      "scenario": "published",
+      "module": "btree-kvstore/kvstore.tla",
+      "configuration": "btree-kvstore/kvstore.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/btree/kvstore.tla",
+        "sha256": "c1131a8591f91c110f2a739dc91d20564542ac6f201d5b76be581e485cfbb376"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c1131a8591f91c110f2a739dc91d20564542ac6f201d5b76be581e485cfbb376",
+      "cfgSHA256": "7b0120df31cb29eb12fa2a8a6f3b7e355921e58268b4d27384c1a94978e7246a",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "scheduling-allocator",
+      "sourceModel": "scheduling-allocator",
+      "scenario": "published",
+      "module": "scheduling-allocator/SchedulingAllocator.tla",
+      "configuration": "scheduling-allocator/SchedulingAllocator.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/allocator/SchedulingAllocator.tla",
+        "sha256": "2079cbb8770147eff672f1f3fddd759064e63c0e2c31bfa6a08de57d2d3bac79"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "2079cbb8770147eff672f1f3fddd759064e63c0e2c31bfa6a08de57d2d3bac79",
+      "cfgSHA256": "48f07c633652ba7fe8509fc8950f04789efb5491e56119923623de91375a11b6",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "voucher-life-cycle",
+      "sourceModel": "voucher-life-cycle",
+      "scenario": "published",
+      "module": "voucher-life-cycle/VoucherLifeCycle.tla",
+      "configuration": "voucher-life-cycle/VoucherLifeCycle.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherLifeCycle.tla",
+        "sha256": "6eadee511ab80cc35f389104c8b558677ba5572ce621422a0f0ffdebdc72505f"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "6eadee511ab80cc35f389104c8b558677ba5572ce621422a0f0ffdebdc72505f",
+      "cfgSHA256": "51c27e2b132c95a167abc28a23c9e0c2368f609f2f0b728dbfeff199e7d81d9a",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "byzpaxos-consensus",
       "sourceModel": "byzpaxos-consensus",
       "scenario": "published",

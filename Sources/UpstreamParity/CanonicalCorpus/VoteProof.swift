@@ -242,8 +242,7 @@ package struct VoteProofModel: Sendable {
                 }
             }
             Voting
-            let VoteProof = Validation {}.checkingDeadlock(false)
-            VoteProof
+            Validation("VoteProof") {}.checkingDeadlock(false)
 
         }
     }

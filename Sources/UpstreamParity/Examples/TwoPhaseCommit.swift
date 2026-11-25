@@ -92,10 +92,9 @@ package struct TwoPhaseCommitModel: Sendable {
                     }
                 }
             }
-            let threeManagers = Validation {
+            Validation("threeManagers") {
                 Bind(RM, to: Set<Manager>([.r1, .r2, .r3]))
             }
-            threeManagers
         }
     }
 }

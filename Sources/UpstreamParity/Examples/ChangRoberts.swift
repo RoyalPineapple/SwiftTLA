@@ -85,16 +85,14 @@ package struct ChangRobertsModel: Sendable {
             }
             ChangRoberts
 
-            let MCChangRoberts = Validation {
+            Validation("MCChangRoberts") {
                 Bind(N, to: 3)
                 Bind(Id, to: [1, 2, 3])
             }.checkingDeadlock(false)
-            MCChangRoberts
-            let APChangRoberts = Validation {
+            Validation("APChangRoberts") {
                 Bind(N, to: 3)
                 Bind(Id, to: [3, 1, 2])
             }.behavior(.initialAndNext).checking(only: [TypeOK, Correctness]).checkingDeadlock(false)
-            APChangRoberts
         }
     }
 }

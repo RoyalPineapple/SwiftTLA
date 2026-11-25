@@ -163,13 +163,12 @@ package struct BakeryModel: Sendable {
             }
             Bakery
             InitialStates(satisfying: Inv)
-            let MCBakery = Validation {
+            Validation("MCBakery") {
                 Bind(N, to: 2)
                 Bind(MaxNat, to: 2)
             }.checking(only: [MutualExclusion, TypeOK, Inv])
                 .checkingDeadlock(false)
                 .behavior(.initialAndNext)
-            MCBakery
         }
     }
 }

@@ -3013,7 +3013,7 @@
       "path": "specifications/allocator",
       "name": "Resource Allocator",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "SimpleAllocator matches the published configuration locally on 400 reachable states, 1,632 labeled transitions, two invariants, three liveness properties and deadlock checking. Hosted comparison is pending. SchedulingAllocator, AllocatorImplementation and AllocatorRefinement still need registered ports.",
+      "gap": "SimpleAllocator matches the published configuration locally on 400 reachable states, 1,632 labeled transitions, two invariants, three liveness properties and deadlock checking. Hosted comparison is pending. SchedulingAllocator.cfg matches locally on 1 initial states, 1,690 reachable states, 5,853 labeled transitions and all selected checks. Hosted comparison is pending. AllocatorImplementation and AllocatorRefinement still need registered ports.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3048,7 +3048,9 @@
           "path": "specifications/allocator/SchedulingAllocator.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SchedulingAllocator.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3093,10 +3095,16 @@
           "module": "specifications/allocator/SchedulingAllocator.tla",
           "configuration": "specifications/allocator/SchedulingAllocator.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SchedulingAllocator.swift",
+              "scenario": "published",
+              "caseID": "scheduling-allocator"
+            }
+          ],
           "evidence": []
         },
         {
@@ -3577,7 +3585,7 @@
       "path": "specifications/btree",
       "name": "B-trees",
       "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "gap": "kvstore.cfg matches locally on 1 initial states, 2,641 reachable states, 28,584 labeled transitions and all selected checks. Hosted comparison is pending. The remaining family evidence and module roles need review.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3591,7 +3599,9 @@
           "path": "specifications/btree/kvstore.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/KeyValueStore.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3617,10 +3627,16 @@
           "module": "specifications/btree/kvstore.tla",
           "configuration": "specifications/btree/kvstore.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/KeyValueStore.swift",
+              "scenario": "published",
+              "caseID": "btree-kvstore"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -3630,7 +3646,7 @@
       "path": "specifications/byihive",
       "name": "RFC 3506: Voucher Transaction System",
       "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "gap": "VoucherLifeCycle.cfg matches locally on 1 initial states, 64 reachable states, 192 labeled transitions and all selected checks. Hosted comparison is pending. The remaining family evidence and module roles need review.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3658,7 +3674,9 @@
           "path": "specifications/byihive/VoucherLifeCycle.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/VoucherLifeCycle.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3701,10 +3719,16 @@
           "module": "specifications/byihive/VoucherLifeCycle.tla",
           "configuration": "specifications/byihive/VoucherLifeCycle.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/VoucherLifeCycle.swift",
+              "scenario": "published",
+              "caseID": "voucher-life-cycle"
+            }
+          ],
           "evidence": []
         },
         {
@@ -8378,7 +8402,7 @@
       "path": "specifications/Paxos",
       "name": "The Paxos Protocol",
       "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "gap": "MCConsensus.cfg matches locally on 4 initial states, 4 reachable states, 3 labeled transitions and all selected checks. Hosted comparison is pending. The remaining family evidence and module roles need review.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -8392,7 +8416,9 @@
           "path": "specifications/Paxos/MCConsensus.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/PaxosInductiveConsensus.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8429,10 +8455,16 @@
           "module": "specifications/Paxos/MCConsensus.tla",
           "configuration": "specifications/Paxos/MCConsensus.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/PaxosInductiveConsensus.swift",
+              "scenario": "published",
+              "caseID": "paxos-mc-consensus"
+            }
+          ],
           "evidence": []
         },
         {

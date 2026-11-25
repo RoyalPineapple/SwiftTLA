@@ -178,11 +178,10 @@ package struct BoulangerModel: Sendable {
                 }
             }
             Boulanger
-            let MCBoulanger = Validation {
+            Validation("MCBoulanger") {
                 Bind(N, to: 3)
                 Bind(MaxNat, to: 3)
             }
-            MCBoulanger
         }
     }
 }

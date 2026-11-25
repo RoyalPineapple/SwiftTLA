@@ -360,7 +360,8 @@ public struct ValidationDeclaration: SpecComponent {
     }
 }
 
-package func Validation(_ name: String, label: String? = nil,
+/// Declares a validation scenario with an explicit identity in a specification builder.
+public func Validation(_ name: String, label: String? = nil,
                        @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
     .init(name: name, displayLabel: label, bindings: bindings())
 }

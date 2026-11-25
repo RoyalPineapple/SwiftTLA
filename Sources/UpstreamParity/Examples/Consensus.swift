@@ -53,10 +53,9 @@ package struct ConsensusModel: Sendable {
                 Eventually("Success", !chosen.isEmpty)
             }
             Consensus
-            let published = Validation(label: "Consensus") {
+            Validation("published", label: "Consensus") {
                 Bind(Value, to: Set<Choice>([.one, .two, .three]))
             }.checkingDeadlock(false)
-            published
         }
     }
 }

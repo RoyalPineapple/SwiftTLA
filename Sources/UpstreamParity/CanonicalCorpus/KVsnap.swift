@@ -186,8 +186,7 @@ package struct KVsnapModel: Sendable {
                 Eventually("Termination", Transaction.all.allSatisfy { Finished($0) })
             }
             KVsnap
-            let MCKVsnap = Validation {}
-            MCKVsnap
+            Validation("MCKVsnap") {}
         }
     }
 }

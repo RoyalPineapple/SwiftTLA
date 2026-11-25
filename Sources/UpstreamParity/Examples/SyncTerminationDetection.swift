@@ -50,15 +50,13 @@ package struct SyncTerminationDetectionModel: Sendable {
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
             Liveness(.leadsTo(terminated, terminationDetected))
 
-            let SyncTerminationDetection = Validation {
+            Validation("SyncTerminationDetection") {
                 Bind(N, to: 7)
             }
-            SyncTerminationDetection
 
-            let APSyncTerminationDetection = Validation {
+            Validation("APSyncTerminationDetection") {
                 Bind(N, to: 7)
             }.checking(only: [typeOK, TDCorrect])
-            APSyncTerminationDetection
         }
     }
 }

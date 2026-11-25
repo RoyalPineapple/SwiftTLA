@@ -100,8 +100,7 @@ package struct LockHSModel: Sendable {
                 Map(\.pc, projecting: translatedPC)
             }
             PSpec
-            let published = Validation(label: "LockHS") {}
-            published
+            Validation("published", label: "LockHS") {}
         }
     }
 }

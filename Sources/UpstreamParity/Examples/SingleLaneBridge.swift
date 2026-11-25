@@ -135,13 +135,12 @@ package struct SingleLaneBridgeModel: Sendable {
                 (!Bridge.contains(Location[Car.leftTwo])).leadsTo(Bridge.contains(Location[Car.leftTwo])),
             ]))
 
-            let MC = Validation {
+            Validation("MC") {
                 Bind(CarsRight, to: Set<Car>([.rightOne, .rightTwo]))
                 Bind(CarsLeft, to: Set<Car>([.leftOne, .leftTwo]))
                 Bind(Bridge, to: Set<Int>([4, 5]))
                 Bind(Positions, to: Set<Int>([1, 2, 3, 4, 5, 6, 7, 8]))
             }.checking(only: [invariants, CarsInBridgeExitBridge, CarsEnterBridge])
-            MC
         }
     }
 }

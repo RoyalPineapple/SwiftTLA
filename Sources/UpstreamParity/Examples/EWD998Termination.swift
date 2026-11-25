@@ -58,8 +58,7 @@ package struct EWD998TerminationModel: Sendable {
             Live(.leadsTo(terminated, terminationDetected))
             Constraint(Node.allSatisfy { node in pending[node] <= 3 })
 
-            let AsyncTerminationDetection = Validation { Bind(N, to: 4) }
-            AsyncTerminationDetection
+            Validation("AsyncTerminationDetection") { Bind(N, to: 4) }
         }
     }
 }
