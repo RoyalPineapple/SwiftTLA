@@ -283,7 +283,11 @@ struct UpstreamParityTests {
 
     @Test("bounded Consensus fixture retains terminal deadlocks and temporal progress")
     func consensusGeneratedChecking() throws {
-        let graph = try ReachabilityGraph(initialMachines: ConsensusModel.initialMachines(), maximumStates: 100)
+        let scenario = try #require(ConsensusModel.validationScenarios().first)
+        let published = try scenario.explore(maximumStates: 100)
+        #expect(published.safetyViolations.isEmpty)
+        #expect(published.temporalResults[.Success]?.status == .satisfied)
+        let graph = try ReachabilityGraph(initialMachines: scenario.initialMachines(), maximumStates: 100)
         #expect(graph.transitions.count == Example.consensus.expectedDistinct)
         #expect(graph.safetyViolations.count == 3)
         #expect(graph.safetyViolations.values.allSatisfy { $0 == [.deadlock] })

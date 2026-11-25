@@ -3734,7 +3734,7 @@
       "path": "specifications/byzpaxos",
       "name": "Byzantizing Paxos by Refinement",
       "audit": "reference inputs audited",
-      "gap": "VoteProof and Consensus replace upstream model values with strings and lack model-owned scenarios. Their configurations explicitly disable deadlock checking. The reduced Consensus Swift fixture's generated checker reaches three terminal deadlocks, so its local four-state count and temporal result do not establish upstream configuration parity. Consensus selects LiveSpec, unlike the other three configurations. BPConProof and PConProof have no exact Swift cases. BPConProof has an unknown published outcome, not an assumed success.",
+      "gap": "Consensus matches the published LiveSpec configuration locally, including the complete labeled graph, TypeOK, Inv and Success. Hosted comparison is pending. The reduced VoteProof port uses strings for model values and lacks the published model-owned scenario. BPConProof and PConProof still need exact ports. The published BPConProof outcome is unknown.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3747,7 +3747,7 @@
         {
           "path": "specifications/byzpaxos/Consensus.tla",
           "role": "configured root",
-          "reason": "The configuration binds three model values and selects LiveSpec, TypeOK, Inv, and Success with deadlock checking disabled. LiveSpec adds weak fairness to the safety specification. ConsensusModel remains a partial port.",
+          "reason": "The configuration binds three model values and selects LiveSpec, TypeOK, Inv, and Success with deadlock checking disabled. LiveSpec adds weak fairness to the safety specification.",
           "implementations": [
             "Sources/UpstreamParity/Examples/Consensus.swift"
           ],
@@ -3785,10 +3785,16 @@
           "module": "specifications/byzpaxos/Consensus.tla",
           "configuration": "specifications/byzpaxos/Consensus.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Consensus.swift",
+              "scenario": "published",
+              "caseID": "byzpaxos-consensus"
+            }
+          ],
           "evidence": []
         },
         {

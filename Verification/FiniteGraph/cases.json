@@ -448,6 +448,58 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "byzpaxos-consensus",
+      "sourceModel": "byzpaxos-consensus",
+      "scenario": "published",
+      "module": "byzpaxos-consensus/Consensus.tla",
+      "configuration": "byzpaxos-consensus/Consensus.cfg",
+      "imports": [
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byzpaxos/Consensus.tla",
+        "sha256": "5b877e93b31c982e80b1443127bc2c50c090d7f8d729d468f3b42849315205bf"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "5b877e93b31c982e80b1443127bc2c50c090d7f8d729d468f3b42849315205bf",
+      "cfgSHA256": "b565780a83d15ee93ae45529170484cefe56d948318b25389c68b5442fd0a34c",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "spanning",
       "sourceModel": "spanning",
       "scenario": "broadcast",
