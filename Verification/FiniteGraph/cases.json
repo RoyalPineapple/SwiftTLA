@@ -275,6 +275,26 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "tcommit",
+      "sourceModel": "tcommit",
+      "scenario": "threeManagers",
+      "module": "tcommit/TCommit.tla",
+      "configuration": "tcommit/TCommit.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/TCommit.tla",
+        "sha256": "98974d8c5ee007f4f62188737c20c7dcdb05af099cc53a59c8b8651331fd925d"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "98974d8c5ee007f4f62188737c20c7dcdb05af099cc53a59c8b8651331fd925d",
+      "cfgSHA256": "a896b1bb937ac8fee372e6bc05029c1ffae64acbac7ca58b02e097c40862c415",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "spanning",
       "sourceModel": "spanning",
       "scenario": "broadcast",

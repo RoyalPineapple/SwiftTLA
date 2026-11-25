@@ -10891,8 +10891,8 @@
     {
       "path": "specifications/transaction_commit",
       "name": "Transaction Commit Models",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "The three-manager TCommit port matched the published model locally on 34 reachable states, 93 labeled transitions, TCTypeOK and TCConsistent. Its configuration disables deadlock checking.",
+      "gap": "Other configurations in this family and hosted TCommit parity remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -10934,7 +10934,9 @@
           "path": "specifications/transaction_commit/TCommit.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TransactionCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10987,10 +10989,16 @@
           "module": "specifications/transaction_commit/TCommit.tla",
           "configuration": "specifications/transaction_commit/TCommit.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TransactionCommit.swift",
+              "scenario": "threeManagers",
+              "caseID": "tcommit"
+            }
+          ],
           "evidence": []
         },
         {
