@@ -23,7 +23,7 @@ package struct EWD840Model: Sendable {
             Extends(.naturals)
             let N = scope.parameter(as: Int.self, in: Int.all)
             Assume(N > 0)
-            let Node = IntRange(0, through: N - 1)
+            let Node = 0..<N
             let colors = SetExpr<Color>.literal(.white, .black)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
                 initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
