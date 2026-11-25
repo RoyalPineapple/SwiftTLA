@@ -12,7 +12,7 @@ readonly lock_wait_seconds="${SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS:-30}"
 usage() {
     cat >&2 <<'EOF'
 usage: scripts/local-validation.sh static
-       scripts/local-validation.sh port-build
+       scripts/local-validation.sh port-build [1|4]
        scripts/local-validation.sh swiftpm-test <test-filter>
        scripts/local-validation.sh xcode-test <test-identifier>
        scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]]
@@ -50,7 +50,11 @@ validate_proof_selection() {
 paired=false
 mode="${1:-}"
 case "$mode" in
-    static|port-build|proof-tools)
+    port-build)
+        [[ $# -le 2 && "${2-1}" =~ ^(1|4)$ ]] || usage
+        port_jobs="${2-1}"
+        ;;
+    static|proof-tools)
         [[ $# -eq 1 ]] || usage
         ;;
     swiftpm-test|xcode-test)
@@ -425,7 +429,7 @@ run_guarded() {
             ;;
         port-build)
             (
-                options=(-Xswiftc -warnings-as-errors --disable-automatic-resolution -j 1 --scratch-path "$build_dir")
+                options=(-Xswiftc -warnings-as-errors --disable-automatic-resolution -j "$port_jobs" --scratch-path "$build_dir")
                 swift build "${options[@]}" --product tlc-validate >&2 || exit $?
                 bin_dir="$(swift build "${options[@]}" --show-bin-path)" || exit $?
                 [[ -x "$bin_dir/tlc-validate" ]] || fail "built tlc-validate missing from $bin_dir"
