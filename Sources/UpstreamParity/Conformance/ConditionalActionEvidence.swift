@@ -598,7 +598,9 @@ package enum ConditionalActionEvidence {
                                         \#(source)Targets[position], <<"capture", position>>)
                     BY ONLY <4>range, IsaM("simp"), SMT DEF maps, prefixCount, \#(names.joined(separator: ", "))
                 <4>indexed. routes[index - 1] = maps[index]
-                    BY ONLY <3>aligned, <4>transitions, <4>targets, SMT DEF routeTable, prefixCount
+                    <5>table. routeTable(maps)
+                        BY ONLY <4>range, <4>transitions, <4>targets, SMT DEF routeTable, prefixCount
+                    <5>. QED BY ONLY <3>aligned, <5>table
                 <4>columns. /\ rows[index].emitted.count = \#(source)NodeCounts[index]
                              /\ rows[index].emitted.nodes = \#(source)Nodes(index)
                     BY ONLY <3>arm\#(arm + 1), (index \in DOMAIN rows),
@@ -746,9 +748,7 @@ package enum ConditionalActionEvidence {
             <2>support. Arithmetic!SupportedAssignmentList(rows)
                 BY ONLY <2>cases, \#(supported), SMT DEF rows, ConditionalIntegerRows
             <2>length. Len(rows) = IF arm = 1 THEN \#(arms[0].integerCaptures.count) ELSE \#(arms[1].integerCaptures.count)
-                BY ONLY <2>cases, \#(supported), SMT DEF rows, ConditionalIntegerRows,
-                    \#(sources[0])Rows, \#(sources[0])NodeCounts,
-                    \#(sources[1])Rows, \#(sources[1])NodeCounts
+                BY ONLY <2>cases, \#(supported), SMT DEF rows, ConditionalIntegerRows
             <2>domains. DOMAIN rows = DOMAIN raw.plans
                 \#(domainProofs)
                 <3>source. DOMAIN rows = IF arm = 1 THEN \#(ranges[0]) ELSE \#(ranges[1])
