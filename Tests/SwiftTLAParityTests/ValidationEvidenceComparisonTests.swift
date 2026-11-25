@@ -453,6 +453,29 @@ struct ValidationEvidenceComparisonTests {
         }
     }
 
+    @Test("record-valued action labels preserve field values across TLC print orders")
+    func resolvesRecordAction() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let generated = root.appendingPathComponent("generated.bin")
+        let reference = root.appendingPathComponent("reference.bin")
+        let request = TLAValue.record(["addr": .constant("a1"), "op": .string("Rd")])
+        let action = RenderedAction(sourceName: "Issue", arguments: [request], renderedName: "issue")
+        func graph(_ fields: String) -> Data {
+            tlcGraph(edgeCount: 1, actionName: "Issue",
+                actionLocation: "<Issue([\(fields)]) line 1, col 1 to line 1, col 8 of module Example>")
+        }
+        try graph(#"addr |-> a1, op |-> "Rd""#).write(to: generated)
+        try graph(#"op |-> "Rd", addr |-> a1"#).write(to: reference)
+        #expect(try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+            generated: generated, reference: reference, actions: [action], in: root) == nil)
+        try graph("op |-> Rd, addr |-> a1").write(to: reference)
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action Issue([addr|->a1,op|->Rd])")) {
+            try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+                generated: generated, reference: reference, actions: [action], in: root)
+        }
+    }
+
     @Test("an undeclared TLC action identifies the observed invocation")
     func undeclaredTLCActionIdentifiesInvocation() throws {
         let root = try fixture()

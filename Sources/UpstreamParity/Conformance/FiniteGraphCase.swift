@@ -211,7 +211,18 @@ func tlaLocationArgumentIdentity(_ argument: String) -> String {
             identity.append(character)
         }
     }
-    return identity
+    // TLC may print a record's fields in a different order from the declared action.
+    guard identity.first == "[", identity.last == "]",
+          let fields = try? TLCValueParser.components(String(identity.dropFirst().dropLast())),
+          fields.count > 1 else { return identity }
+    var names: Set<Substring> = []
+    for field in fields {
+        guard let arrow = field.range(of: "|->") else { return identity }
+        let name = field[..<arrow.lowerBound]
+        guard name.range(of: #"^[A-Za-z_][A-Za-z_0-9]*$"#, options: .regularExpression) != nil,
+              names.insert(name).inserted else { return identity }
+    }
+    return "[" + fields.sorted().joined(separator: ",") + "]"
 }
 
 /// The source-controlled declaration for a finite conformance case.
