@@ -1199,20 +1199,20 @@ enum AuthoredCopySyntax {
                                 right == MasterNodeRight[i][j]
                     <4>kind. kind \in {"literal", "read", "add"} /\ kind = view.kinds[origin]
                         BY ONLY <2>index, (j \in 1..count), SMT DEF kind, view, origin, origins, count,
-                            MasterNodeKinds, MasterNodeCounts, MasterRetainedViews
+                            MasterNodeKinds, MasterNodeCounts, MasterRetainedOrigins, MasterRetainedViews
                     <4>literal. /\ (kind = "literal" => literal = view.literals[origin])
                                 /\ (kind = "add" => literal = 0)
                         BY ONLY <2>index, (j \in 1..count), SMT DEF kind, literal, view, origin, origins, count,
-                            MasterNodeKinds, MasterNodeLiterals, MasterNodeCounts, MasterRetainedViews\#(returnedDefinitions)
+                            MasterNodeKinds, MasterNodeLiterals, MasterNodeCounts, MasterRetainedOrigins, MasterRetainedViews\#(returnedDefinitions)
                     <4>read. kind = "read" => read = view.reads[origin]
                         BY ONLY <2>index, (j \in 1..count), SMT DEF kind, read, view, origin, origins, count,
-                            MasterNodeKinds, MasterNodeReadKeys, MasterNodeCounts, MasterRetainedViews
+                            MasterNodeKinds, MasterNodeReadKeys, MasterNodeCounts, MasterRetainedOrigins, MasterRetainedViews
                     <4>left. IF kind = "add" THEN left \in 1..(j - 1) /\ origins[left] = view.left[origin] ELSE left = 0
                         BY ONLY <2>index, (j \in 1..count), SMT DEF kind, left, view, origin, origins, count,
-                            MasterNodeKinds, MasterNodeLeft, MasterNodeCounts, MasterRetainedViews
+                            MasterNodeKinds, MasterNodeLeft, MasterNodeCounts, MasterRetainedOrigins, MasterRetainedViews
                     <4>right. IF kind = "add" THEN right \in 1..(j - 1) /\ origins[right] = view.right[origin] ELSE right = 0
                         BY ONLY <2>index, (j \in 1..count), SMT DEF kind, right, view, origin, origins, count,
-                            MasterNodeKinds, MasterNodeRight, MasterNodeCounts, MasterRetainedViews
+                            MasterNodeKinds, MasterNodeRight, MasterNodeCounts, MasterRetainedOrigins, MasterRetainedViews
                     <4>. QED BY ONLY <2>projection, (j \in 1..count), <4>kind, <4>literal, <4>read, <4>left, <4>right, SMT
                         DEF Rule!NodePayloadMatchesSource, nodes, MasterNodes, origin, kind, literal, read, left, right
                 <3>. QED BY ONLY <2>projection, <3>points, SMT DEF Rule!AllNodePayloadsMatchSource
@@ -1221,10 +1221,10 @@ enum AuthoredCopySyntax {
                              row.emitted.nodes[j].kind = "read" => row.emitted.nodes[j].payload \in MasterFields
                 <3>literals. \A j \in 1..count :
                     view.kinds[origins[j]] = "literal" => Rule!InRange(view.literals[origins[j]])
-                    BY ONLY <2>index, SMT DEF count, view, origins, MasterNodeCounts, MasterRetainedViews, Rule!InRange\#(returnedDefinitions)
+                    BY ONLY <2>index, SMT DEF count, view, origins, MasterNodeCounts, MasterRetainedOrigins, MasterRetainedViews, Rule!InRange\#(returnedDefinitions)
                 <3>reads. \A j \in 1..count :
                     view.kinds[origins[j]] = "read" => view.reads[origins[j]] \in MasterFields
-                    BY ONLY <2>index, SMT DEF count, view, origins, MasterNodeCounts, MasterRetainedViews, MasterFields
+                    BY ONLY <2>index, SMT DEF count, view, origins, MasterNodeCounts, MasterRetainedOrigins, MasterRetainedViews, MasterFields
                 <3>emitted. \A j \in 1..count :
                     MasterNodeKinds[i][j] = "read" => MasterNodeReadKeys[i][j] \in MasterFields
                     BY ONLY <2>index, SMT DEF count, MasterNodeCounts, MasterNodeKinds, MasterNodeReadKeys, MasterFields
