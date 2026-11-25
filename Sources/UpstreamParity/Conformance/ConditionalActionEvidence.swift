@@ -614,6 +614,7 @@ package enum ConditionalActionEvidence {
             }
             let physicalPlans = tuple(planNames[arm])
             let physicalPlanDefinitions = planNames[arm].joined(separator: ", ")
+            let readColumn = TLAValue.tuple(arms[arm].integerCaptures.map { .tuple($0.plan.reads) })
             return (prefixes, #"""
             <3>arm\#(arm + 1). CASE arm = \#(arm + 1)
                 <4>range. Len(rows) = \#(names.count) /\ index \in 1..\#(names.count)
@@ -645,17 +646,49 @@ package enum ConditionalActionEvidence {
                 <4>physicalReads. plan.reads = \#(physicalPlans)[index].reads
                     BY ONLY <3>arm\#(arm + 1), <4>range, IsaM("simp"), SMT
                         DEF plan, raw, ConditionalIntegerTable, \#(table)
+                <4>. DEFINE readColumn == \#(readColumn)
+                <4>readColumn. \#(physicalPlans)[index].reads = readColumn[index]
+                    BY ONLY <4>range, SMT DEF readColumn, \#(physicalPlanDefinitions)
                 <4>lookup. \A node \in 1..\#(source)NodeCounts[index] : \#(source)NodeKinds[index][node] = "read" =>
                     LET key == \#(source)NodeReadKeys[index][node]
                     IN /\ key \in ConditionalIntKeys
-                       /\ \#(physicalPlans)[index].reads[node] = maps[index][key]
-                    BY ONLY <4>range, IsaM("simp"), SMT DEF maps, \#(physicalPlanDefinitions), ConditionalIntKeys, Arithmetic!CopyEntryRoutes,
+                       /\ readColumn[index][node] = maps[index][key]
+                    BY ONLY <4>range, SMT DEF maps, readColumn, ConditionalIntKeys, Arithmetic!CopyEntryRoutes,
                         Arithmetic!CopyReplace, \#(source)NodeKinds, \#(source)NodeCounts,
                         \#(source)NodeReadKeys, \#(source)Targets, \#(names.joined(separator: ", "))
-                <4>. QED BY ONLY <4>indexed, <4>sourceReads, <4>physicalReads, <4>lookup, SMT
+                <4>. QED BY ONLY <4>indexed, <4>sourceReads, <4>physicalReads, <4>readColumn, <4>lookup, SMT
             """#)
         }
         let ranges = arms.map { "1..\($0.integerCaptures.count)" }
+        let rootCases = tables.indices.map { index in
+            let arm = index + 1
+            let table = tables[index]
+            let range = ranges[index]
+            let source = sources[index]
+            let counts = tuple(arms[index].integerCaptures.map { String($0.plan.kinds.count) })
+            let terminalTerms = tuple(arms[index].integerCaptures.enumerated().map { offset, capture in
+                "\(table)Values.terms[\(offset + 1)][\(capture.plan.kinds.count)]"
+            })
+            return #"""
+            <3>arm\#(arm). CASE arm = \#(arm)
+                <4>range. index \in \#(range)
+                    BY ONLY <3>arm\#(arm), <1>integerRows, <2>shape, (arm \in ConditionalArms), (index \in DOMAIN rows), SMT DEF rows
+                <4>width. plan.count = \#(counts)[index]
+                    <5>certified. plan.count = rows[index].emitted.count
+                        BY ONLY <2>operands DEF Arithmetic!PhysicalAssignmentOperandsMatch, Arithmetic!AssignmentRhsPlan, Arithmetic!ExtractedNodePlan
+                    <5>project. rows[index].emitted.count = \#(source)NodeCounts[index]
+                        BY ONLY <3>arm\#(arm), (index \in DOMAIN rows), \#(source)RowsProjectEmittedColumns, SMT DEF rows, ConditionalIntegerRows
+                    <5>. QED BY ONLY <5>certified, <5>project, SMT DEF \#(source)NodeCounts
+                <4>value. \#(table)Values.roots[index] = \#(table)Values.terms[index][\#(counts)[index]]
+                    <5>. DEFINE terminalTerms == \#(terminalTerms)
+                    <5>tuple. \#(table)Values.roots = terminalTerms
+                        BY ONLY SMT DEF terminalTerms, \#(table)Values
+                    <5>index. terminalTerms[index] = \#(table)Values.terms[index][\#(counts)[index]]
+                        BY ONLY <4>range, SMT DEF terminalTerms
+                    <5>. QED BY ONLY <5>tuple, <5>index, SMT
+                <4>. QED BY ONLY <3>arm\#(arm), <4>width, <4>value, SMT DEF raw, ConditionalIntegerTable, \#(table)
+            """#
+        }.joined(separator: "\n        ")
         let domainProofs = sources.indices.map { index in
             let arm = index + 1
             let source = sources[index]
@@ -848,8 +881,8 @@ package enum ConditionalActionEvidence {
                     DEF plan, raw, ConditionalIntegerTable, \#(evaluatedTables),
                         Arithmetic!RenderedRhsGuards, Arithmetic!GeneratedAddDefined, Arithmetic!SmallAddOperands
             <2>roots. raw.roots[index] = raw.terms[index][plan.count]
-                BY ONLY <2>cases, <2>shape, (index \in DOMAIN rows), SMT
-                    DEF plan, raw, ConditionalIntegerTable, \#(evaluatedTables)
+                \#(rootCases)
+                <3>. QED BY ONLY <2>cases, <3>arm1, <3>arm2
             <2>. QED BY ONLY <2>matches, <2>terms, <2>guards, <2>roots DEF plan, completed
         <1>probeSlots. /\ DOMAIN ConditionalProbePositions = 1..\#(probes.count)
                         /\ DOMAIN ConditionalProbeGuards = DOMAIN ConditionalProbePositions
