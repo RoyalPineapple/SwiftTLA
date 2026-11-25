@@ -91,7 +91,8 @@ struct GeneratedAtomicUpdateProofTests {
         let operations = try String(contentsOf: library.appendingPathComponent("NativeMachineOperations.swift"), encoding: .utf8)
         let checking = try String(contentsOf: library.appendingPathComponent("CheckingContext.swift"), encoding: .utf8)
         let members = declaration.memberBlock.members
-        let literal = try #require(TLASpecVerifier.findSpec(in: members, defaultName: modelName))
+        let source = try TLASpecVerifier.findSpec(in: members, defaultName: modelName)
+        let literal = try #require(source)
         let enums = try TLASpecVerifier.collectEnumVariables(from: members)
         let parser = ParserSession(sourceTypes: try TLASpecVerifier.sourceTypes(in: members, enums: enums))
         parser.sourceModelTypeName = modelName
