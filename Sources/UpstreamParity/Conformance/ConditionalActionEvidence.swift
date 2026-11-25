@@ -571,6 +571,37 @@ package enum ConditionalActionEvidence {
              "NodeReadKeys", "NodeLeft", "NodeRight", "Targets"].map { "\(name)\($0)" }
         }.joined(separator: ",\n                ")
         let supported = sources.map { "\($0)AssignmentsAreSupported" }.joined(separator: ", ")
+        let operandCases = sources.indices.map { index in
+            let arm = index + 1
+            let source = sources[index]
+            let table = tables[index]
+            let count = arms[index].integerCaptures.count
+            let physicalPlans = tuple(planNames[index])
+            let physicalPlanDefinitions = planNames[index].joined(separator: ", ")
+            let columnProofs = [("count", "Counts"), ("kinds", "Kinds"), ("literals", "Literals"),
+                                ("left", "Left"), ("right", "Right")].map { field, column in
+                #"""
+                    <4>\#(field). plan.\#(field) = \#(source)Node\#(column)[index]
+                        BY ONLY <4>range, <4>physical, SMT DEF \#(physicalPlanDefinitions), \#(source)Node\#(column)
+                """#
+            }.joined(separator: "\n")
+            return #"""
+            <3>arm\#(arm). CASE arm = \#(arm)
+                <4>range. index \in 1..\#(count)
+                    BY ONLY <3>arm\#(arm), (index \in DOMAIN rows), \#(source)RowsProjectEmittedColumns, SMT
+                        DEF rows, ConditionalIntegerRows, \#(source)NodeCounts
+                <4>row. /\ rows[index].emitted.count = \#(source)NodeCounts[index]
+                         /\ rows[index].emitted.nodes = \#(source)Nodes(index)
+                    BY ONLY <3>arm\#(arm), (index \in DOMAIN rows), \#(source)RowsProjectEmittedColumns, SMT
+                        DEF rows, ConditionalIntegerRows
+                <4>physical. plan = \#(physicalPlans)[index]
+                    BY ONLY <3>arm\#(arm), SMT DEF plan, raw, ConditionalIntegerTable, \#(table)
+            \#(columnProofs)
+                <4>. QED BY ONLY <4>row, <4>count, <4>kinds, <4>literals, <4>left, <4>right, SMT
+                    DEF Arithmetic!PhysicalAssignmentOperandsMatch, Arithmetic!AssignmentRhsPlan,
+                        Arithmetic!ExtractedNodePlan, \#(source)Nodes
+            """#
+        }.joined(separator: "\n        ")
         let routedReads = sources.indices.map { arm -> (prefixes: [String], proof: String) in
             let source = sources[arm]
             let table = tables[arm]
@@ -784,11 +815,8 @@ package enum ConditionalActionEvidence {
                         expected == Arithmetic!AssignmentRhsPlan(rows[index])
                         completed == Arithmetic!HistoryPrefix(raw.roots, index - 1)
             <2>operands. Arithmetic!PhysicalAssignmentOperandsMatch(rows[index], plan)
-                BY ONLY <2>cases, <2>shape, (index \in DOMAIN rows), SMT
-                    DEF plan, rows, raw, ConditionalIntegerRows, ConditionalIntegerTable,
-                        \#(physicalTables), Arithmetic!PhysicalAssignmentOperandsMatch,
-                        Arithmetic!AssignmentRhsPlan, Arithmetic!ExtractedNodePlan,
-                        \#(sourceDefinitions)
+                \#(operandCases)
+                <3>. QED BY ONLY <2>cases, <3>arm1, <3>arm2
             <2>. DEFINE routes == Arithmetic!DirectCopyRoutes(ConditionalIntKeys, rows)
             <2>reads. \A node \in 1..expected.count : expected.kinds[node] = "read" =>
                 /\ expected.reads[node] \in ConditionalIntKeys
