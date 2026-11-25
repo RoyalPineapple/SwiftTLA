@@ -18,7 +18,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
             Extends(.finiteSets, .naturals)
             let Prisoner = scope.parameter(as: Set<String>.self,
                 in: Set<Set<String>>([Set(["Alice"]), Set(["Alice", "Bob", "Eve"])]))
-            let Light_Unknown = scope.parameter(as: Bool.self, in: Set<Bool>([false, true]))
+            let Light_Unknown = scope.parameter(as: Bool.self)
             let DesignatedCounter = Select(from: Prisoner) { _ in true }
             let NormalPrisoner = Prisoner.removing(DesignatedCounter)
             let SignalLimit = If(Light_Unknown, then: 2, else: 1)
