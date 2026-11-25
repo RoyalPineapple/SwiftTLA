@@ -25,17 +25,18 @@ struct GeneratedAtomicUpdateProofTests {
             \(selectedField)
             let increment = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(0, 1))
             """)
-        for (flag, local, first, target, operand) in [
-            ("true", "left", 13, "right", "increment"), ("false", "right", 17, "left", "2"),
+        for (flag, prefix, local, target, operand) in [
+            ("true", ["Assign(left, to: 13)"], "left", "right", "increment"),
+            ("false", ["Assign(right, to: 9223372036854775807)", "Assign(left, to: 17)"], "right", "left", "2"),
         ] {
             let finalWrite = "Assign(selected, to: \(flag))"
             try #require(authored.components(separatedBy: finalWrite).count == 2)
-            authored = authored.replacingOccurrences(of: finalWrite, with: """
-                Assign(\(local), to: \(first))
-                Assign(\(local), to: 9223372036854775807)
-                Assign(\(target), to: \(local) + \(operand))
-                \(finalWrite)
-                """)
+            let writes = prefix + [
+                "Assign(\(local), to: 9223372036854775807)",
+                "Assign(\(target), to: \(local) + \(operand))",
+                finalWrite,
+            ]
+            authored = authored.replacingOccurrences(of: finalWrite, with: writes.joined(separator: "\n                    "))
         }
         let declaration = try #require(Parser.parse(source: authored).statements.compactMap {
             $0.item.as(StructDeclSyntax.self)
@@ -82,21 +83,48 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(client.output.split(separator: "\n").map(String.init) == [
             "success true",
             "entry 2 edges 0 overflow true", "branch 0 target 1 before 0=13,0=\(Int.max) reason true",
-            "entry 4 edges 0 overflow true", "branch 1 target 0 before 1=17,1=\(Int.max) reason true",
+            "entry 4 edges 0 overflow true", "branch 1 target 0 before 1=\(Int.max),0=17,1=\(Int.max) reason true",
         ])
         var emitter = NativeSwiftEmitter(model: compilation)
         let native = try emitter.machineMembers().map(\.description).joined(separator: "\n")
         let library = packageRoot().appendingPathComponent("Sources/SwiftTLA")
         let operations = try String(contentsOf: library.appendingPathComponent("NativeMachineOperations.swift"), encoding: .utf8)
         let checking = try String(contentsOf: library.appendingPathComponent("CheckingContext.swift"), encoding: .utf8)
+        let members = declaration.memberBlock.members
+        let literal = try #require(TLASpecVerifier.findSpec(in: members, defaultName: modelName))
+        let enums = try TLASpecVerifier.collectEnumVariables(from: members)
+        let parser = ParserSession(sourceTypes: try TLASpecVerifier.sourceTypes(in: members, enums: enums))
+        parser.sourceModelTypeName = modelName
+        let parsed = parser.parseSpecClosure(named: literal.name, literal.closure)
         let proof = try ConditionalActionEvidence.arithmeticHistoryProof(authoredSource: authored, modelName: modelName,
-            program: program, rendered: rendered, nativeSource: native, operations: operations, checking: checking)
+            parsed: parsed, program: program, rendered: rendered, nativeSource: native, operations: operations, checking: checking)
+
+        let action = try #require(program.behavior.actions.first)
+        let label = try #require(program.layout.actions.first { $0.id == action.id }?.renderedName)
+        let physical = try #require(OrderedRHSPhysicalAction.decodeConditional(in: tla, action: action, program: program))
+        let captures = physical.ifFalse.action.captures
+        try #require(captures.count == 5)
+        let earlier = captures[0], latest = captures[2], addition = captures[3]
+        try #require(earlier.plan.literals == [.int(Int.max)] && latest.plan.literals == earlier.plan.literals)
+        try #require(addition.plan.reads.first == .tuple([.string("capture"), .int(3)]))
+
+        // Redirect only the evaluated RHS. The earlier writer has the same value.
+        let declarationText = try #require(tla.split(separator: "\n").first { $0.hasPrefix("\(label) == ") })
+        let rhs = "LET \(addition.binding) == (\(latest.binding) + 2) IN"
+        try #require(declarationText.components(separatedBy: rhs).count == 2)
+        let occurrence = try #require(declarationText.range(of: rhs))
+        let redirected = "LET \(addition.binding) == (\(earlier.binding) + 2) IN"
+        let corrupted = tla.replacingCharacters(in: occurrence, with: redirected)
+        #expect(OrderedRHSPhysicalAction.decodeConditional(in: corrupted, action: action, program: program) == nil)
         Attachment.record(Array(authored.utf8), named: "\(modelName).swift")
         Attachment.record(Array(native.utf8), named: "\(modelName)NativeMembers.swift")
         Attachment.record(Array(tla.utf8), named: "\(modelName).tla")
         Attachment.record(Array(proof.configuration.utf8), named: "\(modelName).cfg")
         Attachment.record(Array(proof.bytes), named: "\(proof.name).tla")
         Attachment.record(Array(proof.configured.bytes), named: "\(proof.configured.name).tla")
+        for arm in proof.arms {
+            Attachment.record(Array(arm.bytes), named: "\(arm.name).tla")
+        }
     }
 
     @Test("The compiler stack action returns the child slots supplied by its visitor")

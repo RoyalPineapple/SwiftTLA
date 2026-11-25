@@ -903,6 +903,27 @@ enum AuthoredCopySyntax {
         var continuation: String? { labels.dropFirst(ordinal + 1).first }
     }
 
+    private struct ArithmeticRow {
+        let target: String
+        let retained: String
+        let authoredView: String
+        let authoredParents: String
+        let nodes: [(kind: String, payload: String, left: Int, right: Int)]
+    }
+
+    private static func arithmeticRow(target: String, authored: StateExpr, returned: AlgorithmStatementModel,
+                                      fields: Set<String>) throws -> ArithmeticRow {
+        guard fields.contains(target), case .set(.root(let actualTarget), let expression) = returned,
+              actualTarget.utf8.elementsEqual(target.utf8), authored == expression,
+              let certificate = StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: fields)
+        else { throw unsupported }
+        let authoredBinding = try boundArithmeticView(authored, source: certificate.source)
+        let syntax = try InitialFailureEvidence.sourceSyntaxView(certificate)
+        let retained = "[view |-> \(syntax.view), origins |-> \(syntax.origins), inverse |-> \(syntax.indices)]"
+        return .init(target: TLAValue.string(target).description, retained: retained,
+                     authoredView: authoredBinding.view, authoredParents: authoredBinding.parents, nodes: syntax.emitted)
+    }
+
     static func arithmeticRoute(algorithm: String, label: String, ordinal: Int, continuation: String?) -> TLAValue {
         .record(TLARecord([
             .init("algorithm", .string(algorithm)), .init("label", .string(label)), .init("ordinal", .int(ordinal)),
@@ -914,8 +935,7 @@ enum AuthoredCopySyntax {
         _ selection: Selection, spec: TLASpec, renderedModule: String, sourceAction: String?
     ) throws -> ArithmeticProofInput {
         let authored = try authoredSteps(selection)
-        guard let fallback = authored.fields.sorted().first,
-              spec.sourceAlgorithms.count == 1, let built = spec.sourceAlgorithms.first?.model,
+        guard spec.sourceAlgorithms.count == 1, let built = spec.sourceAlgorithms.first?.model,
               built.name.utf8.elementsEqual(selection.algorithm.utf8) else { throw unsupported }
         let actual = built.components.compactMap { component -> AlgorithmStepModel? in
             guard case .step(let step) = component else { return nil }
@@ -941,25 +961,9 @@ enum AuthoredCopySyntax {
         guard fields.count == authored.fields.count, Set(fields) == authored.fields,
               action.statements.count == step.statements.count else { throw unsupported }
         let rows = try zip(step.statements, action.statements).map { source, returned in
-            guard case .set(.root(let target), let sourceValue) = source, authored.fields.contains(target),
-                  case .set(.root(let actualTarget), let expression) = returned,
-                  actualTarget.utf8.elementsEqual(target.utf8), expression == sourceValue,
-                  let certificate = StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: authored.fields)
-            else { throw unsupported }
-            let authoredBinding = try boundArithmeticView(sourceValue, source: certificate.source)
-            let syntax = try InitialFailureEvidence.sourceSyntaxView(certificate)
-            let retained = "[view |-> \(syntax.view), origins |-> \(syntax.origins), inverse |-> \(syntax.indices)]"
-            return (target: TLAValue.string(target).description, retained: retained,
-                    authoredView: authoredBinding.view, authoredParents: authoredBinding.parents, nodes: syntax.emitted)
+            guard case .set(.root(let target), let sourceValue) = source else { throw unsupported }
+            return try arithmeticRow(target: target, authored: sourceValue, returned: returned, fields: authored.fields)
         }
-        let countColumns = tuple(rows.map { String($0.nodes.count) })
-        let kindColumns = tuple(rows.map { tuple($0.nodes.map { TLAValue.string($0.kind).description }) })
-        let literalColumns = tuple(rows.map { tuple($0.nodes.map { $0.kind == "literal" ? $0.payload : "0" }) })
-        let formalFallback = TLAValue.string(fallback).description
-        let readColumns = tuple(rows.map { tuple($0.nodes.map { $0.kind == "read" ? $0.payload : formalFallback }) })
-        let leftColumns = tuple(rows.map { tuple($0.nodes.map { String($0.left) }) })
-        let rightColumns = tuple(rows.map { tuple($0.nodes.map { String($0.right) }) })
-        guard case .set(.root(let firstTarget), _)? = step.statements.first else { throw unsupported }
         let suffix = labels.count == 1 ? "" : "\(renderedModule)Action\(ordinal + 1)"
         let moduleName = "SwiftTLAArithmeticAssignmentSource" + suffix
         let entries = TLAValue.tuple(labels.map { .tuple([.string($0)]) })
@@ -975,11 +979,26 @@ enum AuthoredCopySyntax {
              ordinal |-> MasterSelectedSlot - 1,
              continuation |-> MasterRouteRules!FollowingSequentialEntry(MasterAuthoredEntries, MasterSelectedSlot, <<>>)]
         """#
-        let module = #"""
-        ---- MODULE \#(moduleName) ----
+        let module = try arithmeticSourceModule(name: moduleName, fields: authored.fields, rows: rows,
+                                                routeDeclaration: routeDeclaration)
+        return .init(algorithm: selection.algorithm, labels: labels, ordinal: ordinal, name: moduleName, module: module)
+    }
+
+    private static func arithmeticSourceModule(name: String, fields: Set<String>, rows: [ArithmeticRow],
+                                               routeDeclaration: String = "") throws -> String {
+        guard let fallback = fields.sorted().first, let firstTarget = rows.first?.target else { throw unsupported }
+        let countColumns = tuple(rows.map { String($0.nodes.count) })
+        let kindColumns = tuple(rows.map { tuple($0.nodes.map { TLAValue.string($0.kind).description }) })
+        let literalColumns = tuple(rows.map { tuple($0.nodes.map { $0.kind == "literal" ? $0.payload : "0" }) })
+        let formalFallback = TLAValue.string(fallback).description
+        let readColumns = tuple(rows.map { tuple($0.nodes.map { $0.kind == "read" ? $0.payload : formalFallback }) })
+        let leftColumns = tuple(rows.map { tuple($0.nodes.map { String($0.left) }) })
+        let rightColumns = tuple(rows.map { tuple($0.nodes.map { String($0.right) }) })
+        return #"""
+        ---- MODULE \#(name) ----
         EXTENDS TLAPS, Integers, Sequences
-        MasterFields == \#(TLAValue.set(Set(authored.fields.map(TLAValue.string))))
-        MasterTarget == \#(TLAValue.string(firstTarget))\#(routeDeclaration)
+        MasterFields == \#(TLAValue.set(Set(fields.map(TLAValue.string))))
+        MasterTarget == \#(firstTarget)\#(routeDeclaration)
         MasterTargets == \#(tuple(rows.map(\.target)))
         MasterNodeCounts == \#(countColumns)
         MasterNodeKinds == \#(kindColumns)
@@ -1163,19 +1182,39 @@ enum AuthoredCopySyntax {
         <1>. QED BY ONLY <1>shape, <1>rows, SMT DEF Rule!SupportedAssignmentList
         ====
         """# + "\n"
-        return .init(algorithm: selection.algorithm, labels: labels, ordinal: ordinal, name: moduleName, module: module)
     }
 
     struct ConditionalInput {
         struct Write {
             let target: String
             let terms: [TLAValue]
+            fileprivate let expression: StateExpr
         }
 
         let fields: Set<TLAValue>
         let label: TLAValue
         let predicate: TLAValue
         let arms: [[Write]]
+
+        func integerPrefixProof(arm: Int, through last: Int, parsed: TLASpec, integerFields: Set<String>,
+                                name: String) throws -> String {
+            guard arms.indices.contains(arm), arms[arm].indices.contains(last),
+                  parsed.sourceAlgorithms.isEmpty, parsed.sourceAtomicSteps.count == 1,
+                  let step = parsed.sourceAtomicSteps.first, step.bindings.isEmpty,
+                  TLAValue.string(step.model.label.name) == label, step.model.loopCondition == nil,
+                  step.model.statements.count == 1,
+                  case .ifElse(let condition, let yes, let no)? = step.model.statements.first,
+                  scalarComparison(condition) == predicate,
+                  Set(parsed.variables.map { TLAValue.string($0.name) }) == fields
+            else { throw unsupported }
+            let authored = arms[arm]
+            let returned = arm == 0 ? yes : no
+            guard authored.count == returned.count else { throw unsupported }
+            let rows = try zip(authored.prefix(last + 1), returned.prefix(last + 1)).map { write, statement in
+                try arithmeticRow(target: write.target, authored: write.expression, returned: statement, fields: integerFields)
+            }
+            return try arithmeticSourceModule(name: name, fields: integerFields, rows: rows)
+        }
 
         var scalarProof: TLAValue? {
             func boolWrite(_ arm: [Write]) -> TLAValue? {
@@ -1231,7 +1270,7 @@ enum AuthoredCopySyntax {
                         throw unsupported
                     }
                 }
-                return .init(target: target, terms: terms)
+                return .init(target: target, terms: terms, expression: expression)
             }
         }
         return try .init(fields: fields, label: .string(declaredLabel.1 ?? label.caseName),
