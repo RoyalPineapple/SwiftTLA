@@ -340,6 +340,7 @@ package enum ConditionalActionEvidence {
             history: history, probes: evidence.sites, aggregate: evidence.aggregate,
             evaluationCheck: selection.checking, ordinal: ordinal, firstBodyBinder: bodyBinderOrdinals.lowerBound,
             keys: .set(keys), before: stateCases(integers), state: state,
+            entryIntegerTypes: integers.map { "\($0.formalName) \\in Int" }.joined(separator: " /\\ "),
             typed: types.joined(separator: " /\\ "), predicate: source.predicate,
             actionName: actionLayout.renderedName, stateKeys: .set(source.fields),
             fullBefore: stateCases(fields), after: stateCases(fields, primed: true),
@@ -404,7 +405,7 @@ package enum ConditionalActionEvidence {
     private static func conditionalOverflowProof(
         name: String, model: String, integerDomain: String, history: String, probes: [OrderedRHSPhysicalAction.OverflowProbe],
         aggregate: String, evaluationCheck: String, ordinal: Int, firstBodyBinder: Int, keys: TLAValue,
-        before: String, state: String, typed: String, predicate: TLAValue, actionName: String,
+        before: String, state: String, entryIntegerTypes: String, typed: String, predicate: TLAValue, actionName: String,
         stateKeys: TLAValue, fullBefore: String, after: String, nativeComparison: TLAValue, nativeRows: TLAValue,
         nativeWriteOrders: [[String]], comparison: String, descriptors: [ConditionalOverflowArm]
     ) -> String {
@@ -416,7 +417,7 @@ package enum ConditionalActionEvidence {
             writeOrders: nativeWriteOrders, integerDefinitions: tables + planNames.flatMap { $0 })
         let certified = conditionalIntegerHistoryProof(
             descriptors, firstBodyBinder: firstBodyBinder, probes: probes, history: history,
-            tables: tables, planNames: planNames, native: native)
+            tables: tables, planNames: planNames, entryIntegerTypes: entryIntegerTypes, native: native)
         let sourceModules = ([integerDomain] + descriptors.map { $0.integerInput.name }).joined(separator: ", ")
         let guards = probes.map(\.failed.name).joined(separator: ", ")
         let stepCases = tables.indices.map { arm in
@@ -516,7 +517,8 @@ package enum ConditionalActionEvidence {
 
     private static func conditionalIntegerHistoryProof(
         _ arms: [ConditionalOverflowArm], firstBodyBinder: Int, probes: [OrderedRHSPhysicalAction.OverflowProbe],
-        history: String, tables: [String], planNames: [[String]], native: (definitions: String, steps: String)
+        history: String, tables: [String], planNames: [[String]], entryIntegerTypes: String,
+        native: (definitions: String, steps: String)
     ) -> (definitions: String, steps: String) {
         func tuple(_ values: [String]) -> String { "<<\(values.joined(separator: ", "))>>" }
         func raw(_ name: String, _ captures: [OrderedRHSPhysicalAction.Capture], _ plans: [String]) -> String {
@@ -702,6 +704,138 @@ package enum ConditionalActionEvidence {
                 BY ONLY SMT DEF \#(table)
             """#
         }.joined(separator: "\n        ")
+        let renderedTermProofs = tables.indices.map { index in
+            let arm = index + 1
+            let table = tables[index]
+            let values = table + "Values"
+            let range = ranges[index]
+            let captures = arms[index].integerCaptures
+            let captureScope = captures.map { "(LET \($0.binding) == \($0.rhs) IN " }.joined()
+            let capturedTerms = captureScope + tuple(captures.map { tuple($0.terms) })
+                + String(repeating: ")", count: captures.count)
+            let physicalPlans = planNames[index].joined(separator: ", ")
+            func projection(_ field: String) -> String { tuple(planNames[index].map { "\($0).\(field)" }) }
+            func column(_ field: KeyPath<OrderedRHSPhysicalAction.Plan, [TLAValue]>) -> TLAValue {
+                .tuple(captures.map { .tuple($0.plan[keyPath: field]) })
+            }
+            let widths = TLAValue.tuple(captures.map { .int($0.plan.kinds.count) })
+            let offsets = TLAValue.tuple(captures.map { .tuple($0.starts.map(TLAValue.int)) })
+            let kinds = column(\.kinds)
+            let lhs = column(\.left)
+            let rhs = column(\.right)
+            let literals = column(\.literals)
+            let reads = column(\.reads)
+            return #"""
+            <3>arm\#(arm). CASE arm = \#(arm)
+                <4>. DEFINE plans == \#(tuple(planNames[index]))
+                            counts == \#(projection("count"))
+                            tags == \#(projection("kinds"))
+                            lefts == \#(projection("left"))
+                            rights == \#(projection("right"))
+                            literalValues == \#(projection("literals"))
+                            references == \#(projection("reads"))
+                            widths == \#(widths)
+                            offsets == \#(offsets)
+                            kinds == \#(kinds)
+                            lhs == \#(lhs)
+                            rhs == \#(rhs)
+                            literals == \#(literals)
+                            reads == \#(reads)
+                <4>index. index \in \#(range)
+                    BY ONLY <3>arm\#(arm), <2>shape, (index \in DOMAIN rows), IsaM("simp"), SMT
+                        DEF raw, ConditionalIntegerTable, \#(table)
+                <4>selected. /\ plan = plans[index]
+                             /\ starts = \#(table).starts[index]
+                    BY ONLY <3>arm\#(arm), SMT DEF plan, starts, raw, ConditionalIntegerTable, \#(table), plans
+                <4>count. plan.count = counts[index]
+                    BY ONLY <4>index, <4>selected, SMT DEF plans, counts
+                <4>widths. counts = widths
+                    BY ONLY SMT DEF counts, widths, \#(physicalPlans)
+                <4>offsets. \#(table).starts = offsets
+                    BY ONLY SMT DEF \#(table), offsets
+                <4>root. /\ plan.count \in Nat \ {0}
+                         /\ starts[plan.count] = 1
+                    <5>geometry. /\ widths[index] \in Nat \ {0}
+                                  /\ offsets[index][widths[index]] = 1
+                        BY ONLY <4>index, SMT DEF widths, offsets
+                    <5>. QED BY ONLY <4>selected, <4>count, <4>widths, <4>offsets, <5>geometry, SMT
+                <4>planColumns. /\ plan.kinds = kinds[index]
+                                /\ plan.left = lhs[index] /\ plan.right = rhs[index]
+                                /\ plan.literals = literals[index] /\ plan.reads = reads[index]
+                    <5>project. /\ plan.kinds = tags[index]
+                                /\ plan.left = lefts[index] /\ plan.right = rights[index]
+                                /\ plan.literals = literalValues[index] /\ plan.reads = references[index]
+                        BY ONLY <4>index, <4>selected, SMT DEF plans, tags, lefts, rights, literalValues, references
+                    <5>columns. /\ tags = kinds /\ lefts = lhs /\ rights = rhs
+                                /\ literalValues = literals /\ references = reads
+                        BY ONLY SMT DEF tags, lefts, rights, literalValues, references, kinds, lhs, rhs,
+                            literals, reads, \#(physicalPlans)
+                    <5>. QED BY ONLY <5>project, <5>columns, SMT
+                <4>tree. \A node \in 1..plan.count :
+                    /\ starts[node] \in 1..node
+                    /\ plan.kinds[node] \in {"literal", "read", "add"}
+                    /\ (plan.kinds[node] # "add" => starts[node] = node)
+                    /\ (plan.kinds[node] = "add" =>
+                          /\ plan.left[node] \in 1..(node - 1)
+                          /\ plan.right[node] = node - 1
+                          /\ starts[node] = starts[plan.left[node]]
+                          /\ starts[plan.right[node]] = plan.left[node] + 1)
+                    <5>geometry. \A node \in 1..widths[index] :
+                        LET start == offsets[index]
+                            kind == kinds[index][node]
+                            leftChild == lhs[index][node]
+                            rightChild == rhs[index][node]
+                        IN /\ start[node] \in 1..node
+                           /\ kind \in {"literal", "read", "add"}
+                           /\ (kind # "add" => start[node] = node)
+                           /\ (kind = "add" =>
+                                  /\ leftChild \in 1..(node - 1)
+                                  /\ rightChild = node - 1
+                                  /\ start[node] = start[leftChild]
+                                  /\ start[rightChild] = leftChild + 1)
+                        BY ONLY <4>index, SMT DEF widths, offsets, kinds, lhs, rhs
+                    <5>. QED BY ONLY <4>selected, <4>count, <4>widths, <4>offsets, <4>planColumns, <5>geometry, SMT
+                <4>values. \A node \in 1..plan.count :
+                    /\ terms[node] \in Int
+                    /\ (plan.kinds[node] = "literal" => terms[node] = plan.literals[node])
+                    /\ (plan.kinds[node] = "read" =>
+                          terms[node] = Arithmetic!PhysicalRhsBindings(plan, ConditionalBefore, completed)[node])
+                    /\ (plan.kinds[node] = "add" => terms[node] = terms[plan.left[node]] + terms[plan.right[node]])
+                    <5>terms. /\ terms = \#(values).terms[index]
+                              /\ completed = Arithmetic!HistoryPrefix(\#(values).roots, index - 1)
+                        BY ONLY <3>arm\#(arm), SMT DEF terms, completed, raw, ConditionalIntegerTable, \#(table)
+                    <5>. TAKE node \in 1..plan.count
+                    <5>bound. node \in 1..widths[index]
+                        BY ONLY (node \in 1..plan.count), <4>count, <4>widths
+                    <5>integer. \#(values).terms[index][node] \in Int
+                        <6>. DEFINE capturedTerms == \#(capturedTerms)
+                        <6>projected. \#(values).terms = capturedTerms
+                            BY ONLY SMT DEF \#(values), capturedTerms
+                        <6>entry. \#(entryIntegerTypes)
+                            BY ONLY ConditionalTypedState, SMT DEF ConditionalTypedState, ConditionalIntValues
+                        <6>typed. capturedTerms[index][node] \in Int
+                            BY ONLY <4>index, <5>bound, <6>entry, SMT DEF capturedTerms, widths
+                        <6>. QED BY ONLY <6>projected, <6>typed, SMT
+                    <5>literal. kinds[index][node] = "literal" =>
+                        \#(values).terms[index][node] = literals[index][node]
+                        BY ONLY <4>index, <5>bound, SMT DEF \#(values), widths, kinds, literals
+                    <5>reference. kinds[index][node] = "read" =>
+                        \#(values).terms[index][node] = Arithmetic!CopyReferenceValue(ConditionalBefore,
+                            Arithmetic!HistoryPrefix(\#(values).roots, index - 1), reads[index][node])
+                        BY ONLY <4>index, <5>bound, SMT DEF \#(values), widths, kinds, reads,
+                            ConditionalBefore, ConditionalLayoutIntKeys, Arithmetic!HistoryPrefix, Arithmetic!CopyReferenceValue
+                    <5>read. plan.kinds[node] = "read" =>
+                        terms[node] = Arithmetic!PhysicalRhsBindings(plan, ConditionalBefore, completed)[node]
+                        BY ONLY <5>reference, <5>terms, <4>planColumns, (node \in 1..plan.count), SMT
+                            DEF Arithmetic!PhysicalRhsBindings
+                    <5>sum. kinds[index][node] = "add" =>
+                        LET actual == \#(values).terms[index]
+                        IN actual[node] = actual[lhs[index][node]] + actual[rhs[index][node]]
+                        BY ONLY <4>index, <5>bound, SMT DEF \#(values), widths, kinds, lhs, rhs
+                    <5>. QED BY ONLY <4>planColumns, <5>terms, <5>integer, <5>literal, <5>read, <5>sum, SMT
+                <4>. QED BY ONLY <4>root, <4>tree, <4>values, SMT DEF Arithmetic!RenderedRhsTerms, starts, terms
+            """#
+        }.joined(separator: "\n        ")
         let targetsProofs = sources.indices.map { index in
             let arm = index + 1
             let source = sources[index]
@@ -720,6 +854,86 @@ package enum ConditionalActionEvidence {
             <3>arm\#(arm). CASE arm = \#(arm)
                 BY ONLY <3>arm\#(arm), <3>authored\#(arm), <3>project\#(arm), <3>keys\#(arm), SMT
                     DEF rows, ConditionalIntegerRows
+            """#
+        }.joined(separator: "\n        ")
+        let guardProofs = tables.indices.map { index in
+            let arm = index + 1
+            let source = sources[index]
+            let table = tables[index]
+            let plans = planNames[index]
+            let values = table + "Values"
+            let planDefinitions = plans.joined(separator: ", ")
+            let sites = probes.indices.filter { probes[$0].arm == index }
+            let places = sites.map { String($0 + 1) }.joined(separator: ", ")
+            let probeByCoordinate = Dictionary(uniqueKeysWithValues: sites.map {
+                ([probes[$0].row, probes[$0].node], $0 + 1)
+            })
+            let witnesses = TLAValue.tuple(arms[index].integerCaptures.enumerated().map { row, capture in
+                .tuple(capture.plan.kinds.indices.map { node in .int(probeByCoordinate[[row + 1, node + 1]] ?? 0) })
+            })
+            let operandDefinitions = sites.map { ", " + probes[$0].operands.name }.joined()
+            return #"""
+            <3>arm\#(arm). CASE arm = \#(arm)
+                <4>range. index \in 1..\#(plans.count)
+                    BY ONLY <3>arm\#(arm), (arm \in ConditionalArms), (index \in DOMAIN rows),
+                        <1>integerRows, <2>shape, SMT DEF rows
+                <4>. DEFINE actualPlan == \#(tuple(plans))[index]
+                            actualTerms == \#(values).terms[index]
+                            actualGuards == \#(values).guards[index]
+                <4>project. /\ plan = actualPlan
+                            /\ raw.terms[index] = actualTerms /\ raw.guards[index] = actualGuards
+                    BY ONLY <3>arm\#(arm), IsaM("simp"), SMT
+                        DEF plan, raw, actualPlan, actualTerms, actualGuards, ConditionalIntegerTable, \#(table)
+                <4>sourceColumns. /\ expected.count = \#(source)NodeCounts[index]
+                                  /\ \A j \in 1..expected.count :
+                                         /\ expected.kinds[j] = \#(source)NodeKinds[index][j]
+                                         /\ expected.left[j] = \#(source)NodeLeft[index][j]
+                                         /\ expected.right[j] = \#(source)NodeRight[index][j]
+                    <5>row. /\ rows[index].emitted.count = \#(source)NodeCounts[index]
+                            /\ rows[index].emitted.nodes = \#(source)Nodes(index)
+                        BY ONLY <3>arm\#(arm), (index \in DOMAIN rows), \#(source)RowsProjectEmittedColumns, SMT
+                            DEF rows, ConditionalIntegerRows
+                    <5>. QED BY ONLY <5>row, SMT DEF expected, Arithmetic!AssignmentRhsPlan,
+                        Arithmetic!ExtractedNodePlan, \#(source)Nodes
+                <4>checked. Arithmetic!RenderedRhsGuards(actualPlan, actualTerms, actualGuards)
+                    <5>nodes. \A node \in 1..actualPlan.count :
+                             actualGuards[node] =
+                                (IF actualPlan.kinds[node] = "add"
+                                 THEN Arithmetic!GeneratedAddDefined(actualTerms[actualPlan.left[node]],
+                                                                      actualTerms[actualPlan.right[node]])
+                                 ELSE TRUE)
+                        <6>. TAKE node \in 1..actualPlan.count
+                        <6>other. CASE actualPlan.kinds[node] # "add"
+                            BY ONLY <6>other, <4>range, (node \in 1..actualPlan.count), SMT
+                                DEF actualPlan, actualGuards, \#(values), \#(planDefinitions)
+                        <6>add. CASE actualPlan.kinds[node] = "add"
+                            <7>location. /\ node \in 1..\#(source)NodeCounts[index]
+                                         /\ \#(source)NodeKinds[index][node] = "add"
+                                BY ONLY <6>add, (node \in 1..actualPlan.count), <2>operands, <4>project, <4>sourceColumns, SMT
+                                    DEF expected, Arithmetic!PhysicalAssignmentOperandsMatch
+                            <7>. DEFINE p == \#(witnesses)[index][node]
+                            <7>site. /\ p \in {\#(places)} /\ p \in DOMAIN ConditionalProbePositions
+                                      /\ ConditionalProbePositions[p] = <<arm, index, node>>
+                                BY ONLY <7>location, <3>arm\#(arm), <4>range, SMT
+                                    DEF p, \#(source)NodeCounts, \#(source)NodeKinds, ConditionalProbePositions
+                            <7>. DEFINE operands == ConditionalProbePayloads[p][3]
+                            <7>left. operands[1] = actualTerms[\#(source)NodeLeft[index][node]]
+                                BY ONLY <7>site, SMT DEF operands, actualTerms, \#(source)NodeLeft,
+                                    ConditionalProbePositions, ConditionalProbePayloads, \#(values)\#(operandDefinitions)
+                            <7>right. operands[2] = actualTerms[\#(source)NodeRight[index][node]]
+                                BY ONLY <7>site, SMT DEF operands, actualTerms, \#(source)NodeRight,
+                                    ConditionalProbePositions, ConditionalProbePayloads, \#(values)\#(operandDefinitions)
+                            <7>indices. /\ actualPlan.left[node] = \#(source)NodeLeft[index][node]
+                                        /\ actualPlan.right[node] = \#(source)NodeRight[index][node]
+                                BY ONLY <7>location, <2>operands, <4>project, <4>sourceColumns, SMT
+                                    DEF expected, Arithmetic!PhysicalAssignmentOperandsMatch
+                            <7>physical. actualGuards[node] = physicalBounds(operands[1], operands[2])
+                                BY ONLY <7>site, SMT DEF operands, actualGuards, ConditionalProbePositions, ConditionalProbePayloads,
+                                    \#(values), physicalBounds\#(operandDefinitions)
+                            <7>. QED BY ONLY <6>add, <7>indices, <7>left, <7>right, <7>physical, <3>bound, SMT
+                        <6>. QED BY ONLY <6>other, <6>add
+                    <5>. QED BY ONLY <5>nodes DEF Arithmetic!RenderedRhsGuards
+                <4>. QED BY ONLY <4>project, <4>checked
             """#
         }.joined(separator: "\n        ")
         return (#"""
@@ -871,15 +1085,20 @@ package enum ConditionalActionEvidence {
             <2>matches. Arithmetic!PhysicalAssignmentReadsMatchRoutes(rows, index, plan)
                 BY ONLY <2>operands, <2>reads DEF expected, routes, Arithmetic!PhysicalAssignmentReadsMatchRoutes
             <2>terms. Arithmetic!RenderedRhsTerms(plan, ConditionalBefore, completed, raw.starts[index], raw.terms[index])
-                BY ONLY <2>cases, <2>shape, (index \in DOMAIN rows), <1>integerEntry, SMT
-                    DEF plan, raw, completed, ConditionalIntegerTable, \#(evaluatedTables),
-                        ConditionalBefore, ConditionalLayoutIntKeys, Arithmetic!AssignmentBindings, Arithmetic!AssignmentIntValues,
-                        Arithmetic!RenderedRhsTerms, Arithmetic!PhysicalRhsBindings, Arithmetic!CopyReferenceValue,
-                        Arithmetic!HistoryPrefix
+                <3>. DEFINE starts == raw.starts[index]
+                            terms == raw.terms[index]
+                \#(renderedTermProofs)
+                <3>. QED BY ONLY <2>cases, <3>arm1, <3>arm2, SMT
             <2>guards. Arithmetic!RenderedRhsGuards(plan, raw.terms[index], raw.guards[index])
-                BY ONLY <2>cases, <2>shape, (index \in DOMAIN rows), SMT
-                    DEF plan, raw, ConditionalIntegerTable, \#(evaluatedTables),
-                        Arithmetic!RenderedRhsGuards, Arithmetic!GeneratedAddDefined, Arithmetic!SmallAddOperands
+                <3>. DEFINE physicalBounds(lhs, rhs) ==
+                    IF (lhs >= -1000000000 /\ lhs <= 1000000000 /\ rhs >= -1000000000 /\ rhs <= 1000000000)
+                    THEN TRUE
+                    ELSE IF rhs > 0 THEN lhs <= \#(TLAValue.int(Int.max)) - rhs
+                    ELSE IF rhs < 0 THEN lhs >= \#(TLAValue.int(Int.min)) - rhs ELSE TRUE
+                <3>bound. \A lhs, rhs : physicalBounds(lhs, rhs) = Arithmetic!GeneratedAddDefined(lhs, rhs)
+                    BY ONLY SMT DEF physicalBounds, Arithmetic!GeneratedAddDefined, Arithmetic!SmallAddOperands
+                \#(guardProofs)
+                <3>. QED BY ONLY <2>cases, <3>arm1, <3>arm2
             <2>roots. raw.roots[index] = raw.terms[index][plan.count]
                 \#(rootCases)
                 <3>. QED BY ONLY <2>cases, <3>arm1, <3>arm2
