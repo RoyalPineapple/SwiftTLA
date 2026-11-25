@@ -3,13 +3,22 @@ import Foundation
 public struct GeneratedModelParameterBinding<Configuration: GeneratedModelFields>: Sendable {
     package let fieldName: String
     package let source: StateExpr
+    package let projected: Bool
 }
 
 public func Bind<Configuration: GeneratedModelFields, Value: TLAValueType>(
     _ target: KeyPath<Configuration, Value>, to source: some TypedExpression<Value>, _fieldName: String = ""
 ) -> GeneratedModelParameterBinding<Configuration> {
     let identity = Configuration.fieldIdentities[target]
-    return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr)
+    return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: false)
+}
+
+/// Binds a parameter across distinct Swift types that represent the same complete formal value.
+public func Bind<Configuration: GeneratedModelFields, Target: TLAValueType, Source: TLAValueType>(
+    _ target: KeyPath<Configuration, Target>, projecting source: some TypedExpression<Source>, _fieldName: String = ""
+) -> GeneratedModelParameterBinding<Configuration> {
+    let identity = Configuration.fieldIdentities[target]
+    return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: true)
 }
 
 @resultBuilder
@@ -56,7 +65,7 @@ public struct GeneratedModelInstance<Model: ConfiguredGeneratedModel>: Generated
     package let bindings: [GeneratedModelParameterBinding<Model.Configuration>]
     package let targetModelType: String
     package var fieldBindings: [GeneratedModelFieldBinding] {
-        bindings.map { .init(fieldName: $0.fieldName, source: $0.source) }
+        bindings.map { .init(fieldName: $0.fieldName, source: $0.source, projected: $0.projected) }
     }
 
     package init(name: String, targetModelType: String,

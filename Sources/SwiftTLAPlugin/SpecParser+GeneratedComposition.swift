@@ -26,7 +26,7 @@ extension ParserSession {
                   let target = binding.arguments.first,
                   let field = generatedFieldName(target.expression),
                   let value = binding.arguments.last,
-                  value.label?.text == "to",
+                  value.label?.text == "to" || value.label?.text == "projecting",
                   let source = decodeTypedFacadeValue(value.expression, scope: sourceScope),
                   seen.insert(field).inserted else {
                 components.diagnostics.append(.init(
@@ -36,7 +36,7 @@ extension ParserSession {
             }
             propertyDeclarationOffsets["generatedModelInstances.\(name).bindings.\(field)", default: []].append(
                 value.expression.positionAfterSkippingLeadingTrivia.utf8Offset)
-            bindings.append(.init(fieldName: field, source: source))
+            bindings.append(.init(fieldName: field, source: source, projected: value.label?.text == "projecting"))
         }
         return .init(name: name, targetModelType: typePath.joined(separator: "."), fieldBindings: bindings)
     }

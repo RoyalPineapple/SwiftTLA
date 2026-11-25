@@ -3013,7 +3013,7 @@
       "path": "specifications/allocator",
       "name": "Resource Allocator",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "SimpleAllocator matches the published configuration locally on 400 reachable states, 1,632 labeled transitions, two invariants, three liveness properties and deadlock checking. Hosted comparison is pending. SchedulingAllocator.cfg matches locally on 1 initial states, 1,690 reachable states, 5,853 labeled transitions and all selected checks. Hosted comparison is pending. AllocatorImplementation and AllocatorRefinement still need registered ports.",
+      "gap": "SimpleAllocator matches the published configuration locally on 400 reachable states, 1,632 labeled transitions, two invariants, three liveness properties and deadlock checking. Hosted comparison is pending. SchedulingAllocator.cfg matches locally on 1 initial states, 1,690 reachable states, 5,853 labeled transitions and all selected checks. Hosted comparison is pending. AllocatorRefinement matched locally on 1,690 states and 5,853 labeled transitions with the SimpleAllocator refinement selected. AllocatorImplementation remains open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3034,7 +3034,9 @@
           "path": "specifications/allocator/AllocatorRefinement.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SchedulingAllocator.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -3085,10 +3087,16 @@
           "module": "specifications/allocator/AllocatorRefinement.tla",
           "configuration": "specifications/allocator/AllocatorRefinement.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SchedulingAllocator.swift",
+              "scenario": "refinement",
+              "caseID": "allocator-refinement"
+            }
+          ],
           "evidence": []
         },
         {
@@ -8494,7 +8502,7 @@
       "path": "specifications/PaxosHowToWinATuringAward",
       "name": "Paxos (How to Win a Turing Award)",
       "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "gap": "MCConsensus matched locally on one initial state, four reachable states, three labeled transitions and Inv, with deadlock checking disabled. Other configurations and hosted evidence remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -8508,7 +8516,9 @@
           "path": "specifications/PaxosHowToWinATuringAward/MCConsensus.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringConsensus.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8552,10 +8562,16 @@
           "module": "specifications/PaxosHowToWinATuringAward/MCConsensus.tla",
           "configuration": "specifications/PaxosHowToWinATuringAward/MCConsensus.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TuringConsensus.swift",
+              "scenario": "published",
+              "caseID": "turing-paxos-consensus"
+            }
+          ],
           "evidence": []
         },
         {
@@ -9295,7 +9311,7 @@
       "path": "specifications/SpecifyingSystems",
       "name": "Specs from Specifying Systems",
       "audit": "reference inputs audited",
-      "gap": "Nine of 29 published configurations have complete hosted graph and property matches on the audited SHA. Missing configurations select distinct behavior formulas, constraints, temporal properties, and refinements. PrintValues and SimpleMath are assumption-evaluation modules, not state machines. All module dispositions, helper coverage, and legacy cleanup remain open.",
+      "gap": "Nine of 29 published configurations have complete hosted graph and property matches on the audited SHA. Missing configurations select distinct behavior formulas, constraints, temporal properties, and refinements. PrintValues and SimpleMath are assumption-evaluation modules, not state machines. All module dispositions, helper coverage, and legacy cleanup remain open. The finite TLC configurations in Composing/APHourClock and Liveness/APHourClock each matched locally on 12 initial states, 12 reachable states, 12 labeled transitions, HCini and deadlock checking. Symbolic configurations remain separate.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -9487,7 +9503,9 @@
           "path": "specifications/SpecifyingSystems/Composing/APHourClock.tla",
           "role": "configured root",
           "reason": "The configuration selects HC and invariant HCini. Its module path remains a distinct required binding, even when another HourClock configuration selects the same names.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/HourClock.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9697,7 +9715,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/APHourClock.tla",
           "role": "configured root",
           "reason": "The configuration selects HC and invariant HCini. It does not select the LiveHourClock temporal properties.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/HourClock.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10186,10 +10206,16 @@
           "module": "specifications/SpecifyingSystems/Composing/APHourClock.tla",
           "configuration": "specifications/SpecifyingSystems/Composing/APHourClock.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/HourClock.swift",
+              "scenario": "Upstream",
+              "caseID": "ap-hour-clock-composing"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10353,10 +10379,16 @@
           "module": "specifications/SpecifyingSystems/Liveness/APHourClock.tla",
           "configuration": "specifications/SpecifyingSystems/Liveness/APHourClock.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/HourClock.swift",
+              "scenario": "Upstream",
+              "caseID": "ap-hour-clock-liveness"
+            }
+          ],
           "evidence": []
         },
         {

@@ -4,6 +4,27 @@ import UpstreamParity
 
 @Suite("Generated refinement behavior")
 struct GeneratedRefinementBehaviorTests {
+    @Test("refinement mappings preserve nested resource sets and reject values from the wrong domain")
+    func projectsAllocatedResources() throws {
+        func project<Source: TLAValueType, Target: TLAValueType>(
+            _ source: Source, into _: KeyPath<SimpleAllocatorModel.State, Target>
+        ) throws -> Target {
+            try _NativeMachineOperations.checkedProjection(source)
+        }
+        let source: [SchedulingAllocatorModel.Client: Set<SchedulingAllocatorModel.Resource>] = [
+            .c1: [.r1, .r2], .c2: []
+        ]
+        let mapped = try project(source, into: \.alloc)
+        #expect(mapped.count == 2)
+        #expect(mapped[.c1] == [.r1, .r2])
+        #expect(mapped[.c2] == [])
+
+        let invalid: [SchedulingAllocatorModel.Client: Set<SchedulingAllocatorModel.Client>] = [.c1: [.c2]]
+        #expect(throws: TLAStateProjectionDiagnostic.self) {
+            _ = try project(invalid, into: \.alloc)
+        }
+    }
+
     @Test("generated refinement imports bind the target's closed finite constants")
     func retainsAbstractFiniteConstants() throws {
         let configuration = try FairRefinementTarget.Configuration(N: 1)

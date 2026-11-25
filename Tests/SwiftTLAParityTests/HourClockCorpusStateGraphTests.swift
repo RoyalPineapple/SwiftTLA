@@ -11,10 +11,17 @@ struct HourClockCorpusStateGraphTests {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: root.appendingPathComponent("Verification/FiniteGraph/cases.json")))
         let declarations = manifest.cases.filter { $0.sourceModel.rawValue == "hour-clock" }
-        #expect(Set(declarations.map(\.id)) == ["hour-clock", "ap-hour-clock"])
+        let upstreamPaths = [
+            "hour-clock": "HourClock/HourClock.tla",
+            "ap-hour-clock": "HourClock/APHourClock.tla",
+            "ap-hour-clock-composing": "Composing/APHourClock.tla",
+            "ap-hour-clock-liveness": "Liveness/APHourClock.tla",
+        ]
+        #expect(Set(declarations.map(\.id)) == Set(upstreamPaths.keys))
         for declaration in declarations {
             let pin = try #require(declaration.sourceInput)
-            #expect(pin.path.hasPrefix("tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/HourClock/"))
+            let upstreamPath = try #require(upstreamPaths[declaration.id])
+            #expect(pin.path == "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/\(upstreamPath)")
             #expect(pin.sha256 == declaration.moduleSHA256)
             for (path, digest) in [(declaration.module, declaration.moduleSHA256),
                                    (declaration.configuration, declaration.cfgSHA256)] {

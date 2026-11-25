@@ -84,6 +84,14 @@ extension NativeSwiftEmitter {
         """)
     }
 
+    mutating func generatedRefinementParameters(_ refinement: CompiledGeneratedModelRefinement) throws -> String {
+        try refinement.parameters.map { binding in
+            let value = try expression(binding.value.expression, state: "")
+            let argument = binding.projected ? "try SwiftTLA._NativeMachineOperations.checkedProjection(\(value))" : value
+            return "\(binding.fieldName): \(argument)"
+        }.joined(separator: ", ")
+    }
+
     func supportsNativeRefinement(_ refinement: CompiledRefinementProgram) -> Bool {
         let abstract = refinement.abstract
         return abstract.layout.variables.allSatisfy { $0.declaration.origin == .source }
@@ -144,9 +152,7 @@ extension NativeSwiftEmitter {
             }
             for refinement in program.generatedRefinements {
                 let target = refinement.targetModelType
-                let parameters = try refinement.parameters.map { binding in
-                    "\(binding.fieldName): \(try expression(binding.value.expression, state: ""))"
-                }.joined(separator: ", ")
+                let parameters = try generatedRefinementParameters(refinement)
                 let state = try refinement.state.map { binding in
                     let value = try expression(binding.value.expression)
                     return "\(binding.fieldName): \(binding.projected ? "try SwiftTLA._NativeMachineOperations.checkedProjection(\(value))" : value)"

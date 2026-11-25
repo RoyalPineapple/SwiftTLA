@@ -302,6 +302,9 @@ public enum _NativeMachineOperations: Sendable {
     public static func checkedProjection<Source: TLAValueType, Target: TLAValueType>(
         _ source: Source
     ) throws -> Target {
+        guard source.sourceIssue == nil else {
+            throw TLAStateProjectionDiagnostic.invalidValue(path: String(reflecting: Source.self))
+        }
         let formal = source.tlaValue
         guard let target = Target(formalValue: formal), target.preservesFormalValue(formal) else {
             throw TLAStateProjectionDiagnostic.invalidValue(path: String(reflecting: Target.self))

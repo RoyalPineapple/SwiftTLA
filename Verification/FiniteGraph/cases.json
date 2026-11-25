@@ -2,6 +2,117 @@
   "schema": "FiniteGraphCases",
   "cases": [
     {
+      "id": "turing-paxos-consensus",
+      "sourceModel": "turing-paxos-consensus",
+      "scenario": "published",
+      "module": "turing-paxos-consensus/MCConsensus.tla",
+      "configuration": "turing-paxos-consensus/MCConsensus.cfg",
+      "imports": [
+        "turing-paxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCConsensus",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/MCConsensus.tla",
+        "sha256": "5d253478994e142ec1e8576f1d339a5bca18b563fef4a447ed2f0bff902bc8e4"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "5d253478994e142ec1e8576f1d339a5bca18b563fef4a447ed2f0bff902bc8e4",
+      "cfgSHA256": "aaf88c6a64c71a5999fad00e74d4c6cbc8d177c3c6190371acae33ddd4e4b949",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-hour-clock-composing",
+      "sourceModel": "hour-clock",
+      "scenario": "Upstream",
+      "module": "ap-hour-clock-composing/APHourClock.tla",
+      "configuration": "ap-hour-clock-composing/APHourClock.cfg",
+      "imports": [
+        "ap-hour-clock-composing/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APHourClock",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Composing/APHourClock.tla",
+        "sha256": "b1ee6db9d303720f5302b73dee332afb1c9f11c29a86a7a4254c45cc895381c6"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b1ee6db9d303720f5302b73dee332afb1c9f11c29a86a7a4254c45cc895381c6",
+      "cfgSHA256": "1cae199360d6c8767bee3192ff11211d5fd091d1e3332957d55bab1dda8dd133",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-hour-clock-liveness",
+      "sourceModel": "hour-clock",
+      "scenario": "Upstream",
+      "module": "ap-hour-clock-liveness/APHourClock.tla",
+      "configuration": "ap-hour-clock-liveness/APHourClock.cfg",
+      "imports": [
+        "ap-hour-clock-liveness/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APHourClock",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Liveness/APHourClock.tla",
+        "sha256": "566751e84f3f8783b1e37b3ca978d75583af104713234000c2cc890d28f7cf54"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "566751e84f3f8783b1e37b3ca978d75583af104713234000c2cc890d28f7cf54",
+      "cfgSHA256": "1cae199360d6c8767bee3192ff11211d5fd091d1e3332957d55bab1dda8dd133",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "ap-channel",
       "sourceModel": "channel",
       "scenario": "APChannel",
@@ -522,6 +633,38 @@
       },
       "moduleSHA256": "c1131a8591f91c110f2a739dc91d20564542ac6f201d5b76be581e485cfbb376",
       "cfgSHA256": "7b0120df31cb29eb12fa2a8a6f3b7e355921e58268b4d27384c1a94978e7246a",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "allocator-refinement",
+      "sourceModel": "scheduling-allocator",
+      "scenario": "refinement",
+      "module": "scheduling-allocator/AllocatorRefinement.tla",
+      "configuration": "scheduling-allocator/AllocatorRefinement.cfg",
+      "imports": [
+        "scheduling-allocator/SchedulingAllocator.tla",
+        "simple-allocator/SimpleAllocator.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "AllocatorRefinement",
+          "importedModule": "SchedulingAllocator"
+        },
+        {
+          "importingModule": "AllocatorRefinement",
+          "importedModule": "SimpleAllocator"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/allocator/AllocatorRefinement.tla",
+        "sha256": "7c3900880a1a6235440d37818e43e9a2d818af4645b2bca1964a144adc95fb74"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "7c3900880a1a6235440d37818e43e9a2d818af4645b2bca1964a144adc95fb74",
+      "cfgSHA256": "685ae012385ee06d906b81eb716b0342de9a985c610edef48ee3e4cba487242f",
       "timeoutSeconds": 120
     },
     {
