@@ -26,3 +26,4 @@ Verification/FiniteGraph/fixtures/spanning/* whitespace=-blank-at-eol,-blank-at-
 Verification/FiniteGraph/fixtures/tcommit/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/transaction-two-phase/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/two-phase-btm/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/acp/* whitespace=-blank-at-eol,-blank-at-eof

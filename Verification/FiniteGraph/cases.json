@@ -275,6 +275,33 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "acp-sb",
+      "sourceModel": "acp-sb",
+      "scenario": "simpleBroadcast",
+      "module": "acp/ACP_SB_TLC.tla",
+      "configuration": "acp/ACP_SB_TLC.cfg",
+      "imports": [
+        "acp/ACP_SB.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "ACP_SB_TLC",
+          "importedModule": "ACP_SB"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/acp/ACP_SB_TLC.tla",
+        "sha256": "fc5e9d4cc4312e03eaf73288683c24a8e755f467f2da63ce56a7c48cd97c8cb1"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "fc5e9d4cc4312e03eaf73288683c24a8e755f467f2da63ce56a7c48cd97c8cb1",
+      "cfgSHA256": "c3192ca50e1182d77d0d3a1d8050345cecdb93d208562abb141296c4df41061e",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "two-phase-btm",
       "sourceModel": "two-phase-btm",
       "scenario": "threeManagers",

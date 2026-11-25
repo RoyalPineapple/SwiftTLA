@@ -2889,8 +2889,8 @@
     {
       "path": "specifications/acp",
       "name": "Atomic Commitment Protocol",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "The simple-broadcast configuration with three participants matched locally across typed Swift, generated TLA and the pinned original TLC graph on 8 initial states, 54,944 reachable states and 218,120 labeled transitions. The published configuration selects Spec, leaves all properties unselected and disables deadlock checking.",
+      "gap": "Hosted validation for simple broadcast, the non-blocking variants and the separate Apalache configuration remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -2918,14 +2918,18 @@
           "path": "specifications/acp/ACP_SB_TLC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/acp/ACP_SB.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "imported dependency",
+          "reason": "Defines the simple-broadcast protocol extended by the TLC root.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -2961,10 +2965,16 @@
           "module": "specifications/acp/ACP_SB_TLC.tla",
           "configuration": "specifications/acp/ACP_SB_TLC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift",
+              "scenario": "simpleBroadcast",
+              "caseID": "acp-sb"
+            }
+          ],
           "evidence": []
         },
         {
