@@ -4,7 +4,7 @@ import SwiftTLAMacros
 /// Peterson's two-process mutual-exclusion algorithm from the upstream
 /// PlusCal auxiliary-variables collection.
 @TLAModel
-package struct PetersonModel: Sendable {
+package struct PetersonModel: ParameterlessGeneratedModel {
     package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2

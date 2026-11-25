@@ -608,7 +608,7 @@ public struct RenderedSpecification: Sendable {
         symmetry: [String], viewOperators: [String] = [], postconditionOperators: [String] = [],
         actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
         _generatedPlusCalProfiles: [String: Result<String, CompilationDiagnostic>] = [:],
-        _assumptionsOnly: Bool = false,
+        _assumptionsOnly: Bool = false, _behaviorSpecificationName: String = "Spec",
         _generatedParameters: [(name: String, value: TLAValue)] = [],
         _generatedImports: [(name: String, source: String, structuralPath: [String])] = [],
         _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
@@ -629,7 +629,7 @@ public struct RenderedSpecification: Sendable {
                 path: "assumption-only export", expected: "assumptions without state-machine checks",
                 actual: "state-machine selection", nextSafeAction: "Remove state checks from this state-free model.")
         }
-        let configuration = TLCConfiguration(assumptionsOnly: _assumptionsOnly,
+        let configuration = TLCConfiguration(specificationName: _behaviorSpecificationName, assumptionsOnly: _assumptionsOnly,
             declarations: declarations, checkDeadlock: checkDeadlock,
             intrinsicInvariants: _generatedIntrinsicInvariants,
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements,
@@ -690,7 +690,7 @@ public struct RenderedSpecification: Sendable {
         configuration abstractConfiguration: Abstract.Configuration,
         behavior: ModelBehavior = .specification,
         parameters: [(PartialKeyPath<Abstract.Configuration>, String)],
-        state: [(PartialKeyPath<Abstract.State>, String)]
+        state: [(PartialKeyPath<Abstract.RefinementState>, String)]
     ) throws -> Self {
         guard !configuration.assumptionsOnly, isTLADeclarationName(name), isTLADeclarationName(instance),
               !checkNames.contains(name), name != instance else {
@@ -720,7 +720,7 @@ public struct RenderedSpecification: Sendable {
             }
             return mapped
         }
-        let stateBindings = try substitutions(state, names: Abstract.State.fieldIdentities, kind: "state")
+        let stateBindings = try substitutions(state, names: Abstract.RefinementState.fieldIdentities, kind: "state")
         var bindings = try substitutions(parameters, names: Abstract.Configuration.fieldIdentities, kind: "parameters")
             + stateBindings
         let renderedTarget = try abstract.render(configuration: abstractConfiguration)
@@ -802,7 +802,7 @@ public struct RenderedSpecification: Sendable {
                     actual: "an incomplete or external module", nextSafeAction: "Render the generated concrete model first.")
             }
             let property = behavior == .specification
-                ? "\(linkedInstance)!Spec"
+                ? "\(linkedInstance)!\(renderedTarget.configuration.specificationName)"
                 : "\(linkedInstance)!Init /\\ [][\(linkedInstance)!Next]_\(mappedFrame ?? "\(linkedInstance)!vars")"
             let constants = constantNames.isEmpty ? "" : "CONSTANTS \(constantNames.sorted().joined(separator: ", "))\n"
             let definitions = constants + (existingInstance ? "" : "\(linkedInstance) == \(instanceBody)\n")
@@ -1527,7 +1527,8 @@ public extension TLASpec {
         if semantics.behavior.actionConstraint != nil { occupied.insert("ActionConstraint") }
         var propertyReservations = occupied
         if authoredAlgorithm != nil { propertyReservations.insert("Terminating") }
-        layout.resolvePropertyNames(reserving: propertyReservations)
+        layout.resolvePropertyNames(reserving: propertyReservations, directBehavior: sourceAlgorithms.isEmpty)
+        occupied.insert(layout.specificationName)
         let propertyNames = Dictionary(uniqueKeysWithValues: layout.properties.map { ($0.id, $0.formalName) })
         semantics.behavior.resolvePropertyNames(propertyNames)
         let resolvedRefinements = refinements.map {
@@ -2509,7 +2510,7 @@ extension CompiledProgram {
             definitions: [], definitionsBeforeInstances: [], definitionsAfterInstances: [], instances: instances,
             recursiveFunctions: renderer.resolvedFunctionDefinitions(), renderedRefinements: renderedRefinements,
             renderedFormalModuleReplacements: formalModuleReplacements.map(renderer.formalModuleReplacement),
-            configuration: metadata.tlcConfiguration(behavior: behavior, replacements: replacements,
+            configuration: metadata.tlcConfiguration(specificationName: layout.specificationName, behavior: behavior, replacements: replacements,
                 refinementNames: refinements.map(\.name), hasState: !layout.variables.isEmpty),
             requiredStandardModules: requiredStandardModules,
             importedNames: metadata.imports.map { moduleNames[$0] ?? $0 }, instancesAfterBehavior: true)
@@ -2580,7 +2581,7 @@ private extension CompiledModuleMetadata {
             instances: instances, recursiveFunctions: recursiveFunctions,
             renderedRefinements: renderedRefinements,
             renderedFormalModuleReplacements: renderedFormalModuleReplacements,
-            configuration: tlcConfiguration(behavior: semantics.behavior,
+            configuration: tlcConfiguration(specificationName: layout.specificationName, behavior: semantics.behavior,
                 replacements: semantics.formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) },
                 refinementNames: refinements.map(\.name), hasState: !layout.variables.isEmpty),
             requiredStandardModules: requiredStandardModules, importedNames: imports)
@@ -3397,7 +3398,7 @@ private extension CompiledModuleMetadata {
         }
         lines.append("")
 
-        lines.append("Spec ==")
+        lines.append("\(layout.specificationName) ==")
         lines.append("  /\\ Init")
         lines.append("  /\\ [][Next]_\(varsTuple)")
         for condition in behavior.fairness {
@@ -3485,7 +3486,7 @@ private extension CompiledModuleMetadata {
             initialFailureAggregate, initialFailureRecord)
     }
 
-    func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],
+    func tlcConfiguration(specificationName: String, behavior: CompiledBehavior, replacements: [TLCModuleReplacement],
         refinementNames: [String], hasState: Bool) -> TLCConfiguration {
         var lines: [String] = []
         for constant in constants.sorted(by: { $0.name < $1.name }) {
@@ -3506,7 +3507,7 @@ private extension CompiledModuleMetadata {
             && behavior.temporalProperties.isEmpty && refinementNames.isEmpty && behavior.assume != nil
             && behavior.constraint == nil && behavior.actionConstraint == nil && behavior.fairness.isEmpty
         return TLCConfiguration(
-            assumptionsOnly: assumptionsOnly,
+            specificationName: specificationName, assumptionsOnly: assumptionsOnly,
             declarations: lines,
             checkDeadlock: assumptionsOnly ? false : behavior.checkDeadlock,
             invariants: behavior.invariants.map(\.name),

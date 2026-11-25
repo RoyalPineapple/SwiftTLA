@@ -538,6 +538,61 @@
       "timeoutSeconds": 600
     },
     {
+      "id": "auxiliary-lockhs",
+      "sourceModel": "auxiliary-lockhs",
+      "scenario": "published",
+      "module": "auxiliary-lock/LockHS.tla",
+      "configuration": "auxiliary-lock/LockHS.cfg",
+      "imports": [
+        "auxiliary-lock/Lock.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "auxiliary-lock/Stuttering.tla",
+        "auxiliary-lock/Peterson.tla",
+        "boulanger/TLAPS.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "LockHS",
+          "importedModule": "Lock"
+        },
+        {
+          "importingModule": "LockHS",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "LockHS",
+          "importedModule": "Stuttering"
+        },
+        {
+          "importingModule": "LockHS",
+          "importedModule": "Peterson"
+        },
+        {
+          "importingModule": "Peterson",
+          "importedModule": "Lock"
+        },
+        {
+          "importingModule": "Peterson",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Lock",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/LockHS.tla",
+        "sha256": "a34543670fc7fb46332624aa46ab6f350b67de5f0ffb59ec0b1c50cfe3500d10"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "a34543670fc7fb46332624aa46ab6f350b67de5f0ffb59ec0b1c50cfe3500d10",
+      "cfgSHA256": "cc57190fa6da336bc232d649869eb95825361634241b7013411da85660d8fc44",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "binary-search",
       "sourceModel": "binary-search",
       "scenario": "MCBinarySearch",

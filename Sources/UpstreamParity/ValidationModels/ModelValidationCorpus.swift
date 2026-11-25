@@ -71,6 +71,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "spanning", scenarios: { try SpanningModel.validationScenarios() }),
     .init(id: "token-ring", scenarios: { try TokenRingModel.validationScenarios() }),
     .init(id: "peterson-safety", scenarios: { try PetersonModel.validationScenarios() }),
+    .init(id: "auxiliary-lockhs", scenarios: { try LockHSModel.validationScenarios() }),
     .init(id: "auxiliary-lock", scenarios: { try LockModel.validationScenarios() }),
     .init(id: "coffee-can", scenarios: { try CoffeeCanModel.validationScenarios() }),
     .init(id: "cigarette-smokers", scenarios: { try CigaretteSmokersModel.validationScenarios() }),

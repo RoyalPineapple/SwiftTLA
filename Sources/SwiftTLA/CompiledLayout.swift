@@ -195,6 +195,7 @@ struct CompiledModuleInstanceLayout: Hashable, Sendable {
 }
 
 package struct CompiledLayout: Hashable, Sendable {
+    package private(set) var specificationName = "Spec"
     package var properties: [CompiledPropertyLayout] {
         stateProperties + temporalProperties + refinementProperties + generatedRefinementProperties
     }
@@ -309,8 +310,14 @@ package struct CompiledLayout: Hashable, Sendable {
         }?.id
     }
 
-    mutating func resolvePropertyNames(reserving names: Set<String>) {
-        let reserved = names.union(["Init", "Next", "Spec", "vars"])
+    mutating func resolvePropertyNames(reserving names: Set<String>, directBehavior: Bool = false) {
+        if directBehavior, !names.contains("Spec"),
+           generatedRefinementProperties.contains(where: { $0.declaration.name == "Spec" }) {
+            let taken = names.union(declarations.map(\.name))
+            specificationName = "SwiftTLABehavior"
+            while taken.contains(specificationName) { specificationName += "_" }
+        }
+        let reserved = names.union(["Init", "Next", specificationName, "vars"])
         var used = reserved.union(properties.map(\.declaration.name))
         func resolve(_ property: CompiledPropertyLayout) -> CompiledPropertyLayout {
             let stem = tlaDeclarationStem(property.declaration.name)

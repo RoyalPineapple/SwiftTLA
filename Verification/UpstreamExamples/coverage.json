@@ -7260,8 +7260,8 @@
     {
       "path": "specifications/locks_auxiliary_vars",
       "name": "Peterson Lock Refinement With Auxiliary Variables",
-      "audit": "Published two-process Lock scenario registered; hosted comparison pending",
-      "gap": "PetersonSafety selects TypeOK and Inv. Peterson.cfg also selects the LSpec refinement, which remains open alongside LockHS and Stuttering. The Lock transition and property comparison on hosted TLC remains pending.",
+      "audit": "Lock and LockHS have registered ports for their published configurations. Both matched locally on their complete labeled graphs and selected checks.",
+      "gap": "Hosted comparison remains pending. PetersonSafety selects TypeOK and Inv. The published Peterson.cfg also selects LSpec, which remains open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -7277,7 +7277,9 @@
           "path": "specifications/locks_auxiliary_vars/LockHS.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/LockHS.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -7318,10 +7320,16 @@
           "module": "specifications/locks_auxiliary_vars/LockHS.tla",
           "configuration": "specifications/locks_auxiliary_vars/LockHS.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/LockHS.swift",
+              "scenario": "published",
+              "caseID": "auxiliary-lockhs"
+            }
+          ],
           "evidence": []
         },
         {

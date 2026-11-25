@@ -849,7 +849,6 @@ final class ParserSession {
             name = constructor
             domains = arguments.map(\.expression)
         }
-        guard let finalStatement = closure.statements.last else { return nil }
         let parameters = closureParameterNames(in: closure)
         guard parameters.isEmpty || parameters.count == domains.count,
               Set(parameters.filter { $0 != "_" }).count == parameters.filter({ $0 != "_" }).count else { return nil }
@@ -871,6 +870,22 @@ final class ParserSession {
                 shape: typedFacadeValueType(domainSyntax, scope: scope)?.selectedElement)
             bindings.append((domain, binder))
         }
+        guard let (bodySyntax, predicateScope) = scopedClosureResult(closure, scope: bodyScope),
+              var predicate = decodeTypedFacadeValue(bodySyntax, scope: predicateScope) else {
+            algorithmParseFailure = algorithmParseFailure ?? "\(name) could not decode its predicate."
+            return nil
+        }
+        for binding in bindings.reversed() {
+            predicate = name == "ForAll"
+                ? .forAll(binding.domain, binding.name, predicate)
+                : .exists(binding.domain, binding.name, predicate)
+        }
+        return predicate
+    }
+
+    private func scopedClosureResult(_ closure: ClosureExprSyntax, scope: TypedFacadeScope) -> (ExprSyntax, TypedFacadeScope)? {
+        guard let finalStatement = closure.statements.last else { return nil }
+        var bodyScope = scope
         for statement in closure.statements.dropLast() {
             guard let declaration = statement.item.as(VariableDeclSyntax.self),
                   let binding = parseFormalLet(declaration, scope: bodyScope) else { return nil }
@@ -884,16 +899,7 @@ final class ParserSession {
         } else {
             return nil
         }
-        guard let bodySyntax, var predicate = decodeTypedFacadeValue(bodySyntax, scope: bodyScope) else {
-            algorithmParseFailure = algorithmParseFailure ?? "\(name) could not decode its predicate."
-            return nil
-        }
-        for binding in bindings.reversed() {
-            predicate = name == "ForAll"
-                ? .forAll(binding.domain, binding.name, predicate)
-                : .exists(binding.domain, binding.name, predicate)
-        }
-        return predicate
+        return bodySyntax.map { ($0, bodyScope) }
     }
 
     func decodeTypedInfix(
@@ -1424,9 +1430,7 @@ final class ParserSession {
            let domainType = literalType.terminalArgumentName(at: 0),
            let closure = call.trailingClosure,
            closureParameterNames(in: closure).count == 1,
-           let parameter = closureParameterNames(in: closure).first,
-           closure.statements.count == 1,
-           case .expr(let bodySyntax) = closure.statements.first?.item {
+           let parameter = closureParameterNames(in: closure).first {
             let domain: StateExpr
             if literalType.name == "Dictionary" {
                 guard call.arguments.map({ $0.label?.text }) == ["over"],
@@ -1444,9 +1448,10 @@ final class ParserSession {
             let functionScope = scope.extending(binding: parameter,
                 to: .variable(key),
                 shape: literalType.argument(at: 0).flatMap { try? sourceTypeResolver.resolve($0) })
+            guard let (bodySyntax, bodyScope) = scopedClosureResult(closure, scope: functionScope) else { return nil }
             let body = decodeTypedFacadeValue(
                 bodySyntax,
-                scope: functionScope,
+                scope: bodyScope,
                 expectedEnumType: literalType.terminalArgumentName(at: 1)
             )
                 ?? decodeTypedDefaultValue(bodySyntax, expectedType: literalType.argument(at: 1))

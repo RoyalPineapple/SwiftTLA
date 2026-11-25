@@ -466,7 +466,11 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
             if model.program.layout.variables.isEmpty && model.program.behavior.actions.isEmpty {
                 return try emitter.assumptionMembers()
             }
-            return try emitter.machineMembers()
+            var members = try emitter.machineMembers()
+            if isParameterlessRefinementTarget(declaration) {
+                members += try emitter.parameterlessRefinementTarget()
+            }
+            return members
         } catch let diagnostic as SourceParseDiagnostic {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
             return []

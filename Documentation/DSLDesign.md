@@ -1490,6 +1490,13 @@ The abstract model's compiled generated transitions supply native refinement
 checking; its compiled TLA+ module supplies export. The concrete model's one
 resolved mapping supplies both paths. Neither path compiles the abstract model
 again at runtime, copies its declarations, or evaluates it through an interpreter.
+LockHS refines two machines with no parameters. Each target declares
+`ParameterlessGeneratedModel` and the instance has an empty binding block.
+For a process algorithm, the refinement also maps the program counter. For
+example, `Map(\.pc, projecting: translatedPC)` maps each process to a label
+in the target. The native checker constructs the target snapshot from these
+labels and the mapped fields. The app still reads its ordinary typed `State`.
+
 EWD840's selected `TDSpec` must include the abstract model's fairness obligation.
 `Refinement(instance: TD, behavior: .initialAndNext)` instead checks the
 abstract initial predicate and next-state relation without its fairness; this
