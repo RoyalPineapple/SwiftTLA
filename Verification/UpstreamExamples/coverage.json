@@ -10008,7 +10008,9 @@
           "path": "specifications/SpecifyingSystems/SimpleMath/SimpleMath.tla",
           "role": "configured root",
           "reason": "The configuration binds seven distinct model values, a through g. The module checks logical and set-theoretic assumptions without state variables or a transition specification. Evaluation evidence remains missing, not excluded.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SimpleMath.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10573,10 +10575,16 @@
           "module": "specifications/SpecifyingSystems/SimpleMath/SimpleMath.tla",
           "configuration": "specifications/SpecifyingSystems/SimpleMath/SimpleMath.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SimpleMath.swift",
+              "scenario": "Upstream",
+              "caseID": "simple-math-0"
+            }
+          ],
           "evidence": []
         },
         {

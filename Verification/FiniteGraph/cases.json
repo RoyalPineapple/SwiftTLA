@@ -2814,6 +2814,28 @@
       "moduleSHA256": "46b09f1b84b763e366cc98a7af4a072b4371c5cdd06ef5396ebba49233490af8",
       "cfgSHA256": "7c78a0ad30883f1f292981a03a98cbe41ea5e01ddfcd4db604e73f19b3c4ee4e",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "simple-math-0",
+      "sourceModel": "simple-math",
+      "scenario": "Upstream",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "simple-math/SimpleMath.tla",
+      "configuration": "simple-math/SimpleMath.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/SimpleMath/SimpleMath.tla",
+        "sha256": "2fc09bd878a02b2e756b149b364352cc5c738d1266ca0323479baa2fcf6e95cd"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "2fc09bd878a02b2e756b149b364352cc5c738d1266ca0323479baa2fcf6e95cd",
+      "cfgSHA256": "d74105971509736e380040d40c08e52e544004fb314452c2f488513de895c06a",
+      "timeoutSeconds": 600
     }
   ]
 }
