@@ -2889,8 +2889,8 @@
     {
       "path": "specifications/acp",
       "name": "Atomic Commitment Protocol",
-      "audit": "The simple-broadcast configuration with three participants matched locally across typed Swift, generated TLA and the pinned original TLC graph on 8 initial states, 54,944 reachable states and 218,120 labeled transitions. The published configuration selects Spec, leaves all properties unselected and disables deadlock checking. The two-participant non-blocking configuration matched locally across the same three machines on 4 initial states, 4,284 reachable states and 13,924 labeled transitions. AC1, AC2, AC3_1, AC3_2, AC4_alt and AC5 held. Its deadlock check is disabled.",
-      "gap": "Hosted validation of both ports, the deliberately incorrect non-blocking variant and the separate Apalache configuration remain open.",
+      "audit": "The simple-broadcast configuration with three participants matched locally across typed Swift, generated TLA and the pinned original TLC graph on 8 initial states, 54,944 reachable states and 218,120 labeled transitions. The published configuration selects Spec, leaves all properties unselected and disables deadlock checking. The two-participant non-blocking configuration matched locally across the same three machines on 4 initial states, 4,284 reachable states and 13,924 labeled transitions. AC1, AC2, AC3_1, AC3_2, AC4_alt and AC5 held. Its deadlock check is disabled. The early-decision variant violated its sole selected property AC1. The Swift machine replayed the 12 published actions and reached commit for one participant and abort for the other. A separate exhaustive graph comparison matched 4 initial states, 13,756 reachable states and 44,984 labeled transitions across Swift, generated TLA and the pinned original.",
+      "gap": "Hosted validation of the atomic-commit ports and the separate Apalache configuration remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -2906,7 +2906,9 @@
           "path": "specifications/acp/ACP_NB_WRONG_TLC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -2966,10 +2968,16 @@
           "module": "specifications/acp/ACP_NB_WRONG_TLC.tla",
           "configuration": "specifications/acp/ACP_NB_WRONG_TLC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/NonBlockingAtomicCommit.swift",
+              "scenario": "earlyDecision",
+              "caseID": "acp-nb-wrong"
+            }
+          ],
           "evidence": []
         },
         {

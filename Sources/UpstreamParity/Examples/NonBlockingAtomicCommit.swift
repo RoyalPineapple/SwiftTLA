@@ -46,11 +46,14 @@ package struct NonBlockingAtomicCommitModel: Sendable {
         case request, getVote, detectFault, makeDecision, coordBroadcast, coordDie
         case sendVote, abortOnVote, abortOnTimeoutRequest, parDie
         case forward, preDecideOnForward, preDecide, decideNB, abortOnTimeout
+        case decide, decideOnForward
     }
 
     package static var spec: TLASpec {
         #spec("NonBlockingAtomicCommit") { scope in
             let participants = scope.parameter(as: Set<Member>.self, in: Subsets(of: Member.all.assuming(Set<Member>.self)))
+            // The faulty upstream variant delivers a decision before forwarding it to every peer.
+            let decideBeforeForwarding = scope.parameter(as: Bool.self)
             let unsent = Dictionary<Member, Decision>.mapping(over: participants) { _ in Decision.notsent }
             let initialParticipants = SetExpr<Vote>.literal(.yes, .no).mapping { vote in
                 Participant.expression(vote: vote, alive: true, decision: Decision.undecided, faulty: false, forward: unsent, voteSent: false)
@@ -120,12 +123,14 @@ package struct NonBlockingAtomicCommitModel: Sendable {
             abortOnTimeoutRequest
             let forward = Do(Step.forward, over: participants, participants) { sender, receiver in
                 When(sender != receiver && participant[sender].alive)
-                When(participant[sender].forward[sender] != Decision.notsent)
+                let message = If(decideBeforeForwarding, then: participant[sender].decision, else: participant[sender].forward[sender])
+                When(message != Decision.notsent)
                 When(participant[sender].forward[receiver] == Decision.notsent)
-                participant[sender].forward[receiver].set(participant[sender].forward[sender])
+                participant[sender].forward[receiver].set(message)
             }
             forward
             let preDecideOnForward = Do(Step.preDecideOnForward, over: participants, participants) { receiver, sender in
+                When(!decideBeforeForwarding)
                 When(receiver != sender && participant[receiver].alive)
                 When(participant[receiver].forward[receiver] == Decision.notsent)
                 When(participant[sender].forward[receiver] != Decision.notsent)
@@ -133,17 +138,31 @@ package struct NonBlockingAtomicCommitModel: Sendable {
             }
             preDecideOnForward
             let preDecide = Do(Step.preDecide, over: participants) { member in
+                When(!decideBeforeForwarding)
                 When(participant[member].alive && participant[member].forward[member] == Decision.notsent)
                 When(coordinator.broadcast[member] != Decision.notsent)
                 participant[member].forward[member].set(coordinator.broadcast[member])
             }
             preDecide
             let decideNB = Do(Step.decideNB, over: participants) { member in
+                When(!decideBeforeForwarding)
                 When(participant[member].alive)
                 When(participants.allSatisfy { peer in participant[member].forward[peer] != Decision.notsent })
                 participant[member].decision.set(participant[member].forward[member])
             }
             decideNB
+            let decide = Do(Step.decide, over: participants) { member in
+                When(decideBeforeForwarding && participant[member].alive && participant[member].decision == Decision.undecided)
+                When(coordinator.broadcast[member] != Decision.notsent)
+                participant[member].decision.set(coordinator.broadcast[member])
+            }
+            decide
+            let decideOnForward = Do(Step.decideOnForward, over: participants, participants) { receiver, sender in
+                When(decideBeforeForwarding && receiver != sender && participant[receiver].alive)
+                When(participant[receiver].decision == Decision.undecided && participant[sender].forward[receiver] != Decision.notsent)
+                participant[receiver].decision.set(participant[sender].forward[receiver])
+            }
+            decideOnForward
             let abortOnTimeout = Do(Step.abortOnTimeout, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == Decision.undecided && !coordinator.alive)
                 When(participants.allSatisfy { live in
@@ -163,7 +182,7 @@ package struct NonBlockingAtomicCommitModel: Sendable {
                 participant[member].faulty.set(true)
             }
 
-            WeakFairness(eachOf: [sendVote, abortOnVote, abortOnTimeoutRequest, forward, preDecideOnForward, abortOnTimeout, preDecide, decideNB])
+            WeakFairness(eachOf: [sendVote, abortOnVote, abortOnTimeoutRequest, forward, preDecideOnForward, abortOnTimeout, preDecide, decideNB, decide, decideOnForward])
             WeakFairness(anyOf: [makeDecision, request, getVote, detectFault, coordBroadcast])
 
             let anyCommit = participants.contains { member in participant[member].decision == Decision.commit }
@@ -194,8 +213,14 @@ package struct NonBlockingAtomicCommitModel: Sendable {
 
             let twoParticipants = Validation {
                 Bind(participants, to: Set<Member>([.p0, .p1]))
+                Bind(decideBeforeForwarding, to: false)
             }.checking(only: [AC1, AC2, AC3_1, AC4_alt, AC3_2, AC5]).checkingDeadlock(false)
             twoParticipants
+            let earlyDecision = Validation {
+                Bind(participants, to: Set<Member>([.p0, .p1]))
+                Bind(decideBeforeForwarding, to: true)
+            }.checking(only: [AC1]).checkingDeadlock(false).expect(AC1, .violated)
+            earlyDecision
         }
     }
 }

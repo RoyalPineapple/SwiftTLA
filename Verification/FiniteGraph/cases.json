@@ -307,6 +307,33 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "acp-nb-wrong",
+      "sourceModel": "acp-nb",
+      "scenario": "earlyDecision",
+      "module": "acp/ACP_NB_WRONG_TLC.tla",
+      "configuration": "acp/ACP_NB_WRONG_TLC.cfg",
+      "imports": [
+        "acp/ACP_SB.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "ACP_NB_WRONG_TLC",
+          "importedModule": "ACP_SB"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/acp/ACP_NB_WRONG_TLC.tla",
+        "sha256": "a0eed90eda36ab2ceeb324f5dfe211bcea3951bdeccf978db32cb1a4ccb1bd4d"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "a0eed90eda36ab2ceeb324f5dfe211bcea3951bdeccf978db32cb1a4ccb1bd4d",
+      "cfgSHA256": "f592b1932ae7209302bb9165f2a44e47933bf26205fb1e2d879c49897f05cd71",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "acp-sb",
       "sourceModel": "acp-sb",
       "scenario": "simpleBroadcast",
