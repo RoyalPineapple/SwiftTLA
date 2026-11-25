@@ -25,8 +25,8 @@ package struct PrisonersModel: Sendable {
             let Counter = scope.parameter(as: PrisonerID.self, in: PrisonerID.all)
             Assume(Prisoner.contains(Counter) && Prisoner.count > 1)
             let OtherPrisoner = Prisoner.removing(Counter)
-            let switchAUp = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
-            let switchBUp = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let switchAUp = scope.sharedVar(initiallyIn: Bool.all)
+            let switchBUp = scope.sharedVar(initiallyIn: Bool.all)
             let timesSwitched = scope.sharedVar(initial:
                 Dictionary<PrisonerID, Int>.mapping(over: OtherPrisoner) { _ in 0 })
             let count = scope.sharedVar(initial: 0)
@@ -57,8 +57,8 @@ package struct PrisonersModel: Sendable {
 
             let done = count == 2 * (Prisoner.count - 1)
             Invariant("TypeOK") {
-                SetExpr<Bool>.literal(false, true).contains(switchAUp)
-                    && SetExpr<Bool>.literal(false, true).contains(switchBUp)
+                Bool.all.contains(switchAUp)
+                    && Bool.all.contains(switchBUp)
                     && Functions(from: OtherPrisoner, to: IntRange(0, through: 2)).contains(timesSwitched)
                     && IntRange(0, through: 2 * Prisoner.count - 1).contains(count)
             }

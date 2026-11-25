@@ -17,7 +17,7 @@ package struct GameOfLifeModel: Sendable {
                     Pair<Int, Int>.literal(column.expr, row.expr)
                 }
             }
-            let grids = Functions(from: positions, to: SetExpr<Bool>.literal(false, true))
+            let grids = Functions(from: positions, to: Bool.all)
 
             let grid: SharedVariable<[Position: Bool]> = scope.sharedVar(initiallyIn: grids)
 

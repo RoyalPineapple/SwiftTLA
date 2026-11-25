@@ -18,7 +18,7 @@ package struct EWD998TerminationModel: Sendable {
             Assume(N > 0)
             let Node = IntRange(0, through: N - 1)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+                initiallyIn: Functions(from: Node, to: Bool.all))
             let pending = scope.sharedVar(initial: Dictionary<Int, Int>.mapping(over: Node) { _ in 0 })
             let terminated = Node.allSatisfy { node in !active[node] && pending[node] == 0 }
             let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
@@ -49,9 +49,9 @@ package struct EWD998TerminationModel: Sendable {
             WeakFairness(detectTermination)
 
             Invariant("TypeOK") {
-                Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
+                Functions(from: Node, to: Bool.all).contains(active)
                     && Node.allSatisfy { node in pending[node] >= 0 }
-                    && SetExpr<Bool>.literal(false, true).contains(terminationDetected)
+                    && Bool.all.contains(terminationDetected)
             }
             Invariant("Safe") { !terminationDetected || terminated }
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
