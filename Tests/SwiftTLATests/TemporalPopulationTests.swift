@@ -1,8 +1,29 @@
 import Testing
 import UpstreamParity
 @testable import SwiftTLA
+@testable import SwiftTLAPlugin
 
 struct TemporalPopulationTests {
+    @Test("temporal predicates use the pair type from their population")
+    func infersPairFromPopulation() throws {
+        let source = SpecParser.parseSpecClosure(named: "PairPopulation", try parseSpecTestClosure("""
+        { scope in
+            let values = scope.parameter(as: Set<Int>.self, in: Subsets(of: Set<Int>([0, 1])))
+            let value = scope.sharedVar(initial: 0)
+            Do(Step.toggle) { value.set(1 - value) }
+            let pairs = values.mapping { n in Pair<Int, Int>.literal(n, n + 1) }
+            let Responds = Temporal()
+            Responds(forEach: pairs) { pair in
+                .leadsTo(value == pair.first(), value == pair.second())
+            }
+        }
+        """), sourceTypes: .init(enums: [parserTestEnum("Step", cases: ["toggle": .string("toggle")])]))
+        #expect(source.diagnostics.isEmpty)
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: source.compile()))
+        let binding = try #require(program.behavior.temporalProperties.first?.bindings.first)
+        #expect(program.bindingTypes[binding.binder] == .tuple([.int, .int]))
+    }
+
     @Test("configured temporal members recur independently in generated native checking")
     func checksEachMember() throws {
         for scenario in try RecurringPopulation.validationScenarios() {

@@ -423,7 +423,10 @@ package struct CompiledTypeChecker: Sendable {
         for property in inputs.semantics.behavior.temporalProperties {
             do {
                 let domainBindings = try property.bindings.map { binding in
-                    try binding.map { try checkOperand($0, expected: .set(bindings[binding.binder] ?? .unknown)) }
+                    let expected = bindings[binding.binder] ?? .unknown
+                    let checked = try binding.map { try checkOperand($0, expected: .set(expected)) }
+                    bindings[binding.binder] = try CompiledValueType.merge(expected, element(checked.domain.resultType))
+                    return checked
                 }
                 let expression = try property.expression.map { predicate in
                     try predicate.map { try checkOperand($0, expected: .bool) }
