@@ -42,12 +42,12 @@ package struct CatModel: Sendable {
             // cat_box has exactly the Move_Cat relation used by upstream fairness.
             WeakFairnessNext(on: cat_box)
 
-            let typeOK = Invariant("TypeOK") {
+            let typeOK = Invariant("TypeOK")
+            typeOK {
                 Boxes.contains(cat_box)
                     && Observed_Boxes.contains(observed_box)
                     && SetExpr<Direction>.literal(.left, .right).contains(direction)
             }
-            typeOK
             let Victory = Temporal()
             Victory(.eventually(observed_box == cat_box))
 

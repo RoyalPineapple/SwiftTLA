@@ -65,7 +65,8 @@ package struct ReadersWritersModel {
             WeakFairness(readOrWrite)
             WeakFairness(stop)
 
-            let typeOK = Invariant("TypeOK") {
+            let typeOK = Invariant("TypeOK")
+            typeOK {
                 readers.isSubset(of: actors)
                 writers.isSubset(of: actors)
                 IntRange(1, through: waiting.count).allSatisfy { i in
@@ -74,12 +75,11 @@ package struct ReadersWritersModel {
                         && actors.contains(request.second())
                 }
             }
-            typeOK
-            let safety = Invariant("Safety") {
+            let safety = Invariant("Safety")
+            safety {
                 readers.isEmpty || writers.isEmpty
                 writers.count <= 1
             }
-            safety
             let Liveness = Temporal()
             Liveness(forEach: actors) { actor in .all([
                 .alwaysEventually(readers.contains(actor)), .alwaysEventually(writers.contains(actor)),

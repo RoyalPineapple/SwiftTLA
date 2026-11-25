@@ -69,22 +69,22 @@ package struct EWD840Model: Sendable {
             let terminated = Node.allSatisfy { i in !active[i] }
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
-            let typeOK = Invariant("TypeOK") {
+            let typeOK = Invariant("TypeOK")
+            typeOK {
                 Functions(from: Node, to: Bool.all).contains(active)
                     && Functions(from: Node, to: colors).contains(color)
                     && Node.contains(tpos) && colors.contains(tcolor)
             }
-            typeOK
-            let terminationDetection = Invariant("TerminationDetection") { !terminationDetected || terminated }
-            terminationDetection
+            let terminationDetection = Invariant("TerminationDetection")
+            terminationDetection { !terminationDetected || terminated }
             let inductiveInvariant = Node.allSatisfy { i in tpos >= i || !active[i] }
                 || IntRange(0, through: tpos).contains { i in color[i] == Color.black }
                 || tcolor == Color.black
-            let inv = Invariant("Inv") { inductiveInvariant }
-            inv
+            let inv = Invariant("Inv")
+            inv { inductiveInvariant }
             // The upstream JSON trace/exit effect belongs to validation, not the state predicate.
-            let jsonInv = Invariant("JsonInv") { inductiveInvariant }
-            jsonInv
+            let jsonInv = Invariant("JsonInv")
+            jsonInv { inductiveInvariant }
             Liveness(.leadsTo(terminated, terminationDetected))
 
             let TD = Instance(of: SyncTerminationDetectionModel.self) {

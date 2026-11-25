@@ -43,11 +43,11 @@ package struct CoffeeCanModel: Sendable {
             Termination
             WeakFairnessNext()
 
-            let typeInvariant = Invariant("TypeInvariant") {
+            let typeInvariant = Invariant("TypeInvariant")
+            typeInvariant {
                 can.black >= 0 && can.black <= MaxBeanCount
                     && can.white >= 0 && can.white <= MaxBeanCount
             }
-            typeInvariant
             let MonotonicDecrease = Temporal()
             let EventuallyTerminates = Temporal()
             let LoopInvariant = Temporal()

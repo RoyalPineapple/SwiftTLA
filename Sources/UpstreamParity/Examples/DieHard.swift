@@ -43,8 +43,8 @@ package struct DieHardModel: Sendable {
                 (0...5).contains(big)
                 (0...3).contains(small)
             }
-            let notSolved = Invariant("NotSolved") { big != 4 }
-            notSolved
+            let notSolved = Invariant("NotSolved")
+            notSolved { big != 4 }
             Validation("Upstream") {}.expect(notSolved, .violated)
         }
     }

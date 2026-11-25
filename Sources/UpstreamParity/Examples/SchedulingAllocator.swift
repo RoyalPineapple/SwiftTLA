@@ -73,7 +73,8 @@ package struct SchedulingAllocatorModel: Sendable {
             WeakFairness(eachOf: [allocate])
             WeakFairness(schedule)
 
-            let typeInvariant = Invariant("TypeInvariant") {
+            let typeInvariant = Invariant("TypeInvariant")
+            typeInvariant {
                 positions.allSatisfy { i in Clients.contains(sched[i]) }
                 unsat.keys == Clients
                 alloc.keys == Clients
@@ -81,14 +82,14 @@ package struct SchedulingAllocatorModel: Sendable {
                     unsat[client].isSubset(of: Resources) && alloc[client].isSubset(of: Resources)
                 }
             }
-            typeInvariant
-            let mutex = Invariant("ResourceMutex") {
+            let mutex = Invariant("ResourceMutex")
+            mutex {
                 Clients.allSatisfy { first in
                     Clients.allSatisfy { second in first == second || alloc[first].intersection(alloc[second]).isEmpty }
                 }
             }
-            mutex
-            let allocatorInvariant = Invariant("AllocatorInvariant") {
+            let allocatorInvariant = Invariant("AllocatorInvariant")
+            allocatorInvariant {
                 positions.allSatisfy { i in !unsat[sched[i]].isEmpty }
                 waiting.allSatisfy { client in !unsat[client].isEmpty }
                 positions.allSatisfy { i in
@@ -104,7 +105,6 @@ package struct SchedulingAllocatorModel: Sendable {
                     }
                 }
             }
-            allocatorInvariant
             let ClientsWillReturn = Temporal()
             ClientsWillReturn(forEach: Clients) { client in .leadsTo(unsat[client].isEmpty, alloc[client].isEmpty) }
             let ClientsWillObtain = Temporal()

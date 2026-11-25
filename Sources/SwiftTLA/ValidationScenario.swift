@@ -25,6 +25,10 @@ public struct InvariantHandle: ModelProperty {
     }
 }
 
+public func Invariant(_ name: String) -> InvariantHandle {
+    .init(name: name)
+}
+
 public func Invariant(label: String? = nil, _name: String = "") -> InvariantHandle {
     .init(name: _name, label: label)
 }

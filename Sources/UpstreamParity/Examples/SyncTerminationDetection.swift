@@ -40,11 +40,11 @@ package struct SyncTerminationDetectionModel: Sendable {
             detectTermination
             WeakFairness(detectTermination)
 
-            let typeOK = Invariant("TypeOK") {
+            let typeOK = Invariant("TypeOK")
+            typeOK {
                 Functions(from: Node, to: Bool.all).contains(active)
                     && Bool.all.contains(terminationDetected)
             }
-            typeOK
             let TDCorrect = Invariant { !terminationDetected || terminated }
             TDCorrect
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })

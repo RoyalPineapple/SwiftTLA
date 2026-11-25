@@ -220,6 +220,16 @@ extension ParserSession {
                     components.diagnostics.append(.init(message: "A property handle requires a unique let binding.", source: binding))
                     continue
                 }
+                if compilerGrammarName(in: call.calledExpression) == "Invariant", call.trailingClosure == nil,
+                   call.arguments.count == 1, call.arguments.first?.label == nil {
+                    guard let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+                          !name.isEmpty else {
+                        components.diagnostics.append(.init(message: "An invariant name requires a nonempty string literal.", source: binding))
+                        continue
+                    }
+                    specBindings.properties[sourceName] = InvariantHandle(name: name)
+                    continue
+                }
                 if call.arguments.allSatisfy({ $0.label?.text == "label" }), call.trailingClosure == nil,
                    let constructor = compilerGrammarName(in: call.calledExpression) {
                     let label = extractStringArg(call, index: 0)

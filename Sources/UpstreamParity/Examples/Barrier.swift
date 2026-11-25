@@ -24,11 +24,11 @@ package struct BarrierModel {
                 pc.set(Dictionary<Int, String>.mapping(over: processes) { _ in "b0" })
             }
 
-            let typeOK = Invariant("TypeOK") {
+            let typeOK = Invariant("TypeOK")
+            typeOK {
                 pc.keys == processes
                 processes.allSatisfy { process in pc[process] == "b0" || pc[process] == "b1" }
             }
-            typeOK
             let BarrierProperty = Temporal()
             BarrierProperty(.alwaysStep(on: pc) { before, after in
                 processes.allSatisfy { p in
