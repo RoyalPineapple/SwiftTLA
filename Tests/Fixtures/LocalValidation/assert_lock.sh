@@ -47,7 +47,7 @@ run_validation() {
 
 assert_wait_timeout() {
     local expected_owner="$1"
-    run_validation static
+    run_validation proof-step "$tmp" 1 1
     [[ "$status" -eq 64 ]] || { echo "expected timeout exit 64, got $status" >&2; exit 1; }
     [[ "$elapsed" -ge 1 && "$elapsed" -le 3 ]] || {
         echo "expected bounded one-second wait, observed ${elapsed}s" >&2
@@ -104,6 +104,7 @@ release_lock_holder() {
 
 start_lock_holder
 assert_wait_timeout "lock owner data is unavailable"
+assert_static_started
 release_lock_holder
 assert_static_started
 
@@ -184,7 +185,7 @@ for n in 1 2 3; do
     [[ -s "$repo/pkg$n/started" ]] || { cat "$tmp/pkg$n.log" >&2; exit 1; }
     if [[ "$n" == 1 ]]; then
         probe_package="$repo/pkg4" PROBE_FREE_PERCENT=10 run_validation xcode-test Probe/test
-        [[ "$status" -eq 64 && "$output" == *"waiting for Xcode capacity"* && ! -e "$repo/pkg4/started" ]]
+        [[ "$status" -eq 64 && "$output" == *"waiting for validation capacity"* && ! -e "$repo/pkg4/started" ]]
         mkdir "$repo/pkg1/nested"
         probe_package="$repo/pkg1/nested" run_validation xcode-test Probe/test
         [[ "$status" -eq 64 && "$output" == *"waiting for validation lock"* ]]
@@ -192,7 +193,7 @@ for n in 1 2 3; do
 done
 [[ "$(sort -u "$repo"/pkg[123]/started | wc -l | tr -d ' ')" == 3 ]]
 probe_package="$repo/pkg4" run_validation xcode-test Probe/test
-[[ "$status" -eq 64 && "$output" == *"waiting for Xcode capacity"* && ! -e "$repo/pkg4/started" ]]
+[[ "$status" -eq 64 && "$output" == *"waiting for validation capacity"* && ! -e "$repo/pkg4/started" ]]
 rm "$repo/pkg1/hold"
 wait "${probe_pids[0]}"
 if /usr/bin/lockf -s -k -t 0 "$xcode_gate" true; then
@@ -204,6 +205,45 @@ probe_package="$repo/pkg4" run_validation xcode-test Probe/test
 rm "$repo/pkg2/hold" "$repo/pkg3/hold"
 wait "${probe_pids[1]}"
 wait "${probe_pids[2]}"
+# Both product modes write the same cache. Exercise real wrapper locks and scratch paths.
+git -C "$repo" worktree add -q --detach "$tmp/peer" HEAD
+for dir in "$repo" "$tmp/peer"; do touch "$dir/Package.swift" "$dir/Package.resolved"; done
+cat > "$tmp/bin/swift" <<'STUB'
+#!/bin/bash
+case "$1" in
+    --version) echo fixture; exit ;;
+    test) echo product-test-ran; exit ;;
+esac
+while [[ "$1" != --scratch-path ]]; do shift; done
+cache="$2"
+if [[ "${3:-}" == --show-bin-path ]]; then echo "$cache"; exit; fi
+mkdir -p "$cache"
+touch "$cache/tlc-validate"
+chmod +x "$cache/tlc-validate"
+echo "$cache" > cache-path
+for _ in {1..100}; do [[ ! -e hold ]] && exit 0; sleep 0.1; done
+exit 1
+STUB
+chmod +x "$tmp/bin/swift"
+start_lock_holder
+touch "$repo/hold"
+(cd "$repo" && exec "$runner" port-build) > "$tmp/product.log" 2>&1 &
+product_pid=$!
+for _ in {1..80}; do [[ -s "$repo/cache-path" ]] && break; sleep 0.1; done
+[[ -s "$repo/cache-path" ]] || { cat "$tmp/product.log" >&2; exit 1; }
+run_validation swiftpm-test Probe
+[[ "$status" -eq 64 && "$output" == *"waiting for validation lock"* && "$output" != *product-test-ran* ]]
+probe_package="$tmp/peer" PROBE_FREE_PERCENT=10 run_validation port-build
+[[ "$status" -eq 64 && "$output" == *"waiting for validation capacity"* && ! -e "$tmp/peer/cache-path" ]]
+probe_package="$tmp/peer" run_validation port-build
+[[ "$status" -eq 0 && -x "$(<"$tmp/peer/cache-path")/tlc-validate" ]]
+[[ ! "$(<"$tmp/peer/cache-path")" -ef "$(<"$repo/cache-path")" ]]
+rm "$repo/hold"
+wait "$product_pid"
+release_lock_holder
+run_validation swiftpm-test Probe
+[[ "$status" -eq 0 && "$output" == *product-test-ran* ]]
+rm "$tmp/bin/swift"
 rm "$tmp/bin/sysctl" "$tmp/bin/memory_pressure"
 
 mkdir -p "$repo/scripts"

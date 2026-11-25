@@ -1,7 +1,7 @@
 # Test targets
 
 All local test execution goes through `scripts/local-validation.sh`, which
-takes the repository-wide lock, isolates build artifacts, and stops unsafe
+locks the resources each command writes, isolates build artifacts, and stops unsafe
 memory pressure. Hosted CI remains the admission authority; local runs are
 diagnostic.
 
@@ -14,9 +14,11 @@ structured-value, runtime, and generated-machine work:
 
 The filter matches suite and test identifiers the way `swift test --filter`
 does. SwiftPM still builds every test target before running the selected
-suites. The wrapper keeps SwiftPM's incremental build cache under the common
-Git directory and records a source-content key; it retains the repository-wide
-lock and memory guard. Per-run scratch files stay outside the working tree.
+suites. The wrapper keeps SwiftPM's incremental build cache in the worktree’s Git
+directory and records a source-content key. Product builds and tests share
+that cache lock. Other worktrees and proof jobs can run concurrently within
+the host capacity and memory guards. Per-run scratch files stay outside the
+working tree.
 
 During the corpus migration, build the validation CLI once per batch:
 
