@@ -167,6 +167,23 @@ ScheduledRootReplacementNames(incoming, definitionNames) ==
     [key \in {k \in Keys : incoming[k][1] = "capture"} |->
         definitionNames[incoming[key][2]]]
 
+\* Binder ordinals are global. Capture positions are local to the selected path.
+AssignmentBinderSlot(binders, id) ==
+    CHOOSE slot \in DOMAIN binders : binders[slot] = id
+
+THEOREM UniqueAssignmentBinderResolvesToItsSlot ==
+    ASSUME NEW binders, NEW slot \in DOMAIN binders,
+           \A p, q \in DOMAIN binders : binders[p] = binders[q] => p = q
+    PROVE AssignmentBinderSlot(binders, binders[slot]) = slot
+PROOF
+<1>exists. \E p \in DOMAIN binders : binders[p] = binders[slot]
+    BY ONLY (slot \in DOMAIN binders), SMT
+<1>found. LET p == AssignmentBinderSlot(binders, binders[slot])
+          IN p \in DOMAIN binders /\ binders[p] = binders[slot]
+    BY ONLY <1>exists, SMT DEF AssignmentBinderSlot
+<1>. QED BY ONLY <1>found, (slot \in DOMAIN binders),
+    (\A p, q \in DOMAIN binders : binders[p] = binders[q] => p = q), SMT
+
 THEOREM ScheduledReadOccurrencesSupplyThePhysicalAssignmentRoutes ==
     ASSUME NEW rows, Len(rows) \in Nat, NEW index \in 1..Len(rows), index \in DOMAIN rows,
            AssignmentRhsCertificate(rows[index]),
@@ -178,7 +195,7 @@ THEOREM ScheduledReadOccurrencesSupplyThePhysicalAssignmentRoutes ==
                LET key == rows[index].view.reads[origin]
                    name == loweredNames[origin]
                    id == loweredIDs[origin]
-                   slot == 1 + id[2] - definitionBinders[1]
+                   slot == AssignmentBinderSlot(definitionBinders, id[2])
                IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
                   /\ name = StateExprReplaceProjection(rows[index].view,
                                 ScheduledRootReplacementNames(incoming, definitionNames))[origin].payload
@@ -214,7 +231,7 @@ PROOF
     <2>. DEFINE key == view.reads[origin]
                 name == loweredNames[origin]
                 id == loweredIDs[origin]
-                slot == 1 + id[2] - definitionBinders[1]
+                slot == AssignmentBinderSlot(definitionBinders, id[2])
                 writer == DirectCopyWriter(rows, prefix, key)
     <2>key. key \in Keys
         BY ONLY (origin \in DOMAIN view.kinds), (view.kinds[origin] = "read"), <1>typed, SMT DEF key
@@ -280,7 +297,7 @@ ReturnedRootAssignmentReceiptFieldsInput(rows, index, maps, definitionNames, def
             LET key == rows[index].view.reads[origin]
                 name == loweredNames[origin]
                 id == loweredIDs[origin]
-                slot == 1 + id[2] - definitionBinders[1]
+                slot == AssignmentBinderSlot(definitionBinders, id[2])
             IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
                /\ (\/ /\ id[1] = "state" /\ name = key /\ scheduled[origin] = <<"state", key>>
                    \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
@@ -341,7 +358,7 @@ PROOF
                       LET key == rows[index].view.reads[origin]
                           name == loweredNames[origin]
                           id == loweredIDs[origin]
-                          slot == 1 + id[2] - definitionBinders[1]
+                          slot == AssignmentBinderSlot(definitionBinders, id[2])
                       IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
                          /\ (\/ /\ id[1] = "state" /\ name = key /\ scheduled[origin] = <<"state", key>>
                              \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
@@ -379,7 +396,7 @@ PROOF
     <2>. DEFINE key == view.reads[origin]
                 name == loweredNames[origin]
                 id == loweredIDs[origin]
-                slot == 1 + id[2] - definitionBinders[1]
+                slot == AssignmentBinderSlot(definitionBinders, id[2])
     <2>key. key \in Keys
         BY ONLY AssignmentRhsCertificate(rows[index]), (origin \in DOMAIN view.kinds), (view.kinds[origin] = "read"), SMT
             DEF view, key, AssignmentRhsCertificate, LiteralReadAddCertificate, TypedVisitedSourceInputs
@@ -447,7 +464,7 @@ THEOREM ReturnedRootAssignmentReceiptSuppliesScheduledReadRoutes ==
                LET key == rows[index].view.reads[origin]
                    name == loweredNames[origin]
                    id == loweredIDs[origin]
-                   slot == 1 + id[2] - definitionBinders[1]
+                   slot == AssignmentBinderSlot(definitionBinders, id[2])
                IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
                   /\ (\/ /\ id[1] = "state" /\ name = key /\ scheduled[origin] = <<"state", key>>
                       \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)

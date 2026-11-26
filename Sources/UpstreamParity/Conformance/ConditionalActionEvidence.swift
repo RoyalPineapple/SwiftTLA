@@ -1393,7 +1393,7 @@ package enum ConditionalActionEvidence {
                                     LET id == loweredReadIDs[index][origin]
                                     IN IF kinds[origin] # "read" THEN <<>>
                                        ELSE IF id[1] = "state" THEN <<"state", ConditionalIntegerFieldNames[id[2]]>>
-                                       ELSE <<"capture", 1 + id[2] - definitionBinders[1]>>]
+                                       ELSE <<"capture", Arithmetic!AssignmentBinderSlot(definitionBinders, id[2])>>]
                     <5>certificate. Arithmetic!AssignmentRhsCertificate(rows[index])
                         BY ONLY <1>integerRows, (arm \in ConditionalArms), (index \in DOMAIN rows), SMT
                             DEF rows, Arithmetic!SupportedAssignmentList
@@ -1406,19 +1406,27 @@ package enum ConditionalActionEvidence {
                     <5>returnedReads. \A origin \in DOMAIN kinds :
                         LET id == loweredReadIDs[index][origin]
                             name == loweredNames[index][origin]
-                            slot == 1 + id[2] - definitionBinders[1]
+                            slot == scheduled[index][origin][2]
                         IN IF kinds[origin] # "read" THEN scheduled[index][origin] = <<>>
                            ELSE \/ /\ id[1] = "state" /\ id[2] \in DOMAIN ConditionalIntegerFieldNames
                                    /\ name = ConditionalIntegerFieldNames[id[2]] /\ name = readKeys[origin]
                                    /\ scheduled[index][origin] = <<"state", name>>
                                 \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
-                                   /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
+                                   /\ slot \in DOMAIN definitionBinders /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
                                    /\ scheduled[index][origin] = <<"capture", slot>>
                         BY ONLY <5>range, SMT DEF kinds, scheduled, \#(scheduledColumn), definitionNames, \#(namesColumn), definitionBinders, \#(bindersColumn),
                             loweredNames, \#(loweredNamesColumn), loweredReadIDs, \#(loweredIDsColumn), readKeys, \#(source)SourceOccurrenceKinds, \#(source)SourceOccurrenceReadKeys,
                             ConditionalIntegerFieldNames
+                    <5>distinctBinders. \A p, q \in DOMAIN definitionBinders :
+                        definitionBinders[p] = definitionBinders[q] => p = q
+                        BY ONLY SMT DEF definitionBinders, \#(bindersColumn)
+                    <5>bindingSlots. \A origin \in DOMAIN kinds :
+                        kinds[origin] = "read" /\ loweredReadIDs[index][origin][1] = "binding" =>
+                            Arithmetic!AssignmentBinderSlot(definitionBinders, loweredReadIDs[index][origin][2]) =
+                                scheduled[index][origin][2]
+                        BY ONLY <5>returnedReads, <5>distinctBinders, Arithmetic!UniqueAssignmentBinderResolvesToItsSlot, SMT
                     <5>readProjection. \A origin \in DOMAIN kinds : resolved[origin] = scheduled[index][origin]
-                        BY ONLY <5>returnedReads, SMT DEF resolved
+                        BY ONLY <5>returnedReads, <5>bindingSlots, SMT DEF resolved
                     <5>. DEFINE incoming(origin) == \#(returnedMapsColumn)[index][readKeys[origin]]
                                 writer(origin) == IF incoming(origin)[1] = "state" THEN 0 ELSE incoming(origin)[2]
                     <5>acceptedReads. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
@@ -1485,13 +1493,13 @@ package enum ConditionalActionEvidence {
                         LET key == rows[index].view.reads[origin]
                             name == selectedNames[origin]
                             id == selectedIDs[origin]
-                            slot == 1 + id[2] - definitionBinders[1]
+                            slot == Arithmetic!AssignmentBinderSlot(definitionBinders, id[2])
                         IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
                            /\ (\/ /\ id[1] = "state" /\ name = key /\ selectedRoutes[origin] = <<"state", key>>
                                \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
                                   /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
                                   /\ selectedRoutes[origin] = <<"capture", slot>>)
-                        BY ONLY <5>returnedReads, <5>lexicalScope, <5>source, SMT DEF kinds, readKeys, selectedNames, selectedIDs, selectedRoutes
+                        BY ONLY <5>returnedReads, <5>bindingSlots, <5>lexicalScope, <5>source, SMT DEF kinds, readKeys, selectedNames, selectedIDs, selectedRoutes
                     <5>physicalInput. \A node \in 1..rows[index].emitted.count : rows[index].emitted.nodes[node].kind = "read" =>
                         plan.reads[node] = selectedRoutes[rows[index].emitted.origins[node]]
                         BY ONLY <5>physicalOrder, <5>readProjection, <5>projected, <5>originOrder, <5>source, <5>count,

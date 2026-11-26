@@ -42,6 +42,7 @@ struct GeneratedAtomicUpdateProofTests {
                 """)
             .replacingOccurrences(of: falseWrite, with: """
                 Assign(right, to: 4)
+                Assign(right, to: right)
                 \(falseWrite)
                 """)
         let declaration = try #require(Parser.parse(source: variant).statements.compactMap {
