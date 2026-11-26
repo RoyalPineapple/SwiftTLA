@@ -1291,7 +1291,12 @@ public extension TLASpec {
 
     package func compileRetainingAtomicBranchContinuations(checkingBodyBinderOrdinals: Bool = false) throws
         -> (CompiledSpecification, [String: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt]) {
-        try compile(retainingScalarCopyRoutes: false, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals, projection: { lowered in
+        var scheduledAssignments: [String: [String: ScheduledAtomicAssignment]] = [:]
+        let record: ((String, String, ScheduledAtomicAssignment) -> Void)? = checkingBodyBinderOrdinals ? { action, name, assignment in
+            scheduledAssignments[action, default: [:]][name] = assignment
+        } : nil
+        return try compile(retainingScalarCopyRoutes: false, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals,
+                           recordAtomicAssignment: record, projection: { lowered in
             guard sourceAlgorithms.isEmpty else { return [:] }
             let roots = Set(lowered.variables.map(\.name))
             var receipts: [String: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt] = [:]
@@ -1301,7 +1306,7 @@ public extension TLASpec {
                 guard actions.count == 1, let action = actions.first,
                       let receipt = try StraightLineAssignmentCheck.checkedAtomicBranchContinuations(
                           step, lowered: action.body, stateRoots: roots,
-                          retainingDefinitions: checkingBodyBinderOrdinals) else { continue }
+                          retainingDefinitions: checkingBodyBinderOrdinals, scheduledAssignments: scheduledAssignments[label]) else { continue }
                 receipts[label] = receipt
             }
             return receipts
@@ -1310,11 +1315,12 @@ public extension TLASpec {
 
     private func compile<Projection>(retainingScalarCopyRoutes: Bool, checkingBodyBinderOrdinals: Bool = false,
                                      retainingSequentialAssignmentTargets: Bool = false,
+                                     recordAtomicAssignment: ((String, String, ScheduledAtomicAssignment) -> Void)? = nil,
                                      projection: (TLASpec) throws -> Projection) throws
         -> (CompiledSpecification, Projection) {
         try validateSourceDeclarationNames()
         let lowered = try loweredSourceModel(retainingScalarCopyRoutes: retainingScalarCopyRoutes,
-            retainingSequentialAssignmentTargets: retainingSequentialAssignmentTargets)
+            retainingSequentialAssignmentTargets: retainingSequentialAssignmentTargets, recordAtomicAssignment: recordAtomicAssignment)
         return (try lowered.compileLowered(checkingBodyBinderOrdinals: checkingBodyBinderOrdinals), try projection(lowered))
     }
 

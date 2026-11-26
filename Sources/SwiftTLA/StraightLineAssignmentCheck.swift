@@ -810,7 +810,10 @@ package enum StraightLineAssignmentCheck {
         package struct Definition: Sendable {
             package let name: String
             package let rhs: StateExpr
-            package let target: String
+            package let update: ScheduledAtomicBindingWrite
+            package let incomingBindings: [String: StateExpr]
+
+            package var target: String { update.target }
         }
 
         package struct Branch: Sendable {
@@ -865,7 +868,8 @@ package enum StraightLineAssignmentCheck {
     }
 
     package static func checkedAtomicBranchContinuations(
-        _ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>, retainingDefinitions: Bool
+        _ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>, retainingDefinitions: Bool,
+        scheduledAssignments: [String: ScheduledAtomicAssignment]? = nil
     ) throws -> AtomicBranchContinuationReceipt? {
         let statements = step.model.statements
         guard step.bindings.isEmpty, let fork = statements.firstIndex(where: {
@@ -943,7 +947,13 @@ package enum StraightLineAssignmentCheck {
                 result.sourcePlans.append(source)
                 let target = assignment.target.root
                 result.targets.append(target)
-                result.definitions?.append(.init(name: name, rhs: rhs, target: target))
+                if result.definitions != nil {
+                    guard let scheduled = scheduledAssignments?[name],
+                          scheduled.update.binding.utf8.elementsEqual(name.utf8),
+                          scheduled.update.target.utf8.elementsEqual(target.utf8) else { throw failure }
+                    result.definitions?.append(.init(name: name, rhs: rhs, update: scheduled.update,
+                        incomingBindings: scheduled.incomingBindings))
+                }
                 let reference: TLAValue = .tuple([.string("capture"), .int(result.plans.count)])
                 result.authored[target] = reference
                 result.physical[name] = reference

@@ -372,6 +372,23 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(transition.after == expected)
         #expect(machine.state == expected)
 
+        let operationsPath = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Sources/SwiftTLA/NativeMachineOperations.swift")
+        let operations = try String(contentsOf: operationsPath, encoding: .utf8)
+        let runtime = try decodeTraversalSeedSequenceRuntime(operations)
+        #expect(runtime.prefixFloor == 0)
+        #expect(runtime.elementMinimum == 1)
+        #expect(runtime.elementOffset == 1)
+        let clamp = "sequence.prefix(Swift.max(0, length))"
+        try #require(operations.components(separatedBy: clamp).count == 2)
+        let retainingFirstFrame = operations.replacingOccurrences(of: clamp, with: "sequence.prefix(Swift.max(1, length))")
+        do {
+            _ = try decodeTraversalSeedSequenceRuntime(retainingFirstFrame)
+            Issue.record("The stack proof accepted a prefix that retains a removed frame")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.traversal.operations.sequencePrefix")
+        }
+
         let path = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../Sources/UpstreamParity/CompilerPasses/OrderedIntTraversalPass.swift")
         let file = Parser.parse(source: try String(contentsOf: path, encoding: .utf8))

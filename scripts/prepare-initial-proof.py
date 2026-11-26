@@ -867,6 +867,16 @@ def main():
             wrong_helpers.write_bytes(helpers.replace(append_body, append_body.replace(b"return result", b"return sequence"), 1))
             wrong_append = rejected_stack_control("wrong-sequence-append", "native.traversal.operations.sequenceAppend",
                                                   operations, wrong_helpers, members, wrong_helpers)
+            element_subscript = b"return sequence[index - 1]"
+            if helpers.count(element_subscript) != 1:
+                raise ValueError("expected one physical sequenceElement zero-based subscript")
+            wrong_helpers = stack / "NativeMachineOperations-wrong-sequence-element.swift"
+            wrong_helpers.write_bytes(helpers.replace(element_subscript, b"return sequence[index - 0]", 1))
+            wrong_element = rejected_stack_control("wrong-sequence-element", "native.traversal.operations.sequenceElement",
+                                                   operations, wrong_helpers, members, wrong_helpers)
+            if b"NativeStackElementMinimum == 1\nNativeStackElementOffset == 1\n" not in (
+                    render / "OrderedIntTraversalPassSource.tla").read_bytes():
+                raise ValueError("actual stack seed proof input lacks its decoded element operands")
             render_receipt = json.loads((render / "files.json").read_text())
             stack_files = render_receipt.get("files", {})
             if (not re.fullmatch(r"[a-f0-9]{64}", render_receipt.get("compilationIdentity", ""))
@@ -886,6 +896,7 @@ def main():
                 "installedBytesMatch": installed, "rendering": render_receipt,
                 "wrongInitialCaptureControl": wrong_initializer,
                 "wrongSequenceAppendControl": wrong_append,
+                "wrongSequenceElementControl": wrong_element,
                 "mathematicalProof": False, "hostedAdmission": False,
                 "artifacts": {str(path.relative_to(stack)): digest(path) for path in stack.rglob("*") if path.is_file()},
                 "sourceOrigins": {part: origin for part, (_, origin) in dumps.items()},

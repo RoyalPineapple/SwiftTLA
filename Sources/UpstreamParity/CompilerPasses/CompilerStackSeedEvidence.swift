@@ -19,7 +19,7 @@ package enum CompilerStackSeedEvidence {
               let configuration = root.cfg else {
             throw EvidenceFormatError.invalidField(record: "OrderedIntTraversalPass", field: "generated render")
         }
-        try verifyTraversalSeedAppendRuntime(operations)
+        let sequenceRuntime = try decodeTraversalSeedSequenceRuntime(operations)
         let captured = try capturedRender(nativeSource)
         let authored = try authoredExpansion(authoredSource)
         guard captured.binding.authored == authored, captured.binding.formalAction == "expand",
@@ -45,7 +45,8 @@ package enum CompilerStackSeedEvidence {
             root.name + ".tla": Data(root.tla.utf8),
             root.name + ".cfg": Data(configuration.utf8),
             "OrderedIntTraversalPassSource.tla": Data(sourceProof(authored, binding: captured.binding,
-                nativeExpansion: captured.expansion, nativeInitialization: captured.initialization).utf8),
+                nativeExpansion: captured.expansion, sequenceRuntime: sequenceRuntime,
+                nativeInitialization: captured.initialization).utf8),
         ]
         let hashes = files.mapValues(SHA256.hex)
         let encoder = JSONEncoder()
@@ -120,6 +121,7 @@ package enum CompilerStackSeedEvidence {
     private static func sourceProof(_ authored: OrderedIntStackSeedSource.Expansion,
                                     binding: OrderedIntStackSeedSource,
                                     nativeExpansion: NativeTraversalSeedExpansion,
+                                    sequenceRuntime: NativeTraversalSeedSequenceRuntime,
                                     nativeInitialization: NativeTraversalSeedInitialization) -> String {
         func record(_ fields: [(String, TLAValue)]) -> TLAValue {
             .record(TLARecord(fields.map { .init($0.0, $0.1) }))
@@ -156,6 +158,9 @@ package enum CompilerStackSeedEvidence {
         TypedStackExpansion == \#(row(binding.typed))
         NativeStackReturnedSlots == \#(TLAValue.tuple(nativeExpansion.returnedSlots.map(TLAValue.int)))
         NativeStackExpansion == \#(native)
+        NativeStackPrefixFloor == \#(sequenceRuntime.prefixFloor)
+        NativeStackElementMinimum == \#(sequenceRuntime.elementMinimum)
+        NativeStackElementOffset == \#(sequenceRuntime.elementOffset)
         TypedStackFormalFields == \#(TLAValue.tuple(binding.formalFields.map(TLAValue.string)))
         TypedStackFieldOrdinals == \#(TLAValue.tuple(binding.fieldOrdinals.map(TLAValue.int)))
         TypedStackActionOrdinal == \#(binding.actionOrdinal)

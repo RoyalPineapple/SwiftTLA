@@ -445,8 +445,44 @@ package enum ConditionalActionEvidence {
                 TLAValue.record(["target": .string(write.target), "field": .int(origin.target.ordinal)])
             }
             let finalRoutes = TLAValue.function(authoredRoutes)
+            // The compiled source names use the existing ASCII declaration gate.
+            // The write trace uses those names and the actual returned LET identities.
+            var priorSlots: [String: Int] = [:]
+            var incomingRoutes: [TLAValue] = []
+            let bindingWrites = try definitions.prefix(count).enumerated().map { index, definition -> TLAValue in
+                let write = definition.update
+                guard write.binding.utf8.elementsEqual(definition.name.utf8),
+                      integerFields.contains(where: { $0.utf8.elementsEqual(write.target.utf8) }),
+                      priorSlots[write.binding] == nil else { throw invalid }
+                let predecessor: Int
+                if let binding = write.predecessor {
+                    guard let slot = priorSlots[binding], definitions[slot - 1].name.utf8.elementsEqual(binding.utf8)
+                    else { throw invalid }
+                    predecessor = slot
+                } else {
+                    predecessor = 0
+                }
+                let entries = try integerFields.map { root -> (TLAValue, TLAValue) in
+                    let key = TLAValue.string(root)
+                    guard let replacement = definition.incomingBindings[root] else {
+                        return (key, .tuple([.string("state"), key]))
+                    }
+                    guard case .variable(let binding) = replacement, let slot = priorSlots[binding],
+                          definitions[slot - 1].name.utf8.elementsEqual(binding.utf8) else { throw invalid }
+                    return (key, .tuple([.string("capture"), .int(slot)]))
+                }
+                incomingRoutes.append(.function(Dictionary(uniqueKeysWithValues: entries)))
+                priorSlots[write.binding] = index + 1
+                return .record([
+                    "target": .string(write.target),
+                    "predecessor": .int(predecessor),
+                    "binding": .string(write.binding),
+                ])
+            }
             return .init(integerInput: (sourceName, Data(sourceModule.module.utf8)), integerCaptures: integerCaptures,
-                         scheduledReads: sourceModule.scheduledReads, physicalRoutes: physicalRoutes,
+                         scheduledReads: sourceModule.scheduledReads, incomingRoutes: incomingRoutes,
+                         bindingWrites: bindingWrites,
+                         physicalRoutes: physicalRoutes,
                          suffix: .tuple(suffix), targets: .tuple(targets), finalRoutes: finalRoutes,
                          origins: origins)
         }
@@ -579,6 +615,8 @@ package enum ConditionalActionEvidence {
         let integerInput: (name: String, bytes: Data)
         let integerCaptures: [OrderedRHSPhysicalAction.Capture]
         let scheduledReads: [AuthoredCopySyntax.ScheduledIntReads]
+        let incomingRoutes: [TLAValue]
+        let bindingWrites: [TLAValue]
         let physicalRoutes: TLAValue
         let suffix: TLAValue
         let targets: TLAValue
@@ -1277,24 +1315,17 @@ package enum ConditionalActionEvidence {
                         Arithmetic!ExtractedNodePlan, \#(source)Nodes
             """#
         }.joined(separator: "\n        ")
-        let routedReads = sources.indices.map { arm -> (prefixes: [String], receipt: String, proof: String) in
+        let routedReads = sources.indices.map { arm -> (receipt: String, proof: String) in
             let source = sources[arm]
             let table = tables[arm]
             let scheduled = arms[arm].scheduledReads
-            guard !scheduled.isEmpty else { return ([], "", emptyArm(arm)) }
+            guard !scheduled.isEmpty else { return ("", emptyArm(arm)) }
             let definitionNames = TLAValue.tuple(scheduled.map { .string($0.definitionName) })
             let definitionBinders = TLAValue.tuple(scheduled.map { .int($0.definitionBinder.ordinal) })
             let definitionTargets = TLAValue.tuple(scheduled.map { .int($0.definitionTarget.ordinal) })
             let loweredNames = TLAValue.tuple(scheduled.map { .tuple($0.loweredNames) })
             let loweredReadIDs = TLAValue.tuple(scheduled.map { .tuple($0.loweredReadIDs) })
             let targetColumn = table + "DefinitionTargets"
-            let names = scheduled.indices.map { "\(table)SourcePrefix\($0)" }
-            let prefixes = ["LOCAL \(targetColumn) == \(definitionTargets)"] + names.enumerated().map { count, name in
-                count == 0
-                    ? "LOCAL \(name) == Arithmetic!CopyEntryRoutes(ConditionalIntKeys)"
-                    : "LOCAL \(name) == Arithmetic!CopyReplace(ConditionalIntKeys, \(names[count - 1]), "
-                        + "ConditionalIntegerFieldNames[\(targetColumn)[\(count)]], <<\"capture\", \(count)>>)"
-            }
             let physicalPlans = tuple(planNames[arm])
             let physicalPlanDefinitions = planNames[arm].joined(separator: ", ")
             let scheduledByOrigin = TLAValue.tuple(scheduled.map { .tuple($0.byOrigin) })
@@ -1303,14 +1334,20 @@ package enum ConditionalActionEvidence {
                 .tuple(row.origins.map { row.byOrigin[$0 - 1] })
             })
             let receiptName = "ConditionalReturnedReceipt\(arm + 1)"
-            let mapsColumn = "ConditionalReturnedMaps\(arm + 1)"
+            let returnedMapsColumn = "ConditionalReturnedMaps\(arm + 1)"
+            let mapsColumn = "ConditionalInterpretedBindingMaps\(arm + 1)"
+            let writesColumn = "ConditionalRecordedBindingWrites\(arm + 1)"
             let namesColumn = "ConditionalReturnedDefinitionNames\(arm + 1)"
             let bindersColumn = "ConditionalReturnedDefinitionBinders\(arm + 1)"
             let loweredNamesColumn = "ConditionalReturnedLoweredNames\(arm + 1)"
             let loweredIDsColumn = "ConditionalReturnedLoweredIDs\(arm + 1)"
             let scheduledColumn = "ConditionalReturnedScheduled\(arm + 1)"
             let receipt = #"""
-            LOCAL \#(mapsColumn) == \#(tuple(names))
+            LOCAL \#(targetColumn) == \#(definitionTargets)
+            LOCAL \#(returnedMapsColumn) == \#(TLAValue.tuple(arms[arm].incomingRoutes))
+            LOCAL \#(writesColumn) == \#(TLAValue.tuple(arms[arm].bindingWrites))
+            LOCAL \#(mapsColumn) == [position \in 1..Len(\#(writesColumn)) |->
+                Arithmetic!DirectCopyRoutes(ConditionalIntKeys, \#(writesColumn))[position - 1]]
             LOCAL \#(namesColumn) == \#(definitionNames)
             LOCAL \#(bindersColumn) == \#(definitionBinders)
             LOCAL \#(loweredNamesColumn) == \#(loweredNames)
@@ -1322,14 +1359,14 @@ package enum ConditionalActionEvidence {
                  definitionBinders |-> \#(bindersColumn), loweredNames |-> \#(loweredNamesColumn)[index],
                  loweredIDs |-> \#(loweredIDsColumn)[index], scheduled |-> \#(scheduledColumn)[index]]
             """#
-            return (prefixes, receipt, #"""
+            return (receipt, #"""
             <3>arm\#(arm + 1). CASE arm = \#(arm + 1)
                 <4>. DEFINE compilerReceipt == \#(receiptName)(rows, index, plan)
                 <4>geometry. /\ compilerReceipt.rows = rows /\ compilerReceipt.index = index
                              /\ compilerReceipt.physical = plan
                     BY ONLY SMT DEF compilerReceipt, \#(receiptName)
                 <4>input. Arithmetic!ReturnedRootAssignmentReceiptInput(compilerReceipt)
-                    <5>range. Len(rows) = \#(names.count) /\ index \in 1..\#(names.count)
+                    <5>range. Len(rows) = \#(scheduled.count) /\ index \in 1..\#(scheduled.count)
                         BY ONLY <3>arm\#(arm + 1), <1>integerRows, <2>shape, (arm \in ConditionalArms),
                             (index \in DOMAIN rows), SMT DEF rows
                     <5>targets. \A position \in 1..Len(rows) :
@@ -1344,11 +1381,29 @@ package enum ConditionalActionEvidence {
                                 DEF \#(targetColumn), ConditionalIntegerFieldNames, ConditionalSourceRows, \#(source)Targets
                         <6>. QED BY ONLY <6>source, <6>compiled, SMT
                     <5>. DEFINE maps == \#(mapsColumn)
+                                writes == \#(writesColumn)
+                    <5>writeCount. Len(writes) = Len(rows) /\ Len(writes) \in Nat
+                        BY ONLY <5>range, IsaM("simp"), SMT DEF writes, \#(writesColumn)
+                    <5>writeIdentity. \A position \in 1..Len(rows) :
+                        /\ writes[position].predecessor = position - 1
+                        /\ writes[position].binding = \#(namesColumn)[position]
+                        /\ writes[position].target = ConditionalIntegerFieldNames[\#(targetColumn)[position]]
+                        BY ONLY <5>range, <5>writeCount, SMT
+                            DEF writes, \#(writesColumn), \#(namesColumn), \#(targetColumn), ConditionalIntegerFieldNames
                     <5>transitions. /\ maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
                                     /\ \A position \in 1..prefixCount :
                                         maps[position + 1] = Arithmetic!CopyReplace(ConditionalIntKeys, maps[position],
                                             ConditionalIntegerFieldNames[\#(targetColumn)[position]], <<"capture", position>>)
-                        BY ONLY <5>range, IsaM("simp"), SMT DEF maps, \#(mapsColumn), prefixCount, \#(names.joined(separator: ", "))
+                        <6>recording. /\ Arithmetic!DirectCopyRoutes(ConditionalIntKeys, writes)[0] =
+                                                Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
+                                      /\ \A position \in 1..Len(writes) :
+                                          Arithmetic!DirectCopyRoutes(ConditionalIntKeys, writes)[position] =
+                                              Arithmetic!CopyReplace(ConditionalIntKeys,
+                                                  Arithmetic!DirectCopyRoutes(ConditionalIntKeys, writes)[writes[position].predecessor],
+                                                  writes[position].target, <<"capture", position>>)
+                            BY ONLY <5>writeCount, <5>writeIdentity, Arithmetic!DirectCopyRoutesFollowEveryCapture, SMT
+                        <6>. QED BY ONLY <5>range, <5>writeCount, <5>writeIdentity, <6>recording, SMT
+                            DEF maps, \#(mapsColumn), writes, prefixCount
                     <5>. DEFINE scheduled == \#(scheduledColumn)
                                 origins == \#(origins)
                                 readColumn == \#(readColumn)
@@ -1388,12 +1443,26 @@ package enum ConditionalActionEvidence {
                             ConditionalIntegerFieldNames
                     <5>readProjection. \A origin \in DOMAIN kinds : resolved[origin] = scheduled[index][origin]
                         BY ONLY <5>returnedReads, SMT DEF resolved
+                    <5>. DEFINE incoming(origin) == \#(returnedMapsColumn)[index][readKeys[origin]]
+                                writer(origin) == IF incoming(origin)[1] = "state" THEN 0 ELSE incoming(origin)[2]
                     <5>acceptedReads. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
                         scheduled[index][origin] = maps[index][readKeys[origin]]
-                        BY ONLY <5>range, SMT DEF scheduled, \#(scheduledColumn), kinds, readKeys, maps, \#(mapsColumn),
-                            \#(source)SourceOccurrenceKinds, \#(source)SourceOccurrenceReadKeys,
-                            ConditionalIntKeys, Arithmetic!CopyEntryRoutes, Arithmetic!CopyReplace,
-                            ConditionalIntegerFieldNames, \#(targetColumn), \#(names.joined(separator: ", "))
+                        <6>physical. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
+                            scheduled[index][origin] = incoming(origin)
+                            BY ONLY <5>range, SMT DEF incoming, \#(returnedMapsColumn), scheduled, \#(scheduledColumn),
+                                kinds, readKeys, \#(source)SourceOccurrenceKinds, \#(source)SourceOccurrenceReadKeys
+                        <6>writers. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
+                            /\ readKeys[origin] \in ConditionalIntKeys
+                            /\ Arithmetic!LastDirectCopy(writes, index - 1, readKeys[origin], writer(origin))
+                            /\ incoming(origin) = Arithmetic!DirectCopyReference(readKeys[origin], writer(origin))
+                            BY ONLY <5>range, SMT DEF writes, \#(writesColumn), writer, incoming, \#(returnedMapsColumn),
+                                kinds, readKeys, ConditionalIntKeys, \#(source)SourceOccurrenceKinds,
+                                \#(source)SourceOccurrenceReadKeys, Arithmetic!LastDirectCopy, Arithmetic!DirectCopyReference
+                        <6>interpreted. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
+                            incoming(origin) = maps[index][readKeys[origin]]
+                            BY ONLY <5>range, <5>writeCount, <6>writers,
+                                Arithmetic!RecordedWriterSuppliesTheProjectedRead, SMT DEF maps, \#(mapsColumn), writes
+                        <6>. QED BY ONLY <6>physical, <6>interpreted, SMT
                     <5>lexicalScope. /\ \A a, b \in 1..(index - 1) : definitionNames[a] = definitionNames[b] => a = b
                                       /\ \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
                                              \A p \in 1..(index - 1) : definitionNames[p] # readKeys[origin]
@@ -1491,7 +1560,23 @@ package enum ConditionalActionEvidence {
                                        \/ /\ id[1] = "binding" /\ slot \in 1..(compilerReceipt.index - 1)
                                           /\ id[2] = compilerReceipt.definitionBinders[slot] /\ name = compilerReceipt.definitionNames[slot]
                                           /\ compilerReceipt.scheduled[origin] = <<"capture", slot>>)
-                        BY ONLY <5>scopeInput, <4>geometry, <5>tableFields, <5>rowFields, SMT
+                        <6>. TAKE origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds
+                        <6>read. compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
+                            /\ origin \in DOMAIN rows[index].view.kinds
+                            /\ rows[index].view.kinds[origin] = "read"
+                            BY ONLY <4>geometry, (origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds), SMT
+                        <6>point. compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
+                            LET key == rows[index].view.reads[origin]
+                                name == selectedNames[origin]
+                                id == selectedIDs[origin]
+                                slot == 1 + id[2] - definitionBinders[1]
+                            IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
+                               /\ (\/ /\ id[1] = "state" /\ name = key /\ selectedRoutes[origin] = <<"state", key>>
+                                   \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
+                                      /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
+                                      /\ selectedRoutes[origin] = <<"capture", slot>>)
+                            BY ONLY <6>read, <5>scopeInput, SMT
+                        <6>. QED BY ONLY <6>point, <4>geometry, <5>tableFields, <5>rowFields, SMT
                     <5>physicalFieldInput.
                         \A node \in 1..compilerReceipt.rows[compilerReceipt.index].emitted.count : compilerReceipt.rows[compilerReceipt.index].emitted.nodes[node].kind = "read" =>
                                 compilerReceipt.physical.reads[node] = compilerReceipt.scheduled[compilerReceipt.rows[compilerReceipt.index].emitted.origins[node]]
@@ -1832,7 +1917,6 @@ package enum ConditionalActionEvidence {
         """#
         let rowDefinitions = #"""
         \#(actual.joined(separator: "\n"))
-        \#(routedReads.flatMap(\.prefixes).joined(separator: "\n"))
         \#(routedReads.map(\.receipt).filter { !$0.isEmpty }.joined(separator: "\n"))
         ConditionalIntegerRows(arm) ==
             IF arm = 1 THEN \#(sources[0])Rows ELSE \#(sources[1])Rows
