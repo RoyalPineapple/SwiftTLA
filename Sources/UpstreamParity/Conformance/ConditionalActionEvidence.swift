@@ -1520,7 +1520,23 @@ package enum ConditionalActionEvidence {
                                        \/ /\ id[1] = "binding" /\ slot \in 1..(compilerReceipt.index - 1)
                                           /\ id[2] = compilerReceipt.definitionBinders[slot] /\ name = compilerReceipt.definitionNames[slot]
                                           /\ compilerReceipt.scheduled[origin] = <<"capture", slot>>)
-                        BY ONLY <5>scopeInput, <4>geometry, <5>tableFields, <5>rowFields, SMT
+                        <6>. TAKE origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds
+                        <6>read. compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
+                            /\ origin \in DOMAIN rows[index].view.kinds
+                            /\ rows[index].view.kinds[origin] = "read"
+                            BY ONLY <4>geometry, (origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds), SMT
+                        <6>point. compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
+                            LET key == rows[index].view.reads[origin]
+                                name == selectedNames[origin]
+                                id == selectedIDs[origin]
+                                slot == 1 + id[2] - definitionBinders[1]
+                            IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
+                               /\ (\/ /\ id[1] = "state" /\ name = key /\ selectedRoutes[origin] = <<"state", key>>
+                                   \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
+                                      /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
+                                      /\ selectedRoutes[origin] = <<"capture", slot>>)
+                            BY ONLY <6>read, <5>scopeInput, SMT
+                        <6>. QED BY ONLY <6>point, <4>geometry, <5>tableFields, <5>rowFields, SMT
                     <5>physicalFieldInput.
                         \A node \in 1..compilerReceipt.rows[compilerReceipt.index].emitted.count : compilerReceipt.rows[compilerReceipt.index].emitted.nodes[node].kind = "read" =>
                                 compilerReceipt.physical.reads[node] = compilerReceipt.scheduled[compilerReceipt.rows[compilerReceipt.index].emitted.origins[node]]
