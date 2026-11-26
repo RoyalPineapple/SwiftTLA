@@ -14,7 +14,7 @@ package struct APSpanningModel: Sendable {
         package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, CaseIterable { case next = "Next" }
+    private enum Step: String, CaseIterable { case takeSpanningTreeStep = "Next" }
 
     package static var spec: TLASpec {
         #spec("APspanning") { scope in
@@ -22,8 +22,8 @@ package struct APSpanningModel: Sendable {
             let Proc = scope.parameter(as: Set<Node>.self, in: Subsets(of: Set<Node>([Node.p1, Node.p2, Node.p3])))
             let NoPrnt = scope.parameter(as: Node.self, in: Set<Node>([Node.noParent]))
             let root = scope.parameter(as: Node.self, in: Proc)
-            let pairs = Proc.flatMapping { (i: WithValue<Node>) in
-                Proc.mapping { (j: WithValue<Node>) in Pair<Node, Node>.literal(i, j) }
+            let pairs = Proc.flatMapping { (source: WithValue<Node>) in
+                Proc.mapping { (destination: WithValue<Node>) in Pair<Node, Node>.literal(source, destination) }
             }
             let nbrs = scope.parameter(as: Set<Pair<Node, Node>>.self, in: Subsets(of: pairs))
             Assume(!Proc.contains(NoPrnt) && nbrs.isSubset(of: pairs))
@@ -32,28 +32,29 @@ package struct APSpanningModel: Sendable {
             let rpt = scope.sharedVar(initial: Dictionary<Node, Bool>.mapping(over: Proc) { _ in false })
             let msg = scope.sharedVar(initial: Set<Pair<Node, Node>>())
 
-            Do(Step.next) {
-                With(Proc, Proc) { (i: WithValue<Node>, j: WithValue<Node>) in
-                    If(i != root && prnt[i] == NoPrnt && msg.contains(Pair<Node, Node>.literal(j, i))) {
-                        prnt[i].set(j.expr)
+            Do(Step.takeSpanningTreeStep) {
+                With(Proc, Proc) { (node: WithValue<Node>, candidateParent: WithValue<Node>) in
+                    let incomingMessage = Pair<Node, Node>.literal(candidateParent, node)
+                    If(node != root && prnt[node] == NoPrnt && msg.contains(incomingMessage)) {
+                        prnt[node].set(candidateParent.expr)
                     } else: {
                         Either {
-                            When(i == root || prnt[i] != NoPrnt) {
-                                With(Proc) { k in
-                                    let link = Pair<Node, Node>.literal(i, k)
+                            When(node == root || prnt[node] != NoPrnt) {
+                                With(Proc) { destination in
+                                    let link = Pair<Node, Node>.literal(node, destination)
                                     When(nbrs.contains(link) && !msg.contains(link))
                                     msg.insert(link)
                                 }
                             }
-                            When(prnt[i] != NoPrnt && !rpt[i]) { rpt[i].set(true) }
+                            When(prnt[node] != NoPrnt && !rpt[node]) { rpt[node].set(true) }
                             When(true) { Skip() }
                         }
                     }
                 }
             }
             Invariant("TypeOK") {
-                Proc.allSatisfy { i in
-                    prnt[i] == NoPrnt || nbrs.contains(Pair<Node, Node>.literal(i, prnt[i]))
+                Proc.allSatisfy { node in
+                    prnt[node] == NoPrnt || nbrs.contains(Pair<Node, Node>.literal(node, prnt[node]))
                 }
                 Functions(from: Proc, to: Bool.all).contains(rpt)
                 msg.isSubset(of: pairs)

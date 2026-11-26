@@ -87,7 +87,7 @@ package struct BarriersModel: Sendable {
                         )
                     }
                 }
-                let critical = processes.filter { process in
+                let lockHolders = processes.filter { process in
                     process.isAt(anyOf:
                         Step.countArrival, .checkForLastArrival, .openFirstGate,
                         .unlockAfterArrival, .countDeparture, .checkForLastDeparture,
@@ -95,8 +95,8 @@ package struct BarriersModel: Sendable {
                     )
                 }
                 LockInv {
-                    critical.count <= 1
-                    critical.isEmpty || lock == 0
+                    lockHolders.count <= 1
+                    lockHolders.isEmpty || lock == 0
                 }
                 let firstChamber = processes.filter { process in
                     process.isAt(anyOf:
@@ -122,15 +122,16 @@ package struct BarriersModel: Sendable {
                         .openSecondGate
                     )
                 }
+                let arrivedProcesses = processes.filter { process in
+                    process.isAt(anyOf:
+                        Step.checkForLastArrival, .openFirstGate, .unlockAfterArrival,
+                        .passFirstGate, .lockForDeparture, .countDeparture
+                    )
+                }
                 Inv {
                     IntRange(0, through: N).contains(gate_1)
                     IntRange(0, through: N).contains(gate_2)
-                    rdv == processes.filter { process in
-                        process.isAt(anyOf:
-                            Step.checkForLastArrival, .openFirstGate, .unlockAfterArrival,
-                            .passFirstGate, .lockForDeparture, .countDeparture
-                        )
-                    }.count
+                    rdv == arrivedProcesses.count
                     gate_1 <= 0 || processes.contains { process in
                         process.isAt(anyOf: Step.unlockAfterArrival, .passFirstGate)
                     }
