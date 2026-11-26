@@ -278,6 +278,13 @@ extension ParserSession {
         }
     }
 
+    static func inlineAlgorithmName(_ call: FunctionCallExprSyntax) -> String? {
+        guard let first = call.arguments.first, first.label == nil,
+              let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+              !name.isEmpty, call.arguments.dropFirst().allSatisfy({ $0.label != nil }) else { return nil }
+        return name
+    }
+
     /// Parses the bounded PlusCal-shaped authoring layer into an `AlgorithmModel`.
     func parseAlgorithm(
         _ call: FunctionCallExprSyntax,
@@ -286,13 +293,13 @@ extension ParserSession {
     ) -> (algorithm: Algorithm, copyEvents: [DirectCopyParserSyntax.Event]?)? {
         algorithmParseFailure = nil
         algorithmSourceDiagnostic = nil
-        guard let name = boundName,
-              call.arguments.allSatisfy({ $0.label != nil }),
+        guard let name = boundName ?? Self.inlineAlgorithmName(call),
+              boundName == nil || call.arguments.allSatisfy({ $0.label != nil }),
               !call.arguments.contains(where: { $0.label?.text == "_name" }),
               let closure = ModelSpecificationSyntax.algorithmBody(call)
         else {
             components.diagnostics.append(.init(
-                message: "Algorithm requires an immutable let binding and a builder body.",
+                message: "Algorithm requires an immutable let binding or an inline literal name, and a builder body.",
                 source: call
             ))
             return nil

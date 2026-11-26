@@ -47,12 +47,10 @@ package struct GlowingProductModel: Sendable {
                 tinyShortDouble.set(0)
                 product.set(0)
             }
-            heat
             let cool = Do(Step.cool, when: tee == "TooHot" && stage == "denatured") {
                 tee.set("Hot")
                 stage.set("ready")
             }
-            cool
             let anneal = Do(Step.anneal, when: tee == "Hot" && stage == "ready") {
                 With(IntRange(0, through: longTemplate), IntRange(0, through: shortTemplate),
                      IntRange(0, through: tinyTemplate)) { long, short, tiny in
@@ -69,7 +67,6 @@ package struct GlowingProductModel: Sendable {
                     tinyHybrid.set(tinyHybrid + tiny)
                 }
             }
-            anneal
             let extend = Do(Step.extend, when: tee == "Warm" && stage == "annealed") {
                 stage.set("extended")
                 cycle += 1
@@ -82,7 +79,6 @@ package struct GlowingProductModel: Sendable {
                 tinyHybrid.set(0)
             }
 
-            extend
             WeakFairness(anneal)
             WeakFairness(heat)
             WeakFairness(cool)
@@ -102,8 +98,7 @@ package struct GlowingProductModel: Sendable {
                 Bind(\.DNA, to: DNA)
                 Bind(\.PRIMER, to: PRIMER)
             }
-            stagesInstance
-            let stagesSpec = Refinement(instance: stagesInstance) {
+            Refinement("stagesSpec", instance: stagesInstance) {
                 Map(\.tee, projecting: tee)
                 Map(\.primer, from: primer)
                 Map(\.dna, from: doubles)
@@ -112,7 +107,6 @@ package struct GlowingProductModel: Sendable {
                 Map(\.stage, projecting: stage)
                 Map(\.cycle, from: cycle)
             }
-            stagesSpec
             let primerDepleted = Temporal()
             primerDepleted(.eventually(primer == 0))
 

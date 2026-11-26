@@ -143,10 +143,9 @@ an unchecked formal identifier.
 
 Write a validation scenario directly inside `#spec`, for example
 `Validation("exhaustive", label: "Exhaustive check") {}.checkingDeadlock(false)`.
-The first string literal names the scenario. An algorithm takes its identity
-from an immutable binding, as in `let protocolAlgorithm = Algorithm { ... }; protocolAlgorithm`.
-A validation declared with `let exhaustive = Validation { ... }; exhaustive` takes
-its name from the binding too.
+The first string literal names the scenario. Write `Algorithm("protocolAlgorithm") { ... }`
+when the algorithm needs only a formal name. Bind a component to `let` when another
+rule uses it. The declaration registers the component once.
 The nonempty literal `label:` is optional and only for presentation;
 interpolation is rejected.
 Duplicate labels are allowed; generated scenario `name` remains the identity
@@ -252,8 +251,7 @@ No program counter, source-order scheduling, or termination action is added.
     Do(Step.reset, when: count == 2) {
         count.set(0)
     }
-    let complete = Validation {}
-    complete
+    Validation("complete") {}
 }
 ```
 
@@ -272,11 +270,10 @@ Acceptance requires generated execution, complete native graphs, TLA+ export wit
 The direct model must not acquire an authored PlusCal algorithm.
 
 An immutable binding can retain an independent `Do` step for later references.
-The binding does not register the step. A separate expression registers it once:
+The declaration registers the step once. Later expressions can refer to the same step by name.
 
 ```swift
 let finish = Do(Step.finish, when: count == 0) { Skip() }
-finish
 let Finished = Temporal()
 Finished(.eventually(finish.enabled))
 WeakFairness(finish)
@@ -296,7 +293,6 @@ not change the generated scheduler or transitions. A mutable domain is rejected.
 let visit = Do(Step.visit, over: members) { member in
     seen[member].set(true)
 }
-visit
 WeakFairness(each: visit)
 ```
 
@@ -525,20 +521,18 @@ The predicate retains its inner scope and any process-member quantification.
 
 ```swift
 let safe = Invariant()
-let worker = Algorithm { scope in
+Algorithm("worker") { scope in
     let value = scope.sharedVar(initial: 0)
     Do(Step.wait) { Goto(Step.wait) }
     safe { value == 0 }
 }
-worker
-let safety = Validation {}.checking(only: [safe])
-safety
+Validation("safety") {}.checking(only: [safe])
 ```
 
 A bare forward handle is not a builder component. A scenario reference without a registered predicate fails compilation.
 Two predicate registrations for the same handle also fail compilation, even when their bodies agree.
 For example, `safe { true }` followed by `safe { false }` is invalid.
-An unused handle registers no claim, like an unused bound predicate declaration.
+A forward handle registers its claim when the author supplies the predicate.
 An unbound forward constructor such as `Invariant()` is rejected at its source
 location; authors bind the handle with `let` and call it to register the claim.
 
@@ -552,7 +546,7 @@ An omitted label uses the Swift declaration name for display.
 
 Refinements use the same naming and label rules.
 For example, `let refines = Refinement(instance: target, mappings: mappings, label: "Abstract behavior")` keeps `refines` as its formal name.
-The separate `refines` builder expression registers this declaration.
+The `refines` declaration registers the refinement.
 The macro supplies the internal `_name` argument from the Swift binding.
 The former `Refinement(name: ...)` spelling is not supported.
 
@@ -615,7 +609,7 @@ For example, the existing `RecurringPopulation` declarations supply `members`, `
 
 ```swift
 let EachRecurs = AlwaysEventually()
-let toggle = Algorithm {
+Algorithm("toggle") {
     Each(members, fairness: .weak) { member in
         Loop(Step.toggle) {
             value.set(1 - value)
@@ -623,10 +617,8 @@ let toggle = Algorithm {
         EachRecurs(value == member)
     }
 }
-toggle
-let outsideCycle = Validation(label: "Outside cycle") { Bind(members, to: Set<Int>([2])) }
+Validation("outsideCycle", label: "Outside cycle") { Bind(members, to: Set<Int>([2])) }
     .expect(EachRecurs, .violated)
-outsideCycle
 ```
 
 Acceptance requires the expected violation and actionable native and TLC lassos for member `2`.
@@ -752,11 +744,8 @@ the author registers that binding once:
 
 ```swift
 let memberSymmetry = Symmetry(Set(Member.all))
-memberSymmetry
-let ordinary = Validation {}
-ordinary
-let reduced = Validation {}.usingSymmetry(memberSymmetry)
-reduced
+Validation("ordinary") {}
+Validation("reduced") {}.usingSymmetry(memberSymmetry)
 ```
 
 A typed set parameter can supply the members for different configurations:
@@ -765,7 +754,6 @@ A typed set parameter can supply the members for different configurations:
 let members = scope.parameter(as: Set<Member>.self,
     in: NonEmptySubsets(of: Set(Member.all)))
 let memberSymmetry = Symmetry(members)
-memberSymmetry
 ```
 
 The current finite-domain implementation accepts enumerated nonempty member
@@ -820,13 +808,12 @@ each member one weak-fairness obligation over its eligible steps other than
 `ncs`:
 
 ```swift
-let algorithm = Algorithm {
+Algorithm("algorithm") {
     Each(members, fairness: .weak(excluding: [Step.ncs])) { _ in
         Do(Step.ncs) { Goto(Step.pass) }
         Do(Step.pass) { Goto(Step.ncs) }
     }
 }
-algorithm
 ```
 
 Putting `WeakFairness(Step.pass)` inside that `Each` is invalid. An inner `Do`
@@ -849,9 +836,7 @@ binding registers it, and `Validation.usingFairness(_:)` selects it for one scen
 
 ```swift
 let NonCriticalMayStutter = FairnessProfile(excluding: [Step.ncs])
-NonCriticalMayStutter
-let liveness = Validation {}.usingFairness(NonCriticalMayStutter)
-liveness
+Validation("liveness") {}.usingFairness(NonCriticalMayStutter)
 ```
 
 Without a selection, the algorithm's declared process fairness is unchanged.
@@ -965,12 +950,11 @@ retains. An action constraint selects successors using a typed before/after
 value beside the algorithm it bounds:
 
 ```swift
-let counter = Algorithm { scope in
+Algorithm("counter") { scope in
     let count = scope.sharedVar(initial: 0)
     Loop(Step.advance) { count += 1 }
     ActionConstraint(on: count) { before, after in after <= 2 }
 }
-counter
 ```
 
 Neither constraint changes the executable transition relation. Deadlock checks
@@ -997,12 +981,11 @@ verdict. Neither choice permits a truncated graph to pass equivalence validation
 The check-selection syntax is:
 
 ```swift
-let upstreamSelection = Validation(label: "Upstream selection") {
+Validation("upstreamSelection", label: "Upstream selection") {
     Bind(processCount, to: 3)
 }
 .checking(only: [exclusion])
 .checkingDeadlock(false)
-upstreamSelection
 ```
 
 `Bind` accepts a typed value or a closed typed expression, such as
@@ -1055,11 +1038,10 @@ checks. For example, EWD998ChanID excludes vector clocks while retaining the
 active flags, colors, counters, clock-free inbox, and pass count:
 
 ```swift
-let published = Validation { Bind(Node, to: fiveNodes) }
+Validation("published") { Bind(Node, to: fiveNodes) }
     .viewing(Quintuple.literal(active, color, counter, viewInbox, passes))
     .checking(only: [EWD998Safe, Max3TokenRounds, EWD998ChanSpec, EWD998Live])
     .checkingDeadlock(false)
-published
 ```
 
 View-based exploration records complete representative states for diagnostics,
@@ -1084,9 +1066,8 @@ view-identified search. For example:
 Inside `#spec { scope in ... }`, a scenario can declare:
 
 ```swift
-let trace = Validation {}.postcondition(scope.checkingDiameter == 3,
+Validation("trace") {}.postcondition(scope.checkingDiameter == 3,
     name: "TraceAccepted")
-trace
 ```
 
 The condition is a check of the completed run, not a state invariant. It must
@@ -1170,11 +1151,10 @@ let nodes = scope.parameter(as: Set<Int>.self,
 let quorum = scope.parameter(as: Int.self, in: IntRange(1, through: nodes.cardinality))
 let selected = scope.sharedVar(initial: Set<Int>([]))
 
-let threeNodes = Validation(label: "Three nodes") {
+Validation("threeNodes", label: "Three nodes") {
     Bind(nodes, to: Set<Int>([1, 2, 3]))
     Bind(quorum, to: 2)
 }
-threeNodes
 ```
 
 The generated configuration stores `Set<Int>`. Its initializer checks both the
@@ -1315,11 +1295,10 @@ Ordinary dictionary literals can bind function-valued model parameters:
 ```swift
 let capacity = scope.parameter(as: [String: Int].self,
     in: Functions(from: jugs, to: Set<Int>([3, 5])))
-let twoJugs = Validation(label: "Two jugs") {
+Validation("twoJugs", label: "Two jugs") {
     Bind(jugs, to: Set<String>(["small", "big"]))
     Bind(capacity, to: ["small": 3, "big": 5])
 }
-twoJugs
 ```
 
 The parameter type supplies the key and value types, including for `[:]`.
@@ -1385,17 +1364,15 @@ let devices = scope.parameter(as: Set<DeviceID>.self,
 let phase = scope.sharedVar(initial:
     Dictionary<DeviceID, Int>.mapping(over: devices) { _ in 0 })
 
-let protocolAlgorithm = Algorithm { _ in
+Algorithm("protocolAlgorithm") { _ in
     Each(devices) { member in
         Do(Step.advance) { phase[member] += 1 }
     }
 }
-protocolAlgorithm
 
-let pair = Validation(label: "Pair") {
+Validation("pair", label: "Pair") {
     Bind(devices, to: Set<DeviceID>([.east, .west]))
 }
-pair
 ```
 
 `DeviceID` values identify the same members in configuration, actions, state,
@@ -1420,18 +1397,16 @@ exclusion {
     criticalSection.count <= 1
 }
 
-let correctProtocol = Validation(label: "Correct protocol") {
+Validation("correctProtocol", label: "Correct protocol") {
     Bind(processCount, to: 3)
     Bind(lockEnabled, to: true)
 }
-correctProtocol
 
-let missingLock = Validation(label: "Missing lock") {
+Validation("missingLock", label: "Missing lock") {
     Bind(processCount, to: 3)
     Bind(lockEnabled, to: false)
 }
 .expect(exclusion, .violated)
-missingLock
 ```
 
 The `exclusion { ... }` expression registers the predicate in the builder.
@@ -1448,7 +1423,7 @@ Fixed `ModelCollection` replacement follows the member-ID parameter contract
 above; the legacy API has been deleted locally and awaits hosted parity.
 
 Registered refinements have model-owned property handles and participate in every scenario by default.
-A `let` binding alone does not register a refinement. Its handle must also appear as a specification builder expression.
+Declaring the refinement registers it. Use the binding to refer to it in a validation scenario.
 `.expect(refinement, .violated)` changes the expected outcome without disabling the refinement or other checks.
 A distinct handle with the same name does not resolve to the registered refinement.
 Generated native checking and TLA+ export use the same resolved refinement identity and mappings.
@@ -1468,12 +1443,10 @@ followed by a bound, registered refinement:
 let TD = Instance(of: SyncTerminationDetectionModel.self) {
     Bind(\.N, to: N)
 }
-TD
 let TDSpec = Refinement(instance: TD) {
     Map(\.active, from: active)
     Map(\.terminationDetected, from: terminationDetected)
 }
-TDSpec
 ```
 
 The key paths address generated `Configuration` and `State` members of the abstract
@@ -1821,7 +1794,7 @@ Hosted equivalence is separate from settling the syntax and semantics.
 | ID | Decision |
 | --- | --- |
 | B-01 | Settled: typed parameter-dependent domains and model-owned finite scenario bindings use the same resolved parameter identities and generated `Configuration`; `Each` and dictionary state use stable member IDs, not application objects. Runner limits stop validation and never constrain the model. The fixed `ModelCollection` authoring API is removed. Acceptance still requires source-aligned tests and hosted parity for applicable configurations |
-| B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` registers through its bound reference. `Validation("name")` registers inline, and bound validation scenarios register through their reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
+| B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm("name")` and `Validation("name")` register inline. Declaring a named component also registers it. Inline control statements need no extra identity. Optional `label:` is presentation-only |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Settled for this DSL surface: only the explicit bound-step, `Next`, process-member, and projected fairness forms above declare obligations; inner process steps have no independent handles. Finite symmetry is opt-in for a registered, immutable binding, and only a safety-only TLC scenario may select it. Native checking remains unreduced. Unsupported scopes and reductions fail rather than silently changing meaning; independent parity evidence is still required |
 | B-05 | Bounded current contract: ordinary supported Swift values and the typed operations above retain their types; immutable local expressions and bound `Macro` statements are the supported reuse forms, not arbitrary Swift function bodies. Inference must resolve completely before emission; checked `Int` arithmetic and other specified evaluation failures must agree in generated Swift and TLA+, including failure identity and evaluation order. Reachable overflow is a checking failure, not a compile-time rejection. One-based DSL sequence indices apply. Additional value or helper forms require a named case and a new native/formal contract |
@@ -1852,9 +1825,8 @@ Validation(label: String? = nil,
 
 An inline call such as `Validation("exhaustive") {}` declares and registers
 the scenario. For declarations that use an immutable `let` binding, the macro
-supplies the internal `_name` and the author registers the binding.
-`let algorithm = Algorithm { Do(Step.start) { Stop() } }; algorithm`
-and `let exhaustive = Validation {}; exhaustive` are positive examples.
+supplies the name and registers the component. Prefer `Algorithm("algorithm") { Do(Step.start) { Stop() } }`
+and `Validation("exhaustive") {}` when the component needs only a name.
 `Algorithm { Do(Step.start) { Stop() } }` without a binding, and
 `var exhaustive = Validation {}` with a mutable binding, fail at their source
 locations. A named property handle likewise needs its declared binding and
@@ -1867,7 +1839,7 @@ For B-03, the public modifiers `expect(_ property: some ModelProperty, _ expecte
 and `expectDeadlock(_ expected: ValidationExpectation)` accept `.satisfied` or
 `.violated`. All declared properties and deadlock are
 selected by default. An expected unfinished stuck state is written as
-`let expectedStuck = Validation(label: "Expected stuck") {}.expectDeadlock(.violated); expectedStuck`;
+`Validation("expectedStuck", label: "Expected stuck") {}.expectDeadlock(.violated)`;
 the same check
 remains enabled and must return a replayable deadlock witness. Normal completion
 must satisfy the default deadlock check. An expectation for a disabled check,

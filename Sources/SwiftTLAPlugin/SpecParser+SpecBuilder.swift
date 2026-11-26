@@ -24,7 +24,10 @@ extension ParserSession {
         let declarationScope = closureParameterNames(in: closure).first
         if let declarationScope { sourceScope = sourceScope.extendingCheckingScope(declarationScope) }
         var directCopyLexicalSource: DirectCopyLexicalSource?
-        for statement in closure.statements {
+        var declarationFailed = false
+        for (statement, binding) in specBuilderItems(in: closure) {
+            if binding != nil && declarationFailed { continue }
+            declarationFailed = false
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
                 parseBuilderCall(fc, into: &components)
@@ -61,7 +64,7 @@ extension ParserSession {
                       let bound = specBindings.algorithms[reference.baseName.sourceIdentifierName] {
                 components.sourceAlgorithms.append(bound.algorithm)
                 if closure.signature?.capture == nil {
-                    directCopyLexicalSource = bound.copySyntax?.registered(at: reference.baseName, in: closure)
+                    directCopyLexicalSource = bound.copySyntax?.registered(at: binding ?? reference.baseName, in: closure)
                 }
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
@@ -75,16 +78,18 @@ extension ParserSession {
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let symmetry = specBindings.symmetries[reference.baseName.sourceIdentifierName] {
                 symmetryDeclarations.append(symmetry)
-                symmetryDeclarationOffsets.append(reference.positionAfterSkippingLeadingTrivia.utf8Offset)
+                symmetryDeclarationOffsets.append((binding ?? reference.baseName).positionAfterSkippingLeadingTrivia.utf8Offset)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &components)
             } else if case .decl(let decl) = statement.item,
                       let varDecl = decl.as(VariableDeclSyntax.self) {
+                let diagnosticCount = components.diagnostics.count
                 parseLocalDeclaration(
                     varDecl,
                     into: &components,
                     declarationScope: declarationScope
                 )
+                declarationFailed = components.diagnostics.count > diagnosticCount
             } else {
                 components.diagnostics.append(.init(
                     message: "Specification body contains an unsupported item.",
@@ -1276,12 +1281,31 @@ extension ParserSession {
         case "Instance":
             parseFormalModuleInstance(call, into: &components)
         case "Refinement":
-            parseRefinement(call, into: &components)
+            if let first = call.arguments.first, first.label == nil, call.trailingClosure != nil,
+               let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue, !name.isEmpty {
+                var declaration = call
+                declaration.arguments = LabeledExprListSyntax(call.arguments.dropFirst())
+                if let property = parseGeneratedModelRefinement(declaration, named: name, into: &components) {
+                    registerProperty(property, into: &components)
+                }
+            } else {
+                parseRefinement(call, into: &components)
+            }
         case "Symmetry":
+            if call.arguments.count == 2, let first = call.arguments.first, first.label == nil,
+               let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue, !name.isEmpty {
+                var declaration = call
+                declaration.arguments = LabeledExprListSyntax(call.arguments.dropFirst())
+                if let symmetry = parseSymmetry(declaration, named: name, into: &components) {
+                    symmetryDeclarations.append(symmetry)
+                    symmetryDeclarationOffsets.append(first.positionAfterSkippingLeadingTrivia.utf8Offset)
+                }
+                return
+            }
             components.diagnostics.append(.init(
-                message: "Symmetry requires an immutable named let binding and a registration reference.",
+                message: "Symmetry requires a named let binding or an inline literal name.",
                 source: call,
-                expected: "let TxId = Symmetry(Set(Transaction.all)); TxId"
+                expected: "let TxId = Symmetry(Set(Transaction.all))"
             ))
         default:
             components.diagnostics.append(.init(
@@ -1326,7 +1350,7 @@ extension ParserSession {
             components.diagnostics.append(.init(
                 message: "Symmetry requires a finite domain or a typed set parameter.",
                 source: call,
-                expected: "let TxId = Symmetry(Set(Transaction.all)); TxId, or Symmetry(typedSetParameter)"
+                expected: "let TxId = Symmetry(Set(Transaction.all)), or Symmetry(typedSetParameter)"
             ))
             return nil
         }
@@ -1357,7 +1381,7 @@ extension ParserSession {
             components.diagnostics.append(.init(message: "A property label requires one nonempty string literal without interpolation.", source: call))
             return
         }
-        let explicitName = call.arguments.first { $0.label?.text == "_name" }?
+        let explicitName = call.arguments.first { $0.label == nil || $0.label?.text == "_name" }?
             .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
         guard let name = bindingName ?? explicitName, !name.isEmpty,
               let instanceSyntax = call.arguments.first(where: { $0.label?.text == "instance" })?.expression,
@@ -1367,7 +1391,7 @@ extension ParserSession {
             components.diagnostics.append(.init(
                 message: "Refinement requires a declared Instance binding.",
                 source: call,
-                expected: "let C = Instance(\"C\", of: Module.module); C; let Refines = Refinement(instance: C, operator: .spec, mappings: mappings); Refines",
+                expected: "let C = Instance(\"C\", of: Module.module); Refinement(\"Refines\", instance: C, operator: .spec, mappings: mappings)",
                 nextSafeAction: "Declare the instance in this specification, then pass that binding to Refinement."
             ))
             return

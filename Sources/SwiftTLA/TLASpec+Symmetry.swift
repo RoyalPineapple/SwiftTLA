@@ -56,6 +56,10 @@ private func finiteSymmetryDeclaration<Member: TLAValueConvertible & Hashable>(
   return SymmetrySetDecl(name, converted, sourceIssue: issue)
 }
 
+public func Symmetry<Member: TLAValueType>(_ name: String, _ members: ModelParameter<Set<Member>>) -> SymmetrySetDecl {
+  SymmetrySetDecl(name, domain: .parameter(members.reference))
+}
+
 public func Symmetry<Member: TLAValueType>(_name: String = "", _ members: ModelParameter<Set<Member>>) -> SymmetrySetDecl {
   SymmetrySetDecl(_name, domain: .parameter(members.reference))
 }

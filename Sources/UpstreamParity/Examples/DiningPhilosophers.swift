@@ -40,7 +40,7 @@ package struct DiningPhilosophersModel: Sendable {
             let ExclusiveAccess = Invariant()
             let NobodyStarves = AlwaysEventually()
 
-            let DiningPhilosophers = Algorithm { scope in
+            Algorithm("DiningPhilosophers") { scope in
                 let forks = scope.sharedVar(initial: Function<Philosopher, Fork>.literal(
                     (Philosopher.one, Fork(holder: Philosopher.one, clean: false)),
                     (Philosopher.two, Fork(holder: Philosopher.one, clean: false)),
@@ -144,7 +144,6 @@ package struct DiningPhilosophersModel: Sendable {
                     }
                 }
             }
-            DiningPhilosophers
             Validation("NP5") {}
             Validation("apNP5", label: "AP NP5") {}
                 .checking(only: [TypeOK, ExclusiveAccess])

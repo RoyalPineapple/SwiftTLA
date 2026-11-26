@@ -34,7 +34,7 @@ package struct BackupTransactionManagerModel: Sendable {
             let TypeOK = Invariant()
             let Consistency = Invariant()
             let Termination = Temporal()
-            let protocolSteps = Algorithm { scope in
+            Algorithm("protocolSteps") { scope in
                 let rmState = scope.sharedVar(initial: Dictionary<Manager, Phase>.mapping(over: RM) { _ in Phase.working })
                 let tmState = scope.sharedVar(initial: Decision.undecided)
                 let anyCommitted = RM.contains { manager in rmState[manager] == Phase.committed }
@@ -95,7 +95,6 @@ package struct BackupTransactionManagerModel: Sendable {
                 Consistency { !anyCommitted || !RM.contains { manager in rmState[manager] == Phase.aborted } }
                 Termination(.eventually(RM.allSatisfy { manager in Finished(manager) } && Finished(0) && Finished(10)))
             }
-            protocolSteps
             Validation("threeManagers") {
                 Bind(RM, to: Set<Manager>([.rm1, .rm2, .rm3]))
                 Bind(RMMAYFAIL, to: true)

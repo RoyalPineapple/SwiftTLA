@@ -832,7 +832,7 @@ public struct Algorithm: Sendable, SpecComponent {
         self.init(name, label: label, fairness: fairness, scoped: body)
     }
 
-    package init(
+    public init(
         _ name: String,
         label: String? = nil,
         fairness: SequentialAlgorithmFairness = .none,
@@ -842,7 +842,7 @@ public struct Algorithm: Sendable, SpecComponent {
             sequentialFairness: fairness, components: body().map(\.model))
     }
 
-    package init(
+    public init(
         _ name: String,
         label: String? = nil,
         fairness: SequentialAlgorithmFairness = .none,

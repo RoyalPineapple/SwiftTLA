@@ -48,7 +48,7 @@ public struct ChangRoberts {
                 Message(candidate: 4, from: .eleven, to: .twelve)
             ]))
             let leader = scope.sharedVar(initial: 0)
-            let changRoberts = Algorithm {
+            Algorithm("changRoberts") {
                 Each(Node.all, fairness: .weak) { node in
                     Do(Step.deliver) {
                         With(messages) { message in
@@ -76,7 +76,6 @@ public struct ChangRoberts {
                     }
                 }
             }
-            changRoberts
             Invariant("LeaderDomain") { (0...12).contains(leader) }
         }
     }

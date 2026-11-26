@@ -49,7 +49,6 @@ package struct EWD998TerminationModel: Sendable {
             let detectTermination = Do(Step.detectTermination, when: terminated) {
                 terminationDetected.set(true)
             }
-            detectTermination
             WeakFairness(detectTermination)
 
             Invariant("TypeOK") {

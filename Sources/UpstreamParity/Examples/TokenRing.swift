@@ -27,12 +27,10 @@ package struct TokenRingModel: Sendable {
             let createToken = Do(Step.createToken, when: c[0] == c[N - 1]) {
                 c[0].set((c[N - 1] + 1) % M)
             }
-            createToken
             let passToken = Do(Step.passToken, over: 1..<N) { i in
                 When(c[i] != c[i - 1])
                 c[i].set(c[i - 1])
             }
-            passToken
             WeakFairness(anyOf: [createToken, passToken])
 
             let typeOK = Invariant("TypeOK")

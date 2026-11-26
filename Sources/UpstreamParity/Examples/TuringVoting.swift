@@ -95,9 +95,7 @@ package struct TuringVotingModel: Sendable {
                 }
             }
             let consensus = Instance(of: TuringConsensusModel.self) { Bind(\.Value, projecting: values) }
-            consensus
-            let prop_156180051387248000 = Refinement(instance: consensus) { Map(\.chosen, projecting: chosen) }
-            prop_156180051387248000
+            Refinement("prop_156180051387248000", instance: consensus) { Map(\.chosen, projecting: chosen) }
             Validation("published") {
                 Bind(MaxBallot, to: 2)
                 Bind(values, to: Set<Choice>([.v1, .v2]))

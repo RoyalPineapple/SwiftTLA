@@ -33,7 +33,7 @@ package struct ConsensusModel: Sendable {
             Extends(.finiteSets)
             Extends(.integers)
             let Value = configuration.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.one, .two]), Set([.one, .two, .three])]))
-            let Consensus = Algorithm(fairness: .weak) { scope in
+            Algorithm("Consensus", fairness: .weak) { scope in
                 let chosen = scope.sharedVar(initial: Set<Choice>())
 
                 let choose = Macro {
@@ -55,7 +55,6 @@ package struct ConsensusModel: Sendable {
                 }
                 Eventually("Success", !chosen.isEmpty)
             }
-            Consensus
             Validation("published", label: "Consensus") {
                 Bind(Value, to: Set<Choice>([.one, .two, .three]))
             }.checkingDeadlock(false)

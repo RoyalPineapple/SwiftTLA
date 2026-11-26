@@ -231,12 +231,12 @@ struct OrderedAssignmentLoweringTests {
             (domainSpec, [[0, 0], [1, 0], [1, 1]], nil, nil),
             (fallibleDomainSpec, [[0, 0]], .integerOverflow(.addition, operands: [1, Int.max]), nil),
             (constantDomainSpec, [[0, 0], [0, 3], [0, 5], [0, 14], [1, -1], [2, -1], [3, 1]], nil,
-                ("", "in: If(first == 0, then: SetExpr<Int>.literal(0, 1 + 2, 10 - 3 - 2, 2 + 3 * 4), "
+                ("", "initiallyIn: If(first == 0, then: SetExpr<Int>.literal(0, 1 + 2, 10 - 3 - 2, 2 + 3 * 4), "
                     + "else: If(first == 1, then: SetExpr<Int>.literal((-3) / 2), "
                     + "else: If(first == 2, then: SetExpr<Int>.literal((-3) % 2), else: SetExpr<Int>.literal(3 % (-2)))))")),
             (formalArithmeticDomainSpec, [[0, -2], [0, 1], [0, 3], [1, -2], [2, 1]], .negativeModuloDivisor(-2),
                 ("let formalConstant: Expr<Int> = (-3) / 2",
-                    "in: If(first == 0, then: SetExpr<Int>.literal((first + (-3)) / 2, (first + (-3)) % 2, (first + (-3)) / ((-3) / 2)), "
+                    "initiallyIn: If(first == 0, then: SetExpr<Int>.literal((first + (-3)) / 2, (first + (-3)) % 2, (first + (-3)) / ((-3) / 2)), "
                     + "else: If(first == 1, then: SetExpr<Int>.literal(formalConstant, Expr<Int>(-3) / 2), "
                     + "else: If(first == 2, then: SetExpr<Int>.literal(Expr<Int>(-3) % 2), else: SetExpr<Int>.literal(Expr<Int>(3) % (-2)))))")),
             (constantInitialSpec, [[0, 3], [1, 3], [2, 3], [3, 3]], nil, ("", "initial: +(-(-(1 + 2)))")),
@@ -506,9 +506,9 @@ struct OrderedAssignmentLoweringTests {
         }
 
         let domainSource = source
-            .replacingOccurrences(of: "initial: 1", with: "in: 0...1")
+            .replacingOccurrences(of: "initial: 1", with: "initiallyIn: 0...1")
             .replacingOccurrences(of: "initial: first + 2",
-                with: "in: If(first == 0, then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1))")
+                with: "initiallyIn: If(first == 0, then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1))")
         let domainOriginal = try parseSpecTestClosure(domainSource)
         let domainExpanded = domainSource
             .replacingOccurrences(of: "Algorithm(scoped:", with: "Algorithm(_name: \"algorithm\", scoped:")
@@ -519,7 +519,7 @@ struct OrderedAssignmentLoweringTests {
         let mutations = [
             ("algorithmIdentity", domainExpanded.replacingOccurrences(of: "_name: \"algorithm\"", with: "_name: \"other\"")),
             ("stateIdentity", domainExpanded.replacingOccurrences(of: "_name: \"first\"", with: "_name: \"other\"")),
-            ("rangeUpper", domainExpanded.replacingOccurrences(of: "in: 0...1", with: "in: 0...2")),
+            ("rangeUpper", domainExpanded.replacingOccurrences(of: "initiallyIn: 0...1", with: "initiallyIn: 0...2")),
             ("conditionOperation", domainExpanded.replacingOccurrences(of: "If(first == 0", with: "If(first != 0")),
             ("conditionRead", domainExpanded.replacingOccurrences(of: "If(first == 0", with: "If(0 == 0")),
             ("setMember", domainExpanded.replacingOccurrences(of: "else: SetExpr<Int>.literal(0, 1)",
@@ -562,9 +562,8 @@ struct OrderedAssignmentLoweringTests {
 
     }
 
-    @Test("Authored sequential Int syntax agrees with its parsed initial values and ordered steps")
-    func authoredSequentialIntSyntaxRejectsDrift() throws {
-        let source = """
+    private var sequentialSource: String {
+        """
         {
             let algorithm = Algorithm(scoped: { scope in
                 let first = scope.sharedVar(initial: 1)
@@ -580,8 +579,17 @@ struct OrderedAssignmentLoweringTests {
             algorithm
         }
         """
-        let enums = [parserTestEnum("Step", cases: ["copy": .string("copy"),
+    }
+
+    private var sequentialEnums: [SourceEnum] {
+        [parserTestEnum("Step", cases: ["copy": .string("copy"),
             "finish": .string("finish")])]
+    }
+
+    @Test("Authored sequential Int syntax agrees with its parsed initial values and ordered steps")
+    func authoredSequentialIntSyntaxRejectsDrift() throws {
+        let source = sequentialSource
+        let enums = sequentialEnums
         let original = try parseSpecTestClosure(source)
         let parsed = SpecParser.parseSpecClosure(named: "OrderedInt", original,
             sourceTypes: .init(enums: enums))
@@ -740,14 +748,15 @@ struct OrderedAssignmentLoweringTests {
                 }
             }
         }
-        let unused = source.replacingOccurrences(of: "algorithm\n",
+        let extraAlgorithm = source.replacingOccurrences(of: "algorithm\n",
             with: "let ignored = Algorithm(scoped: { scope in\n"
                 + "    let value = scope.sharedVar(initial: 4)\n"
                 + "    Do(Step.copy) { Assign(value, to: 5) }\n"
                 + "})\nalgorithm\n")
-        #expect(unused != source)
-        try OrderedIntSourceSyntaxCheck.verify(try parseSpecTestClosure(unused),
-            parsed: parsed, enums: enums)
+        #expect(extraAlgorithm != source)
+        #expect(throws: CompilationDiagnostic.self) {
+            try OrderedIntSourceSyntaxCheck.verify(try parseSpecTestClosure(extraAlgorithm), parsed: parsed, enums: enums)
+        }
         let reversed = source
             .replacingOccurrences(of: "Assign(first, to: second + 1)", with: "__FIRST__")
             .replacingOccurrences(of: "Assign(second, to: first)",
@@ -798,10 +807,16 @@ struct OrderedAssignmentLoweringTests {
                 parsed: labeledModel, enums: enums)
         }
 
+    }
+
+    @Test("Authored Int domains preserve their choices and failures")
+    func authoredIntDomainOutcomes() throws {
+        let source = sequentialSource
+        let enums = sequentialEnums
         let domainExpression = "If(first == 0, then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1))"
         let domainSource = source
-            .replacingOccurrences(of: "initial: 1", with: "in: 0...1")
-            .replacingOccurrences(of: "initial: first + 2", with: "in: \(domainExpression)")
+            .replacingOccurrences(of: "initial: 1", with: "initiallyIn: 0...1")
+            .replacingOccurrences(of: "initial: first + 2", with: "initiallyIn: \(domainExpression)")
         let domainSyntax = try parseSpecTestClosure(domainSource)
         let domainParsed = SpecParser.parseSpecClosure(named: "OrderedInt", domainSyntax,
             sourceTypes: .init(enums: enums))
@@ -816,7 +831,7 @@ struct OrderedAssignmentLoweringTests {
             .replacingOccurrences(of: "then: SetExpr<Int>.literal(0),", with: "then: SetExpr<Int>.literal(0, 1),")
             .replacingOccurrences(of: "else: SetExpr<Int>.literal(0, 1)", with: "else: SetExpr<Int>.literal(0)")
         let mutations = [
-            ("rangeUpper", domainSource.replacingOccurrences(of: "in: 0...1", with: "in: 0...2")),
+            ("rangeUpper", domainSource.replacingOccurrences(of: "initiallyIn: 0...1", with: "initiallyIn: 0...2")),
             ("conditionOperation", domainSource.replacingOccurrences(of: "If(first == 0", with: "If(first != 0")),
             ("conditionRead", domainSource.replacingOccurrences(of: "If(first == 0", with: "If(0 == 0")),
             ("armOrder", swappedArms),
@@ -840,6 +855,48 @@ struct OrderedAssignmentLoweringTests {
                 #expect(diagnostic.path == "algorithms.algorithm.authoredSyntax")
             }
         }
+        let fallibleSource = domainSource.replacingOccurrences(of: "SetExpr<Int>.literal(0, 1)",
+            with: "SetExpr<Int>.literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)")
+        let fallibleSyntax = try parseSpecTestClosure(fallibleSource)
+        let fallibleParsed = SpecParser.parseSpecClosure(named: "OrderedInt", fallibleSyntax,
+            sourceTypes: .init(enums: enums))
+        try #require(fallibleParsed.diagnostics.isEmpty)
+        let fallibleProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: fallibleParsed.compile()))
+        let fallibleOutcomes = try CompiledRuntime(program: fallibleProgram).initialOutcomes()
+        #expect(fallibleOutcomes.states.count == 1)
+        #expect(fallibleOutcomes.firstFailure == .integerOverflow(.addition, operands: [1, Int.max]))
+        _ = try fallibleProgram.renderModule()
+        var fallibleEmitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: fallibleProgram))
+        _ = try fallibleEmitter.machineMembers()
+        try OrderedIntSourceSyntaxCheck.verify(fallibleSyntax, parsed: fallibleParsed, enums: enums)
+        for (label, changed) in [
+            ("additionOperand", fallibleSource.replacingOccurrences(
+                of: "first + 9_223_372_036_854_775_807", with: "first + 0")),
+            ("childOrder", fallibleSource.replacingOccurrences(
+                of: "literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)",
+                with: "literal(9_223_372_036_854_775_807 + first, first + 9_223_372_036_854_775_807)")),
+        ] {
+            try #require(changed != fallibleSource)
+            let altered = SpecParser.parseSpecClosure(named: "OrderedInt", try parseSpecTestClosure(changed),
+                sourceTypes: .init(enums: enums))
+            try #require(altered.diagnostics.isEmpty)
+            let changedProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: altered.compile()))
+            let changedOutcomes = try CompiledRuntime(program: changedProgram).initialOutcomes()
+            #expect(changedOutcomes.firstFailure == .integerOverflow(.addition, operands: [Int.max, 1]))
+            do {
+                try OrderedIntSourceSyntaxCheck.verify(fallibleSyntax, parsed: altered, enums: enums)
+                Issue.record("Fallible domain source extraction corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "algorithms.algorithm.authoredSyntax")
+            }
+        }
+
+    }
+
+    @Test("Authored Int literals preserve their values across radices")
+    func authoredRadixInitializers() throws {
+        let source = sequentialSource
+        let enums = sequentialEnums
         let radixAltered = SpecParser.parseSpecClosure(named: "OrderedInt",
             try parseSpecTestClosure(source.replacingOccurrences(of: "initial: 1", with: "initial: 3")),
             sourceTypes: .init(enums: enums))
@@ -898,42 +955,10 @@ struct OrderedAssignmentLoweringTests {
             }
         }
 
-        let fallibleSource = domainSource.replacingOccurrences(of: "SetExpr<Int>.literal(0, 1)",
-            with: "SetExpr<Int>.literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)")
-        let fallibleSyntax = try parseSpecTestClosure(fallibleSource)
-        let fallibleParsed = SpecParser.parseSpecClosure(named: "OrderedInt", fallibleSyntax,
-            sourceTypes: .init(enums: enums))
-        try #require(fallibleParsed.diagnostics.isEmpty)
-        let fallibleProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: fallibleParsed.compile()))
-        let fallibleOutcomes = try CompiledRuntime(program: fallibleProgram).initialOutcomes()
-        #expect(fallibleOutcomes.states.count == 1)
-        #expect(fallibleOutcomes.firstFailure == .integerOverflow(.addition, operands: [1, Int.max]))
-        _ = try fallibleProgram.renderModule()
-        var fallibleEmitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: fallibleProgram))
-        _ = try fallibleEmitter.machineMembers()
-        try OrderedIntSourceSyntaxCheck.verify(fallibleSyntax, parsed: fallibleParsed, enums: enums)
-        for (label, changed) in [
-            ("additionOperand", fallibleSource.replacingOccurrences(
-                of: "first + 9_223_372_036_854_775_807", with: "first + 0")),
-            ("childOrder", fallibleSource.replacingOccurrences(
-                of: "literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)",
-                with: "literal(9_223_372_036_854_775_807 + first, first + 9_223_372_036_854_775_807)")),
-        ] {
-            try #require(changed != fallibleSource)
-            let altered = SpecParser.parseSpecClosure(named: "OrderedInt", try parseSpecTestClosure(changed),
-                sourceTypes: .init(enums: enums))
-            try #require(altered.diagnostics.isEmpty)
-            let changedProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: altered.compile()))
-            let changedOutcomes = try CompiledRuntime(program: changedProgram).initialOutcomes()
-            #expect(changedOutcomes.firstFailure == .integerOverflow(.addition, operands: [Int.max, 1]))
-            do {
-                try OrderedIntSourceSyntaxCheck.verify(fallibleSyntax, parsed: altered, enums: enums)
-                Issue.record("Fallible domain source extraction corruption accepted: \(label)")
-            } catch let diagnostic as CompilationDiagnostic {
-                #expect(diagnostic.path == "algorithms.algorithm.authoredSyntax")
-            }
-        }
+    }
 
+    @Test("Root Int initializers preserve prior bindings on failure")
+    func rootIntInitializerObservations() throws {
         let rootCases: [(String, Int, Int?)] = [
             ("7", 7, nil), ("3 + 4", 7, nil),
             ("+(-(-(3 + 4)))", 7, nil),

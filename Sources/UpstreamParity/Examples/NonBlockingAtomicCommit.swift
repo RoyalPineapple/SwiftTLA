@@ -75,18 +75,15 @@ package struct NonBlockingAtomicCommitModel: Sendable {
                 When(coordinator.alive && !coordinator.request[member])
                 coordinator.request[member].set(true)
             }
-            request
             let getVote = Do(Step.getVote, over: participants) { member in
                 When(collecting && allRequested && coordinator.vote[member] == Vote.waiting && participant[member].voteSent)
                 coordinator.vote[member].set(participant[member].vote)
             }
-            getVote
             let detectFault = Do(Step.detectFault, over: participants) { member in
                 When(collecting && allRequested && coordinator.vote[member] == Vote.waiting)
                 When(!participant[member].alive && !participant[member].voteSent)
                 coordinator.decision.set(Decision.abort)
             }
-            detectFault
             let makeDecision = Do(Step.makeDecision, when: collecting) {
                 When(participants.allSatisfy { member in coordinator.vote[member] != Vote.waiting })
                 If(participants.allSatisfy { member in coordinator.vote[member] == Vote.yes }) {
@@ -95,13 +92,11 @@ package struct NonBlockingAtomicCommitModel: Sendable {
                     coordinator.decision.set(Decision.abort)
                 }
             }
-            makeDecision
             let coordBroadcast = Do(Step.coordBroadcast, over: participants) { member in
                 When(coordinator.alive && coordinator.decision != Decision.undecided)
                 When(coordinator.broadcast[member] == Decision.notsent)
                 coordinator.broadcast[member].set(coordinator.decision)
             }
-            coordBroadcast
             Do(Step.coordDie, when: coordinator.alive) {
                 coordinator.alive.set(false)
                 coordinator.faulty.set(true)
@@ -111,19 +106,16 @@ package struct NonBlockingAtomicCommitModel: Sendable {
                 When(participant[member].alive && coordinator.request[member])
                 participant[member].voteSent.set(true)
             }
-            sendVote
             let abortOnVote = Do(Step.abortOnVote, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == Decision.undecided)
                 When(participant[member].voteSent && participant[member].vote == Vote.no)
                 participant[member].decision.set(Decision.abort)
             }
-            abortOnVote
             let abortOnTimeoutRequest = Do(Step.abortOnTimeoutRequest, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == Decision.undecided)
                 When(!coordinator.alive && !coordinator.request[member])
                 participant[member].decision.set(Decision.abort)
             }
-            abortOnTimeoutRequest
             let forward = Do(Step.forward, over: participants, participants) { sender, receiver in
                 When(sender != receiver && participant[sender].alive)
                 let message = If(decideBeforeForwarding, then: participant[sender].decision, else: participant[sender].forward[sender])
@@ -131,7 +123,6 @@ package struct NonBlockingAtomicCommitModel: Sendable {
                 When(participant[sender].forward[receiver] == Decision.notsent)
                 participant[sender].forward[receiver].set(message)
             }
-            forward
             let preDecideOnForward = Do(Step.preDecideOnForward, over: participants, participants) { receiver, sender in
                 When(!decideBeforeForwarding)
                 When(receiver != sender && participant[receiver].alive)
@@ -139,33 +130,28 @@ package struct NonBlockingAtomicCommitModel: Sendable {
                 When(participant[sender].forward[receiver] != Decision.notsent)
                 participant[receiver].forward[receiver].set(participant[sender].forward[receiver])
             }
-            preDecideOnForward
             let preDecide = Do(Step.preDecide, over: participants) { member in
                 When(!decideBeforeForwarding)
                 When(participant[member].alive && participant[member].forward[member] == Decision.notsent)
                 When(coordinator.broadcast[member] != Decision.notsent)
                 participant[member].forward[member].set(coordinator.broadcast[member])
             }
-            preDecide
             let decideNB = Do(Step.decideNB, over: participants) { member in
                 When(!decideBeforeForwarding)
                 When(participant[member].alive)
                 When(participants.allSatisfy { peer in participant[member].forward[peer] != Decision.notsent })
                 participant[member].decision.set(participant[member].forward[member])
             }
-            decideNB
             let decide = Do(Step.decide, over: participants) { member in
                 When(decideBeforeForwarding && participant[member].alive && participant[member].decision == Decision.undecided)
                 When(coordinator.broadcast[member] != Decision.notsent)
                 participant[member].decision.set(coordinator.broadcast[member])
             }
-            decide
             let decideOnForward = Do(Step.decideOnForward, over: participants, participants) { receiver, sender in
                 When(decideBeforeForwarding && receiver != sender && participant[receiver].alive)
                 When(participant[receiver].decision == Decision.undecided && participant[sender].forward[receiver] != Decision.notsent)
                 participant[receiver].decision.set(participant[sender].forward[receiver])
             }
-            decideOnForward
             let abortOnTimeout = Do(Step.abortOnTimeout, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == Decision.undecided && !coordinator.alive)
                 When(participants.allSatisfy { live in
@@ -178,7 +164,6 @@ package struct NonBlockingAtomicCommitModel: Sendable {
                 })
                 participant[member].decision.set(Decision.abort)
             }
-            abortOnTimeout
             Do(Step.parDie, over: participants) { member in
                 When(participant[member].alive)
                 participant[member].alive.set(false)

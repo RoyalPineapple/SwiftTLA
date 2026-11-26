@@ -42,20 +42,16 @@ package struct AlternatingBitModel: Sendable {
             let resend = Do(Step.resend, when: sAck != sBit) {
                 msgQ.set(msgQ.appending(Pair<Int, Datum>.literal(sBit, sent)))
             }
-            resend
             let receive = Do(Step.receive, when: !msgQ.isEmpty) {
                 rBit.set(msgQ.head().first())
                 rcvd.set(msgQ.head().second())
                 msgQ.set(msgQ.tail())
             }
-            receive
             let sendAck = Do(Step.sendAck) { ackQ.set(ackQ.appending(rBit)) }
-            sendAck
             let receiveAck = Do(Step.receiveAck, when: !ackQ.isEmpty) {
                 sAck.set(ackQ.head())
                 ackQ.set(ackQ.tail())
             }
-            receiveAck
             Do(Step.loseMsg) {
                 With(IntRange(1, through: msgQ.count)) { i in msgQ.set(msgQ.removing(at: i)) }
             }
@@ -76,15 +72,13 @@ package struct AlternatingBitModel: Sendable {
                 Data.contains(sent) && Data.contains(rcvd)
             }
             let abstraction = Instance(of: ABCorrectnessModel.self) { Bind(\.Data, projecting: Data) }
-            abstraction
-            let ABCSpec = Refinement(instance: abstraction) {
+            Refinement("ABCSpec", instance: abstraction) {
                 Map(\.sBit, projecting: sBit)
                 Map(\.sAck, projecting: sAck)
                 Map(\.rBit, projecting: rBit)
                 Map(\.sent, projecting: sent)
                 Map(\.rcvd, projecting: rcvd)
             }
-            ABCSpec
             let SentLeadsToRcvd = Temporal()
             SentLeadsToRcvd(forEach: Data) { d in
                 .leadsTo(sent == d && sBit != sAck, rcvd == d)

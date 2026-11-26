@@ -90,18 +90,15 @@ package struct AtomicCommitProtocolModel: Sendable {
                 When(coordinator.alive && !coordinator.request[member])
                 coordinator.request[member].set(true)
             }
-            request
             let getVote = Do(Step.getVote, over: participants) { member in
                 When(collecting && allRequested && coordinator.vote[member] == waiting && participant[member].voteSent)
                 coordinator.vote[member].set(participant[member].vote)
             }
-            getVote
             let detectFault = Do(Step.detectFault, over: participants) { member in
                 When(collecting && allRequested && coordinator.vote[member] == waiting)
                 When(!participant[member].alive && !participant[member].voteSent)
                 coordinator.decision.set(abort)
             }
-            detectFault
             let makeDecision = Do(Step.makeDecision, when: collecting) {
                 When(participants.allSatisfy { member in coordinator.vote[member] != waiting })
                 If(participants.allSatisfy { member in coordinator.vote[member] == yes }) {
@@ -110,13 +107,11 @@ package struct AtomicCommitProtocolModel: Sendable {
                     coordinator.decision.set(abort)
                 }
             }
-            makeDecision
             let coordBroadcast = Do(Step.coordBroadcast, over: participants) { member in
                 When(coordinator.alive && coordinator.decision != undecided)
                 When(coordinator.broadcast[member] == notsent)
                 coordinator.broadcast[member].set(coordinator.decision)
             }
-            coordBroadcast
             Do(Step.coordDie, when: coordinator.alive) {
                 coordinator.alive.set(false)
                 coordinator.faulty.set(true)
@@ -126,25 +121,21 @@ package struct AtomicCommitProtocolModel: Sendable {
                 When(participant[member].alive && coordinator.request[member])
                 participant[member].voteSent.set(true)
             }
-            sendVote
             let abortOnVote = Do(Step.abortOnVote, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == undecided)
                 When(participant[member].voteSent && participant[member].vote == no)
                 participant[member].decision.set(abort)
             }
-            abortOnVote
             let abortOnTimeoutRequest = Do(Step.abortOnTimeoutRequest, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == undecided)
                 When(!coordinator.alive && !coordinator.request[member])
                 participant[member].decision.set(abort)
             }
-            abortOnTimeoutRequest
             let decide = Do(Step.decide, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == undecided)
                 When(coordinator.broadcast[member] != notsent)
                 participant[member].decision.set(coordinator.broadcast[member])
             }
-            decide
             Do(Step.parDie, over: participants) { member in
                 When(participant[member].alive)
                 participant[member].alive.set(false)

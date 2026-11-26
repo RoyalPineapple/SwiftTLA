@@ -30,7 +30,7 @@ package struct APSpanTreeModel: Sendable {
                 If(n == Root, then: 0, else: MaxCardinality)
             })
 
-            let relax = Do(Step.relax) {
+            Do(Step.relax) {
                 With(Nodes, Nodes) { n, m in
                     When(Edges.contains(Set<Node>().inserting(n).inserting(m)) && dist[m] < 1 + dist[n])
                     With(IntRange(dist[m] + 1, through: dist[n] - 1)) { distance in
@@ -39,7 +39,6 @@ package struct APSpanTreeModel: Sendable {
                     }
                 }
             }
-            relax
             WeakFairnessNext()
             Invariant("TypeOK") {
                 Functions(from: Nodes, to: Nodes).contains(mom)

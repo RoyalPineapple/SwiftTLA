@@ -40,7 +40,7 @@ package struct TLCMCModel: Sendable {
     package static var spec: TLASpec {
         #spec("TLCMC") {
             Extends(.integers, .sequences)
-            let ModelChecker = Algorithm(fairness: .weak) { scope in
+            Algorithm("ModelChecker", fairness: .weak) { scope in
                 let initialStates = SetExpr<Node>.literal(.one, .two)
                 let violations = SetExpr<Node>.literal(.four)
                 let transitionTargets = Function<Node, SetExpr<Node>>.literal(
@@ -138,7 +138,6 @@ package struct TLCMCModel: Sendable {
                 }
                 Invariant("BFSLevel") { initialIndex >= 1 }
             }
-            ModelChecker
             Validation("TLCMC") {}.checking(only: [])
         }
     }

@@ -33,7 +33,7 @@ package struct ChangRobertsModel: Sendable {
             let Correctness = Invariant()
             let Liveness = Temporal()
 
-            let ChangRoberts = Algorithm { scope in
+            Algorithm("ChangRoberts") { scope in
                 let msgs = scope.sharedVar(initial: Dictionary<Int, Set<Int>>.mapping(over: Node) { _ in Set<Int>() })
                 let initiator: SharedVariable<[Int: Bool]> = scope.sharedVar(initiallyIn:
                     Functions(from: Node, to: Bool.all))
@@ -87,7 +87,6 @@ package struct ChangRobertsModel: Sendable {
                 let hasWinner = Node.contains { node in state[node] == ProcessState.won }
                 Liveness(.conditional(hasCandidate, then: .eventually(hasWinner), else: .always(true)))
             }
-            ChangRoberts
 
             Validation("MCChangRoberts") {
                 Bind(N, to: 3)

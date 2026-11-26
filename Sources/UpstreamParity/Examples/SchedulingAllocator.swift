@@ -52,12 +52,10 @@ package struct SchedulingAllocatorModel: Sendable {
                     unsat[client].set(unsat[client].subtracting(granted))
                 }
             }
-            allocate
             let giveBack = Do(Step.giveBack, over: Clients, choices) { client, returned in
                 When(!returned.isEmpty && returned.isSubset(of: alloc[client]))
                 alloc[client].set(alloc[client].subtracting(returned))
             }
-            giveBack
 
             let schedule = Do(Step.schedule) {
                 When(!waiting.isEmpty)
@@ -67,7 +65,6 @@ package struct SchedulingAllocatorModel: Sendable {
                     sched.set(sched.concatenating(order))
                 }
             }
-            schedule
 
             // On Return, this flag changes only for a full return with no outstanding request.
             WeakFairness(giveBack, on: unsat[Client.c1].isEmpty && alloc[Client.c1].isEmpty)
@@ -121,12 +118,10 @@ package struct SchedulingAllocatorModel: Sendable {
                 Bind(\.Clients, projecting: Clients)
                 Bind(\.Resources, projecting: Resources)
             }
-            simple
             let SimpleAllocator = Refinement(instance: simple) {
                 Map(\.unsat, projecting: unsat)
                 Map(\.alloc, projecting: alloc)
             }
-            SimpleAllocator
 
             Validation("published", label: "SchedulingAllocator") {
                 Bind(Clients, to: Set<Client>([.c1, .c2, .c3]))

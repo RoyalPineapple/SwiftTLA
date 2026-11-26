@@ -23,7 +23,7 @@ package struct BoulangerModel: Sendable {
             let MaxNat = scope.parameter(as: Int.self, in: 1...3)
             let Procs: Expr<Set<Int>> = IntRange(1, through: N)
             Assume(IntRange(0, through: MaxNat).contains(N))
-            let Boulanger = Algorithm { scope in
+            Algorithm("Boulanger") { scope in
                 let num: SharedVariable<[Int: Int]> = scope.sharedVar(initial: Dictionary<Int, Int>.mapping(over: Procs) { _ in 0 })
                 let flag: SharedVariable<[Int: Bool]> = scope.sharedVar(initial: Dictionary<Int, Bool>.mapping(over: Procs) { _ in false })
 
@@ -181,7 +181,6 @@ package struct BoulangerModel: Sendable {
                     }
                 }
             }
-            Boulanger
             Validation("MCBoulanger") {
                 Bind(N, to: 3)
                 Bind(MaxNat, to: 3)

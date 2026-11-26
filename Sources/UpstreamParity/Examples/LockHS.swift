@@ -79,12 +79,10 @@ package struct LockHSModel: Sendable {
                 }
             }
             let L = Instance(of: LockModel.self) {}
-            L
-            let Spec = Refinement(instance: L) {
+            Refinement("Spec", instance: L) {
                 Map(\.lock, from: lock)
                 Map(\.pc, projecting: pc)
             }
-            Spec
 
             let translatedPC = Dictionary<Int, String>.mapping(over: processes) { process in
                 let label = pc[process]
@@ -97,13 +95,11 @@ package struct LockHSModel: Sendable {
                 Set<String>(["a2", "a3", "cs", "a4"]).contains(translatedPC[process])
             }
             let P = Instance(of: PetersonModel.self) {}
-            P
-            let PSpec = Refinement(instance: P) {
+            Refinement("PSpec", instance: P) {
                 Map(\.c, projecting: flags)
                 Map(\.turn, projecting: h_turn)
                 Map(\.pc, projecting: translatedPC)
             }
-            PSpec
             Validation("published", label: "LockHS") {}
         }
     }

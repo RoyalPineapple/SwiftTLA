@@ -42,12 +42,10 @@ package struct SimpleAllocatorModel: Sendable {
                 alloc[client].set(alloc[client].union(granted))
                 unsat[client].set(unsat[client].subtracting(granted))
             }
-            allocate
             let giveBack = Do(Step.giveBack, over: Clients, choices) { client, returned in
                 When(!returned.isEmpty && returned.isSubset(of: alloc[client]))
                 alloc[client].set(alloc[client].subtracting(returned))
             }
-            giveBack
 
             // A Return changes a client's emptiness flag exactly when that client returns everything.
             WeakFairness(giveBack, on: alloc[Client.c1].isEmpty)

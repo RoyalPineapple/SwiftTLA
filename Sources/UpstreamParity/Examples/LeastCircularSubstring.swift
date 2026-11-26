@@ -26,7 +26,7 @@ package struct LeastCircularSubstringModel: Sendable {
             let CharSetSize = scope.parameter(as: Int.self, in: 0...3)
             let MaxStringLength = scope.parameter(as: Int.self, in: 0...8)
             Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: MaxStringLength))
-            let LeastCircularSubstring = Algorithm { algorithm in
+            Algorithm("LeastCircularSubstring") { algorithm in
                 let b = algorithm.sharedVar(initiallyIn: ZSequences.sequences(over: IntRange(0, through: CharSetSize - 1)))
                 let n = algorithm.sharedVar(initial: ZSequences.length(of: b))
                 let f = algorithm.sharedVar(initial: Dictionary<Int, Int>.mapping(
@@ -92,7 +92,6 @@ package struct LeastCircularSubstringModel: Sendable {
                     }
                 }
             }
-            LeastCircularSubstring
             Validation("Small") {
                 Bind(CharSetSize, to: 2)
                 Bind(MaxStringLength, to: 6)

@@ -61,13 +61,11 @@ package struct InternalMemoryModel: Sendable {
                 buf[p].set(reply)
                 ctl[p].set("done")
             }
-            perform
             let respond = Do(Step.respond, over: Proc) { p in
                 When(ctl[p] == "done")
                 memInt.set(Pair<Atom, Message>.literal(p, buf[p]))
                 ctl[p].set("rdy")
             }
-            respond
             WeakFairness(eachOf: [perform, respond])
             let TypeInvariant = Invariant()
             TypeInvariant {
@@ -86,7 +84,6 @@ package struct InternalMemoryModel: Sendable {
             ]) }
             // ISpec has no fairness clauses. LISpec adds one grouped obligation per processor.
             let ISpec = FairnessProfile(excluding: [Step.perform, Step.respond])
-            ISpec
             Validation("Upstream") {
                 Bind(Proc, to: Set<Atom>([Atom.p1, Atom.p2]))
                 Bind(Adr, to: Set<Atom>([Atom.a1, Atom.a2, Atom.a3]))

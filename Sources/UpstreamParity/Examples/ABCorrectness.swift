@@ -38,11 +38,9 @@ package struct ABCorrectnessModel: Sendable {
                 rBit.set(sBit)
                 rcvd.set(sent)
             }
-            receive
             let acknowledge = Do(Step.acknowledge, when: rBit != sAck) {
                 sAck.set(rBit)
             }
-            acknowledge
             WeakFairness(receive)
             WeakFairness(acknowledge)
 

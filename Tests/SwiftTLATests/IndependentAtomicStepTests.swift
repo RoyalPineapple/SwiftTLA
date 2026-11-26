@@ -207,10 +207,9 @@ struct IndependentAtomicStepTests {
         #expect(try renderedValue(named: "value", in: next, compilation: compilation) == .int(shadow ? 2 : 1))
     }
 
-    @Test("bound steps reject mutable bindings, duplicate registration, and unregistered enabledness", arguments: [
+    @Test("bound steps reject mutable bindings and duplicate registration", arguments: [
         "var next = Do(Step.next) { Skip() }\nnext",
-        "let next = Do(Step.next) { Skip() }\nnext\nnext",
-        "let next = Do(Step.next) { Skip() }\nInvariant(\"Ready\") { next.enabled }"
+        "let next = Do(Step.next) { Skip() }\nnext\nnext"
     ])
     func rejectsInvalidBoundSteps(_ declarations: String) throws {
         let spec = SpecParser.parseSpecClosure(named: "InvalidBoundSteps", try parseSpecTestClosure("""

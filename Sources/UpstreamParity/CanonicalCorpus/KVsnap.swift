@@ -82,8 +82,7 @@ package struct KVsnapModel: Sendable {
             Constant("t2", Transaction.t2)
             Constant("t3", Transaction.t3)
             Constant("NoVal", NoValue.noVal)
-            let TxId = Symmetry(Set(Transaction.all))
-            TxId
+            Symmetry("TxId", Set(Transaction.all))
 
             Instance("CC", of: ClientCentric.module, with: [
                 ModuleArgument("Keys", value: SetExpr<Key>.literal(.k1, .k2)),
@@ -96,7 +95,7 @@ package struct KVsnapModel: Sendable {
                 parameters: [],
                 body: Function<Key, Value>.mapping { _ in Value.second(Expr<NoValue>(.noVal)) }.raw
             )
-            let KVsnap = Algorithm { scope in
+            Algorithm("KVsnap") { scope in
                 let store: SharedVariable<Function<Key, Value>> = scope.sharedVar(initial: FormalCall("InitialState"))
                 let tx = scope.sharedVar(initial: SetExpr<Transaction>())
                 let missed = scope.sharedVar(initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
@@ -188,7 +187,6 @@ package struct KVsnapModel: Sendable {
                 }
                 Eventually("Termination", Transaction.all.allSatisfy { Finished($0) })
             }
-            KVsnap
             Validation("MCKVsnap") {}
         }
     }

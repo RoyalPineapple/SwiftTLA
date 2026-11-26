@@ -41,7 +41,6 @@ package struct EWD840Model: Sendable {
                 tcolor.set(Color.white)
                 color[0].set(Color.white)
             }
-            initiate
 
             let pass = Do(Step.passToken, over: Node) { i in
                 When(i != 0 && tpos == i
@@ -50,7 +49,6 @@ package struct EWD840Model: Sendable {
                 tcolor.set(If(color[i] == Color.black, then: Color.black, else: tcolor))
                 color[i].set(Color.white)
             }
-            pass
             WeakFairness(anyOf: [initiate, pass])
 
             Do(Step.sendMessage, over: Node) { i in
@@ -94,12 +92,10 @@ package struct EWD840Model: Sendable {
             let TD = Instance(of: SyncTerminationDetectionModel.self) {
                 Bind(\.N, to: N)
             }
-            TD
             let TDSpec = Refinement(instance: TD) {
                 Map(\.active, from: active)
                 Map(\.terminationDetected, from: terminationDetected)
             }
-            TDSpec
 
             Validation("EWD840") { Bind(N, to: 3) }
                 .checking(only: [typeOK, terminationDetection, inv, Liveness, TDSpec])

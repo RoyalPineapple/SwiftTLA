@@ -38,7 +38,6 @@ struct Counter {
                     count += 1
                 }
             }
-            counter
         }
     }
 }

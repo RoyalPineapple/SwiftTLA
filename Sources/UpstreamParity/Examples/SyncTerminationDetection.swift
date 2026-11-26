@@ -40,7 +40,6 @@ package struct SyncTerminationDetectionModel: Sendable {
             let detectTermination = Do(Step.detectTermination, when: terminated) {
                 terminationDetected.set(true)
             }
-            detectTermination
             WeakFairness(detectTermination)
 
             let typeOK = Invariant("TypeOK")
@@ -49,7 +48,6 @@ package struct SyncTerminationDetectionModel: Sendable {
                     && Bool.all.contains(terminationDetected)
             }
             let TDCorrect = Invariant { !terminationDetected || terminated }
-            TDCorrect
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
             Liveness(.leadsTo(terminated, terminationDetected))
 

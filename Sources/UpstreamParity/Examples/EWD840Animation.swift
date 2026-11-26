@@ -42,7 +42,6 @@ package struct EWD840AnimationModel: Sendable {
                 color[0].set(Color.white)
                 history.set(Triple.literal(history.first(), history.second(), "InitiateProbe"))
             }
-            initiate
 
             let pass = Do(Step.animPassToken, over: Node) { i in
                 When(i != 0 && tpos == i
@@ -52,7 +51,6 @@ package struct EWD840AnimationModel: Sendable {
                 color[i].set(Color.white)
                 history.set(Triple.literal(history.first(), history.second(), "PassToken"))
             }
-            pass
             WeakFairness(anyOf: [initiate, pass])
 
             Do(Step.animSendMsg, over: Node) { i in

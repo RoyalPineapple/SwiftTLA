@@ -44,18 +44,21 @@ enum AuthoredCopySyntax {
     private static func select(source: String, modelName: String, includingCapturedRoots: Bool) throws -> Selection {
         let (members, specBody) = try specification(source: source, modelName: modelName)
         var bindings: [String: (declaration: TokenSyntax, call: FunctionCallExprSyntax)] = [:]
-        var selected: (name: String, declaration: TokenSyntax, registration: TokenSyntax, call: FunctionCallExprSyntax)?
+        var explicitRegistration: (name: String, declaration: TokenSyntax, registration: TokenSyntax, call: FunctionCallExprSyntax)?
         for item in specBody.statements {
             if let (declaration, value) = letBindingTokens(item), let call = value.as(FunctionCallExprSyntax.self),
                reference(call.calledExpression) == "Algorithm" {
                 guard bindings.updateValue((declaration, call), forKey: name(declaration)) == nil else { throw unsupported }
             } else if let registration = referenceToken(item.item.as(ExprSyntax.self)),
                       let (declaration, call) = bindings[name(registration)] {
-                guard selected == nil else { throw unsupported }
-                selected = (name(registration), declaration, registration, call)
+                guard explicitRegistration == nil else { throw unsupported }
+                explicitRegistration = (name(registration), declaration, registration, call)
             }
         }
-        guard let selected, let body = ModelSpecificationSyntax.algorithmBody(selected.call) else { throw unsupported }
+        guard bindings.count == 1, let binding = bindings.first else { throw unsupported }
+        let selected = explicitRegistration ?? (name: binding.key, declaration: binding.value.declaration,
+            registration: binding.value.declaration, call: binding.value.call)
+        guard let body = ModelSpecificationSyntax.algorithmBody(selected.call) else { throw unsupported }
         let parameters = ModelSpecificationSyntax.parameterNames(in: body)
         let specParameters = ModelSpecificationSyntax.parameterNames(in: specBody)
         let scope: String
@@ -78,11 +81,13 @@ enum AuthoredCopySyntax {
             sourceStart: specBody.positionAfterSkippingLeadingTrivia.utf8Offset,
             declaration: selected.declaration, registration: selected.registration,
             hasExplicitCapture: specBody.signature?.capture != nil || body.signature?.capture != nil,
-            hasPlainBehavior: hasPlainBehavior(members, specBody: specBody, call: selected.call, body: body))
+            hasPlainBehavior: hasPlainBehavior(members, specBody: specBody, hasRegistration: explicitRegistration != nil,
+                                               call: selected.call, body: body))
     }
 
     private static func hasPlainBehavior(_ members: MemberBlockItemListSyntax, specBody: ClosureExprSyntax,
-                                         call: FunctionCallExprSyntax, body: ClosureExprSyntax) -> Bool {
+                                         hasRegistration: Bool, call: FunctionCallExprSyntax,
+                                         body: ClosureExprSyntax) -> Bool {
         func plainParameters(_ closure: ClosureExprSyntax, allowImplicit: Bool) -> Bool {
             guard let signature = closure.signature else { return allowImplicit }
             guard signature.attributes.isEmpty, signature.capture == nil,
@@ -94,9 +99,8 @@ enum AuthoredCopySyntax {
             declaration.attributes.isEmpty && declaration.modifiers.isEmpty
         }
 
-        // The two enclosing items are the binding and registration already matched by select.
         // Extra items could register fairness or select another behavior.
-        guard specBody.statements.count == 2,
+        guard specBody.statements.count == (hasRegistration ? 2 : 1),
               let binding = specBody.statements.first?.item.as(VariableDeclSyntax.self), unmodified(binding),
               plainParameters(specBody, allowImplicit: true), plainParameters(body, allowImplicit: false),
               call.additionalTrailingClosures.isEmpty,

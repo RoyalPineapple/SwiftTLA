@@ -32,7 +32,7 @@ package struct PetersonModel: ParameterlessGeneratedModel {
             Extends(.integers)
             let TypeOK = Invariant()
             let Inv = Invariant()
-            let Peterson = Algorithm { scope in
+            Algorithm("Peterson") { scope in
                 let c = scope.sharedVar(initial: Function<Process, Bool>.literal(
                     (.one, false), (.two, false)
                 ))
@@ -91,20 +91,17 @@ package struct PetersonModel: ParameterlessGeneratedModel {
                     holders.count <= 1
                 }
             }
-            Peterson
             let L = Instance(of: LockModel.self) {}
-            L
             let lockPC = Dictionary<Process, String>.mapping(over: Process.all) { process in
                 If(process.isAt(anyOf: Step.a0), then: "l0", else:
                     If(process.isAt(anyOf: Step.a1, .a2, .a3), then: "l1", else:
                         If(process.isAt(anyOf: Step.cs), then: "cs", else: "l2")))
             }
             let held = Process.all.contains { process in process.isAt(anyOf: Step.cs, .a4) }
-            let LSpec = Refinement(instance: L) {
+            Refinement("LSpec", instance: L) {
                 Map(\.lock, from: If(held, then: 0, else: 1))
                 Map(\.pc, projecting: lockPC)
             }
-            LSpec
             Validation("safety", label: "PetersonSafety") {}.checking(only: [TypeOK, Inv])
             Validation("published", label: "Peterson") {}
         }

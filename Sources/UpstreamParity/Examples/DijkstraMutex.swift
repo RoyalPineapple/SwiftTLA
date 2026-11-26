@@ -62,7 +62,7 @@ package struct DijkstraMutexModel: Sendable {
             let DeadlockFree = LeadsTo()
             let StarvationFree = LeadsTo()
             let DeadlockFreedom = LeadsTo()
-            let Mutex = Algorithm { scope in
+            Algorithm("Mutex") { scope in
                 let b = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
                 let c = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
                 let k = scope.sharedVar(initiallyIn: Proc)
@@ -162,9 +162,7 @@ package struct DijkstraMutexModel: Sendable {
                     }
                 }
             }
-            Mutex
             let NonCriticalMayStutter = FairnessProfile(excluding: [Label.nonCritical])
-            NonCriticalMayStutter
             Validation("Safety4Processors") {
                 Bind(Proc, to: Set<Process>([.one, .two, .three, .four]))
             }.checking(only: [MutualExclusion])

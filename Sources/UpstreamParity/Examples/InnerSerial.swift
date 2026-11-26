@@ -131,7 +131,6 @@ package struct InnerSerialModel: Sendable {
                 opQ[proc].set(queue)
                 updateOpOrder()
             }
-            write
             let read = Do(Step.read, over: Proc, Reg) { proc, reg in
                 let req = regFile[proc][reg]
                 When(req.op == "Rd")
@@ -152,9 +151,7 @@ package struct InnerSerialModel: Sendable {
                     updateOpOrder()
                 }
             }
-            read
             let orderStep = Do(Step.internalOrder) { updateOpOrder() }
-            orderStep
             // With two processes and one queue entry each, a nonstuttering Internal step
             // orders their two live IDs. Every other distinct-ID pair is disabled.
             WeakFairness(orderStep)

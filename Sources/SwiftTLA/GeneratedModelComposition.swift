@@ -196,6 +196,14 @@ public struct GeneratedModelRefinement<Model: ConfiguredGeneratedModel>: Generat
 }
 
 public func Refinement<Model: ConfiguredGeneratedModel>(
+    _ name: String, instance: GeneratedModelInstance<Model>, behavior: ModelBehavior = .specification,
+    label: String? = nil,
+    @GeneratedModelStateMappingBuilder<Model.RefinementState> _ mappings: () -> [GeneratedModelStateMapping<Model.RefinementState>]
+) -> GeneratedModelRefinement<Model> {
+    .init(name: name, label: label, instance: instance, behavior: behavior, mappings: mappings())
+}
+
+public func Refinement<Model: ConfiguredGeneratedModel>(
     _name: String = "", instance: GeneratedModelInstance<Model>, behavior: ModelBehavior = .specification,
     label: String? = nil,
     @GeneratedModelStateMappingBuilder<Model.RefinementState> _ mappings: () -> [GeneratedModelStateMapping<Model.RefinementState>]

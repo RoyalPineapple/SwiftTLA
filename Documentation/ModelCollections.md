@@ -20,7 +20,7 @@ struct DeviceContract {
                 Dictionary<DeviceID, Int>.mapping(over: devices) { _ in 0 })
             let NonnegativePhase = Invariant()
 
-            let advance = Algorithm { scope in
+            Algorithm("advance") { scope in
                 Each(devices) { (device: ProcessIdentifier<DeviceID>, scope: ProcessScope) in
                     Do(Label.advance) {
                         phase[device] += 1
@@ -28,13 +28,11 @@ struct DeviceContract {
                     }
                 }
             }
-            advance
             NonnegativePhase {
                 devices.allSatisfy { device in phase[device] >= 0 }
             }
 
-            let twoDevices = Validation { Bind(devices, to: Set<DeviceID>([.east, .west])) }
-            twoDevices
+            Validation("twoDevices") { Bind(devices, to: Set<DeviceID>([.east, .west])) }
         }
     }
 }

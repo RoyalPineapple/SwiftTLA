@@ -55,17 +55,15 @@ package struct VoteProofModel: Sendable {
                 plusCalPhase: .postTranslation,
                 dependsOn: ["chosen"]
             )
-            consensus
-            let Refines = Refinement(
+            Refinement("Refines",
                 instance: consensus,
                 mappings: [
                     .init(FormalModuleParameter("Value"), from: consensusValue),
                     .init(Var<SetExpr<Value>>("chosen"), from: consensusChosen)
                 ]
             )
-            Refines
 
-            let Voting: Algorithm = Algorithm { scope in
+            Algorithm("Voting") { scope in
                 let votes = scope.sharedVar(initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
                 let maxBal = scope.sharedVar(initial: Function<Acceptor, Int>.mapping { _ in -1 })
                 let values = SetExpr<Value>.literal(.v1, .v2)
@@ -244,7 +242,6 @@ package struct VoteProofModel: Sendable {
                     }
                 }
             }
-            Voting
             Validation("VoteProof") {}.checkingDeadlock(false)
 
         }

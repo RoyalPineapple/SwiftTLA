@@ -44,7 +44,6 @@ package struct CoffeeCanModel: Sendable {
                 can.black.set(can.black - 1)
             }
             let Termination = Do(Step.termination, when: beanCount == 1) { Skip() }
-            Termination
             WeakFairnessNext()
 
             let typeInvariant = Invariant("TypeInvariant")

@@ -173,12 +173,10 @@ package struct VoucherIssueModel: Sendable {
             let lifeCycle = Instance(of: VoucherLifeCycleModel.self) {
                 Bind(\.V, projecting: V)
             }
-            lifeCycle
-            let VSpec = Refinement(instance: lifeCycle) {
+            Refinement("VSpec", instance: lifeCycle) {
                 Map(\.vState, projecting: vState)
                 Map(\.vlcState, projecting: vlcState)
             }
-            VSpec
             Validation("published") {
                 Bind(V, to: Set<Voucher>([.v1, .v2, .v3]))
                 Bind(H, to: Set<Participant>([.holder1, .holder2, .holder3]))

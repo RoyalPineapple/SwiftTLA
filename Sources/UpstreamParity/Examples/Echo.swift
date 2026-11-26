@@ -69,7 +69,7 @@ package struct EchoModel: Sendable {
                 }))
             let TypeOK = Invariant()
             let AncestorProperties = Invariant()
-            let Echo = Algorithm { (scope: AlgorithmScope) in
+            Algorithm("Echo") { (scope: AlgorithmScope) in
                 let inbox: SharedVariable<[NodeID: Set<Message>]> = scope.sharedVar(initial:
                     Dictionary<NodeID, Set<Message>>.mapping(over: Node) { _ in Set<Message>() })
 
@@ -175,7 +175,6 @@ package struct EchoModel: Sendable {
                     }
                 }
             }
-            Echo
             Validation("MCEcho") {
                 Bind(Node, to: Set<NodeID>([.a, .b, .c]))
                 Bind(initiator, to: NodeID.a)

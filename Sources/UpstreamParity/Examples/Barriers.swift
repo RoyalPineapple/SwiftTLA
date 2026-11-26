@@ -22,7 +22,7 @@ package struct BarriersModel: Sendable {
             let Inv = Invariant()
             let FlushInv = Invariant()
 
-            let barriers = Algorithm { scope in
+            Algorithm("barriers") { scope in
                 let lock = scope.sharedVar(initial: 1)
                 let gate_1 = scope.sharedVar(initial: 0)
                 let rdv = scope.sharedVar(initial: 0)
@@ -102,15 +102,12 @@ package struct BarriersModel: Sendable {
                     gate_2 <= 0 || gate_2 == secondChamber.count
                 }
             }
-            barriers
             let abstract = Instance(of: BarrierModel.self) { Bind(\.N, to: N) }
-            abstract
             let translatedPC = Dictionary<Int, String>.mapping(over: processes) { p in
                 If(p.isAt(anyOf: Step.a1, .a2, .a3, .a4, .a5, .a6, .a7, .a8, .a9, .a10), then: "b1", else:
                     If(p.isAt(anyOf: Step.a0) || gate_2 > 0, then: "b0", else: "b1"))
             }
-            let BSpec = Refinement(instance: abstract) { Map(\.pc, projecting: translatedPC) }
-            BSpec
+            Refinement("BSpec", instance: abstract) { Map(\.pc, projecting: translatedPC) }
             Validation("published") { Bind(N, to: 6) }
         }
     }

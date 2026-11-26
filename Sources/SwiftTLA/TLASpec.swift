@@ -640,6 +640,16 @@ public struct RefinementMapping: Sendable, Equatable {
 }
 
 public func Refinement(
+  _ name: String,
+  instance: FormalModuleInstance,
+  operator: RefinementDecl.Operator = .spec,
+  mappings: [RefinementMapping],
+  label: String? = nil
+) -> RefinementDecl {
+  Refinement(_name: name, instance: instance, operator: `operator`, mappings: mappings, label: label)
+}
+
+public func Refinement(
   _name: String = "",
   instance: FormalModuleInstance,
   operator: RefinementDecl.Operator = .spec,

@@ -58,7 +58,7 @@ public struct ElevatorBank {
                 .bob: Passenger(phase: .waiting, floor: .three, destination: .one)
             ])
 
-            let elevatorBank = Algorithm {
+            Algorithm("elevatorBank") {
                 Each(CarID.all, fairness: .weak) { car in
                     Do(Step.operate) {
                         Either {
@@ -135,7 +135,6 @@ public struct ElevatorBank {
                     }
                 }
             }
-            elevatorBank
 
             Invariant("CarFloorDomain") {
                 cars[.carA].floor == .one || cars[.carA].floor == .two || cars[.carA].floor == .three

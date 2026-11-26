@@ -6,12 +6,33 @@ import SwiftTLA
 enum OrderedIntSourceSyntaxCheck {
     private typealias Component = _OrderedIntSourceComponent
 
+    // Compare the same algorithm body for a binding-inferred name and an inline literal name.
+    private static func algorithm(in item: CodeBlockItemSyntax, expanded: Bool = false)
+        -> (name: String, call: FunctionCallExprSyntax)? {
+        if var call = item.item.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm",
+           let first = call.arguments.first, first.label == nil,
+           let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue, !name.isEmpty {
+            call.arguments = LabeledExprListSyntax(call.arguments.dropFirst())
+            return (name, call)
+        }
+        guard let variable = item.item.as(VariableDeclSyntax.self), variable.bindingSpecifier.text == "let",
+              variable.bindings.count == 1, let binding = variable.bindings.first,
+              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+              var call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm"
+        else { return nil }
+        if expanded {
+            guard let first = call.arguments.first, first.label?.text == "_name",
+                  let identity = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+                  identity.utf8.elementsEqual(name.utf8) else { return nil }
+            call.arguments = LabeledExprListSyntax(call.arguments.dropFirst())
+        }
+        return (name, call)
+    }
+
     static func verify(_ syntax: ClosureExprSyntax, parsed: TLASpec, enums: [SourceEnum],
                        sourceTypes: SourceTypeMetadata? = nil) throws {
-        let registered = Set(syntax.statements.compactMap { item -> String? in
-            guard case .expr(let expression) = item.item else { return nil }
-            return expression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
-        })
         let primitiveNames = ["Int", "Swift", "SwiftTLA", "Expr"]
         let unshadowed = !primitiveNames.contains { name in
             enums.contains { $0.typeName == name }
@@ -22,14 +43,7 @@ enum OrderedIntSourceSyntaxCheck {
                 path: "variables.authoredIntInitializers")
         }
         for item in syntax.statements {
-            guard case .decl(let declaration) = item.item,
-                  let variable = declaration.as(VariableDeclSyntax.self),
-                  variable.bindingSpecifier.text == "let", variable.bindings.count == 1,
-                  let binding = variable.bindings.first,
-                  let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
-                  registered.contains(name),
-                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm" else { continue }
+            guard let (name, call) = algorithm(in: item) else { continue }
             let matches = parsed.sourceAlgorithms.filter { $0.model.name == name }
             if unshadowed,
                let body = call.arguments.first(where: { $0.label?.text == "scoped" })?
@@ -167,28 +181,12 @@ enum OrderedIntSourceSyntaxCheck {
             throw drift("specification")
         }
         for (original, expanded) in zip(source.statements, rewritten.statements) {
-            guard case .decl(let declaration) = original.item,
-                  let variable = declaration.as(VariableDeclSyntax.self),
-                  variable.bindings.count == 1,
-                  let binding = variable.bindings.first,
-                  let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
-                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm",
-                  components(of: call, enums: nil) != nil else { continue }
-            guard case .decl(let outputDeclaration) = expanded.item,
-                  let output = outputDeclaration.as(VariableDeclSyntax.self),
-                  output.bindings.count == 1,
-                  let outputBinding = output.bindings.first,
-                  let outputName = outputBinding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
-                  outputName.utf8.elementsEqual(name.utf8),
-                  var outputCall = outputBinding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  let identity = outputCall.arguments.first,
-                  identity.label?.text == "_name",
-                  let identityName = identity.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
-                  identityName.utf8.elementsEqual(name.utf8),
+            guard let (name, call) = algorithm(in: original), components(of: call, enums: nil) != nil else { continue }
+            guard let output = algorithm(in: expanded, expanded: true), output.name.utf8.elementsEqual(name.utf8),
+                  original.item.is(VariableDeclSyntax.self) == expanded.item.is(VariableDeclSyntax.self),
                   let sourceBody = call.arguments.first(where: { $0.label?.text == "scoped" })?
                     .expression.as(ClosureExprSyntax.self),
-                  var outputBody = outputCall.arguments.first(where: { $0.label?.text == "scoped" })?
+                  var outputBody = output.call.arguments.first(where: { $0.label?.text == "scoped" })?
                     .expression.as(ClosureExprSyntax.self),
                   sourceBody.statements.count == outputBody.statements.count else {
                 throw drift(name)
@@ -224,7 +222,8 @@ enum OrderedIntSourceSyntaxCheck {
             }
             outputBody.statements = CodeBlockItemListSyntax(normalizedStatements)
             guard sameTokens(sourceBody, outputBody) else { throw drift(name) }
-            outputCall.arguments = LabeledExprListSyntax(outputCall.arguments.dropFirst().map { argument in
+            var outputCall = output.call
+            outputCall.arguments = LabeledExprListSyntax(outputCall.arguments.map { argument in
                 guard argument.label?.text == "scoped" else { return argument }
                 var result = argument
                 result.expression = ExprSyntax(outputBody)
@@ -241,20 +240,9 @@ enum OrderedIntSourceSyntaxCheck {
     }
 
     static func checkingBuilderOutput(_ source: ClosureExprSyntax, built: ExprSyntax) throws -> ExprSyntax {
-        let registered = Set(source.statements.compactMap { item -> String? in
-            guard case .expr(let expression) = item.item else { return nil }
-            return expression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
-        })
         var witnessCalls: [String] = []
         for item in source.statements {
-            guard case .decl(let declaration) = item.item,
-                  let variable = declaration.as(VariableDeclSyntax.self),
-                  variable.bindingSpecifier.text == "let", variable.bindings.count == 1,
-                  let binding = variable.bindings.first,
-                  let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
-                  registered.contains(name),
-                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm",
+            guard let (name, call) = algorithm(in: item),
                   let expected = components(of: call, enums: nil) else { continue }
             let rendered = try expected.map(render).joined(separator: ", ")
             witnessCalls.append("._checkingOrderedIntSource(algorithm: \(String(reflecting: name)), components: [\(rendered)])")

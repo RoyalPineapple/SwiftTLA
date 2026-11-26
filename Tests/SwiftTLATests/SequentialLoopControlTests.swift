@@ -3,11 +3,24 @@ import SwiftParser
 import SwiftSyntax
 import SwiftTLACompilerSupport
 import Testing
-import UpstreamParity
+@testable import UpstreamParity
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
 struct SequentialLoopControlTests {
+    @Test("only the algorithm and its optional registration establish plain behavior")
+    func selectsPlainAlgorithm() throws {
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("SequentialLoopControlFixtures.swift")
+        let source = try String(contentsOf: fixture, encoding: .utf8)
+        let registration = "            loop\n"
+        for (replacement, expected) in [(registration, true), ("", true), ("            Validation(\"Extra\") {}\n", false)] {
+            let authored = source.replacingOccurrences(of: registration, with: replacement)
+            let selection = try AuthoredCopySyntax.select(source: authored, modelName: "FinishingLoop")
+            #expect(selection.hasPlainBehavior == expected)
+        }
+    }
+
     @Test("HourClock preserves all twelve initial states and labeled transitions without control state")
     func preservesHourClockGraph() throws {
         let scenario = try #require(try HourClockModel.validationScenarios().first)

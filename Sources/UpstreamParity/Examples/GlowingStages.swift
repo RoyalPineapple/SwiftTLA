@@ -29,12 +29,10 @@ package struct GlowingStagesModel: Sendable {
                 dna.set(0)
                 hybrid.set(0)
             }
-            heat
             let cool = Do(Step.cool, when: tee == "TooHot" && stage == "denatured") {
                 tee.set("Hot")
                 stage.set("ready")
             }
-            cool
             let anneal = Do(Step.anneal, when: tee == "Hot" && stage == "ready") {
                 With(IntRange(1, through: If(primer < template, then: primer, else: template))) { k in
                     tee.set("Warm")
@@ -44,7 +42,6 @@ package struct GlowingStagesModel: Sendable {
                     hybrid.set(hybrid + k)
                 }
             }
-            anneal
             let extend = Do(Step.extend, when: tee == "Warm" && stage == "annealed") {
                 stage.set("extended")
                 cycle += 1
@@ -53,7 +50,6 @@ package struct GlowingStagesModel: Sendable {
                 hybrid.set(0)
             }
 
-            extend
             WeakFairness(anneal)
             WeakFairness(heat)
             WeakFairness(cool)
@@ -69,15 +65,13 @@ package struct GlowingStagesModel: Sendable {
                 Bind(\.DNA, to: DNA)
                 Bind(\.PRIMER, to: PRIMER)
             }
-            cleanInstance
-            let cleanSpec = Refinement(instance: cleanInstance) {
+            Refinement("cleanSpec", instance: cleanInstance) {
                 Map(\.tee, projecting: tee)
                 Map(\.primer, from: primer)
                 Map(\.dna, from: dna)
                 Map(\.template, from: template)
                 Map(\.hybrid, from: hybrid)
             }
-            cleanSpec
             let primerDepleted = Temporal()
             primerDepleted(.eventually(primer == 0))
 

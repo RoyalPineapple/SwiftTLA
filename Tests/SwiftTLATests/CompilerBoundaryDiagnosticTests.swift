@@ -1042,7 +1042,8 @@ struct CompilerBoundaryDiagnosticTests {
         for body in [
             "Algorithm {}",
             "Validation {}",
-            "Algorithm(\"Named\") {}",
+            "Algorithm(\"\") {}",
+            "Algorithm(name) {}",
             "Validation(\"\") {}",
             "Validation(name) {}",
             "Validation(\"bad \\(name)\") {}",
@@ -1065,7 +1066,7 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
-    @Test("#spec rejects inline Algorithm and unnamed Validation builders")
+    @Test("#spec rejects unnamed inline Algorithm and Validation builders")
     func macroRejectsInlineBuilders() throws {
         let build = try buildExternalConsumer("InvalidInlineSpecBuilder")
 

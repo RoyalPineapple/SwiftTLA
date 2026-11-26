@@ -15,7 +15,7 @@ package struct FindHighestModel: Sendable {
             Extends(.integers)
             let MaxLength = model.parameter(as: Int.self, in: 3...3)
             let MaxNat = model.parameter(as: Int.self, in: 4...4)
-            let Highest = Algorithm { scope in
+            Algorithm("Highest") { scope in
                 let f = scope.sharedVar(initiallyIn: Sequences(
                     of: IntRange(0, through: MaxNat),
                     lengths: IntRange(0, through: MaxNat)
@@ -51,7 +51,6 @@ package struct FindHighestModel: Sendable {
                     }
                 }
             }
-            Highest
             Validation("MCFindHighest") {
                 Bind(MaxLength, to: 3)
                 Bind(MaxNat, to: 4)

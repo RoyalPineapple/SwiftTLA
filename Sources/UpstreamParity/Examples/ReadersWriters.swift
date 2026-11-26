@@ -27,13 +27,11 @@ package struct ReadersWritersModel {
                 When(!waiting.contains(request))
                 waiting.append(request)
             }
-            tryRead
             let tryWrite = Do(Step.tryWrite, over: actors) { actor in
                 let request = Pair<String, Int>.literal("write", actor)
                 When(!waiting.contains(request))
                 waiting.append(request)
             }
-            tryWrite
             let readOrWrite = Do(Step.readOrWrite, when: !waiting.isEmpty && writers.isEmpty) {
                 let request = waiting.head()
                 If(request.first() == "read") {
@@ -44,7 +42,6 @@ package struct ReadersWritersModel {
                 }
                 waiting.set(waiting.tail())
             }
-            readOrWrite
             let finishActivity = Macro { (actor: MacroParameter<Int>) in
                 If(readers.contains(actor)) {
                     readers.remove(actor)
@@ -57,7 +54,6 @@ package struct ReadersWritersModel {
                     finishActivity(actor)
                 }
             }
-            stop
             Do(Step.stopActivity, over: actors) { actor in
                 When(exposeStoppingActor && (readers.contains(actor) || writers.contains(actor)))
                 finishActivity(actor)

@@ -24,7 +24,7 @@ package struct TeachingSimpleRegularN8Model: Sendable {
     package static var spec: TLASpec {
         #spec("SimpleRegular") {
             Extends(.integers)
-            let SimpleRegular = Algorithm { scope in
+            Algorithm("SimpleRegular") { scope in
                 let x = scope.sharedVar(initial: Function<Process, SetExpr<Int>>.literal(
                     (.p0, SetExpr<Int>.literal(0)), (.p1, SetExpr<Int>.literal(0)),
                     (.p2, SetExpr<Int>.literal(0)), (.p3, SetExpr<Int>.literal(0)),
@@ -76,7 +76,6 @@ package struct TeachingSimpleRegularN8Model: Sendable {
                         || Process.all.contains { process in y[process] == 1 }
                 }
             }
-            SimpleRegular
             Validation("simpleRegularValidation", label: "SimpleRegular") {}
         }
     }

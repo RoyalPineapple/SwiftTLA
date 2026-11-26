@@ -3527,6 +3527,92 @@
       "moduleSHA256": "89f9ca0345801ed0834542c1332bc2b6bb3feb9a95da40d750793e8948d696da",
       "cfgSHA256": "5b0d03e72f8141ae48d179ebba5b5a64867071941a324a0bb73f8a2283eafb7d",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-german-control",
+      "sourceModel": "ap-german-control",
+      "scenario": "Upstream",
+      "module": "german-protocol/APGermanControl.tla",
+      "configuration": "german-protocol/APGermanControl.cfg",
+      "imports": [
+        "german-protocol/GermanControl.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APGermanControl",
+          "importedModule": "GermanControl"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/APGermanControl.tla",
+        "sha256": "036775f601fc1ecd258ee9154f251f91757ae3173d1a95446bfb5c365788b66f"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "036775f601fc1ecd258ee9154f251f91757ae3173d1a95446bfb5c365788b66f",
+      "cfgSHA256": "83fd498d17ba7ffd82ad0e349b446371b2ca39691cb89c952db1bff042dca635",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-german-mutex",
+      "sourceModel": "ap-german-mutex",
+      "scenario": "Upstream",
+      "module": "german-protocol/APGermanCMPWithMutex.tla",
+      "configuration": "german-protocol/APGermanCMPWithMutex.cfg",
+      "imports": [
+        "german-protocol/GermanCMPWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APGermanCMPWithMutex",
+          "importedModule": "GermanCMPWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/APGermanCMPWithMutex.tla",
+        "sha256": "a38d5bf745bcedc4b5d759927e800e212962687aa10e468dbae196d84d94e7ae"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "a38d5bf745bcedc4b5d759927e800e212962687aa10e468dbae196d84d94e7ae",
+      "cfgSHA256": "57d65fbf96851eb2175a0185a82ab0ff1defea18b11f762a4a0e3bec2cc924b7",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-german-data",
+      "sourceModel": "ap-german-data",
+      "scenario": "Upstream",
+      "module": "german-protocol/APGermanData.tla",
+      "configuration": "german-protocol/APGermanData.cfg",
+      "imports": [
+        "german-protocol/GermanData.tla",
+        "german-protocol/GermanControl.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APGermanData",
+          "importedModule": "GermanData"
+        },
+        {
+          "importingModule": "GermanData",
+          "importedModule": "GermanControl"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/APGermanData.tla",
+        "sha256": "35ce7ae00bffee9c43ffe9b36de1d3383c7b2c65809b4686fdb84c309d488a7a"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "35ce7ae00bffee9c43ffe9b36de1d3383c7b2c65809b4686fdb84c309d488a7a",
+      "cfgSHA256": "9fadf76c3a66a8fa807bf77a5c5d276e7a1dae385b64201acb5e41800075f687",
+      "timeoutSeconds": 120
     }
   ]
 }

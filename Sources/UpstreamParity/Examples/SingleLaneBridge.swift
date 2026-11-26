@@ -69,7 +69,6 @@ package struct SingleLaneBridgeModel: Sendable {
                 }
                 Location[car].set(next)
             }
-            moveOutside
 
             let moveInside = Do(Step.moveInsideBridge, over: Cars) { car in
                 let next = If(CarsRight.contains(car),
@@ -83,7 +82,6 @@ package struct SingleLaneBridgeModel: Sendable {
                 }
                 Location[car].set(next)
             }
-            moveInside
 
             let enterBridge = Do(Step.enterBridge, when: WaitingBeforeBridge.count > 0) {
                 let car = WaitingBeforeBridge.head()
@@ -99,7 +97,6 @@ package struct SingleLaneBridgeModel: Sendable {
                 Location[car].set(next)
                 WaitingBeforeBridge.set(WaitingBeforeBridge.tail())
             }
-            enterBridge
 
             WeakFairness(each: moveOutside)
             WeakFairness(each: moveInside)

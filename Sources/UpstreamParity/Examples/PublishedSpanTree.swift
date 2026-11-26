@@ -38,7 +38,6 @@ package struct PublishedSpanTreeModel: Sendable {
                     }
                 }
             }
-            relax
             WeakFairnessNext()
             Invariant("TypeOK") {
                 Functions(from: Nodes, to: Nodes).contains(mom)

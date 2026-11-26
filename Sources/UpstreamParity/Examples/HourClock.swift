@@ -10,7 +10,7 @@ package struct HourClockModel: Sendable {
 
     package static var spec: TLASpec {
         #spec("HourClock") {
-            let Clock = Algorithm { scope in
+            Algorithm("Clock") { scope in
                 // Every hour in this range is a valid starting state.
                 let hr = scope.sharedVar(initiallyIn: 1...12)
                 Loop(Step.tick) {
@@ -22,7 +22,6 @@ package struct HourClockModel: Sendable {
                 }
                 Invariant("HCini") { (1...12).contains(hr) }
             }
-            Clock
             Validation("Upstream") {}
         }
     }

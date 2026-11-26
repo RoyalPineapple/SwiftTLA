@@ -53,7 +53,6 @@ package struct PrisonerSingleSwitchModel: Sendable {
                 }
                 has_visited.insert(prisoner)
             }
-            wardenAction
             WeakFairness(each: wardenAction)
 
             Invariant("TypeOK") {

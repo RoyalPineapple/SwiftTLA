@@ -26,7 +26,7 @@ package struct BakeryModel: Sendable {
             let Inv = Invariant()
             let MutualExclusion = Invariant()
 
-            let Bakery = Algorithm { scope in
+            Algorithm("Bakery") { scope in
                 let num: SharedVariable<[Int: Int]> = scope.sharedVar(initiallyIn: Functions(from: Procs, to: Nat))
                 let flag: SharedVariable<[Int: Bool]> = scope.sharedVar(initiallyIn: Functions(from: Procs, to: Set<Bool>([false, true])))
 
@@ -164,7 +164,6 @@ package struct BakeryModel: Sendable {
                     }
                 }
             }
-            Bakery
             InitialStates(satisfying: Inv)
             Validation("MCBakery") {
                 Bind(N, to: 2)

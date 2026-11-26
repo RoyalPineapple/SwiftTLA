@@ -6643,50 +6643,62 @@
     {
       "path": "specifications/GermanProtocol",
       "name": "German Cache-Coherence Protocol",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "partially audited",
+      "gap": "All three published AP configurations matched their pinned upstream graphs, selected invariants and deadlock checks in local TLC runs. The three MC configurations, including symmetry and refinement, and hosted evidence remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/GermanProtocol/APGermanCMPWithMutex.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GermanCMPWithMutex.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/GermanProtocol/APGermanControl.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APGermanControl.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/GermanProtocol/APGermanData.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APGermanData.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/GermanProtocol/GermanCMPWithMutex.tla",
           "role": "unclassified",
           "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GermanCMPWithMutex.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/GermanProtocol/GermanControl.tla",
           "role": "unclassified",
           "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APGermanControl.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/GermanProtocol/GermanData.tla",
           "role": "unclassified",
           "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APGermanData.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -6716,30 +6728,48 @@
           "module": "specifications/GermanProtocol/APGermanCMPWithMutex.tla",
           "configuration": "specifications/GermanProtocol/APGermanCMPWithMutex.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GermanCMPWithMutex.swift",
+              "scenario": "Upstream",
+              "caseID": "ap-german-mutex"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/GermanProtocol/APGermanControl.tla",
           "configuration": "specifications/GermanProtocol/APGermanControl.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/APGermanControl.swift",
+              "scenario": "Upstream",
+              "caseID": "ap-german-control"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/GermanProtocol/APGermanData.tla",
           "configuration": "specifications/GermanProtocol/APGermanData.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/APGermanData.swift",
+              "scenario": "Upstream",
+              "caseID": "ap-german-data"
+            }
+          ],
           "evidence": []
         },
         {

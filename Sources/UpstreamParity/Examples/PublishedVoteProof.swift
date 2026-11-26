@@ -165,11 +165,9 @@ package struct PublishedVoteProofModel: Sendable {
             let C = Instance(of: ConsensusModel.self) {
                 Bind(\.Value, projecting: Value)
             }
-            C
-            let Refines = Refinement(instance: C, behavior: .initialAndNext) {
+            Refinement("Refines", instance: C, behavior: .initialAndNext) {
                 Map(\.chosen, projecting: FormalCall(as: Set<Proposal>.self, "chosen"))
             }
-            Refines
             Validation("published") {
                 Bind(Value, to: Set<Proposal>([.one, .two]))
                 Bind(Acceptor, to: Set<Voter>([.a1, .a2, .a3]))

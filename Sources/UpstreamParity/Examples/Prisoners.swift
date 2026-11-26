@@ -44,7 +44,6 @@ package struct PrisonersModel: Sendable {
                     switchBUp.set(!switchBUp)
                 }
             }
-            counterStep
             let nonCounterStep = Do(Step.nonCounterStep, over: OtherPrisoner) { prisoner in
                 If(!switchAUp && timesSwitched[prisoner] < 2) {
                     switchAUp.set(true)
@@ -53,7 +52,6 @@ package struct PrisonersModel: Sendable {
                     switchBUp.set(!switchBUp)
                 }
             }
-            nonCounterStep
 
             WeakFairness(counterStep)
             WeakFairness(each: nonCounterStep)

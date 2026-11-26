@@ -62,7 +62,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
             let constructor = reference?.baseName.sourceIdentifierName
                 ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
                     ? member?.declName.baseName.sourceIdentifierName : nil)
-            if constructor == "Algorithm" || (constructor == "Validation" && inlineValidationName(in: call) == nil) {
+            if (constructor == "Algorithm" && ParserSession.inlineAlgorithmName(call) == nil) || (constructor == "Validation" && inlineValidationName(in: call) == nil) {
                 context.diagnose(Diagnostic(node: Syntax(statement.item), message: BuilderBindingDiagnostic()))
             } else if constructor == "Invariant", call.arguments.isEmpty, call.trailingClosure != nil,
                       member != nil || !hasInvariantBinding {
@@ -77,8 +77,15 @@ public struct SpecExpressionMacro: ExpressionMacro {
         case nil: parameterScope = nil
         }
         let rewriter = DSLRewriter(context: context, parameterScope: parameterScope)
-        let rewritten = rewriter.rewrite(closure).as(ClosureExprSyntax.self) ?? closure
+        var rewritten = rewriter.rewrite(closure).as(ClosureExprSyntax.self) ?? closure
         try OrderedIntSourceSyntaxCheck.verifyRewrite(closure, rewritten: rewritten)
+        let items = specBuilderItems(in: closure)
+        if items.count != closure.statements.count {
+            var originals = rewritten.statements.makeIterator()
+            rewritten.statements = CodeBlockItemListSyntax(items.map { item in
+                item.binding == nil ? originals.next()! : item.syntax
+            })
+        }
         return try OrderedIntSourceSyntaxCheck.checkingBuilderOutput(closure,
             built: specCall(named: name, body: rewritten))
     }
@@ -117,6 +124,34 @@ public struct SpecExpressionMacro: ExpressionMacro {
         ))
     }
 
+}
+
+/// Expand completed top-level declarations into result-builder components. Keep the original
+/// binding token for diagnostics and lexical receipts. An explicit registration keeps its position.
+func specBuilderItems(in closure: ClosureExprSyntax) -> [(syntax: CodeBlockItemSyntax, binding: TokenSyntax?)] {
+    let explicit = Set(closure.statements.compactMap { item -> String? in
+        item.item.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
+    })
+    let parser = ParserSession()
+    var items: [(CodeBlockItemSyntax, TokenSyntax?)] = []
+    for item in closure.statements {
+        items.append((item, nil))
+        guard let declaration = item.item.as(VariableDeclSyntax.self), declaration.bindingSpecifier.text == "let" else { continue }
+        for binding in declaration.bindings {
+            guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier,
+                  !explicit.contains(identifier.sourceIdentifierName),
+                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { continue }
+            switch parser.compilerGrammarName(in: call.calledExpression) {
+            case "Do", "Algorithm", "Refinement", "Instance", "FairnessProfile", "Symmetry": break
+            case "Invariant" where call.trailingClosure != nil: break
+            default: guard parser.validationRoot(call) != nil else { continue }
+            }
+            let reference = DeclReferenceExprSyntax(baseName: identifier.trimmed)
+            items.append((CodeBlockItemSyntax(leadingTrivia: .newline, item: .expr(ExprSyntax(reference)),
+                trailingTrivia: .newline), identifier))
+        }
+    }
+    return items
 }
 
 private final class DSLRewriter: SyntaxRewriter {
@@ -521,7 +556,7 @@ private struct PropertyBindingDiagnostic: DiagnosticMessage {
 private struct BuilderBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-builder-binding")
     let severity: DiagnosticSeverity = .error
-    let message = "Use an immutable let binding for Algorithm or Validation, or write Validation(\"Name\") directly inside #spec."
+    let message = "Use an immutable let binding for Algorithm or Validation, or supply a literal name directly inside #spec."
 }
 
 private struct InstanceBindingDiagnostic: DiagnosticMessage {

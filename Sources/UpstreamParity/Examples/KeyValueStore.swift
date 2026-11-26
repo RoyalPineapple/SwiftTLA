@@ -96,7 +96,6 @@ package struct KeyValueStoreModel: Sendable {
                 ret.set(NIL)
                 state.set(Phase.working)
             }
-            deleteRequest
             Do(Step.deleteResponse) {
                 When(op == Atom.delete)
                 ret.set(Atom.ok)

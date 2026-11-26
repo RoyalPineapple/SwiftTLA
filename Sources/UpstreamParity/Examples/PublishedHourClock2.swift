@@ -16,11 +16,9 @@ package struct PublishedHourClock2Model: Sendable {
             }
 
             let moduloClock = Instance(of: HourClock2Model.self) {}
-            moduloClock
             let HC2 = Refinement(instance: moduloClock, behavior: .initialAndNext) {
                 Map(\.hr, from: hr)
             }
-            HC2
             Validation("Upstream") {}.checking(only: [HC2])
         }
     }

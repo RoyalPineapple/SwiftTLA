@@ -58,8 +58,6 @@ struct BoundStepEnabledness {
                 Assign(count, to: count + amount)
             }
             let finish = Do(Step.finish, when: count >= 2) { Skip() }
-            advance
-            finish
             WeakFairness(advance)
             StrongFairness(finish)
             Invariant("Enabled") {

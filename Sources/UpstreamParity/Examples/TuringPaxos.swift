@@ -144,12 +144,10 @@ package struct TuringPaxosModel: Sendable {
                 Bind(\.MaxBallot, to: MaxBallot)
                 Bind(\.values, projecting: values)
             }
-            voting
-            let prop_1560336937635612000 = Refinement(instance: voting) {
+            Refinement("prop_1560336937635612000", instance: voting) {
                 Map(\.votes, projecting: votes)
                 Map(\.maxBal, projecting: maxBal)
             }
-            prop_1560336937635612000
             Validation("tiny") {
                 Bind(MaxBallot, to: 1)
                 Bind(acceptors, to: Set<Atom>([.a1, .a2, .a3]))
