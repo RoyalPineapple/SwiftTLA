@@ -116,12 +116,15 @@ package struct AlgorithmModel: Sendable {
         resolvingAtomicSteps(retainingScalarCopyRoutes: false).model
     }
 
-    func resolvingAtomicSteps(retainingScalarCopyRoutes: Bool)
-        -> (model: AlgorithmModel, scalarCopies: [String: StraightLineAssignmentCheck.ScalarCopyReceipt]) {
+    func resolvingAtomicSteps(
+        retainingScalarCopyRoutes: Bool, retainingSequentialAssignmentTargets: Bool = false
+    ) -> (model: AlgorithmModel, scalarCopies: [String: StraightLineAssignmentCheck.ScalarCopyReceipt],
+          assignmentTargets: [String: [String: String]]) {
         var usedBindings = authoredIdentifiers
         var nextBinding = 0
         let scalarRoots = orderedIntCopyRoots
         var scalarCopies: [String: StraightLineAssignmentCheck.ScalarCopyReceipt] = [:]
+        var assignmentTargets: [String: [String: String]] = [:]
 
         func binding() -> String {
             while true {
@@ -136,12 +139,16 @@ package struct AlgorithmModel: Sendable {
         func component(_ value: AlgorithmComponentModel) -> AlgorithmComponentModel {
             switch value {
             case .step(let step):
-                if let scalarRoots, let plan = scheduleDirectScalarCopies(step.statements, roots: scalarRoots, binding: binding) {
+                let record: ((String, String) -> Void)? = retainingSequentialAssignmentTargets && scalarRoots != nil
+                    ? { name, target in assignmentTargets[step.label.name, default: [:]][name] = target }
+                    : nil
+                if let scalarRoots, let plan = scheduleDirectScalarCopies(step.statements, roots: scalarRoots,
+                    binding: binding, recordAssignment: record) {
                     if retainingScalarCopyRoutes { scalarCopies[step.label.name] = plan.receipt }
                     return .step(.init(label: step.label, statements: plan.statements, loopCondition: step.loopCondition))
                 }
                 var displacedTargets: [String: String] = [:]
-                let statements = scheduleAtomicStatements(step.statements, binding: binding) {
+                let statements = scheduleAtomicStatements(step.statements, binding: binding, recordAssignment: record) {
                     displacedTargets[$0] = $1
                 }
                 return .step(.init(label: step.label, statements: statements, loopCondition: step.loopCondition,
@@ -160,7 +167,7 @@ package struct AlgorithmModel: Sendable {
         }
         let resolved = AlgorithmModel(name: name, sequentialFairness: sequentialFairness,
             components: components.map(component))
-        return (resolved, scalarCopies)
+        return (resolved, scalarCopies, assignmentTargets)
     }
 
     package var directScalarCopyInput: DirectCopySource? {
@@ -812,7 +819,8 @@ private func directScalarCopyOperands(
 }
 
 private func scheduleDirectScalarCopies(
-    _ statements: [AlgorithmStatementModel], roots: Set<String>, binding: () -> String
+    _ statements: [AlgorithmStatementModel], roots: Set<String>, binding: () -> String,
+    recordAssignment: ((String, String) -> Void)?
 ) -> (statements: [AlgorithmStatementModel], receipt: StraightLineAssignmentCheck.ScalarCopyReceipt)? {
     typealias Reference = StraightLineAssignmentCheck.ScalarCopyReceipt.Reference
     guard let copies = directScalarCopyOperands(statements, roots: roots) else { return nil }
@@ -823,7 +831,9 @@ private func scheduleDirectScalarCopies(
     for copy in copies {
         // The RHS uses the previous route even when it reads its own target.
         reads.append(writes[copy.read, default: .state(copy.read)])
-        binders.append(binding())
+        let name = binding()
+        binders.append(name)
+        recordAssignment?(name, copy.target)
         writes[copy.target] = .capture(binders.count)
     }
 
@@ -848,7 +858,7 @@ private func scheduleDirectScalarCopies(
 
 func scheduleAtomicStatements(
     _ statements: [AlgorithmStatementModel], binding: () -> String,
-    displace: (String, String) -> Void
+    recordAssignment: ((String, String) -> Void)? = nil, displace: (String, String) -> Void
 ) -> [AlgorithmStatementModel] {
     // Snapshot each write where it occurs, then publish one assignment per
     // root at the end of the atomic branch. PlusCal labels require that form.
@@ -870,6 +880,7 @@ func scheduleAtomicStatements(
         case .set(let target, let value):
             let name = binding()
             let updated = expression(target.assigning(value))
+            recordAssignment?(name, target.root)
             if case .variable(let capture)? = replacements[target.root] {
                 displace(capture, target.root)
             }

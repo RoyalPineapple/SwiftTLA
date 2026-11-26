@@ -10,6 +10,60 @@ RenderedAssignmentInventory(rows, before, raw) ==
            /\ RenderedRhsGuards(plan, raw.terms[index], raw.guards[index])
            /\ raw.roots[index] = raw.terms[index][plan.count]
 
+RenderedAssignmentTablesAgreeOnPrefix(prefixRows, raw, prefixRaw) ==
+    \A index \in DOMAIN prefixRows :
+        /\ prefixRaw.plans[index] = raw.plans[index]
+        /\ prefixRaw.starts[index] = raw.starts[index]
+        /\ prefixRaw.terms[index] = raw.terms[index]
+        /\ prefixRaw.guards[index] = raw.guards[index]
+        /\ prefixRaw.roots[index] = raw.roots[index]
+
+THEOREM RenderedAssignmentInventoryRestrictsToPrefix ==
+    ASSUME NEW rows, NEW prefixRows, AssignmentRhsRowsArePrefix(rows, prefixRows),
+           NEW before, NEW raw, RenderedAssignmentInventory(rows, before, raw),
+           NEW prefixRaw, RenderedAssignmentTablesAgreeOnPrefix(prefixRows, raw, prefixRaw)
+    PROVE RenderedAssignmentInventory(prefixRows, before, prefixRaw)
+PROOF
+<1>shape. /\ Len(prefixRows) \in Nat /\ DOMAIN prefixRows = 1..Len(prefixRows)
+          /\ DOMAIN prefixRows \subseteq DOMAIN rows
+    BY ONLY AssignmentRhsRowsArePrefix(rows, prefixRows), SMT DEF AssignmentRhsRowsArePrefix
+<1>fullReads. \A index \in DOMAIN rows : PhysicalAssignmentReadsMatchRoutes(rows, index, raw.plans[index])
+    BY ONLY RenderedAssignmentInventory(rows, before, raw) DEF RenderedAssignmentInventory
+<1>plans. \A index \in DOMAIN prefixRows : prefixRaw.plans[index] = raw.plans[index]
+    BY ONLY RenderedAssignmentTablesAgreeOnPrefix(prefixRows, raw, prefixRaw) DEF RenderedAssignmentTablesAgreeOnPrefix
+<1>prefixReads. \A index \in DOMAIN prefixRows :
+    PhysicalAssignmentReadsMatchRoutes(prefixRows, index, prefixRaw.plans[index])
+    BY ONLY AssignmentRhsRowsArePrefix(rows, prefixRows), <1>fullReads, <1>plans,
+        PhysicalAssignmentReadsRestrictToPrefix
+<1>inventory. \A index \in DOMAIN prefixRows :
+    LET plan == prefixRaw.plans[index]
+    IN /\ PhysicalAssignmentReadsMatchRoutes(prefixRows, index, plan)
+       /\ RenderedRhsTerms(plan, before, HistoryPrefix(prefixRaw.roots, index - 1),
+                          prefixRaw.starts[index], prefixRaw.terms[index])
+       /\ RenderedRhsGuards(plan, prefixRaw.terms[index], prefixRaw.guards[index])
+       /\ prefixRaw.roots[index] = prefixRaw.terms[index][plan.count]
+    <2>. TAKE index \in DOMAIN prefixRows
+    <2>bounds. /\ index \in DOMAIN rows /\ 1..(index - 1) \subseteq DOMAIN prefixRows
+        BY ONLY <1>shape, (index \in DOMAIN prefixRows), SMT
+    <2>raw. /\ prefixRaw.plans[index] = raw.plans[index]
+            /\ prefixRaw.starts[index] = raw.starts[index]
+            /\ prefixRaw.terms[index] = raw.terms[index]
+            /\ prefixRaw.guards[index] = raw.guards[index]
+            /\ prefixRaw.roots[index] = raw.roots[index]
+        BY ONLY (index \in DOMAIN prefixRows), RenderedAssignmentTablesAgreeOnPrefix(prefixRows, raw, prefixRaw), SMT
+            DEF RenderedAssignmentTablesAgreeOnPrefix
+    <2>completed. HistoryPrefix(prefixRaw.roots, index - 1) = HistoryPrefix(raw.roots, index - 1)
+        BY ONLY <2>bounds, RenderedAssignmentTablesAgreeOnPrefix(prefixRows, raw, prefixRaw), SMT
+            DEF RenderedAssignmentTablesAgreeOnPrefix, HistoryPrefix
+    <2>full. LET plan == raw.plans[index]
+             IN /\ RenderedRhsTerms(plan, before, HistoryPrefix(raw.roots, index - 1),
+                                    raw.starts[index], raw.terms[index])
+                /\ RenderedRhsGuards(plan, raw.terms[index], raw.guards[index])
+                /\ raw.roots[index] = raw.terms[index][plan.count]
+        BY ONLY <2>bounds, RenderedAssignmentInventory(rows, before, raw), SMT DEF RenderedAssignmentInventory
+    <2>. QED BY ONLY <1>prefixReads, (index \in DOMAIN prefixRows), <2>raw, <2>completed, <2>full, SMT
+<1>. QED BY ONLY <1>inventory DEF RenderedAssignmentInventory
+
 RenderedAssignmentsPass(raw, end) ==
     \A index \in 1..end : EveryRenderedGuardPasses(raw.guards[index], raw.plans[index].count)
 
@@ -225,5 +279,39 @@ PROOF
     <2>. QED BY ONLY (index \in 1..count), (node \in 1..raw.plans[index].count), <2>reject, SMT
         DEF RenderedAssignmentsPass, EveryRenderedGuardPasses
 <1>. QED BY <1>first, <1>some DEF count
+
+THEOREM RenderedAssignmentFailurePositionIsUnique ==
+    ASSUME NEW raw, NEW end, NEW a, NEW i, NEW b, NEW j,
+           RenderedAssignmentFailsAt(raw, end, a, i),
+           RenderedAssignmentFailsAt(raw, end, b, j)
+    PROVE a = b /\ i = j
+PROOF
+<1>a. /\ a \in 1..end /\ i \in 1..raw.plans[a].count /\ ~raw.guards[a][i]
+      /\ RenderedAssignmentsPass(raw, a - 1)
+      /\ EveryRenderedGuardPasses(raw.guards[a], i - 1)
+    BY ONLY RenderedAssignmentFailsAt(raw, end, a, i)
+        DEF RenderedAssignmentFailsAt, FirstRejectedRenderedGuard
+<1>b. /\ b \in 1..end /\ j \in 1..raw.plans[b].count /\ ~raw.guards[b][j]
+      /\ RenderedAssignmentsPass(raw, b - 1)
+      /\ EveryRenderedGuardPasses(raw.guards[b], j - 1)
+    BY ONLY RenderedAssignmentFailsAt(raw, end, b, j)
+        DEF RenderedAssignmentFailsAt, FirstRejectedRenderedGuard
+<1>row. a = b
+    <2>ab. a < b => a \in 1..(b - 1)
+        BY ONLY <1>a, <1>b, SMT
+    <2>ba. b < a => b \in 1..(a - 1)
+        BY ONLY <1>a, <1>b, SMT
+    <2>notEarlier. ~(a < b)
+        BY ONLY <1>a, <1>b, <2>ab, SMT
+            DEF RenderedAssignmentsPass, EveryRenderedGuardPasses
+    <2>notLater. ~(b < a)
+        BY ONLY <1>a, <1>b, <2>ba, SMT
+            DEF RenderedAssignmentsPass, EveryRenderedGuardPasses
+    <2>. QED BY ONLY <1>a, <1>b, <2>notEarlier, <2>notLater, SMT
+<1>node. i = j
+    <2>bounds. /\ (i < j => i \in 1..(j - 1)) /\ (j < i => j \in 1..(i - 1))
+        BY ONLY <1>a, <1>b, SMT
+    <2>. QED BY ONLY <1>row, <1>a, <1>b, <2>bounds, SMT DEF EveryRenderedGuardPasses
+<1>. QED BY ONLY <1>row, <1>node
 
 ====

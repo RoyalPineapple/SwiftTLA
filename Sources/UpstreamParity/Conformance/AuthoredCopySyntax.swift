@@ -849,9 +849,14 @@ enum AuthoredCopySyntax {
     }
 
     private static func boundArithmeticView(
-        _ authored: StateExpr, source: [StraightLineAssignmentCheck.OrderedIntNode], literal: (Int) -> String
-    ) throws -> (view: String, parents: String) {
-        var pending: [(origin: Int, syntax: StateExpr, parent: Int)] = [(1, authored, 0)]
+        _ authored: StateExpr, source: [StraightLineAssignmentCheck.OrderedIntNode],
+        scheduled: ScheduledRHS?, literal: (Int) -> String
+    ) throws -> (view: String, parents: String, scheduledReads: [TLAValue]?,
+                 loweredNames: [TLAValue]?, loweredReadIDs: [TLAValue]?,
+                 sourceKinds: TLAValue, sourceReadKeys: TLAValue) {
+        var pending: [(origin: Int, syntax: StateExpr, parent: Int, lowered: StateExpr?, compiled: CompiledExpression?)] = [
+            (1, authored, 0, scheduled?.definition.rhs, scheduled?.compiled.rhs)
+        ]
         var kinds = Array(repeating: "", count: source.count)
         var literals = Array(repeating: "0", count: source.count)
         var reads = Array(repeating: TLAValue.int(0), count: source.count)
@@ -859,25 +864,62 @@ enum AuthoredCopySyntax {
         var right = reads
         var parents = reads
         var bound = 0
+        var captureTerms = scheduled?.terms.makeIterator()
+        var scheduledReads = scheduled.map { _ in Array(repeating: TLAValue.tuple([]), count: source.count) }
+        var loweredNames = scheduledReads
+        var loweredReadIDs = scheduledReads
 
-        while let (origin, syntax, parent) = pending.popLast() {
+        while let (origin, syntax, parent, lowered, compiled) = pending.popLast() {
             guard origin > 0, origin <= source.count, kinds[origin - 1].isEmpty else { throw unsupported }
             let slot = origin - 1
+            let captured = captureTerms?.next()
+            guard scheduled == nil || captured != nil else { throw unsupported }
             switch (syntax, source[slot]) {
             case (.value(.int(let authoredValue)), .literal(let returnedValue)) where authoredValue == returnedValue:
+                if let captured {
+                    guard captured == .tuple([.string("literal"), .int(authoredValue)]),
+                          case .value(.int(let loweredValue))? = lowered, loweredValue == authoredValue,
+                          let compiled, compiled.children.isEmpty,
+                          compiled.operation == .value(.integer(authoredValue)) else { throw unsupported }
+                }
                 kinds[slot] = "literal"
                 literals[slot] = literal(authoredValue)
             case (.variable(let authoredName), .read(let returnedName))
                 where authoredName.utf8.elementsEqual(returnedName.utf8):
                 kinds[slot] = "read"
                 reads[slot] = .string(authoredName)
+                if let captured {
+                    guard case .tuple(let reference) = captured, reference.count == 2,
+                          case .variable(let name)? = lowered, let compiled, compiled.children.isEmpty
+                    else { throw unsupported }
+                    let identity: TLAValue
+                    switch (reference[0], reference[1], compiled.operation) {
+                    case (.string("state"), .string(let key), .stateVariable(let id))
+                        where key.utf8.elementsEqual(authoredName.utf8):
+                        identity = .tuple([.string("state"), .int(id.ordinal)])
+                    case (.string("capture"), .int(let position), .boundValue(let binder)) where position > 0:
+                        identity = .tuple([.string("binding"), .int(binder.ordinal)])
+                    default: throw unsupported
+                    }
+                    scheduledReads?[slot] = captured
+                    loweredNames?[slot] = .string(name)
+                    loweredReadIDs?[slot] = identity
+                }
             case (.add(let first, let second), .add(let leftOrigin, let rightOrigin)):
                 guard leftOrigin > origin, rightOrigin > origin, leftOrigin != rightOrigin else { throw unsupported }
                 kinds[slot] = "add"
                 left[slot] = .int(leftOrigin)
                 right[slot] = .int(rightOrigin)
-                pending.append((rightOrigin, second, origin))
-                pending.append((leftOrigin, first, origin))
+                if let captured {
+                    guard captured == .tuple([.string("add")]), case .add(let loweredLeft, let loweredRight)? = lowered,
+                          let compiled, compiled.operation == .add, compiled.children.count == 2
+                    else { throw unsupported }
+                    pending.append((rightOrigin, second, origin, loweredRight, compiled.children[1]))
+                    pending.append((leftOrigin, first, origin, loweredLeft, compiled.children[0]))
+                } else {
+                    pending.append((rightOrigin, second, origin, nil, nil))
+                    pending.append((leftOrigin, first, origin, nil, nil))
+                }
             default:
                 throw unsupported
             }
@@ -885,11 +927,14 @@ enum AuthoredCopySyntax {
             bound += 1
         }
         // The returned indices address the proof rows. The tags and leaf values come from authored syntax.
-        guard bound == source.count else { throw unsupported }
-        let view = "[root |-> 1, kinds |-> \(TLAValue.tuple(kinds.map(TLAValue.string))), "
-            + "literals |-> \(tuple(literals)), reads |-> \(TLAValue.tuple(reads)), "
+        guard bound == source.count, captureTerms?.next() == nil else { throw unsupported }
+        let sourceKinds = TLAValue.tuple(kinds.map(TLAValue.string))
+        let sourceReadKeys = TLAValue.tuple(reads)
+        let view = "[root |-> 1, kinds |-> \(sourceKinds), "
+            + "literals |-> \(tuple(literals)), reads |-> \(sourceReadKeys), "
             + "left |-> \(TLAValue.tuple(left)), right |-> \(TLAValue.tuple(right))]"
-        return (view, TLAValue.tuple(parents).description)
+        return (view, TLAValue.tuple(parents).description, scheduledReads, loweredNames, loweredReadIDs,
+                sourceKinds, sourceReadKeys)
     }
 
     struct ArithmeticProofInput {
@@ -903,23 +948,44 @@ enum AuthoredCopySyntax {
         var continuation: String? { labels.dropFirst(ordinal + 1).first }
     }
 
+    struct ScheduledRHS {
+        let definition: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt.Definition
+        let compiled: OrderedRHSPhysicalAction.Conditional.Definition
+        let target: VariableID
+        let terms: [TLAValue]
+    }
+
+    struct ScheduledIntReads {
+        let byOrigin: [TLAValue]
+        let origins: [Int]
+        let definitionName: String
+        let definitionBinder: BinderID
+        let definitionTarget: VariableID
+        let loweredNames: [TLAValue]
+        let loweredReadIDs: [TLAValue]
+        fileprivate let sourceKinds: TLAValue
+        fileprivate let sourceReadKeys: TLAValue
+    }
+
     private struct ArithmeticRow {
         let target: String
         let retained: (view: String, origins: String, inverse: String)
         let authoredView: String
         let authoredParents: String
         let nodes: [(kind: String, payload: String, left: Int, right: Int)]
+        let scheduledReads: ScheduledIntReads?
     }
 
     private typealias ArithmeticLiteralAliases = [Int: (authored: String, returned: String)]
 
     private static func arithmeticRow(target: String, authored: StateExpr, returned: AlgorithmStatementModel,
-                                      fields: Set<String>, aliases: inout ArithmeticLiteralAliases) throws -> ArithmeticRow {
+                                      fields: Set<String>, scheduled: ScheduledRHS? = nil,
+                                      aliases: inout ArithmeticLiteralAliases) throws -> ArithmeticRow {
         guard fields.contains(target), case .set(.root(let actualTarget), let expression) = returned,
               actualTarget.utf8.elementsEqual(target.utf8), authored == expression,
               let certificate = StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: fields)
         else { throw unsupported }
-        let authoredBinding = try boundArithmeticView(authored, source: certificate.source) { value in
+        let authoredBinding = try boundArithmeticView(authored, source: certificate.source, scheduled: scheduled) { value in
             let literal = TLAValue.int(value).description
             guard literal.hasPrefix("(") else { return literal }
             if let names = aliases[value] { return names.authored }
@@ -932,8 +998,20 @@ enum AuthoredCopySyntax {
             aliases[value]?.returned ?? InitialFailureEvidence.binaryLiteral(value)
         }
         let retained = (view: syntax.view, origins: syntax.origins, inverse: syntax.indices)
+        let scheduledReads = try authoredBinding.scheduledReads.map { reads -> ScheduledIntReads in
+            guard let scheduled, let loweredNames = authoredBinding.loweredNames,
+                  let loweredReadIDs = authoredBinding.loweredReadIDs,
+                  scheduled.definition.target.utf8.elementsEqual(target.utf8),
+                  certificate.origins.count == syntax.emitted.count,
+                  certificate.origins.allSatisfy({ $0 > 0 && $0 <= reads.count }) else { throw unsupported }
+            return .init(byOrigin: reads, origins: certificate.origins, definitionName: scheduled.definition.name,
+                         definitionBinder: scheduled.compiled.binder, definitionTarget: scheduled.target,
+                         loweredNames: loweredNames, loweredReadIDs: loweredReadIDs,
+                         sourceKinds: authoredBinding.sourceKinds, sourceReadKeys: authoredBinding.sourceReadKeys)
+        }
         return .init(target: TLAValue.string(target).description, retained: retained,
-                     authoredView: authoredBinding.view, authoredParents: authoredBinding.parents, nodes: syntax.emitted)
+                     authoredView: authoredBinding.view, authoredParents: authoredBinding.parents, nodes: syntax.emitted,
+                     scheduledReads: scheduledReads)
     }
 
     static func arithmeticRoute(algorithm: String, label: String, ordinal: Int, continuation: String?) -> TLAValue {
@@ -1021,7 +1099,45 @@ enum AuthoredCopySyntax {
     private static func arithmeticSourceModule(name: String, fields: Set<String>, rows: [ArithmeticRow],
                                                aliases: ArithmeticLiteralAliases,
                                                routeDeclaration: String = "",
-                                               conditional: (domain: String, prefix: String)? = nil) throws -> String {
+                                               conditional: (domain: String, prefix: String)? = nil,
+                                               projectingSharedPrefix: Bool = false) throws -> String {
+        if let conditional, rows.isEmpty {
+            let prefix = conditional.prefix
+            let keys = TLAValue.set(Set(fields.map(TLAValue.string)))
+            let columns = ["Rows", "Targets", "NodeCounts", "NodeKinds", "NodeLiterals", "NodeReadKeys", "NodeLeft", "NodeRight",
+                           "SourceOccurrenceKinds", "SourceOccurrenceReadKeys", "SourceOccurrenceOrigins"]
+                .map { "\(prefix)\($0) == <<>>" }.joined(separator: "\n")
+            return #"""
+            ---- MODULE \#(name) ----
+            EXTENDS \#(conditional.domain)
+            \#(prefix)Fields == \#(keys)
+            \#(columns)
+            \#(prefix)Nodes(index) == <<>>
+
+            THEOREM \#(prefix)AssignmentsAreSupported ==
+                /\ Arithmetic!SupportedAssignmentList(\#(prefix)Rows)
+                /\ Len(\#(prefix)Rows) = 0
+                BY ONLY Arithmetic!EmptySeq, SMT DEF \#(prefix)Rows, Arithmetic!SupportedAssignmentList
+
+            THEOREM \#(prefix)RowsProjectEmittedColumns ==
+                /\ DOMAIN \#(prefix)Rows = DOMAIN \#(prefix)NodeCounts
+                /\ \A i \in DOMAIN \#(prefix)NodeCounts :
+                       /\ \#(prefix)Rows[i].target = \#(prefix)Targets[i]
+                       /\ \#(prefix)Rows[i].emitted.count = \#(prefix)NodeCounts[i]
+                       /\ \#(prefix)Rows[i].emitted.nodes = \#(prefix)Nodes(i)
+                BY ONLY SMT DEF \#(prefix)Rows, \#(prefix)NodeCounts
+
+            THEOREM \#(prefix)RowsProjectSourceOccurrences ==
+                \A i \in DOMAIN \#(prefix)Rows :
+                    /\ \#(prefix)Rows[i].view.kinds = \#(prefix)SourceOccurrenceKinds[i]
+                    /\ \#(prefix)Rows[i].view.reads = \#(prefix)SourceOccurrenceReadKeys[i]
+                    /\ \#(prefix)Rows[i].emitted.origins = \#(prefix)SourceOccurrenceOrigins[i]
+                    /\ Arithmetic!CompilerOccurrenceTree(\#(prefix)Rows[i].view, \#(prefix)Rows[i].emitted.count)
+                BY ONLY SMT DEF \#(prefix)Rows
+            ====
+
+            """#
+        }
         guard let fallback = fields.sorted().first, let firstTarget = rows.first?.target else { throw unsupported }
         let countColumns = tuple(rows.map { String($0.nodes.count) })
         let kindColumns = tuple(rows.map { tuple($0.nodes.map { TLAValue.string($0.kind).description }) })
@@ -1061,6 +1177,77 @@ enum AuthoredCopySyntax {
             BY ONLY SMT DEF \#(prefix)Rows
         <1>. QED BY ONLY <1>domain, <1>records
         """# + "\n\n" : ""
+        let inventoryProjection: String
+        if projectingSharedPrefix {
+            let expandedAliases = Dictionary(uniqueKeysWithValues: aliases.map { value, names in
+                (names.returned, TLAValue.int(value).description)
+            })
+            let checkedLiterals = aliases.isEmpty ? "\(prefix)NodeLiterals" : tuple(rows.map { row in
+                tuple(row.nodes.map { node in
+                    node.kind == "literal" ? expandedAliases[node.payload] ?? node.payload : "0"
+                })
+            })
+            let extraDefinitions = literalNames.isEmpty ? "" : ", " + literalNames
+            inventoryProjection = #"""
+            \#(prefix)InventoryLiterals == \#(checkedLiterals)
+            \#(prefix)InventoryPlan(i) ==
+                Arithmetic!ExtractedNodePlan(
+                    [count |-> \#(prefix)NodeCounts[i],
+                     nodes |-> [n \in 1..\#(prefix)NodeCounts[i] |->
+                         [kind |-> \#(prefix)NodeKinds[i][n],
+                          payload |-> IF \#(prefix)NodeKinds[i][n] = "read"
+                                      THEN \#(prefix)NodeReadKeys[i][n] ELSE \#(prefix)InventoryLiterals[i][n],
+                          left |-> \#(prefix)NodeLeft[i][n], right |-> \#(prefix)NodeRight[i][n]]]],
+                    \#(formalFallback))
+            THEOREM \#(prefix)RowsProjectInventoryPlans ==
+                \A i \in DOMAIN \#(prefix)Rows :
+                    /\ \#(prefix)Rows[i].target = \#(prefix)Targets[i]
+                    /\ Arithmetic!AssignmentRhsPlan(\#(prefix)Rows[i]) = \#(prefix)InventoryPlan(i)
+            PROOF
+            <1>literals. \#(prefix)InventoryLiterals = \#(prefix)NodeLiterals
+                BY ONLY IsaM("simp"), SMT DEF \#(prefix)InventoryLiterals, \#(prefix)NodeLiterals\#(extraDefinitions)
+            <1>fallback. \A i \in DOMAIN \#(prefix)Rows : \#(prefix)Rows[i].fallback = \#(formalFallback)
+                BY ONLY SMT DEF \#(prefix)Rows
+            <1>. QED BY ONLY <1>literals, <1>fallback, \#(prefix)RowsProjectEmittedColumns, SMT
+                DEF \#(prefix)InventoryPlan, \#(prefix)Nodes, Arithmetic!AssignmentRhsPlan, Arithmetic!ExtractedNodePlan
+            """# + "\n\n"
+        } else {
+            inventoryProjection = ""
+        }
+        let occurrenceColumns: String
+        if conditional != nil {
+            let retained = rows.compactMap(\.scheduledReads)
+            guard retained.count == rows.count else { throw unsupported }
+            occurrenceColumns = #"""
+            \#(prefix)SourceOccurrenceKinds == \#(TLAValue.tuple(retained.map(\.sourceKinds)))
+            \#(prefix)SourceOccurrenceReadKeys == \#(TLAValue.tuple(retained.map(\.sourceReadKeys)))
+            \#(prefix)SourceOccurrenceOrigins == MasterRetainedOrigins
+
+            THEOREM \#(prefix)RowsProjectSourceOccurrences ==
+                \A row \in DOMAIN \#(prefix)Rows :
+                    /\ \#(prefix)Rows[row].view.kinds = \#(prefix)SourceOccurrenceKinds[row]
+                    /\ \#(prefix)Rows[row].view.reads = \#(prefix)SourceOccurrenceReadKeys[row]
+                    /\ \#(prefix)Rows[row].emitted.origins = \#(prefix)SourceOccurrenceOrigins[row]
+                    /\ Arithmetic!CompilerOccurrenceTree(\#(prefix)Rows[row].view, \#(prefix)Rows[row].emitted.count)
+            PROOF
+            <1>. TAKE row \in DOMAIN \#(prefix)Rows
+            <1>views. /\ \#(prefix)Rows[row].view = MasterAuthoredViews[row]
+                      /\ \#(prefix)Rows[row].emitted.origins = \#(prefix)SourceOccurrenceOrigins[row]
+                BY ONLY (row \in DOMAIN \#(prefix)Rows), SMT DEF \#(prefix)Rows, \#(prefix)SourceOccurrenceOrigins
+            <1>domain. row \in DOMAIN MasterAuthoredViews
+                BY ONLY (row \in DOMAIN \#(prefix)Rows), \#(prefix)RowsProjectEmittedColumns, \#(authoredBindings), SMT
+            <1>kinds. MasterAuthoredViews[row].kinds = \#(prefix)SourceOccurrenceKinds[row]
+                BY ONLY <1>domain, IsaM("simp"), SMT DEF MasterAuthoredViews, \#(prefix)SourceOccurrenceKinds
+            <1>reads. MasterAuthoredViews[row].reads = \#(prefix)SourceOccurrenceReadKeys[row]
+                BY ONLY <1>domain, IsaM("simp"), SMT DEF MasterAuthoredViews, \#(prefix)SourceOccurrenceReadKeys
+            <1>tree. Arithmetic!CompilerOccurrenceTree(\#(prefix)Rows[row].view, \#(prefix)Rows[row].emitted.count)
+                BY ONLY <1>views, (row \in DOMAIN \#(prefix)Rows), \#(prefix)RowsProjectEmittedColumns,
+                    \#(authoredBindings), SMT
+            <1>. QED BY ONLY <1>views, <1>kinds, <1>reads, <1>tree
+            """# + "\n\n"
+        } else {
+            occurrenceColumns = ""
+        }
         let keys = TLAValue.set(Set(fields.map(TLAValue.string)))
         let rule = conditional == nil ? "Rule" : "Arithmetic"
         let keyAgreement = conditional == nil ? "" : "MasterFieldsUseCommonDomain, "
@@ -1309,7 +1496,7 @@ enum AuthoredCopySyntax {
             <2>. QED BY ONLY <2>types, <2>domains, <2>preorder, <2>postorder, <2>root, <2>payload, <2>bound, \#(keyAgreement)SMT
                 DEF row, \#(rule)!AssignmentRhsCertificate, \#(rule)!LiteralReadAddCertificate
         <1>. QED BY ONLY <1>shape, <1>rows, \#(keyAgreement)SMT DEF \#(rule)!SupportedAssignmentList
-        \#(emittedColumns)
+        \#(emittedColumns)\#(occurrenceColumns)\#(inventoryProjection)
         """#
         let imports = conditional?.domain ?? "TLAPS, Integers, Sequences"
         return "---- MODULE \(name) ----\nEXTENDS \(imports)\n" + body + "====\n"
@@ -1355,29 +1542,36 @@ enum AuthoredCopySyntax {
         var fields: Set<TLAValue> { Set(fieldOrder.map(TLAValue.string)) }
         let label: TLAValue
         let predicate: TLAValue
+        let sharedWrites: [Write]
         let arms: [[Write]]
 
-        func integerPrefixProof(arm: Int, through last: Int, parsed: TLASpec, integerFields: Set<String>,
-                                name: String, domain: String, prefix: String) throws -> String {
-            guard arms.indices.contains(arm), arms[arm].indices.contains(last),
+        func integerPrefixProof(arm: Int, count: Int, parsed: TLASpec, integerFields: Set<String>,
+                                scheduled: [ScheduledRHS], name: String, domain: String, prefix: String)
+            throws -> (module: String, scheduledReads: [ScheduledIntReads]) {
+            guard arms.indices.contains(arm),
                   parsed.sourceAlgorithms.isEmpty, parsed.sourceAtomicSteps.count == 1,
                   let step = parsed.sourceAtomicSteps.first, step.bindings.isEmpty,
                   TLAValue.string(step.model.label.name) == label, step.model.loopCondition == nil,
-                  step.model.statements.count == 1,
-                  case .ifElse(let condition, let yes, let no)? = step.model.statements.first,
+                  case .ifElse(let condition, let yes, let no)? = step.model.statements.last,
+                  step.model.statements.dropLast().count == sharedWrites.count,
                   scalarComparison(condition) == predicate,
                   fieldOrder.elementsEqual(parsed.variables.map(\.name), by: { $0.utf8.elementsEqual($1.utf8) })
             else { throw unsupported }
-            let authored = arms[arm]
-            let returned = arm == 0 ? yes : no
-            guard authored.count == returned.count else { throw unsupported }
+            let authored = sharedWrites + arms[arm]
+            let returned = Array(step.model.statements.dropLast()) + (arm == 0 ? yes : no)
+            guard authored.count == returned.count, (0...authored.count).contains(count),
+                  scheduled.count == count else { throw unsupported }
             var aliases: ArithmeticLiteralAliases = [:]
-            let rows = try zip(authored.prefix(last + 1), returned.prefix(last + 1)).map { write, statement in
-                try arithmeticRow(target: write.target, authored: write.expression, returned: statement,
-                                  fields: integerFields, aliases: &aliases)
+            let rows = try (0..<count).map { index in
+                let write = authored[index]
+                return try arithmeticRow(target: write.target, authored: write.expression, returned: returned[index],
+                                         fields: integerFields, scheduled: scheduled[index], aliases: &aliases)
             }
-            return try arithmeticSourceModule(name: name, fields: integerFields, rows: rows, aliases: aliases,
-                                              conditional: (domain, prefix))
+            let scheduledReads = rows.compactMap(\.scheduledReads)
+            guard scheduledReads.count == rows.count else { throw unsupported }
+            let module = try arithmeticSourceModule(name: name, fields: integerFields, rows: rows, aliases: aliases,
+                                                   conditional: (domain, prefix), projectingSharedPrefix: !sharedWrites.isEmpty)
+            return (module, scheduledReads)
         }
 
         var scalarProof: TLAValue? {
@@ -1388,7 +1582,7 @@ enum AuthoredCopySyntax {
                       parts[0] == .string("literal"), case .bool = parts[1] else { return nil }
                 return .tuple([.string(write.target), term])
             }
-            guard arms.count == 2, let yes = boolWrite(arms[0]), let no = boolWrite(arms[1]) else { return nil }
+            guard sharedWrites.isEmpty, arms.count == 2, let yes = boolWrite(arms[0]), let no = boolWrite(arms[1]) else { return nil }
             return .record(["fields": .set(fields), "label": label, "predicate": predicate,
                             "ifTrue": yes, "ifFalse": no])
         }
@@ -1416,7 +1610,7 @@ enum AuthoredCopySyntax {
         }
         guard Set(declarations.map { TLAValue.string($0.name) }).count == declarations.count else { return nil }
         let statements = try controlStatements(body.statements, roots: roots, resolve: { _ in throw unsupported })
-        guard statements.count == 1, case .ifElse(let predicate, let yes, let no)? = statements.first,
+        guard case .ifElse(let predicate, let yes, let no)? = statements.last,
               let guardTerm = scalarComparison(predicate) else { return nil }
         func writes(_ statements: [AlgorithmStatementModel]) throws -> [ConditionalInput.Write] {
             try statements.map { statement in
@@ -1441,7 +1635,8 @@ enum AuthoredCopySyntax {
         }
         return try .init(declarations: declarations,
                          label: .string(declaredLabel.1 ?? label.caseName),
-                         predicate: guardTerm, arms: [writes(yes), writes(no)])
+                         predicate: guardTerm, sharedWrites: writes(Array(statements.dropLast())),
+                         arms: [writes(yes), writes(no)])
     }
 
     struct BranchwiseAssignments {

@@ -16,8 +16,13 @@ package struct NativeAlternativeFailure: Equatable, Sendable {
         package let value: Int
     }
 
+    package enum Location: Equatable, Sendable {
+        case sharedPrefix
+        case arm(Int)
+    }
+
     package let action: Int
-    package let branch: Int
+    package let location: Location
     package let site: Int
     package let target: Int
     package let before: [Binding]
@@ -105,6 +110,17 @@ public func _recordNativeAlternativeFailure<Registers>(
 ) {
     guard context?.recordsAlternativeFailures == true else { return }
     let bindings = before().map { NativeAlternativeFailure.Binding(binding: $0.binding, target: $0.target, value: $0.value) }
-    context?.record(.alternative(.init(action: action, branch: branch, site: site, target: target,
+    context?.record(.alternative(.init(action: action, location: .arm(branch), site: site, target: target,
+                                       before: bindings, reason: reason)))
+}
+
+@_documentation(visibility: internal)
+public func _recordNativeSharedPrefixFailure<Registers>(
+    _ context: inout CheckingContext<Registers>?, action: Int, site: Int, target: Int,
+    before: @autoclosure () -> [(binding: Int, target: Int, value: Int)], reason: NativeMachineEvaluationError
+) {
+    guard context?.recordsAlternativeFailures == true else { return }
+    let bindings = before().map { NativeAlternativeFailure.Binding(binding: $0.binding, target: $0.target, value: $0.value) }
+    context?.record(.alternative(.init(action: action, location: .sharedPrefix, site: site, target: target,
                                        before: bindings, reason: reason)))
 }

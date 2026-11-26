@@ -31,7 +31,25 @@ def validate_arithmetic_packet(packet, source_sha):
         "SwiftTLAOrderedRHSConfiguredProof.tla", "SwiftTLAOrderedRHSOutputProof.tla",
     }
     preparation = json.loads(report.read_text()) if report.is_file() and not report.is_symlink() else {}
-    if ("arithmeticPreparation" not in preparation
+    shared_variant = "GeneratedScalarConditionalSharedPrefixProofModel"
+    shared_stem = f"SwiftTLAArithmeticAssignmentSource{shared_variant}"
+    shared_proof = f"SwiftTLA{shared_variant}ConditionalOverflowHistory"
+    shared_send = f"SwiftTLA{shared_variant}PublicSendBinding"
+    shared_arms = [f"{shared_stem}Arm{arm}.tla" for arm in (1, 2)]
+    shared_body = f"{shared_stem}Shared.tla"
+    shared_domain = f"{shared_stem}Domain.tla"
+    shared_members = f"{shared_variant}NativeMembers.swift"
+    shared_compiled = "native-conditional-shared-prefix-source.swift"
+    shared_files = {f"{shared_variant}.{ext}" for ext in ("swift", "tla", "cfg")}
+    shared_files.update({f"{shared_proof}.tla", f"{shared_proof}ConfiguredProof.tla",
+                         shared_members, shared_domain, shared_body, *shared_arms})
+    shared = preparation.get("conditionalSharedPrefixHistory", {})
+    shared_paths = {name: packet / "proof-inputs" / name for name in shared_files}
+    has_shared = ("conditionalSharedPrefixHistory" in preparation
+                  or "conditionalSharedPrefixPublicSendBinding" in preparation
+                  or any(path.exists() or path.is_symlink() for path in
+                         [*shared_paths.values(), packet / "proof-inputs" / f"{shared_send}.tla", packet / shared_compiled]))
+    if ("arithmeticPreparation" not in preparation and not has_shared
             and not any(path.exists() or path.is_symlink() for path in
                         [manifest, *(generated / name for name in required)])):
         return
@@ -55,17 +73,54 @@ def validate_arithmetic_packet(packet, source_sha):
     validate_send_packet(packet, preparation, "arithmeticPublicSendBinding",
                          "SwiftTLAArithmeticPublicSendBinding", arithmetic["nativeSourceSHA256"])
     copy = preparation.get("orderedCopyNativeOutput", {})
-    catalog_binding = "SwiftTLAOrderedAssignmentCatalogOrderedCopySendBinding"
-    catalog_module = packet / "proof-inputs" / (catalog_binding + ".tla")
-    if "orderedCopyPublicSendBinding" in preparation or catalog_module.exists() or catalog_module.is_symlink():
-        compiled = packet / "native-ordered-copy-source.swift"
-        attached = packet / "proof-inputs/OrderedCopyNativeMembers.swift"
-        if (copy.get("matchingSourceAccurateTokens") is not True
-                or any(path.is_symlink() or not path.is_file() for path in (compiled, attached))
-                or digest(compiled) != copy.get("compiledSHA256") or digest(attached) != copy.get("attachedSHA256")):
-            raise ValueError("retained catalog send source differs from the checked macro expansion")
-        validate_send_packet(packet, preparation, "orderedCopyPublicSendBinding",
-                             catalog_binding, copy["compiledSHA256"])
+    conditional = preparation.get("conditionalOverflowHistory", {})
+    conditional_members = "GeneratedScalarConditionalOverflowProofModelNativeMembers.swift"
+    if has_shared:
+        fixture = "Sources/UpstreamParity/ValidationModels/GeneratedScalarConditionalProofModel.swift"
+        shared_hashes = shared.get("files", {})
+        expected = {
+            "sourceSHA": source_sha,
+            "test": "GeneratedAtomicUpdateProofTests/sharedConditionalWriteSelectsOrStops",
+            "fixture": fixture, "fixtureSHA256": preparation["inputs"][fixture],
+            "authoredVariant": f"{shared_variant}.swift", "configuration": f"{shared_variant}.cfg",
+            "proof": f"{shared_proof}.tla", "configuredProof": f"{shared_proof}ConfiguredProof.tla",
+            "domainSource": shared_domain, "sharedSource": shared_body, "armSources": shared_arms,
+        }
+        if (any(shared.get(key) != value for key, value in expected.items())
+                or shared_files != set(shared_hashes)
+                or "conditionalSharedPrefixPublicSendBinding" not in preparation
+                or any(path.is_symlink() or not path.is_file() or digest(path) != shared_hashes[name]
+                       for name, path in shared_paths.items())):
+            raise ValueError("retained shared-prefix conditional packet differs from fresh compiler evidence")
+    for field, module, evidence, compiled_name, compiled_sha, attached_name, attached_sha in (
+        ("orderedCopyPublicSendBinding", "SwiftTLAOrderedAssignmentCatalogOrderedCopySendBinding",
+         copy, "native-ordered-copy-source.swift", copy.get("compiledSHA256"),
+         "OrderedCopyNativeMembers.swift", copy.get("attachedSHA256")),
+        ("conditionalPublicSendBinding", "SwiftTLAConditionalPublicSendBinding",
+         conditional, "native-conditional-overflow-source.swift", conditional.get("compiledMembersSHA256"),
+         conditional_members, conditional.get("files", {}).get(conditional_members)),
+        ("conditionalSharedPrefixPublicSendBinding", shared_send,
+         shared, shared_compiled, shared.get("compiledMembersSHA256"),
+         shared_members, shared.get("files", {}).get(shared_members)),
+    ):
+        binding = packet / "proof-inputs" / (module + ".tla")
+        if field in preparation or binding.exists() or binding.is_symlink():
+            compiled = packet / compiled_name
+            attached = packet / "proof-inputs" / attached_name
+            if (evidence.get("matchingSourceAccurateTokens") is not True
+                    or any(path.is_symlink() or not path.is_file() for path in (compiled, attached))
+                    or digest(compiled) != compiled_sha or digest(attached) != attached_sha):
+                raise ValueError(f"{field} source differs from the checked macro expansion")
+            validate_send_packet(packet, preparation, field, module, compiled_sha)
+
+    total_module = "SwiftTLAGeneratedScalarConditionalProofModelPublicSendBinding"
+    total_binding = packet / "proof-inputs" / (total_module + ".tla")
+    if "conditionalTotalPublicSendBinding" in preparation or total_binding.exists() or total_binding.is_symlink():
+        compiled = generated / "native-conditional-source.swift"
+        native_sha = preparation.get("conditionalPreparation", {}).get("nativeSourceSHA256")
+        if compiled.is_symlink() or not compiled.is_file() or digest(compiled) != native_sha:
+            raise ValueError("total conditional public send evidence differs from its retained compiler expansion")
+        validate_send_packet(packet, preparation, "conditionalTotalPublicSendBinding", total_module, native_sha)
 
 
 def validate_send_packet(packet, preparation, field, module_name, native_sha):

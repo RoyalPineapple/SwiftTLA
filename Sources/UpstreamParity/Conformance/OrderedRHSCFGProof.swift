@@ -186,6 +186,7 @@ package enum OrderedRHSCFGProof {
             /\ (\#(prefix)InputType => \E histories :
                 /\ \#(prefix)HistoriesHold(histories)
                 /\ (Next <=> \#(prefix)CertifiedNext(histories))
+                /\ \A label : \#(prefix)EmittedLabeled(label) <=> \#(prefix)CertifiedLabeled(histories, label)
                 /\ \A label : \#(prefix)NativeAuthoredLabeled(label) <=> \#(prefix)CertifiedAuthoredLabeled(histories, label)
                 /\ SendSlots = DOMAIN NativeActionRoutes
                 /\ \A slot \in SendSlots : \#(prefix)PublicSendUsesCertifiedOutput(histories, slot)
@@ -232,9 +233,11 @@ package enum OrderedRHSCFGProof {
                 /\ \A slot \in SendSlots : \#(prefix)PublicSendUsesCertifiedOutput(histories, slot)
                 /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)CertifiedFailures(histories)))
                 /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)NativeSelectedFailures))
+                /\ \A label : \#(prefix)EmittedLabeled(label) <=> \#(prefix)CertifiedLabeled(histories, label)
             <2>histories. PICK histories :
                 /\ \#(prefix)HistoriesHold(histories)
                 /\ (Next <=> \#(prefix)CertifiedNext(histories))
+                /\ \A label : \#(prefix)EmittedLabeled(label) <=> \#(prefix)CertifiedLabeled(histories, label)
                 /\ \A slot \in AuthoredSlots :
                     \#(prefix)NativeSelectedSteps[slot] <=> \#(prefix)CertifiedActions(histories)[slot]
                 /\ \#(prefix)NativeSelectedFailures = \#(prefix)ActualFailures
@@ -308,14 +311,24 @@ package enum OrderedRHSCFGProof {
               cfg.utf8.elementsEqual((lines.joined(separator: "\n") + "\n").utf8) else { return nil }
         let checking = lines[2].dropFirst("INVARIANT ".count)
         guard intrinsicInvariants == [String(checking)] else { return nil }
+        return (String(checking), selectionProof(cfg: cfg, theorem: "NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking"))
+    }
+
+    static func normalTotalSelection(cfg: String, intrinsicInvariants: Set<String>) -> String? {
+        guard intrinsicInvariants.isEmpty,
+              cfg.utf8.elementsEqual("SPECIFICATION Spec\nCHECK_DEADLOCK TRUE\n".utf8) else { return nil }
+        return selectionProof(cfg: cfg, theorem: "NormalOrderedRHSCFGSelectsSpecAndDeadlock")
+    }
+
+    private static func selectionProof(cfg: String, theorem: String) -> String {
         let expected = "<<\(cfg.utf8.map(String.init).joined(separator: ", "))>>"
         let pages = (1...((cfg.utf8.count + 15) / 16)).map { "CallerInputPage\($0)" }.joined(separator: " ")
-        let proof = #"""
+        return #"""
         \* \#(pages)
         LocalOrderedRHSActualCFG == [byte \in 1..CallerInputSize |-> CallerInputByte[byte - 1]]
         LocalOrderedRHSExpectedCFG == \#(expected)
 
-        THEOREM NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking ==
+        THEOREM \#(theorem) ==
             LocalOrderedRHSActualCFG = LocalOrderedRHSExpectedCFG
         PROOF
         <1>domain. DOMAIN LocalOrderedRHSActualCFG = DOMAIN LocalOrderedRHSExpectedCFG
@@ -326,6 +339,5 @@ package enum OrderedRHSCFGProof {
                 DEF LocalOrderedRHSActualCFG, LocalOrderedRHSExpectedCFG, CallerInputSize
         <1>. QED BY <1>domain, <1>bytes, SMT DEF LocalOrderedRHSActualCFG, LocalOrderedRHSExpectedCFG
         """#
-        return (String(checking), proof)
     }
 }

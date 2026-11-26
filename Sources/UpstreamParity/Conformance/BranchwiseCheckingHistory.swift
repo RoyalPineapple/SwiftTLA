@@ -52,6 +52,9 @@ struct BranchwiseCheckingHistory<Machine: StateMachine> {
             guard snapshots.indices.contains(occurrence.source), occurrence.failure.action == action.id.ordinal
             else { throw invalidBranchwiseField("native failure identity") }
             let failure = occurrence.failure
+            guard case .arm(let branch) = failure.location else {
+                throw invalidBranchwiseField("unexpected preselection failure")
+            }
             let payload: TLAValue
             switch failure.reason {
             case .divisionByZero: payload = .tuple([.string("divisionByZero")])
@@ -63,7 +66,7 @@ struct BranchwiseCheckingHistory<Machine: StateMachine> {
             }
             let event = branchwiseRecord([
                 ("source", snapshots[occurrence.source]), ("action", .int(failure.action)),
-                ("branch", .int(failure.branch)), ("site", .int(failure.site)), ("target", .int(failure.target)),
+                ("branch", .int(branch)), ("site", .int(failure.site)), ("target", .int(failure.target)),
                 ("payload", payload), ("before", .tuple(before)),
             ])
             return .tuple([.int(occurrence.source), .int(failure.action), event])

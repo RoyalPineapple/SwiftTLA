@@ -301,6 +301,7 @@ fileprivate struct CompiledModule: Sendable {
     var bindings: CompiledBindingTable
     let semantics: CompiledSemantics
     let orderedActionBodyBinderOrdinals: [ActionID: Range<Int>]
+    let orderedSequentialAssignmentTargets: [ActionID: [BinderID: VariableID]]
     let refinements: [CompiledRefinement]
     let generatedRefinements: [CompiledGeneratedModelRefinement]
     let authoredAlgorithm: (plan: CompiledAuthoredPlusCalAlgorithmPlan, declarations: AuthoredPlusCalDeclarationOrder)?
@@ -399,6 +400,9 @@ public struct CompiledSpecification: Sendable {
     package var layout: CompiledLayout { module.layout }
     package var semantics: CompiledSemantics { module.semantics }
     package var orderedActionBodyBinderOrdinals: [ActionID: Range<Int>] { module.orderedActionBodyBinderOrdinals }
+    package var orderedSequentialAssignmentTargets: [ActionID: [BinderID: VariableID]] {
+        module.orderedSequentialAssignmentTargets
+    }
     package var scalarCopyRoutes: [String: StraightLineAssignmentCheck.ScalarCopyReceipt] {
         module.metadata.scalarCopyRoutes
     }
@@ -1274,6 +1278,10 @@ public extension TLASpec {
         try compile(retainingScalarCopyRoutes: retainingScalarCopyRoutes, projection: { _ in () }).0
     }
 
+    package func compileRetainingSequentialAssignmentTargets() throws -> CompiledSpecification {
+        try compile(retainingScalarCopyRoutes: false, retainingSequentialAssignmentTargets: true, projection: { _ in () }).0
+    }
+
     package func compileRetainingSequentialControl(retainingScalarCopyRoutes: Bool = false) throws
         -> (CompiledSpecification, SequentialControlEvidence?) {
         try compile(retainingScalarCopyRoutes: retainingScalarCopyRoutes, projection: {
@@ -1292,7 +1300,8 @@ public extension TLASpec {
                 let actions = lowered.actions.filter { $0.name.utf8.elementsEqual(label.utf8) }
                 guard actions.count == 1, let action = actions.first,
                       let receipt = try StraightLineAssignmentCheck.checkedAtomicBranchContinuations(
-                          step, lowered: action.body, stateRoots: roots) else { continue }
+                          step, lowered: action.body, stateRoots: roots,
+                          retainingDefinitions: checkingBodyBinderOrdinals) else { continue }
                 receipts[label] = receipt
             }
             return receipts
@@ -1300,10 +1309,12 @@ public extension TLASpec {
     }
 
     private func compile<Projection>(retainingScalarCopyRoutes: Bool, checkingBodyBinderOrdinals: Bool = false,
+                                     retainingSequentialAssignmentTargets: Bool = false,
                                      projection: (TLASpec) throws -> Projection) throws
         -> (CompiledSpecification, Projection) {
         try validateSourceDeclarationNames()
-        let lowered = try loweredSourceModel(retainingScalarCopyRoutes: retainingScalarCopyRoutes)
+        let lowered = try loweredSourceModel(retainingScalarCopyRoutes: retainingScalarCopyRoutes,
+            retainingSequentialAssignmentTargets: retainingSequentialAssignmentTargets)
         return (try lowered.compileLowered(checkingBodyBinderOrdinals: checkingBodyBinderOrdinals), try projection(lowered))
     }
 
@@ -1595,6 +1606,7 @@ public extension TLASpec {
             metadata: .init(source: self, modelValueNames: lowerer.modelValueNames,
                 reserving: constantReservations), layout: layout, bindings: resolvedBindings, semantics: semantics,
             orderedActionBodyBinderOrdinals: lowerer.orderedActionBodyBinderOrdinals,
+            orderedSequentialAssignmentTargets: lowerer.orderedSequentialAssignmentTargets,
             refinements: resolvedRefinements, generatedRefinements: resolvedGenerated,
             authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,

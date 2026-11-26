@@ -10,15 +10,125 @@ import SwiftTLAMacros
 
 @Suite("Generated atomic update proof input")
 struct GeneratedAtomicUpdateProofTests {
+    @Test("A shared conditional write feeds the selector and can fail before selection")
+    func sharedConditionalWriteSelectsOrStops() throws {
+        let owner = packageRoot().appendingPathComponent(
+            "Sources/UpstreamParity/ValidationModels/GeneratedScalarConditionalProofModel.swift")
+        let original = try String(contentsOf: owner, encoding: .utf8)
+        let originalName = "GeneratedScalarConditionalProofModel"
+        let modelName = "GeneratedScalarConditionalSharedPrefixProofModel"
+        try #require(original.components(separatedBy: originalName).count == 3)
+        let authored = original.replacingOccurrences(of: originalName, with: modelName)
+        let prefix = "If(left < right) {"
+        let field = "let selected = scope.sharedVar(initial: false)"
+        let trueWrite = "Assign(selected, to: true)"
+        let falseWrite = "Assign(selected, to: false)"
+        for marker in [prefix, field, trueWrite, falseWrite] {
+            try #require(authored.components(separatedBy: marker).count == 2)
+        }
+        let variant = authored
+            .replacingOccurrences(of: field, with: """
+                \(field)
+                let increment = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(-2, 0, 9223372036854775807))
+                """)
+            .replacingOccurrences(of: prefix, with: """
+                Assign(right, to: 3)
+                Assign(left, to: left + increment)
+                \(prefix)
+                """)
+            .replacingOccurrences(of: trueWrite, with: """
+                Assign(right, to: 9223372036854775807 + right)
+                \(trueWrite)
+                """)
+            .replacingOccurrences(of: falseWrite, with: """
+                Assign(right, to: 4)
+                \(falseWrite)
+                """)
+        let declaration = try #require(Parser.parse(source: variant).statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == modelName })
+        let compilation = try TLASpecVerifier.parseAndVerify(declaration)
+        let program = compilation.program
+        let module = try program.renderModule()
+        let action = try #require(program.behavior.actions.first)
+        let name = "__SwiftTLAActionFailureHistory\(action.id.ordinal) == "
+        let histories = module.renderedModuleSource.split(separator: "\n").filter { $0.hasPrefix(name) }
+        try #require(histories.count == 1)
+        let history = String(try #require(histories.first))
+        #expect(history.components(separatedBy: "branch |-> <<>>").count == 2)
+        #expect(history.components(separatedBy: "branch |-> 0").count == 2)
+        #expect(!history.contains("branch |-> 1"))
+
+        let client = try runExternalGeneratedConsumer(variant + #"""
+
+        @main struct ObserveSharedConditionalWrite {
+            static func main() throws {
+                let models = try \#(modelName).initialMachines()
+                for increment in [-2, 0, Int.max] {
+                    guard let machine = models.first(where: { $0.state.left == 4 && $0.state.increment == increment })
+                    else { fatalError("Missing authored initial state") }
+                    var attempted = machine
+                    if increment == 0 {
+                        let transition = try attempted.send(.choose)
+                        guard transition.action == .choose, transition.before == machine.state,
+                              attempted.state == transition.after, transition.after.left == 4,
+                              transition.after.right == 4, !transition.after.selected
+                        else { fatalError("The false arm did not commit its updates") }
+                        continue
+                    }
+                    let prefix = increment == Int.max
+                    let reason = NativeMachineEvaluationError.integerOverflow(.addition,
+                        operands: prefix ? [4, Int.max] : [Int.max, 3])
+                    let expectedLocation: NativeAlternativeFailure.Location = prefix ? .sharedPrefix : .arm(0)
+                    let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
+                        checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { _ in }
+                    guard let history = outcome.orderedActionFailureHistory, history.count == 1,
+                          let failure = history.first?.failure, outcome.edges == 0,
+                          outcome.completion == .evaluationFailure(reason), outcome.firstEvaluationFailure == reason,
+                          failure.action == 0, failure.reason == reason, failure.location == expectedLocation,
+                          failure.target == (prefix ? 0 : 1),
+                          failure.before.map(\.binding).elementsEqual((failure.site - failure.before.count)..<failure.site),
+                          failure.before.map(\.target) == (prefix ? [1] : [1, 0]),
+                          failure.before.map(\.value) == (prefix ? [3] : [3, 2])
+                    else { fatalError("Unexpected local failure observation") }
+                    do {
+                        _ = try attempted.send(.choose)
+                        fatalError("A failed action returned a successor")
+                    } catch let error as NativeMachineEvaluationError {
+                        guard error == reason, attempted.state == machine.state
+                        else { fatalError("A failed action changed the machine or error") }
+                    }
+                }
+            }
+        }
+        """#)
+        try #require(client.status == 0, Comment(rawValue: client.output))
+
+        var emitter = NativeSwiftEmitter(model: compilation)
+        let native = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+        let library = packageRoot().appendingPathComponent("Sources/SwiftTLA")
+        let operations = try String(contentsOf: library.appendingPathComponent("NativeMachineOperations.swift"), encoding: .utf8)
+        let checking = try String(contentsOf: library.appendingPathComponent("CheckingContext.swift"), encoding: .utf8)
+        let parsed = try parsedConditionalSource(declaration, modelName: modelName)
+        let proof = try ConditionalActionEvidence.arithmeticHistoryProof(authoredSource: variant, modelName: modelName,
+            parsed: parsed, program: program, rendered: module, nativeSource: native, operations: operations, checking: checking,
+            sendBindingModule: "SwiftTLA\(modelName)PublicSendBinding")
+        recordConditionalProof(modelName: modelName, authored: variant, native: native, tla: module.renderedModuleSource,
+            configuration: proof.configuration, modules: [(proof.name, proof.bytes), proof.configured, proof.domain] + proof.arms)
+    }
+
     @Test("Conditional overflow records the first failing addition and its preceding writes")
     func conditionalOverflowKeepsTheSelectedArmHistory() throws {
         let owner = packageRoot().appendingPathComponent(
             "Sources/UpstreamParity/ValidationModels/GeneratedScalarConditionalProofModel.swift")
-        var authored = try String(contentsOf: owner, encoding: .utf8)
+        let original = try String(contentsOf: owner, encoding: .utf8)
         let modelName = "GeneratedScalarConditionalOverflowProofModel"
         let originalName = "GeneratedScalarConditionalProofModel"
-        try #require(authored.components(separatedBy: originalName).count == 3)
-        authored = authored.replacingOccurrences(of: originalName, with: modelName)
+        try #require(original.components(separatedBy: originalName).count == 3)
+        var authored = original.replacingOccurrences(of: originalName, with: modelName)
+        let stepCase = "case choose }"
+        try #require(original.components(separatedBy: stepCase).count == 2)
+        let renamedLabelControl = original.replacingOccurrences(of: stepCase, with: #"case choose = "rawValue" }"#)
         let selectedField = "let selected = scope.sharedVar(initial: false)"
         try #require(authored.components(separatedBy: selectedField).count == 2)
         authored = authored.replacingOccurrences(of: selectedField, with: """
@@ -49,7 +159,7 @@ struct GeneratedAtomicUpdateProofTests {
         let history = tla.split(separator: "\n").filter { $0.hasPrefix("__SwiftTLAActionFailureHistory0 == ") }
         #expect(history.count == 1)
 
-        let client = try runExternalGeneratedConsumer(authored + #"""
+        let client = try runExternalGeneratedConsumer(authored + "\n" + renamedLabelControl + #"""
 
         @main struct ObserveConditionalOverflow {
             static func main() throws {
@@ -58,25 +168,45 @@ struct GeneratedAtomicUpdateProofTests {
                     ($0.state.left, $0.state.increment) < ($1.state.left, $1.state.increment)
                 }
                 for var machine in ordered {
+                    let before = machine.state
                     if machine.state.left < machine.state.right && machine.state.increment == 0 {
                         let transition = try machine.send(.choose)
                         let expected = GeneratedScalarConditionalOverflowProofModel.State(
                             left: Int.max, right: Int.max, selected: true, increment: 0)
-                        print("success \(transition.after == expected && machine.state == expected)")
+                        let label = try machine.formalCall(for: transition.action)
+                        print("success \(label.name == "choose" && label.arguments.isEmpty && transition.action == .choose && transition.before == before && transition.after == expected && machine.state == expected)")
                         continue
                     }
                     let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
                         checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { _ in }
                     let amount = machine.state.increment == 0 ? 2 : 1
                     let expected = NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, amount])
+                    do {
+                        _ = try machine.send(.choose)
+                        print("unexpected successor")
+                    } catch let failure as NativeMachineEvaluationError {
+                        print("send overflow \(failure == expected && machine.state == before)")
+                    }
                     print("entry \(machine.state.left) increment \(machine.state.increment) edges \(outcome.edges) overflow \(outcome.completion == .evaluationFailure(expected))")
                     for event in outcome.orderedActionFailureHistory ?? [] {
                         let f = event.failure
+                        guard case .arm(let branch) = f.location else { fatalError("Expected a reached arm") }
                         let before = f.before.map { "\($0.target)=\($0.value)" }.joined(separator: ",")
                         let bindings = f.before.map(\.binding)
                         let orderedBindings = f.site >= bindings.count && bindings.elementsEqual((f.site - bindings.count)..<f.site)
-                        print("branch \(f.branch) target \(f.target) before \(before) ordered \(orderedBindings) reason \(f.reason == expected)")
+                        print("branch \(branch) target \(f.target) before \(before) ordered \(orderedBindings) reason \(f.reason == expected)")
                     }
+                }
+
+                let renamed = try GeneratedScalarConditionalProofModel.initialMachines()
+                if var machine = renamed.first(where: { $0.state.left < $0.state.right }) {
+                    let before = machine.state
+                    let transition = try machine.send(.action_rawValue)
+                    let label = try machine.formalCall(for: transition.action)
+                    let expected = GeneratedScalarConditionalProofModel.State(left: 2, right: 3, selected: true)
+                    print("renamed label \(label.name == "rawValue" && label.arguments.isEmpty && transition.action == .action_rawValue && transition.before == before && transition.after == expected && machine.state == expected)")
+                } else {
+                    print("renamed label false")
                 }
             }
         }
@@ -84,29 +214,53 @@ struct GeneratedAtomicUpdateProofTests {
         try #require(client.status == 0, Comment(rawValue: client.output))
         #expect(client.output.split(separator: "\n").map(String.init) == [
             "success true",
+            "send overflow true",
             "entry 2 increment 1 edges 0 overflow true",
             "branch 0 target 1 before 0=13,0=\(Int.max) ordered true reason true",
+            "send overflow true",
             "entry 4 increment 0 edges 0 overflow true",
             "branch 1 target 0 before 1=\(Int.max),0=17,1=\(Int.max) ordered true reason true",
+            "send overflow true",
             "entry 4 increment 1 edges 0 overflow true",
             "branch 1 target 0 before 1=\(Int.max),0=18,1=\(Int.max) ordered true reason true",
+            "renamed label true",
         ])
         var emitter = NativeSwiftEmitter(model: compilation)
         let native = try emitter.machineMembers().map(\.description).joined(separator: "\n")
         let library = packageRoot().appendingPathComponent("Sources/SwiftTLA")
         let operations = try String(contentsOf: library.appendingPathComponent("NativeMachineOperations.swift"), encoding: .utf8)
         let checking = try String(contentsOf: library.appendingPathComponent("CheckingContext.swift"), encoding: .utf8)
-        let members = declaration.memberBlock.members
-        let source = try TLASpecVerifier.findSpec(in: members, defaultName: modelName)
-        let literal = try #require(source)
-        let enums = try TLASpecVerifier.collectEnumVariables(from: members)
-        let parser = ParserSession(sourceTypes: try TLASpecVerifier.sourceTypes(in: members, enums: enums))
-        parser.sourceModelTypeName = modelName
-        let parsed = parser.parseSpecClosure(named: literal.name, literal.closure)
+        let parsed = try parsedConditionalSource(declaration, modelName: modelName)
         let proof = try ConditionalActionEvidence.arithmeticHistoryProof(authoredSource: authored, modelName: modelName,
             parsed: parsed, program: program, rendered: rendered, nativeSource: native, operations: operations, checking: checking)
 
         try #require(proof.configured.name == proof.name + "ConfiguredProof")
+
+        let sharedRecorders = Parser.parse(source: checking).statements.compactMap {
+            $0.item.as(FunctionDeclSyntax.self)
+        }.filter { $0.name.text == "_recordNativeSharedPrefixFailure" }
+        try #require(sharedRecorders.count == 1)
+        let sharedRecorder = try #require(sharedRecorders.first).description
+        try #require(checking.components(separatedBy: sharedRecorder).count == 2)
+        let armOnlyChecking = checking.replacingOccurrences(of: sharedRecorder, with: "")
+        func verifyArmRecording(_ checkingSource: String) throws {
+            _ = try ConditionalActionEvidence.arithmeticHistoryProof(authoredSource: authored, modelName: modelName,
+                parsed: parsed, program: program, rendered: rendered, nativeSource: native, operations: operations,
+                checking: checkingSource)
+        }
+        try verifyArmRecording(armOnlyChecking)
+        for (original, corrupted) in [
+            ("recordsAlternativeFailures = true", "recordsAlternativeFailures = false"),
+            ("guard recordsAlternativeFailures else { return [] }", "guard !recordsAlternativeFailures else { return [] }"),
+            ("location: .arm(branch)", "location: .arm(branch + 1)"),
+        ] {
+            try #require(armOnlyChecking.components(separatedBy: original).count == 2)
+            let changedChecking = armOnlyChecking.replacingOccurrences(of: original, with: corrupted)
+            try #require(changedChecking != armOnlyChecking)
+            #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+                try verifyArmRecording(changedChecking)
+            }
+        }
 
         let rightInitializer = "scope.sharedVar(initial: 3)"
         try #require(authored.components(separatedBy: rightInitializer).count == 2)
@@ -182,15 +336,28 @@ struct GeneratedAtomicUpdateProofTests {
             #expect(diagnostic.actual.contains("expected \(latestLocal), actual \(earlierLocal) "))
         }
 
+        recordConditionalProof(modelName: modelName, authored: authored, native: native, tla: tla,
+            configuration: proof.configuration, modules: [(proof.name, proof.bytes), proof.configured, proof.domain] + proof.arms)
+    }
+
+    private func parsedConditionalSource(_ declaration: StructDeclSyntax, modelName: String) throws -> TLASpec {
+        let members = declaration.memberBlock.members
+        let source = try TLASpecVerifier.findSpec(in: members, defaultName: modelName)
+        let literal = try #require(source)
+        let enums = try TLASpecVerifier.collectEnumVariables(from: members)
+        let parser = ParserSession(sourceTypes: try TLASpecVerifier.sourceTypes(in: members, enums: enums))
+        parser.sourceModelTypeName = modelName
+        return parser.parseSpecClosure(named: literal.name, literal.closure)
+    }
+
+    private func recordConditionalProof(modelName: String, authored: String, native: String, tla: String,
+                                        configuration: String, modules: [(name: String, bytes: Data)]) {
         Attachment.record(Array(authored.utf8), named: "\(modelName).swift")
         Attachment.record(Array(native.utf8), named: "\(modelName)NativeMembers.swift")
         Attachment.record(Array(tla.utf8), named: "\(modelName).tla")
-        Attachment.record(Array(proof.configuration.utf8), named: "\(modelName).cfg")
-        Attachment.record(Array(proof.bytes), named: "\(proof.name).tla")
-        Attachment.record(Array(proof.configured.bytes), named: "\(proof.configured.name).tla")
-        Attachment.record(Array(proof.domain.bytes), named: "\(proof.domain.name).tla")
-        for arm in proof.arms {
-            Attachment.record(Array(arm.bytes), named: "\(arm.name).tla")
+        Attachment.record(Array(configuration.utf8), named: "\(modelName).cfg")
+        for module in modules {
+            Attachment.record(Array(module.bytes), named: "\(module.name).tla")
         }
     }
 
@@ -1553,7 +1720,7 @@ struct GeneratedAtomicUpdateProofTests {
         let evidence = try #require(decoded.overflowProbes(in: rendered, actionOrdinal: action.id.ordinal,
             namedHistory: "__SwiftTLAActionFailureHistory\(action.id.ordinal)",
             regions: action.body.orderedAlternativeFailureRegions, program: program))
-        #expect(evidence.sites.map(\.arm) == [0, 0, 0, 0, 1, 1, 1])
+        #expect(evidence.sites.map(\.owner) == [.arm(0), .arm(0), .arm(0), .arm(0), .arm(1), .arm(1), .arm(1)])
         #expect(evidence.sites.map(\.row) == [1, 1, 2, 3, 1, 2, 3])
         #expect(evidence.sites.map(\.node) == [3, 5, 3, 3, 3, 3, 3])
         let local = "left' = \(second.captures[2].binding)"

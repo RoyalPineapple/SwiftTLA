@@ -20,6 +20,39 @@ struct NativeTraversalSeedExpansion: Sendable {
     let returnedSlots: [Int]
 }
 
+private func words(_ syntax: some SyntaxProtocol) -> [String] {
+    syntax.tokens(viewMode: .sourceAccurate).filter { $0.tokenKind != .endOfFile }.map(\.text)
+}
+private func matches(_ actual: [String], _ expected: String) -> Bool {
+    actual == words(Parser.parse(source: expected))
+}
+
+func verifyTraversalSeedAppendRuntime(_ operations: String) throws {
+    let failure = CompilationDiagnostic(
+        code: .unsupportedGeneratedValueShape, stage: .validation,
+        path: "native.traversal.operations.sequenceAppend",
+        expected: "the reviewed Array copy, append, and return",
+        actual: "a different or missing stack append implementation",
+        nextSafeAction: "Review the sequenceAppend proof interpretation against the runtime implementation."
+    )
+    let runtime = Parser.parse(source: operations)
+    let operationOwners = runtime.statements.compactMap { $0.item.as(EnumDeclSyntax.self) }
+        .filter { $0.name.text == "_NativeMachineOperations" }
+    guard !runtime.hasError, !operations.utf8.contains(0), operationOwners.count == 1,
+          let owner = operationOwners.first else { throw failure }
+    let appendHelpers = owner.memberBlock.members.compactMap { $0.decl.as(FunctionDeclSyntax.self) }
+        .filter { $0.name.text == "sequenceAppend" }
+    // Reviewed Array.append interpretation: retain each old cell and write the new cell at the old count.
+    guard appendHelpers.count == 1, let helper = appendHelpers.first,
+          matches(words(helper), """
+              public static func sequenceAppend<Element: Sendable>(_ sequence: [Element], _ element: Element) -> [Element] {
+                  var result = sequence
+                  result.append(element)
+                  return result
+              }
+              """) else { throw failure }
+}
+
 /// Bind the compiler seed's checked stack operations and ordered tuple operands to the actual native visitor.
 func decodeGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws -> NativeTraversalSeedExpansion {
     func fail(_ path: String) -> CompilationDiagnostic {
@@ -32,12 +65,6 @@ func decodeGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws -> 
         )
     }
 
-    func words(_ syntax: some SyntaxProtocol) -> [String] {
-        syntax.tokens(viewMode: .sourceAccurate).filter { $0.tokenKind != .endOfFile }.map(\.text)
-    }
-    func matches(_ actual: [String], _ expected: String) -> Bool {
-        actual == words(Parser.parse(source: expected))
-    }
     func function(named name: String, arity: Int? = nil, firstLabel: String? = nil) throws -> FunctionDeclSyntax {
         let functions = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }.filter {
             let parameters = $0.signature.parameterClause.parameters

@@ -712,9 +712,10 @@ struct ChoiceEvaluationFailureTests {
                     else { fatalError("The actual generated machine did not report the reached failures") }
                     for event in history {
                         let failure = event.failure
-                        guard failure.reason == .divisionByZero else { fatalError("Unexpected failure reason") }
+                        guard failure.reason == .divisionByZero, case .arm(let branch) = failure.location
+                        else { fatalError("Unexpected failure reason or location") }
                         let captures = failure.before.map { "\($0.binding):\($0.target):\($0.value)" }.joined(separator: ",")
-                        print("modulus=\(modulus) source=\(event.source) action=\(failure.action) branch=\(failure.branch) "
+                        print("modulus=\(modulus) source=\(event.source) action=\(failure.action) branch=\(branch) "
                             + "site=\(failure.site) target=\(failure.target) before=\(captures)")
                     }
                 }
@@ -1097,7 +1098,7 @@ struct ChoiceEvaluationFailureTests {
                 #expect(recordedHistory.map(\.reason) == failures)
                 if divisor == 0 && modulus <= 0 {
                     #expect(recordedHistory.map(\.action) == [0, 0])
-                    #expect(recordedHistory.map(\.branch) == [0, 1])
+                    #expect(recordedHistory.map(\.location) == [.arm(0), .arm(1)])
                     #expect(recordedHistory.map(\.site) == [1, 2])
                     #expect(recordedHistory.map(\.target) == [3, 2])
                     #expect(recordedHistory.map { $0.before.map(\.binding) } == [[0], []])
@@ -1133,7 +1134,8 @@ struct ChoiceEvaluationFailureTests {
             .define(selection, selectedValue, .define(result, .divide(dividend, replacement), writes)), other)
         do {
             _ = try StraightLineAssignmentCheck.checkedAtomicBranchContinuations(
-                step, lowered: changed, stateRoots: Set(loweredModel.variables.map(\.name)))
+                step, lowered: changed, stateRoots: Set(loweredModel.variables.map(\.name)),
+                retainingDefinitions: false)
             Issue.record("A shared fallible continuation accepted a changed divisor in just one arm")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "actions.pick.branchContinuations")

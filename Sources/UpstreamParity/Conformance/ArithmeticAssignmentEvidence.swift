@@ -62,7 +62,7 @@ package enum ArithmeticAssignmentEvidence {
         let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
         guard !authoredSource.contains(0), let authored = String(data: authoredSource, encoding: .utf8)
         else { throw invalid }
-        let compilation = try spec.compile()
+        let compilation = try spec.compileRetainingSequentialAssignmentTargets()
         let inputs = try CompiledTypeInputs(compilation: compilation,
             types: CompiledTypeContext(enums: .init(), formalNames: [:])) { spelling in
                 guard ["Int", "Swift.Int"].contains(spelling) else { throw invalid }
@@ -83,7 +83,8 @@ package enum ArithmeticAssignmentEvidence {
         let selection = try AuthoredCopySyntax.select(source: authored, modelName: modelName)
         let source = try AuthoredCopySyntax.arithmeticProofInput(selection, spec: spec,
             renderedModule: bundle.root.name, sourceAction: sourceAction)
-        guard let output = try OrderedRHSTLAProof.render(rendered, program: program, source: source)
+        guard let output = try OrderedRHSTLAProof.render(rendered, program: program, source: source,
+            assignmentTargets: compilation.orderedSequentialAssignmentTargets)
         else { throw invalid }
 
         return .init(sourceAction: source.label, actionOrdinal: source.ordinal, sourceContinuation: source.continuation,
@@ -136,6 +137,9 @@ package enum ArithmeticAssignmentEvidence {
         let selectedHistories = tuple(modules.map(\.history))
         let emittedFailures = tuple(modules.map { "\($0.instance)!RHSOutputActualFailures" })
         let certifiedFailures = tuple(modules.map { "\($0.instance)!RHSOutputHistoryFailures(histories[\($0.slot)])" })
+        let certifiedLabels = tuple(modules.map { "\($0.instance)!RHSOutputActionLabel" }
+            + [TLAValue.string(terminal.declaration.name).description])
+        let sourceLabelDefinitions = modules.map { "\($0.instance)!RHSOutputActionLabel" }.joined(separator: ", ")
         let certifiedActions = tuple(modules.map { "\($0.instance)!RHSOutputHistoryAdvance(histories[\($0.slot)])" }
             + ["\(prefix)Terminal"])
         let witnessChecks = modules.map { row in
@@ -681,6 +685,9 @@ package enum ArithmeticAssignmentEvidence {
         \#(prefix)ActualFailures == \#(emittedFailures)
         \#(prefix)CertifiedFailures(histories) == \#(certifiedFailures)
         \#(prefix)CertifiedActions(histories) == \#(certifiedActions)
+        \#(prefix)CertifiedLabels == \#(certifiedLabels)
+        \#(prefix)CertifiedLabeled(histories, label) ==
+            \#(prefix)Dispatch!CatalogLabeledBranches(\#(prefix)CertifiedActions(histories), \#(prefix)CertifiedLabels, label)
         \#(prefix)CertifiedNext(histories) ==
             \E slot \in DOMAIN \#(prefix)CertifiedActions(histories) : \#(prefix)CertifiedActions(histories)[slot]
 
@@ -692,6 +699,7 @@ package enum ArithmeticAssignmentEvidence {
         \#(nativeConclusion)
                 /\ \#(prefix)ActualFailures = \#(prefix)CertifiedFailures(histories)
                 /\ (\#(terminal.renderedName) <=> \#(prefix)Terminal)
+                /\ \A label : \#(prefix)EmittedLabeled(label) <=> \#(prefix)CertifiedLabeled(histories, label)
                 /\ (Next <=> \#(prefix)CertifiedNext(histories))
                 /\ ([Next]_vars <=> (\#(prefix)CertifiedNext(histories)
                      \/ \#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore))
@@ -721,6 +729,12 @@ package enum ArithmeticAssignmentEvidence {
         <1>points. \A slot \in DOMAIN \#(prefix)ActualActionValues :
             \#(prefix)ActualActionValues[slot] <=> \#(prefix)CertifiedActions(histories)[slot]
             BY ONLY <1>domains, <1>finite, <1>slots, SMT
+        <1>labels. \#(prefix)ActualAuthoredLabels = \#(prefix)CertifiedLabels
+            BY ONLY IsaM("simp"), SMT DEF \#(prefix)ActualAuthoredLabels, \#(prefix)ActualActionRoutes,
+                \#(prefix)CertifiedLabels, \#(sourceLabelDefinitions)
+        <1>labeled. \A label : \#(prefix)EmittedLabeled(label) <=> \#(prefix)CertifiedLabeled(histories, label)
+            BY ONLY <1>labels, <1>points, \#(prefix)ActualNextUsesTheCompleteLabeledActionCatalog, SMT
+                DEF \#(prefix)EmittedLabeled, \#(prefix)CertifiedLabeled, \#(prefix)Dispatch!CatalogLabeledBranches
         <1>union. (\E \#(prefix)Index \in DOMAIN \#(prefix)ActualActionValues :
                        \#(prefix)ActualActionValues[\#(prefix)Index])
             <=> \#(prefix)CertifiedNext(histories)
@@ -732,7 +746,7 @@ package enum ArithmeticAssignmentEvidence {
             BY ONLY \#(prefix)ActualNextUsesTheCompleteLabeledActionCatalog, <1>union, PTL
         \#(nativeResults)
         <1>. WITNESS histories
-        <1>. QED BY ONLY <1>histories, <1>failures, <1>terminal, <1>next, <1>stuttering\#(nativeFact), PTL
+        <1>. QED BY ONLY <1>histories, <1>failures, <1>terminal, <1>labeled, <1>next, <1>stuttering\#(nativeFact), PTL
 
         ====
 

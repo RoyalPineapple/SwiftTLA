@@ -31,9 +31,17 @@ enum OrderedRHSPhysicalAction {
     }
 
     struct Conditional {
+        struct Definition {
+            let binder: BinderID
+            let rhs: CompiledExpression
+        }
+
         struct Arm {
+            let definitions: [Definition]?
             let action: Action
             let writeOrder: [String]
+            let body: String
+            let frame: String
 
             func scalarPlan() -> TLAValue? {
                 let captures = action.captures.compactMap { capture -> TLAValue? in
@@ -50,66 +58,115 @@ enum OrderedRHSPhysicalAction {
             }
         }
 
+        let sharedDefinitions: [Definition]?
+        let sharedCaptures: [Capture]
+        let selectionBody: String
         let condition: TLAValue
         let predicate: String
         let ifTrue: Arm
         let ifFalse: Arm
 
+        func captures(in arm: Arm) -> [Capture] {
+            sharedCaptures + arm.action.captures
+        }
+
+        // This supplies lexical bindings. The shared guards determine whether the selector is reached.
+        func sharedScope(_ body: String) -> String {
+            OrderedRHSPhysicalAction.scoped(sharedCaptures[...], body: body)
+        }
+
         func overflowProbes(in rendered: RenderedModule, actionOrdinal: Int, namedHistory: String,
                             regions: [AlternativeFailureRegion], program: CompiledProgram)
-            -> (sites: [OverflowProbe], aggregate: String)? {
-            let paths = [ifTrue.action.captures, ifFalse.action.captures]
+            -> (sites: [OverflowProbe], aggregate: String, events: [HistoryCell])? {
+            let paths = [captures(in: ifTrue), captures(in: ifFalse)]
             let module = rendered.renderedModuleSource
+            let sharedCount = sharedCaptures.count
             guard regions.count == paths.count,
                   zip(paths, regions).enumerated().allSatisfy({ arm, pair in
-                      pair.1.armOrdinal == arm && pair.0.count == pair.1.bindings.count
+                      pair.1.armOrdinal == arm && pair.1.sharedBindingCount == sharedCount
+                          && pair.0.count == pair.1.bindings.count
                           && zip(pair.0, pair.1.bindings).allSatisfy { capture, binding in
                               capture.binding == program.binderNames[binding.binder]
                           }
                   }),
-                  let evidence = OrderedRHSPhysicalAction.overflowProbes(in: rendered, actionOrdinal: actionOrdinal,
-                      paths: paths, requiringNamedBefore: false), let aggregate = evidence.aggregate,
+                  regions[0].bindings.prefix(sharedCount).elementsEqual(regions[1].bindings.prefix(sharedCount), by: {
+                      $0.binder == $1.binder && $0.target == $1.target
+                  }),
                   let history = actionText(in: module, named: namedHistory)
+            else { return nil }
+
+            let owners = [OverflowPath(owner: .sharedPrefix, captures: sharedCaptures, firstOwnedIndex: 0)]
+                + paths.enumerated().map { arm, captures in
+                    OverflowPath(owner: .arm(arm), captures: captures, firstOwnedIndex: sharedCount)
+                }
+            guard let evidence = OrderedRHSPhysicalAction.overflowProbes(in: rendered, actionOrdinal: actionOrdinal,
+                      probing: owners, requiringNamedBefore: false), let aggregate = evidence.aggregate
             else { return nil }
 
             let entry = "<<\(program.layout.variables.map(\.formalName).joined(separator: ", "))>>"
             func conditioned(_ condition: String, _ body: String) -> String { "(IF \(condition) THEN \(body) ELSE FALSE)" }
-            var events: [String] = []
+            func reachedAfter(_ prefix: ArraySlice<Capture>, _ failure: String) -> String {
+                prefix.reversed().reduce(failure) { body, capture in
+                    let bound = "(LET \(capture.binding) == \(capture.rhs) IN \(body))"
+                    let guards = capture.additionNodes.map { capture.guards[$0 - 1] }
+                    guard let first = guards.first else { return bound }
+                    let defined = guards.count == 1 ? first : guards.reversed().reduce("TRUE") { body, guard_ in
+                        conditioned(guard_, body)
+                    }
+                    return conditioned(defined, bound)
+                }
+            }
+
+            var events: [HistoryCellTemplate] = []
             for probe in evidence.sites {
                 let index = probe.row - 1
-                let captures = paths[probe.arm]
-                let region = regions[probe.arm]
+                let captures: [Capture]
+                let region: AlternativeFailureRegion
+                let branch: String
+                switch probe.owner {
+                case .sharedPrefix:
+                    captures = sharedCaptures
+                    region = regions[0]
+                    branch = "<<>>"
+                    guard region.sharedIndex(of: region.bindings[index].binder) == index else { return nil }
+                case .arm(let arm):
+                    captures = paths[arm]
+                    region = regions[arm]
+                    branch = String(arm)
+                    guard region.index(of: region.bindings[index].binder) == index else { return nil }
+                }
+
                 let origin = region.bindings[index]
-                guard region.index(of: origin.binder) == index else { return nil }
+                let prefix = captures.prefix(index)
                 let current = captures[index]
                 let preceding = current.additionNodes.prefix { $0 != probe.node }.map { current.guards[$0 - 1] }
-                var failed = preceding.reversed().reduce("~(\(current.guards[probe.node - 1]))") { body, guard_ in
+                let failure = preceding.reversed().reduce("~(\(current.guards[probe.node - 1]))") { body, guard_ in
                     conditioned(guard_, body)
                 }
-                for capture in captures.prefix(index).reversed() {
-                    failed = "(LET \(capture.binding) == \(capture.rhs) IN \(failed))"
-                    let guards = capture.additionNodes.map { capture.guards[$0 - 1] }
-                    if let first = guards.first {
-                        let defined = guards.count == 1 ? first : guards.reversed().reduce("TRUE") { body, guard_ in
-                            conditioned(guard_, body)
-                        }
-                        failed = conditioned(defined, failed)
-                    }
+                let reached: String
+                switch probe.owner {
+                case .sharedPrefix:
+                    reached = reachedAfter(prefix, failure)
+                case .arm(let arm):
+                    let local = reachedAfter(prefix.dropFirst(sharedCount), failure)
+                    let selected = arm == 0 ? conditioned(predicate, local) : "(IF \(predicate) THEN FALSE ELSE \(local))"
+                    reached = reachedAfter(prefix.prefix(sharedCount), selected)
                 }
-                let reached = probe.arm == 0 ? conditioned(predicate, failed) : "(IF \(predicate) THEN FALSE ELSE \(failed))"
                 guard sameTokens(probe.failed.body, reached) else { return nil }
 
-                let frame = zip(region.bindings.prefix(index), captures.prefix(index)).map { binding, capture in
+                let frame = zip(region.bindings.prefix(index), prefix).map { binding, capture in
                     "[binding |-> \(binding.binder.ordinal), target |-> \(binding.target.ordinal), value |-> \(capture.binding)]"
                 }.joined(separator: ", ")
-                let before = scoped(captures.prefix(index), body: "<<\(frame)>>")
+                let before = scoped(prefix, body: "<<\(frame)>>")
                 let payload = #"<<"integerOverflow", \#(probe.operation.body), \#(probe.operands.body)>>"#
-                let event = "[source |-> \(entry), action |-> \(actionOrdinal), branch |-> \(probe.arm), "
-                    + "site |-> \(origin.binder.ordinal), target |-> \(origin.target.ordinal), payload |-> \(payload), before |-> \(before)]"
-                events.append("(IF \(probe.failed.body) THEN <<\(event)>> ELSE <<>>)")
+                let header = "<<[source |-> \(entry), action |-> \(actionOrdinal), branch |-> \(branch), "
+                    + "site |-> \(origin.binder.ordinal), target |-> \(origin.target.ordinal), payload |-> "
+                events.append(.init(guardPrefix: "(IF \(probe.failed.body) THEN ", header: header,
+                                    payload: payload, before: before))
             }
-            guard sameTokens(history, events.joined(separator: " \\o ")) else { return nil }
-            return (evidence.sites, aggregate)
+            guard events.count == evidence.sites.count,
+                  let cells = historyCells(history, matching: events) else { return nil }
+            return (evidence.sites, aggregate, cells)
         }
     }
 
@@ -124,8 +181,15 @@ enum OrderedRHSPhysicalAction {
         }
     }
 
+    struct HistoryCell {
+        let body: String
+        let event: String
+        let payload: String
+        let before: String
+    }
+
     struct OverflowProbe {
-        let arm: Int
+        let owner: NativeAlternativeFailure.Location
         let row: Int
         let node: Int
         let failed: Declaration
@@ -134,11 +198,26 @@ enum OrderedRHSPhysicalAction {
         let before: Declaration?
     }
 
+    private struct OverflowPath {
+        let owner: NativeAlternativeFailure.Location
+        let captures: [Capture]
+        let firstOwnedIndex: Int
+    }
+
     static func overflowProbes(in rendered: RenderedModule, actionOrdinal: Int, paths: [[Capture]],
                                requiringNamedBefore: Bool) -> (sites: [OverflowProbe], aggregate: String?)? {
-        let locations = paths.enumerated().flatMap { arm, captures in
-            captures.enumerated().flatMap { index, capture in
-                capture.additionNodes.map { (arm: arm, row: index + 1, node: $0) }
+        let owners = paths.enumerated().map { arm, captures in
+            OverflowPath(owner: .arm(arm), captures: captures, firstOwnedIndex: 0)
+        }
+        return overflowProbes(in: rendered, actionOrdinal: actionOrdinal, probing: owners,
+                              requiringNamedBefore: requiringNamedBefore)
+    }
+
+    private static func overflowProbes(in rendered: RenderedModule, actionOrdinal: Int, probing paths: [OverflowPath],
+                                       requiringNamedBefore: Bool) -> (sites: [OverflowProbe], aggregate: String?)? {
+        let locations = paths.flatMap { path in
+            path.captures.indices.dropFirst(path.firstOwnedIndex).flatMap { index in
+                path.captures[index].additionNodes.map { (path: path, row: index + 1, node: $0) }
             }
         }
         let ordinal = String(actionOrdinal)
@@ -169,8 +248,8 @@ enum OrderedRHSPhysicalAction {
             let start = offset * emittedRoles.count
             let failed = declarations[start], operands = declarations[start + 1], operation = declarations[start + 2]
             let completed = requiringNamedBefore ? declarations[start + 3] : nil
-            let prefix = paths[location.arm].prefix(location.row - 1)
-            let capture = paths[location.arm][location.row - 1]
+            let prefix = location.path.captures.prefix(location.row - 1)
+            let capture = location.path.captures[location.row - 1]
             let node = location.node - 1
             guard operation.body == #""addition""#,
                   case .int(let left) = capture.plan.left[node], case .int(let right) = capture.plan.right[node],
@@ -181,7 +260,7 @@ enum OrderedRHSPhysicalAction {
                 let projection = scoped(prefix, body: values)
                 guard sameTokens(completed.body, "(IF \(failed.name) THEN \(projection) ELSE <<>>)") else { return nil }
             }
-            sites.append(.init(arm: location.arm, row: location.row, node: location.node, failed: failed,
+            sites.append(.init(owner: location.path.owner, row: location.row, node: location.node, failed: failed,
                                operands: operands, operation: operation, before: completed))
         }
         return (sites, declarations.last?.name)
@@ -194,6 +273,58 @@ enum OrderedRHSPhysicalAction {
     private static func sameTokens(_ actual: String, _ expected: String) -> Bool {
         guard let expected = StraightLineRenderedActionCheck.tokens(expected) else { return false }
         return StraightLineRenderedActionCheck.tokens(actual) == expected
+    }
+
+    private struct HistoryCellTemplate {
+        let guardPrefix: String
+        let header: String
+        let payload: String
+        let before: String
+
+        static let beforeLabel = ", before |-> "
+        static let eventEnd = "]>>"
+        static let cellEnd = " ELSE <<>>)"
+
+        var body: String { guardPrefix + header + payload + Self.beforeLabel + before + Self.eventEnd + Self.cellEnd }
+    }
+
+    private static func historyCells(_ history: String, matching expected: [HistoryCellTemplate]) -> [HistoryCell]? {
+        guard sameTokens(history, expected.map(\.body).joined(separator: " \\o ")),
+              let spans = StraightLineRenderedActionCheck.tokenSpans(history) else { return nil }
+        let text = history as NSString
+        var offset = 0
+        var cells: [HistoryCell] = []
+        func width(_ part: String) -> Int? {
+            guard let count = StraightLineRenderedActionCheck.tokenSpans(part)?.count, count > 0 else { return nil }
+            return count
+        }
+        func bytes(from start: Int, to end: Int) -> String {
+            let location = spans[start].location
+            return text.substring(with: NSRange(location: location, length: spans[end - 1].upperBound - location))
+        }
+        guard let labelWidth = width(HistoryCellTemplate.beforeLabel),
+              let eventEndWidth = width(HistoryCellTemplate.eventEnd),
+              let cellEndWidth = width(HistoryCellTemplate.cellEnd) else { return nil }
+        for event in expected {
+            if !cells.isEmpty { offset += 1 } // Token-checked concatenation separator.
+            guard let guardWidth = width(event.guardPrefix), let headerWidth = width(event.header),
+                  let payloadWidth = width(event.payload), let beforeWidth = width(event.before) else { return nil }
+            let eventStart = offset + guardWidth
+            let payloadStart = eventStart + headerWidth
+            let payloadEnd = payloadStart + payloadWidth
+            let beforeStart = payloadEnd + labelWidth
+            let beforeEnd = beforeStart + beforeWidth
+            let eventEnd = beforeEnd + eventEndWidth
+            let end = eventEnd + cellEndWidth
+            guard end <= spans.count else { return nil }
+            cells.append(.init(body: bytes(from: offset, to: end),
+                               event: bytes(from: eventStart, to: eventEnd),
+                               payload: bytes(from: payloadStart, to: payloadEnd),
+                               before: bytes(from: beforeStart, to: beforeEnd)))
+            offset = end
+        }
+        guard offset == spans.count else { return nil }
+        return cells
     }
 
     private static func scoped(_ captures: ArraySlice<Capture>, body: String) -> String {
@@ -214,53 +345,71 @@ enum OrderedRHSPhysicalAction {
     }
 
     static func decode(in module: String, action: String, body: CompiledActionExpr,
-                       fields: [CompiledVariableLayout], counter: CompiledVariableLayout, destination: String) -> Action? {
+                       fields: [CompiledVariableLayout], counter: CompiledVariableLayout, destination: String,
+                       binderNames: [BinderID: String], assignmentTargets: [BinderID: VariableID])
+        -> (action: Action, targets: [String])? {
         guard let text = actionText(in: module, named: action),
               let tokens = StraightLineRenderedActionCheck.tokens(text) else { return nil }
-        var bindings = originalReads(fields)
+        let rawNames = Dictionary(uniqueKeysWithValues: fields.map { ($0.id, $0.declaration.name) })
+        var scope = CaptureScope(reads: originalReads(fields))
         let definitions = tokens.indices.filter { tokens[$0] == "LET" }
         var remaining = body
         if case .and(let assignments, .assign(let id, _)) = body, id == counter.id {
             remaining = assignments
         }
         var captures: [Capture] = []
+        var targets: [String] = []
         var continuation = 0
+        guard !definitions.isEmpty, definitions.count == assignmentTargets.count else { return nil }
         for offset in definitions {
-            guard case .define(_, _, let next) = remaining,
+            guard case .define(let binder, let value, let next) = remaining,
                   offset + 3 < tokens.count,
+                  let name = binderNames[binder], tokens[offset + 1].utf8.elementsEqual(name.utf8),
+                  let target = assignmentTargets[binder], let field = rawNames[target],
                   tokens[offset + 2] == "==",
                   let end = tokens[(offset + 3)...].firstIndex(of: "IN"),
-                  let expression = expression(tokens[(offset + 3)..<end], bindings: bindings),
+                  let expression = expression(tokens[(offset + 3)..<end], bindings: scope.reads),
+                  matches(expression.plan, value, rawNames: rawNames, captures: scope.positions),
                   let guardParts = additionGuards(tokens, before: offset, count: expression.additionNodes.count),
-                  bindings.updateValue(.tuple([.string("capture"), .int(captures.count + 1)]),
-                                       forKey: tokens[offset + 1]) == nil else { return nil }
-            captures.append(capture(named: tokens[offset + 1], rhs: tokens[(offset + 3)..<end],
+                  scope.reads[name] == nil, scope.positions[binder] == nil else { return nil }
+            let position = captures.count + 1
+            scope.reads[name] = .tuple([.string("capture"), .int(position)])
+            scope.positions[binder] = position
+            captures.append(capture(named: name, rhs: tokens[(offset + 3)..<end],
                                     expression: expression, additionGuards: guardParts))
+            targets.append(field)
             remaining = next
             continuation = end + 1
         }
-        guard !captures.isEmpty else { return nil }
         if case .define = remaining { return nil }
         guard let writes = writes(in: tokens[continuation...], fields: fields,
-            bindings: bindings, counter: counter.formalName, destination: destination) else { return nil }
-        return .init(captures: captures, writes: writes)
+            bindings: scope.reads, counter: counter.formalName, destination: destination) else { return nil }
+        return (.init(captures: captures, writes: writes), targets)
     }
 
-    static func decodeConditional(in module: String, action: CompiledAction,
-                                  program: CompiledProgram) -> Conditional? {
-        guard action.bindings.isEmpty, case .ifElse(let predicate, let yes, let no) = action.body,
+    static func decodeConditional(in module: String, action: CompiledAction, program: CompiledProgram,
+                                  retainingDefinitions: Bool = false) -> Conditional? {
+        guard action.bindings.isEmpty,
               let label = program.layout.actions.first(where: { $0.id == action.id }),
               let text = actionText(in: module, named: label.renderedName),
-              let tokens = StraightLineRenderedActionCheck.tokens(text), let split = conditional(tokens[...]),
-              let yesTokens = parentheses(split.yes), let noTokens = parentheses(split.no)
+              let tokens = StraightLineRenderedActionCheck.tokens(text)
         else { return nil }
         let fields = program.layout.variables
-        let reads = originalReads(fields)
         let names = Dictionary(uniqueKeysWithValues: fields.map { ($0.id, $0.formalName) })
         let rawNames = Dictionary(uniqueKeysWithValues: fields.map { ($0.id, $0.declaration.name) })
-        guard let condition = comparison(split.condition, predicate: predicate, reads: reads, rawNames: rawNames),
-              let first = arm(yesTokens, body: yes, reads: reads, names: names, rawNames: rawNames, program: program),
-              let second = arm(noTokens, body: no, reads: reads, names: names, rawNames: rawNames, program: program)
+        var remaining = action.body
+        var physical = tokens[...]
+        var scope = CaptureScope(reads: originalReads(fields))
+        guard let shared = leadingConditionalCaptures(&physical, body: &remaining, scope: &scope,
+                  rawNames: rawNames, program: program, retainingDefinitions: retainingDefinitions),
+              case .ifElse(let predicate, let yes, let no) = remaining,
+              let split = conditional(physical), let yesTokens = parentheses(split.yes),
+              let noTokens = parentheses(split.no),
+              let condition = comparison(split.condition, predicate: predicate, scope: scope, rawNames: rawNames),
+              let first = arm(yesTokens, body: yes, scope: scope, names: names, rawNames: rawNames,
+                              program: program, retainingDefinitions: retainingDefinitions),
+              let second = arm(noTokens, body: no, scope: scope, names: names, rawNames: rawNames,
+                               program: program, retainingDefinitions: retainingDefinitions)
         else { return nil }
         // Do not treat a present guard as a correct one. Match the checked scalar
         // guard/definedness and failure-gating constructions against the same text.
@@ -268,7 +417,9 @@ enum OrderedRHSPhysicalAction {
             try StraightLineRenderedActionCheck.verify(action.body, rendered: text, layout: program.layout,
                 binders: program.binderNames, moduleName: program.moduleName, required: true)
         } catch { return nil }
-        return .init(condition: condition, predicate: split.condition.joined(separator: " "), ifTrue: first, ifFalse: second)
+        return .init(sharedDefinitions: shared.definitions, sharedCaptures: shared.captures,
+                     selectionBody: physical.joined(separator: " "), condition: condition,
+                     predicate: split.condition.joined(separator: " "), ifTrue: first, ifFalse: second)
     }
 
     private static func actionText(in module: String, named action: String) -> String? {
@@ -293,8 +444,13 @@ enum OrderedRHSPhysicalAction {
                      additionNodes: expression.additionNodes)
     }
 
+    private struct CaptureScope {
+        var reads: [String: TLAValue]
+        var positions: [BinderID: Int] = [:]
+    }
+
     private static func comparison(_ text: ArraySlice<String>, predicate: CompiledExpression,
-                                   reads: [String: TLAValue], rawNames: [VariableID: String]) -> TLAValue? {
+                                   scope: CaptureScope, rawNames: [VariableID: String]) -> TLAValue? {
         let comparison: (operation: String, symbol: String)
         switch predicate.operation {
         case .lessThan: comparison = ("lessThan", "<")
@@ -303,11 +459,11 @@ enum OrderedRHSPhysicalAction {
         }
         guard predicate.resultType == .bool, predicate.children.count == 2,
               let inside = parentheses(text), let separator = inside.firstIndex(of: comparison.symbol),
-              let left = expression(inside[..<separator], bindings: reads, allowingBooleans: true),
-              let right = expression(inside[(separator + 1)...], bindings: reads, allowingBooleans: true),
+              let left = expression(inside[..<separator], bindings: scope.reads, allowingBooleans: true),
+              let right = expression(inside[(separator + 1)...], bindings: scope.reads, allowingBooleans: true),
               left.plan.kinds.count == 1, right.plan.kinds.count == 1,
-              matches(left.plan, predicate.children[0], rawNames: rawNames, captures: [:]),
-              matches(right.plan, predicate.children[1], rawNames: rawNames, captures: [:])
+              matches(left.plan, predicate.children[0], rawNames: rawNames, captures: scope.positions),
+              matches(right.plan, predicate.children[1], rawNames: rawNames, captures: scope.positions)
         else { return nil }
         func term(_ plan: Plan) -> TLAValue {
             plan.kinds[0] == .string("literal") ? .tuple([.string("literal"), plan.literals[0]]) : plan.reads[0]
@@ -315,14 +471,12 @@ enum OrderedRHSPhysicalAction {
         return .tuple([.tuple([.string(comparison.operation)]), term(left.plan), term(right.plan)])
     }
 
-    private static func arm(_ tokens: ArraySlice<String>, body: CompiledActionExpr, reads: [String: TLAValue],
-                            names: [VariableID: String], rawNames: [VariableID: String],
-                            program: CompiledProgram) -> Conditional.Arm? {
-        var bindings = reads
-        var positions: [BinderID: Int] = [:]
+    private static func leadingConditionalCaptures(
+        _ physical: inout ArraySlice<String>, body remaining: inout CompiledActionExpr, scope: inout CaptureScope,
+        rawNames: [VariableID: String], program: CompiledProgram, retainingDefinitions: Bool
+    ) -> (captures: [Capture], definitions: [Conditional.Definition]?)? {
         var captures: [Capture] = []
-        var remaining = body
-        var physical = tokens
+        var definitions: [Conditional.Definition]? = retainingDefinitions ? [] : nil
         while case .define(let binder, let value, let next) = remaining {
             let declaration: ArraySlice<String>
             let guardTokens: ArraySlice<String>?
@@ -338,17 +492,32 @@ enum OrderedRHSPhysicalAction {
                   inside[inside.startIndex] == "LET", inside[inside.startIndex + 2] == "==",
                   let expectedName = program.binderNames[binder], inside[inside.startIndex + 1] == expectedName,
                   let end = inside.dropFirst(3).firstIndex(of: "IN"),
-                  let decoded = expression(inside[(inside.startIndex + 3)..<end], bindings: bindings, allowingBooleans: true),
-                  matches(decoded.plan, value, rawNames: rawNames, captures: positions),
+                  let decoded = expression(inside[(inside.startIndex + 3)..<end], bindings: scope.reads, allowingBooleans: true),
+                  matches(decoded.plan, value, rawNames: rawNames, captures: scope.positions),
                   let guards = guardTexts(guardTokens, count: decoded.additionNodes.count),
-                  bindings.updateValue(.tuple([.string("capture"), .int(captures.count + 1)]), forKey: expectedName) == nil,
-                  positions.updateValue(captures.count + 1, forKey: binder) == nil else { return nil }
+                  scope.reads[expectedName] == nil, scope.positions[binder] == nil else { return nil }
+            let position = scope.positions.count + 1
+            scope.reads[expectedName] = .tuple([.string("capture"), .int(position)])
+            scope.positions[binder] = position
+            definitions?.append(.init(binder: binder, rhs: value))
             captures.append(capture(named: expectedName, rhs: inside[(inside.startIndex + 3)..<end],
                                     expression: decoded, additionGuards: guards))
             physical = inside[(end + 1)...]
             remaining = next
         }
 
+        return (captures, definitions)
+    }
+
+    private static func arm(_ tokens: ArraySlice<String>, body: CompiledActionExpr, scope shared: CaptureScope,
+                            names: [VariableID: String], rawNames: [VariableID: String],
+                            program: CompiledProgram, retainingDefinitions: Bool) -> Conditional.Arm? {
+        var scope = shared
+        var remaining = body
+        var physical = tokens
+        guard let local = leadingConditionalCaptures(&physical, body: &remaining, scope: &scope,
+                  rawNames: rawNames, program: program, retainingDefinitions: retainingDefinitions) else { return nil }
+        let frame = physical.joined(separator: " ")
         var pending: [FramePart] = [.action(remaining)]
         var writes: [String: TLAValue] = [:]
         var order: [String] = []
@@ -371,7 +540,7 @@ enum OrderedRHSPhysicalAction {
                 order.append(raw)
             case .action(.assign(let target, let value)):
                 guard let formal = names[target], let raw = rawNames[target], case .boundValue(let binder) = value.operation,
-                      let position = positions[binder], let name = program.binderNames[binder], consume(formal + "'"),
+                      let position = scope.positions[binder], let name = program.binderNames[binder], consume(formal + "'"),
                       consume("="), consume(name), writes.updateValue(.tuple([.string("capture"), .int(position)]),
                                                                      forKey: raw) == nil else { return nil }
                 order.append(raw)
@@ -379,7 +548,8 @@ enum OrderedRHSPhysicalAction {
             }
         }
         guard physical.isEmpty, writes.count == names.count else { return nil }
-        return .init(action: .init(captures: captures, writes: writes), writeOrder: order)
+        return .init(definitions: local.definitions, action: .init(captures: local.captures, writes: writes), writeOrder: order,
+                     body: tokens.joined(separator: " "), frame: frame)
     }
 
     private enum FramePart {

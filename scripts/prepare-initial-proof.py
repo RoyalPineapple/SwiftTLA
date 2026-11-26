@@ -16,6 +16,15 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def ordered_action_failure_has_location(occurrence):
+    if not isinstance(occurrence, dict):
+        return False
+    if "phase" in occurrence:
+        return occurrence["phase"] == "sharedPrefix" and "branch" not in occurrence
+    branch = occurrence.get("branch")
+    return type(branch) is int and branch >= 0
+
+
 def branchwise_state_proofs(model, checking_inputs, original_rules):
     """Specialize only the retained branchwise proof inputs. Keep the actual module intact."""
     model_name = b"BranchwiseConjunctionFailureOrderModel"
@@ -594,7 +603,11 @@ def main():
         if ordered_copy_attachments is not None:
             ordered_copy_attachments.mkdir()
             test_filter += ("|OrderedStepTests/orderedActionsSupplySelectedProofs"
+                            "|OrderedAssignmentLoweringTests/sequentialOrderedIntCapturesRejectStaleReads"
+                            "|ChoiceEvaluationFailureTests/eitherFailureOrderEmittedSwift"
+                            "|ChoiceEvaluationFailureTests/conjunctiveAlternativesKeepBranchwiseFailureOrder"
                             "|GeneratedAtomicUpdateProofTests/conditionalOverflowKeepsTheSelectedArmHistory"
+                            "|GeneratedAtomicUpdateProofTests/sharedConditionalWriteSelectsOrStops"
                             "|SequentialLoopControlTests/preservesCompletion"
                             "|ProcedureLoweringTests/callReturnRestoresFrame"
                             "|ProcedureLoweringTests/eachProcessesIsolateProcedureFrames"
@@ -707,7 +720,7 @@ def main():
                 dumps[part] = (captured, origin)
             return dumps
 
-        def capture_action(model, task, proof_template=None):
+        def capture_action(model, task, proof_template=None, options=()):
             captured, origin = capture_model_expansion(model, task)["members"]
             receipt[task + "SourceOrigin"] = origin
             retained = output / ("native-" + task + "-source.swift")
@@ -716,6 +729,7 @@ def main():
                     str(root / model), "--native-source", str(retained)]
             if proof_template is not None:
                 args.extend(["--proof", str(root / proof_template)])
+            args.extend(options)
             with (output / (task + "-prepare.log")).open("wb") as log:
                 subprocess.run(args + ["--output", str(generated)], env=env, stdout=log,
                                stderr=subprocess.STDOUT, check=True)
@@ -723,8 +737,18 @@ def main():
 
         conditional_model = "Sources/UpstreamParity/ValidationModels/GeneratedScalarConditionalProofModel.swift"
         conditional_template = "Verification/Semantics/GeneratedScalarConditionalProof.tla"
-        conditional_retained = capture_action(conditional_model, "conditional", conditional_template)
-        conditional_report = json.loads((proof.parent / "conditional-preparation.json").read_text())
+        native_operations = "Sources/SwiftTLA/NativeMachineOperations.swift"
+        checking_context = "Sources/SwiftTLA/CheckingContext.swift"
+        conditional_retained = capture_action(conditional_model, "conditional", conditional_template,
+            options=["--operations", str(root / native_operations), "--checking", str(root / checking_context)])
+        conditional_report = json.loads((generated / "conditional-preparation.json").read_text())
+        conditional_module = Path(conditional_model).stem
+        conditional_parent = f"SwiftTLA{conditional_module}ConditionalOverflowHistory"
+        conditional_integer = f"SwiftTLAArithmeticAssignmentSource{conditional_module}"
+        conditional_send = f"SwiftTLA{conditional_module}PublicSendBinding.tla"
+        conditional_shared = [conditional_module + ".cfg", conditional_parent + ".tla", conditional_send,
+                              conditional_parent + "ConfiguredProof.tla", conditional_integer + "Domain.tla",
+                              conditional_integer + "Arm1.tla", conditional_integer + "Arm2.tla"]
         conditional_files = {
             "authoredSourceSHA256": proof.parent / "authored-conditional-source.swift",
             "nativeSourceSHA256": proof.parent / "native-conditional-source.swift",
@@ -735,7 +759,11 @@ def main():
                 or conditional_report["authoredSourceSHA256"] != inputs[conditional_model]
                 or conditional_report["nativeSourceSHA256"] != digest(conditional_retained)
                 or conditional_report["proofTemplateSHA256"] != inputs[conditional_template]
-                or any(conditional_report[key] != digest(path) for key, path in conditional_files.items())):
+                or conditional_report.get("operationsSHA256") != inputs[native_operations]
+                or conditional_report.get("checkingSHA256") != inputs[checking_context]
+                or any(conditional_report[key] != digest(path) for key, path in conditional_files.items())
+                or any((generated / name).is_symlink() or conditional_report.get(name) != digest(generated / name)
+                       for name in conditional_shared)):
             raise ValueError("actual native conditional evidence binding differs")
         receipt["conditionalPreparation"] = conditional_report
         arithmetic_model = "Sources/UpstreamParity/ValidationModels/OrderedOverflowModel.swift"
@@ -794,14 +822,22 @@ def main():
             shutil.copyfile(root / stack_seed, authored)
             caller = stack / "compiler-caller.swift"
             caller.write_bytes(caller_bytes)
-            if digest(authored) != inputs[stack_seed] or digest(caller) != inputs[caller_source]:
-                raise ValueError("stack pass source or compiler caller changed while being retained")
+            operations = stack / "NativeMachineOperations.swift"
+            shutil.copyfile(root / native_operations, operations)
+            if (digest(authored) != inputs[stack_seed] or digest(caller) != inputs[caller_source]
+                    or digest(operations) != inputs[native_operations]):
+                raise ValueError("stack pass source, compiler caller, or runtime operations changed while being retained")
             render = stack / "rendered"
-            stack_command = [str(binary), "native", "prepare-compiler-stack-seed",
-                             "--authored-source", str(authored), "--native-source", str(stack / "members.swift"), "--output", str(render)]
+            stack_command = [str(binary), "native", "prepare-compiler-stack-seed", "--authored-source", str(authored)]
+            members = stack / "members.swift"
+
+            def stack_render_command(native, helpers, destination):
+                return stack_command + ["--native-source", str(native), "--operations", str(helpers),
+                                        "--output", str(destination)]
             with (output / "compiler-stack-seed-render.log").open("wb") as log:
-                subprocess.run(stack_command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
-            capture_source = (stack / "members.swift").read_bytes()
+                subprocess.run(stack_render_command(members, operations, render),
+                               env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+            capture_source = members.read_bytes()
             correct_capture = (b"SwiftTLA._appendNativeOutcome(&result, Snapshot(state: State(pending: "
                                b"_value_pending_0, leftChild: _value_leftChild_1, rightChild: _value_rightChild_2)))")
             if capture_source.count(correct_capture) != 1:
@@ -809,19 +845,33 @@ def main():
             wrong_capture = correct_capture.replace(b"leftChild: _value_leftChild_1", b"leftChild: _value_rightChild_2")
             wrong_native = stack / "members-wrong-initial-capture.swift"
             wrong_native.write_bytes(capture_source.replace(correct_capture, wrong_capture, 1))
-            wrong_output = stack / "wrong-initial-capture-render"
-            wrong_command = [str(binary), "native", "prepare-compiler-stack-seed",
-                             "--authored-source", str(authored), "--native-source", str(wrong_native),
-                             "--output", str(wrong_output)]
-            wrong_log = stack / "wrong-initial-capture.log"
-            with wrong_log.open("wb") as log:
-                wrong_result = subprocess.run(wrong_command, env=env, stdout=log, stderr=subprocess.STDOUT, check=False)
-            wrong_path = "native.traversal.initial.assembly"
-            if wrong_result.returncode != 2 or wrong_output.exists() or wrong_path.encode() not in wrong_log.read_bytes():
-                raise ValueError("the guarded stack evidence checker did not reject the wrong initializer binding")
+            def rejected_stack_control(name, diagnostic, baseline, mutant, native, helpers):
+                wrong_output = stack / (name + "-render")
+                wrong_log = stack / (name + ".log")
+                with wrong_log.open("wb") as log:
+                    wrong_result = subprocess.run(stack_render_command(native, helpers, wrong_output),
+                                                  env=env, stdout=log, stderr=subprocess.STDOUT, check=False)
+                if (wrong_result.returncode != 2 or wrong_output.exists()
+                        or diagnostic.encode() not in wrong_log.read_bytes()):
+                    raise ValueError("the guarded stack evidence checker did not reject " + name)
+                return {"originalSHA256": digest(baseline), "mutatedSHA256": digest(mutant),
+                        "logSHA256": digest(wrong_log), "diagnosticPath": diagnostic, "exitCode": wrong_result.returncode}
+
+            wrong_initializer = rejected_stack_control("wrong-initial-capture", "native.traversal.initial.assembly",
+                                                      members, wrong_native, wrong_native, operations)
+            helpers = operations.read_bytes()
+            append_body = b"        var result = sequence\n        result.append(element)\n        return result\n"
+            if helpers.count(append_body) != 1:
+                raise ValueError("expected one physical sequenceAppend copy, append, and return")
+            wrong_helpers = stack / "NativeMachineOperations-wrong-sequence-append.swift"
+            wrong_helpers.write_bytes(helpers.replace(append_body, append_body.replace(b"return result", b"return sequence"), 1))
+            wrong_append = rejected_stack_control("wrong-sequence-append", "native.traversal.operations.sequenceAppend",
+                                                  operations, wrong_helpers, members, wrong_helpers)
             render_receipt = json.loads((render / "files.json").read_text())
             stack_files = render_receipt.get("files", {})
             if (not re.fullmatch(r"[a-f0-9]{64}", render_receipt.get("compilationIdentity", ""))
+                    or render_receipt.get("operationsSHA256") != inputs[native_operations]
+                    or digest(operations) != inputs[native_operations]
                     or set(stack_files) != {"OrderedIntTraversalPass.tla", "OrderedIntTraversalPass.cfg",
                                             "OrderedIntTraversalPassSource.tla"}
                     or any((render / name).is_symlink() or digest(render / name) != value
@@ -834,11 +884,8 @@ def main():
                 "validatorSHA256": capture["binarySHA256"],
                 "stage": "INSTALLED_REGENERATED" if installed else "BOOTSTRAP_CANDIDATE",
                 "installedBytesMatch": installed, "rendering": render_receipt,
-                "wrongInitialCaptureControl": {
-                    "originalSHA256": digest(stack / "members.swift"),
-                    "mutatedSHA256": digest(wrong_native), "logSHA256": digest(wrong_log),
-                    "diagnosticPath": wrong_path, "exitCode": wrong_result.returncode,
-                },
+                "wrongInitialCaptureControl": wrong_initializer,
+                "wrongSequenceAppendControl": wrong_append,
                 "mathematicalProof": False, "hostedAdmission": False,
                 "artifacts": {str(path.relative_to(stack)): digest(path) for path in stack.rglob("*") if path.is_file()},
                 "sourceOrigins": {part: origin for part, (_, origin) in dumps.items()},
@@ -885,49 +932,83 @@ def main():
             proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
             if retained_input.name in branchwise_imports:
                 branchwise_hashes[retained_input.name] = sha
+        conditional_modules = {conditional_module + ".tla": conditional_report["modelSHA256"]}
+        conditional_modules.update({name: conditional_report[name] for name in conditional_shared})
+        for name, expected in conditional_modules.items():
+            retained_input = imports / name
+            shutil.copyfile(generated / name, retained_input)
+            sha = digest(retained_input)
+            if sha != expected:
+                raise ValueError(f"retained shared conditional input differs: {name}")
+            proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
         if ordered_copy_attachments is not None:
             swift_source = "Tests/SwiftTLATests/OrderedStepFixtures.swift"
             native_attachment = "OrderedCopyNativeMembers.swift"
             attached_source = Path(swift_source).name
             catalog_module = "SwiftTLAOrderedAssignmentCatalogOrderedCopy"
             attached = {path.name: path for path in ordered_copy_attachments.iterdir()}
-            variant = "GeneratedScalarConditionalOverflowProofModel"
-            variant_proof = f"SwiftTLA{variant}ConditionalOverflowHistory"
-            variant_cfg = variant + ".cfg"
-            variant_configured = variant_proof + "ConfiguredProof.tla"
-            variant_members = f"{variant}NativeMembers.swift"
-            arm_sources = [f"SwiftTLAArithmeticAssignmentSource{variant}Arm{arm}.tla" for arm in (1, 2)]
-            domain_source = f"SwiftTLAArithmeticAssignmentSource{variant}Domain.tla"
-            variant_names = {variant + ".swift", variant + ".tla", variant_cfg, variant_members,
-                             variant_proof + ".tla", variant_configured, domain_source, *arm_sources}
-            if not variant_names.issubset(attached):
-                raise ValueError("missing the selected conditional source, members, module, configuration, or proof")
-            variant_files = {name: attached.pop(name) for name in variant_names}
-            if any(path.is_symlink() or not path.is_file() or not path.stat().st_size for path in variant_files.values()):
-                raise ValueError("invalid selected conditional overflow input")
-            if variant_files[variant_configured].read_text().splitlines()[1:2] != [
-                    f"EXTENDS {variant_proof}, CallerInputPageBlock1"]:
-                raise ValueError("conditional configuration proof does not consume the conditional action proof")
-            variant_source = variant_files[variant + ".swift"]
-            expansion, origin = capture_model_expansion(str(variant_source), "conditional-overflow",
-                owner=variant, compiler_module="SwiftTLATests")["members"]
-            retained_expansion = packet / "native-conditional-overflow-source.swift"
-            retained_expansion.write_bytes(expansion)
-            with (output / "conditional-overflow-compare-members.log").open("wb") as log:
-                subprocess.run([str(binary), "native", "verify-member-tokens",
-                                "--compiled-members", str(retained_expansion),
-                                "--attached-members", str(variant_files[variant_members])],
-                               env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
-            receipt["conditionalOverflowHistory"] = {
-                "sourceSHA": head, "test": "GeneratedAtomicUpdateProofTests/conditionalOverflowKeepsTheSelectedArmHistory",
-                "fixture": conditional_model, "fixtureSHA256": inputs[conditional_model],
-                "authoredVariant": variant_source.name, "proof": variant_proof + ".tla",
-                "configuration": variant_cfg, "configuredProof": variant_configured, "armSources": arm_sources,
-                "domainSource": domain_source,
-                "files": {name: digest(path) for name, path in variant_files.items()},
-                "compiledMembersSHA256": digest(retained_expansion), "sourceOrigin": origin,
-                "matchingSourceAccurateTokens": True,
-            }
+            conditional_variants = (
+                ("GeneratedScalarConditionalOverflowProofModel", "conditional-overflow",
+                 "conditionalOverflowKeepsTheSelectedArmHistory", "conditionalOverflowHistory",
+                 "conditionalPublicSendBinding", "SwiftTLAConditionalPublicSendBinding", False),
+                ("GeneratedScalarConditionalSharedPrefixProofModel", "conditional-shared-prefix",
+                 "sharedConditionalWriteSelectsOrStops", "conditionalSharedPrefixHistory",
+                 "conditionalSharedPrefixPublicSendBinding",
+                 "SwiftTLAGeneratedScalarConditionalSharedPrefixProofModelPublicSendBinding", True),
+            )
+            conditional_sends = []
+            variant_files = {}
+            for variant, task, test, history_key, send_key, send_module, has_prefix in conditional_variants:
+                variant_proof = f"SwiftTLA{variant}ConditionalOverflowHistory"
+                variant_cfg = variant + ".cfg"
+                variant_configured = variant_proof + "ConfiguredProof.tla"
+                variant_members = f"{variant}NativeMembers.swift"
+                source_stem = f"SwiftTLAArithmeticAssignmentSource{variant}"
+                arm_sources = [f"{source_stem}Arm{arm}.tla" for arm in (1, 2)]
+                domain_source = f"{source_stem}Domain.tla"
+                shared_sources = [f"{source_stem}Shared.tla"] if has_prefix else []
+                companions = [domain_source, *shared_sources, *arm_sources]
+                variant_names = {variant + ".swift", variant + ".tla", variant_cfg, variant_members,
+                                 variant_proof + ".tla", variant_configured, *companions}
+                if not variant_names.issubset(attached):
+                    raise ValueError(f"missing the conditional source, members, configuration, or proof for {variant}")
+                files = {name: attached.pop(name) for name in variant_names}
+                if any(path.is_symlink() or not path.is_file() or not path.stat().st_size for path in files.values()):
+                    raise ValueError(f"invalid selected conditional input for {variant}")
+                action_imports = f"EXTENDS {variant}, TLAPS, Sequences, " + ", ".join(
+                    Path(name).stem for name in companions)
+                configured_lines = files[variant_configured].read_text().splitlines()
+                if (files[variant_proof + ".tla"].read_text().splitlines()[1:2] != [action_imports]
+                        or configured_lines[1:2] != [f"EXTENDS {variant_proof}, CallerInputPageBlock1"]
+                        or configured_lines.count(f"LOCAL ConditionalSend == INSTANCE {send_module}") != 1):
+                    raise ValueError(f"conditional action/configured proof imports do not match {variant}")
+                variant_source = files[variant + ".swift"]
+                plugin_before = digest(plugin)
+                expansion, origin = capture_model_expansion(str(variant_source), task,
+                    owner=variant, compiler_module="SwiftTLATests")["members"]
+                if digest(plugin) != plugin_before:
+                    raise ValueError(f"compiler plug-in changed while expanding {variant}")
+                retained_expansion = packet / f"native-{task}-source.swift"
+                retained_expansion.write_bytes(expansion)
+                with (output / f"{task}-compare-members.log").open("wb") as log:
+                    subprocess.run([str(binary), "native", "verify-member-tokens",
+                                    "--compiled-members", str(retained_expansion),
+                                    "--attached-members", str(files[variant_members])],
+                                   env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+                receipt[history_key] = {
+                    "sourceSHA": head, "test": f"GeneratedAtomicUpdateProofTests/{test}",
+                    "fixture": conditional_model, "fixtureSHA256": inputs[conditional_model],
+                    "authoredVariant": variant_source.name, "proof": variant_proof + ".tla",
+                    "configuration": variant_cfg, "configuredProof": variant_configured, "armSources": arm_sources,
+                    "domainSource": domain_source,
+                    "files": {name: digest(path) for name, path in files.items()},
+                    "compiledMembersSHA256": digest(retained_expansion), "sourceOrigin": origin,
+                    "matchingSourceAccurateTokens": True,
+                }
+                if has_prefix:
+                    receipt[history_key]["sharedSource"] = shared_sources[0]
+                conditional_sends.append((send_key, retained_expansion, history_key, send_module))
+                variant_files.update(files)
             loop_source = "Tests/SwiftTLATests/SequentialLoopControlFixtures.swift"
             loop_module = "SwiftTLASequentialControlFinishingLoop"
             loop_parent = loop_module + "ConfiguredProof"
@@ -1062,8 +1143,8 @@ def main():
                 proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
         send_inputs = packet / "arithmetic-send"
         send_inputs.mkdir()
-        for helper in ("NativeMachineOperations.swift", "CheckingContext.swift"):
-            source = f"Sources/SwiftTLA/{helper}"
+        for source in (native_operations, checking_context):
+            helper = Path(source).name
             shutil.copyfile(root / source, send_inputs / helper)
             if digest(send_inputs / helper) != inputs[source]:
                 raise ValueError("retained send helper differs from compiler inputs")
@@ -1082,6 +1163,12 @@ def main():
                     "checkingSHA256": digest(send_inputs / "CheckingContext.swift"),
                     "moduleSHA256": digest(binding)}
 
+        receipt["conditionalTotalPublicSendBinding"] = {
+            "nativeSourceSHA256": conditional_report["nativeSourceSHA256"],
+            "operationsSHA256": conditional_report["operationsSHA256"],
+            "checkingSHA256": conditional_report["checkingSHA256"],
+            "moduleSHA256": conditional_report[conditional_send],
+        }
         receipt["arithmeticPublicSendBinding"] = bind_send(
             "prepare-arithmetic-send", generated / "native-arithmetic-source.swift",
             arithmetic["nativeSourceSHA256"], "SwiftTLAArithmeticPublicSendBinding")
@@ -1089,6 +1176,9 @@ def main():
             receipt["orderedCopyPublicSendBinding"] = bind_send(
                 "prepare-catalog-send", retained_ordered_copy,
                 receipt["orderedCopyNativeOutput"]["compiledSHA256"], catalog_module + "SendBinding")
+            for send_key, expansion, history_key, module in conditional_sends:
+                receipt[send_key] = bind_send(
+                    "prepare-catalog-send", expansion, receipt[history_key]["compiledMembersSHA256"], module)
         (packet / "proof-inputs.sha256").write_text("".join(proof_hashes))
         tool_inputs = packet / "toolchain/build-inputs"
         tool_inputs.mkdir(parents=True)
@@ -1139,6 +1229,8 @@ def main():
             history = profile.get("orderedActionFailureHistory")
             if profile.get("caseID") != "Selected" or not isinstance(history, list) or (nonempty and not history):
                 raise ValueError(f"{folder} packet lacks its required observed ordered native history")
+            if not all(ordered_action_failure_has_location(occurrence) for occurrence in history):
+                raise ValueError(f"{folder} packet contains an invalid ordered native failure location")
             receipt[receipt_key] = selection_files
         branchwise = packet / "checking-selection-branchwise"
         combined_name = "SwiftTLABranchwiseSelectedChecking.tla"

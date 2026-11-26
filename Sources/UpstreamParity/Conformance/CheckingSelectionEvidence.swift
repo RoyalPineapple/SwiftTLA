@@ -217,8 +217,12 @@ package enum CheckingSelectionEvidence {
         let before = TLAValue.tuple(failure.before.map { binding in
             record([("binding", .int(binding.binding)), ("target", .int(binding.target)), ("value", .int(binding.value))])
         })
+        let branch: TLAValue = switch failure.location {
+        case .arm(let ordinal): .int(ordinal)
+        case .sharedPrefix: .tuple([])
+        }
         let event = record([
-            ("branch", .int(failure.branch)), ("site", .int(failure.site)), ("target", .int(failure.target)),
+            ("branch", branch), ("site", .int(failure.site)), ("target", .int(failure.target)),
             ("before", before), ("payload", record([
                 ("code", .int(Int(payload.code))), ("detail", .string(payload.detail)),
                 ("integers", .tuple(payload.integers.map(TLAValue.int))),

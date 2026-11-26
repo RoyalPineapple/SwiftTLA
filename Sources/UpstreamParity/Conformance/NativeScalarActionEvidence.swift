@@ -750,7 +750,11 @@ struct NativeConditionalArmOutput {
             let before = call.before.enumerated().map { index, binding in
                 TLAValue.record(["binding": .int(binding.binding), "target": .int(binding.target), "slot": .int(index + 1)])
             }
-            return (.int(site), .record(["action": .int(call.action), "branch": .int(call.branch),
+            let branch: TLAValue = switch call.location {
+            case .arm(let ordinal): .int(ordinal)
+            case .sharedPrefix: .tuple([])
+            }
+            return (.int(site), .record(["action": .int(call.action), "branch": branch,
                 "site": .int(call.site), "target": .int(call.target), "before": .tuple(before)]))
         }
         return .record(["captures": .tuple(captures.map { $0.integerRecord }),
@@ -779,12 +783,17 @@ struct NativeConditionalActionOutput {
     let plans: String
     let fields: String
     let predicate: [String]
+    let selectorCaptures: [String]
+    let handle: String
+    let formalLabel: String
+    let visitor: Int
+    let sharedPrefix: NativeConditionalArmOutput
     let ifTrue: NativeConditionalArmOutput
     let ifFalse: NativeConditionalArmOutput
 }
 
 /// Keep the reviewed arithmetic, branch selection and history recorder tied to the library source.
-func verifyConditionalHistoryHelpers(operations: String, checking: String) throws {
+func verifyConditionalHistoryHelpers(operations: String, checking: String, requiresSharedPrefix: Bool = false) throws {
     let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
     func declarations(_ source: String) throws -> [DeclSyntax] {
         let parsed = Parser.parse(source: source)
@@ -799,6 +808,33 @@ func verifyConditionalHistoryHelpers(operations: String, checking: String) throw
     }
 
     let library = try declarations(operations)
+    let errors = try checked(library.compactMap { $0.as(EnumDeclSyntax.self) }.filter {
+        $0.name.text == "NativeMachineEvaluationError"
+    })
+    let classification = try checked(errors.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter {
+        $0.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "isModelEvaluationFailure"
+    })
+    guard sameWords(syntaxWords(classification), """
+        @_documentation(visibility: internal)
+        public var isModelEvaluationFailure: Bool {
+            switch self {
+            case .nonEnumerableIntegerDomain, .nonEnumerableSequenceDomain,
+                 .collectionCardinalityOverflow, .powerSetTooLarge,
+                 .recursionDepthExceeded, .checkingContextRequired:
+                false
+            case .noMatchingCase, .noSatisfyingChoice, .integerOverflow,
+                 .divisionByZero, .negativeModuloDivisor, .indexOutOfBounds,
+                 .invalidSequenceDomain, .emptySequence, .functionArgumentOutsideDomain,
+                 .tupleIndexOutsideDomain, .recordFieldUnavailable,
+                 .invalidRandomSubsetCount, .emptyRandomElementDomain:
+                true
+            }
+        }
+        """) else { throw invalid }
+    try require("_nativeIntMinimum", """
+        @_documentation(visibility: internal)
+        public func _nativeIntMinimum() -> Int { Int.min }
+        """, in: library)
     let owner = try checked(library.compactMap { $0.as(EnumDeclSyntax.self) }.filter {
         $0.name.text == "_NativeMachineOperations"
     })
@@ -864,7 +900,42 @@ func verifyConditionalHistoryHelpers(operations: String, checking: String) throw
         ) {
             guard context?.recordsAlternativeFailures == true else { return }
             let bindings = before().map { NativeAlternativeFailure.Binding(binding: $0.binding, target: $0.target, value: $0.value) }
-            context?.record(.alternative(.init(action: action, branch: branch, site: site, target: target,
+            context?.record(.alternative(.init(action: action, location: .arm(branch), site: site, target: target,
+                                               before: bindings, reason: reason)))
+        }
+        """, in: collector)
+    try require("startRecordingActionFailureHistory", """
+        package mutating func startRecordingActionFailureHistory() {
+            recordsAlternativeFailures = true
+            assignmentFailures = []
+        }
+        """, in: context.memberBlock.members.map(\.decl))
+    try require("finishRecordingActionFailureHistory", """
+        package mutating func finishRecordingActionFailureHistory() -> [NativeAlternativeFailure] {
+            guard recordsAlternativeFailures else { return [] }
+            defer {
+                assignmentFailures = nil
+                recordsAlternativeFailures = false
+            }
+            return assignmentFailures?.compactMap {
+                guard case .alternative(let failure) = $0 else { return nil }
+                return failure
+            } ?? []
+        }
+        """, in: context.memberBlock.members.map(\.decl))
+    let typedRecorder = collector.contains {
+        $0.as(FunctionDeclSyntax.self)?.name.text == "_recordNativeSharedPrefixFailure"
+    }
+    guard requiresSharedPrefix || typedRecorder else { return }
+    try require("_recordNativeSharedPrefixFailure", """
+        @_documentation(visibility: internal)
+        public func _recordNativeSharedPrefixFailure<Registers>(
+            _ context: inout CheckingContext<Registers>?, action: Int, site: Int, target: Int,
+            before: @autoclosure () -> [(binding: Int, target: Int, value: Int)], reason: NativeMachineEvaluationError
+        ) {
+            guard context?.recordsAlternativeFailures == true else { return }
+            let bindings = before().map { NativeAlternativeFailure.Binding(binding: $0.binding, target: $0.target, value: $0.value) }
+            context?.record(.alternative(.init(action: action, location: .sharedPrefix, site: site, target: target,
                                                before: bindings, reason: reason)))
         }
         """, in: collector)
@@ -873,7 +944,7 @@ func verifyConditionalHistoryHelpers(operations: String, checking: String) throw
 func nativeConditionalActionPlans(_ source: String, program: CompiledProgram, predicate: [String]) throws
     -> NativeConditionalActionOutput {
     let row = try checked(decodeScalarActions(source, program: program, predicate: predicate))
-    guard let visit = row.visit else {
+    guard let visit = row.visit, let shared = row.shared else {
         throw InitialFailureEvidenceError.unsupportedGeneratedOutput
     }
     let names = Dictionary(uniqueKeysWithValues: program.layout.variables.map { ($0.formalName, $0.declaration.name) })
@@ -908,12 +979,13 @@ func nativeConditionalActionPlans(_ source: String, program: CompiledProgram, pr
     return .init(children: "<<\(first), \(second)>>",
         plans: "[child \\in {\(first), \(second)} |-> IF child = \(first) THEN \(row.plans[0].tla) ELSE \(row.plans[1].tla)]",
         fields: TLAValue.set(Set(row.fields.map(TLAValue.string))).description,
-        predicate: visit.predicate, ifTrue: try arm(row.plans[0]), ifFalse: try arm(row.plans[1]))
+        predicate: visit.predicate, selectorCaptures: Array(visit.ifTrue.arguments.dropLast(2)), handle: row.handle, formalLabel: row.formalLabel, visitor: row.visitor,
+        sharedPrefix: try arm(shared), ifTrue: try arm(row.plans[0]), ifFalse: try arm(row.plans[1]))
 }
 
 private func decodeScalarActions(_ source: String, program: CompiledProgram, predicate: [String]?) throws
     -> [(label: String, formalLabel: String, handle: String, visitor: Int, fields: [String],
-         visit: NativeConditionalVisit?, plans: [ActionInstructions])] {
+         visit: NativeConditionalVisit?, shared: ActionInstructions?, plans: [ActionInstructions])] {
 
     let parsed = Parser.parse(source: source)
     guard !parsed.hasError, !source.utf8.contains(0), program.layout.parameters.isEmpty else {
@@ -1083,7 +1155,8 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
         try verifyGeneratedSuccessorOutput(DeclSyntax(successor), actionID: index, parameters: "", arguments: "",
             configurationParameters: "", configurationArguments: "")
         return (label: action.declaration.name, formalLabel: formalLabels[index], handle: labels[index],
-            visitor: physicalRoutes[index].visitor, fields: fields.map(\.name), visit: decoded.visit, plans: decoded.plans)
+            visitor: physicalRoutes[index].visitor, fields: fields.map(\.name), visit: decoded.visit, shared: decoded.shared,
+            plans: decoded.plans)
     }
     try checkNativeValidationActionRoute(functions)
     return rows
@@ -1097,7 +1170,7 @@ struct NativeConditionalFailureCall {
     }
 
     let action: Int
-    let branch: Int
+    let location: NativeAlternativeFailure.Location
     let site: Int
     let target: Int
     let before: [Preceding]
@@ -1114,15 +1187,28 @@ struct NativeConditionalFailureCall {
         }
         let expression = item.item.as(ExprSyntax.self) ?? item.item.as(ExpressionStmtSyntax.self)?.expression
         guard let call = expression?.as(FunctionCallExprSyntax.self), !call.hasError,
-              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
-              syntaxWords(call.calledExpression) == ["SwiftTLA", ".", "_recordNativeAlternativeFailure"] else { return nil }
+              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
         let arguments = Array(call.arguments)
-        guard arguments.map({ $0.label?.text }) == [nil, "action", "branch", "site", "target", "before", "reason"],
-              let context = arguments[0].expression.as(InOutExprSyntax.self), reference(context.expression) == "context",
-              let action = ordinal(arguments[1].expression), let branch = ordinal(arguments[2].expression),
-              let site = ordinal(arguments[3].expression), let target = ordinal(arguments[4].expression),
-              let bindings = arguments[5].expression.as(ArrayExprSyntax.self),
-              reference(arguments[6].expression) == "failure" else { return nil }
+        let labels = arguments.map { $0.label?.text }
+        let location: NativeAlternativeFailure.Location
+        let siteIndex: Int
+        switch syntaxWords(call.calledExpression) {
+        case ["SwiftTLA", ".", "_recordNativeAlternativeFailure"]:
+            guard labels == [nil, "action", "branch", "site", "target", "before", "reason"],
+                  let branch = ordinal(arguments[2].expression) else { return nil }
+            location = .arm(branch)
+            siteIndex = 3
+        case ["SwiftTLA", ".", "_recordNativeSharedPrefixFailure"]:
+            guard labels == [nil, "action", "site", "target", "before", "reason"] else { return nil }
+            location = .sharedPrefix
+            siteIndex = 2
+        default: return nil
+        }
+        guard let context = arguments[0].expression.as(InOutExprSyntax.self), reference(context.expression) == "context",
+              let action = ordinal(arguments[1].expression),
+              let site = ordinal(arguments[siteIndex].expression), let target = ordinal(arguments[siteIndex + 1].expression),
+              let bindings = arguments[siteIndex + 2].expression.as(ArrayExprSyntax.self),
+              reference(arguments[siteIndex + 3].expression) == "failure" else { return nil }
         var before: [Preceding] = []
         for binding in bindings.elements {
             guard let tuple = binding.expression.as(TupleExprSyntax.self) else { return nil }
@@ -1132,14 +1218,14 @@ struct NativeConditionalFailureCall {
                   let local = reference(fields[2].expression) else { return nil }
             before.append(.init(binding: binder, target: key, local: local))
         }
-        return .init(action: action, branch: branch, site: site, target: target, before: before)
+        return .init(action: action, location: location, site: site, target: target, before: before)
     }
 }
 
 private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int,
     fields: [ActionField], control: ActionField?, locations: [(caseName: String, label: String)],
     checking: String, predicate: [String]?, program: CompiledProgram) throws
-    -> (visit: NativeConditionalVisit?, plans: [ActionInstructions]) {
+    -> (visit: NativeConditionalVisit?, shared: ActionInstructions?, plans: [ActionInstructions]) {
     let parts = visitor.body?.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }.filter {
         $0.name.text.hasPrefix("_actionPart")
     } ?? []
@@ -1185,7 +1271,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
     }
 
     typealias Binding = (local: String, value: ActionReference)
-    func partCore(_ name: String, scope: [Binding], region: AlternativeFailureRegion? = nil) throws
+    func partCore(_ name: String, scope: [Binding], beforeSelector: Bool, region: AlternativeFailureRegion?) throws
         -> (tokens: [String], recordsFailure: Bool, conditionalFailure: NativeConditionalFailureCall?) {
         guard let part = byName[name], let body = part.body, visited.insert(name).inserted else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
@@ -1203,12 +1289,14 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
            let catchBody = actionPart.catchClauses.first?.body.statements, catchBody.count == 2,
            let observer = catchBody.first {
             guard let decoded = NativeConditionalFailureCall.decode(observer), let region,
-                  decoded.action == action.ordinal, decoded.branch == region.armOrdinal,
+                  decoded.action == action.ordinal,
+                  decoded.location == (beforeSelector ? .sharedPrefix : .arm(region.armOrdinal)),
                   decoded.before.count == lexical.count, lexical.count < region.bindings.count else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
             let expectedSite = region.bindings[lexical.count]
-            guard region.index(of: expectedSite.binder) == lexical.count,
+            let position = beforeSelector ? region.sharedIndex(of: expectedSite.binder) : region.index(of: expectedSite.binder)
+            guard position == lexical.count,
                   decoded.site == expectedSite.binder.ordinal, decoded.target == expectedSite.target.ordinal,
                   let name = program.binderNames[expectedSite.binder], tokens.count > prefix.count + 1,
                   tokens[prefix.count] == "let", tokens[prefix.count + 1] == "_\(name)_\(expectedSite.binder.ordinal)"
@@ -1251,16 +1339,36 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
         return (core, !recording.isEmpty, conditionalFailure)
     }
 
-    func walk(_ entry: String, region: AlternativeFailureRegion? = nil) throws -> ActionInstructions {
-        var instructions = ActionInstructions()
+    var fork: (visit: NativeConditionalVisit, scope: [Binding])?
+    func walk(_ entry: String, scope: [Binding] = [], startingWith prefix: ActionInstructions = .init(),
+              untilSelector: Bool = false, region: AlternativeFailureRegion? = nil) throws -> ActionInstructions {
+        var instructions = prefix
         var capturesFollowGuard = true
         let entryGuards = predicate == nil ? 1 : 0
-        var pending: [(String, [Binding])] = [(entry, [])]
+        var pending: [(String, [Binding])] = [(entry, scope)]
         parts: while let (name, scope) = pending.popLast() {
-            let (core, recordsFailure, conditionalFailure) = try partCore(name, scope: scope, region: region)
+            let (core, recordsFailure, conditionalFailure) = try partCore(name, scope: scope,
+                beforeSelector: untilSelector, region: region)
             guard !recordsFailure || (core.first == "let"
                 && scope.allSatisfy({ $0.value.type == nativeIntTypeTokens.joined() })) else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            if untilSelector, let predicate,
+               let body = byName[name]?.body?.statements.first?.item.as(DoStmtSyntax.self)?.body.statements,
+               body.count == 1, let item = body.first?.item,
+               let call = item.as(TryExprSyntax.self) ?? item.as(ExpressionStmtSyntax.self)?.expression.as(TryExprSyntax.self),
+               let selection = nativeConditionalVisit(Syntax(call)) {
+                let names = scope.map(\.local)
+                let arguments = names + ["updates", "emit"]
+                guard !recordsFailure, pending.isEmpty, instructions.writes.isEmpty, instructions.guards.isEmpty,
+                      region.map({ $0.sharedBindingCount == names.count }) ?? true,
+                      capturesFollowGuard, names.count == instructions.captures.count, syntaxWords(call) == core,
+                      selection.predicate == predicate, selection.ifTrue.arguments == arguments,
+                      selection.ifFalse.arguments == arguments else {
+                    throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+                }
+                fork = (selection, scope)
+                break parts
             }
             let argument = scope.map { "\($0.local), " }.joined()
             if sameWords(core, "try emit(updates)") { continue }
@@ -1282,6 +1390,17 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                     throw InitialFailureEvidenceError.unsupportedGeneratedOutput
                 }
                 guard core[2] == "=", call > 3 else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+                if let region {
+                    let position = scope.count
+                    guard position < region.bindings.count,
+                          untilSelector == (position < region.sharedBindingCount) else {
+                        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+                    }
+                    let binding = region.bindings[position].binder
+                    guard let name = program.binderNames[binding], local == "_\(name)_\(binding.ordinal)" else {
+                        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+                    }
+                }
                 let rhs = Array(core[3..<call])
                 capturesFollowGuard = capturesFollowGuard
                     && instructions.guards.count == entryGuards && instructions.writes.isEmpty
@@ -1357,33 +1476,32 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         // A selected conditional arm has already passed the checked branch decision.
-        guard instructions.failureAppendSites.isEmpty || (capturesFollowGuard && instructions.guards.count == entryGuards) else {
+        guard (predicate == nil && instructions.failureAppendSites.isEmpty)
+                || (capturesFollowGuard && instructions.guards.count == entryGuards) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         return instructions
     }
 
     let visit: NativeConditionalVisit?
+    let sharedPrefix: ActionInstructions?
     let plans: [ActionInstructions]
-    if let predicate {
-        let (root, recordsFailure, _) = try partCore("_actionPart0", scope: [])
-        let body = byName["_actionPart0"]?.body?.statements.first?.item.as(DoStmtSyntax.self)?.body.statements
-        guard !recordsFailure, body?.count == 1, let item = body?.first?.item,
-              let expression = item.as(TryExprSyntax.self) ?? item.as(ExpressionStmtSyntax.self)?.expression.as(TryExprSyntax.self),
-              syntaxWords(expression) == root, let conditional = nativeConditionalVisit(Syntax(expression)),
-              conditional.predicate == predicate, conditional.ifTrue.arguments == ["updates", "emit"],
-              conditional.ifFalse.arguments == ["updates", "emit"] else {
-            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-        }
-        visit = conditional
-        plans = try [walk("_actionPart\(conditional.ifTrue.id)", region: regions.first { $0.armOrdinal == 0 }),
-                     walk("_actionPart\(conditional.ifFalse.id)", region: regions.first { $0.armOrdinal == 1 })]
+    if predicate != nil {
+        let shared = try walk("_actionPart0", untilSelector: true, region: regions.first)
+        guard let fork else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+        visit = fork.visit
+        sharedPrefix = shared
+        plans = try [walk("_actionPart\(fork.visit.ifTrue.id)", scope: fork.scope, startingWith: shared,
+                          region: regions.first { $0.armOrdinal == 0 }),
+                     walk("_actionPart\(fork.visit.ifFalse.id)", scope: fork.scope, startingWith: shared,
+                          region: regions.first { $0.armOrdinal == 1 })]
     } else {
         visit = nil
+        sharedPrefix = nil
         plans = try [walk("_actionPart0")]
     }
     guard visited.count == parts.count else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-    return (visit, plans)
+    return (visit, sharedPrefix, plans)
 }
 
 private func checkNativeValidationActionRoute(_ functions: [FunctionDeclSyntax]) throws {
@@ -1436,8 +1554,51 @@ private func checkNativeValidationActionRoute(_ functions: [FunctionDeclSyntax])
 
 /// The checked visitor has one continuation per arm. It reaches the successor
 /// wrapper only after all captures and ordered _Updates merges have succeeded.
-func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [String]) -> (definitions: String, steps: String) {
+func conditionalNativeOutputProof(writeOrders: [[String]], nativeRows: TLAValue, tables: [String], planNames: [[String]],
+                                  sharedPrefix: Bool = false)
+    throws -> (rowDefinitions: String, captureNames: [[String]], definitions: String, steps: String,
+               inventorySteps: String, selectedSteps: String) {
+    guard case .tuple(let traces) = nativeRows, traces.count == tables.count,
+          tables.count == planNames.count, writeOrders.count == tables.count else {
+        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+    }
     let arms = writeOrders.indices.map { $0 + 1 }
+    let planRows = try traces.enumerated().map { index, trace -> (names: [String], definitions: [String], row: String, steps: String) in
+        guard case .record(let row) = trace, case .tuple(let captures)? = row.value(named: "captures"),
+              captures.count == planNames[index].count else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let arm = index + 1
+        let physicalPlans = planNames[index]
+        let nativePlans = captures.indices.map { "ConditionalNativeArm\(arm)Plan\($0 + 1)" }
+        let planDefinitions = zip(nativePlans, captures).map { "LOCAL \($0) == \($1)" }
+        let nativeTuple = actionTuple(nativePlans)
+        let namedCaptures = TLAValue.tuple(nativePlans.map(TLAValue.constant))
+        let nativeRow = TLAValue.record(row.replacing(namedCaptures, for: "captures")).description
+        let physicalTuple = actionTuple(physicalPlans)
+        let rowSteps = zip(nativePlans, physicalPlans).enumerated().map { slot, pair in
+            #"""
+                    <3>row\#(slot + 1). \#(pair.0) = \#(pair.1)
+                        BY ONLY SMT DEF \#(pair.0), \#(pair.1)
+            """#
+        }.joined(separator: "\n")
+        let rowFacts = captures.indices.map { "<3>row\($0 + 1), " }.joined()
+        let steps = #"""
+            <2>arm\#(arm). CASE arm = \#(arm)
+                <3>native. ConditionalNativeRows[arm].captures = \#(nativeTuple)
+                    BY ONLY <2>arm\#(arm), SMT DEF ConditionalNativeRows
+                <3>physical. ConditionalIntegerTable(arm).plans = \#(physicalTuple)
+                    BY ONLY <2>arm\#(arm), SMT DEF ConditionalIntegerTable, \#(tables[index])
+        \#(rowSteps)
+                <3>. QED BY ONLY <3>native, <3>physical, \#(rowFacts)SMT
+        """#
+        return (nativePlans, planDefinitions, nativeRow, steps)
+    }
+    let rowDefinitions = (planRows.flatMap(\.definitions)
+        + ["ConditionalNativeRows == \(actionTuple(planRows.map(\.row)))"]).joined(separator: "\n")
+    let captureNames = planRows.map(\.names)
+    let callbackPlanDefinitions = captureNames.flatMap { $0 }.map { ", " + $0 }.joined()
+    let nativePlanCases = planRows.map(\.steps).joined(separator: "\n")
     let suffixSteps = arms.map { arm in
         #"""
             <2>suffix\#(arm). ConditionalNativeRows[\#(arm)].suffix = ConditionalSourceRows[\#(arm)].suffix
@@ -1477,19 +1638,20 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
     }.joined(separator: "\n")
     let writeRoleCases = arms.map { "<2>arm\($0)" }.joined(separator: ", ")
 
-    let definitions = #"""
-    ConditionalIntegerRun(arm) ==
-        LET rows == ConditionalIntegerRows(arm)
-        IN CHOOSE history : Arithmetic!AssignmentListHistory(FALSE, ConditionalBefore, rows, history)
-    LOCAL ConditionalGeneratedIntegerRun(arm) ==
-        LET rows == ConditionalIntegerRows(arm)
-        IN CHOOSE history : Arithmetic!AssignmentListHistory(TRUE, ConditionalBefore, rows, history)
-    ConditionalIntegerTerminal(arm) == ConditionalIntegerRun(arm)[Len(ConditionalIntegerRows(arm))]
-    ConditionalNativeSelectedArm == ConditionalArmFor(ConditionalNativeComparison)
-    ConditionalNativeIntegerResult(arm) ==
-        LET visitor == ConditionalNativeRows[arm]
-        IN Arithmetic!NativeAssignmentCaptureResult(ConditionalBefore, visitor, Len(visitor.captures))
-    ConditionalNativeHistory(recording) ==
+    func afterPrefix(_ selected: String, failure: String, indentation: String = "    ",
+                     condition: String = "~ConditionalNativeAfterSharedPrefix") -> String {
+        guard sharedPrefix else { return selected }
+        let continuation = selected.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { "    \($0)" }.joined(separator: "\n")
+        return "\(indentation)IF \(condition) THEN \(failure)\n\(indentation)ELSE\n\(continuation)"
+    }
+    let armSelection = sharedPrefix ? #"""
+    ConditionalNativeSelectedArm ==
+        IF ~ConditionalNativeAfterSharedPrefix THEN <<>>
+        ELSE IF ConditionalNativeDecision = <<>> THEN <<>> ELSE ConditionalNativeDecision[1]
+    """# : "ConditionalNativeSelectedArm == ConditionalArmFor(ConditionalNativeComparison)"
+    let certifiedFailure = "[callbacks |-> <<>>, reasons |-> <<ConditionalSharedTerminal.failure.payload>>]"
+    let history = #"""
         LET arm == ConditionalNativeSelectedArm
             result == ConditionalNativeIntegerResult(arm)
             calls == ConditionalNativeRows[arm].callbacks
@@ -1501,6 +1663,44 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
                         IN [binding |-> capture.binding, target |-> capture.target, value |-> result.completed[capture.slot]]]
                 IN <<[source |-> ConditionalEntry, action |-> call.action, branch |-> call.branch, site |-> call.site,
                       target |-> call.target, payload |-> result.failure.payload, before |-> before]>>
+    """#
+    let step = #"""
+        LET arm == ConditionalNativeSelectedArm
+        IN ConditionalNativeIntegerResult(arm).failure = <<>> /\ ConditionalNativeMaterializes(arm, ConditionalStateAfter)
+    """#
+    let visitor = #"""
+            LET arm == ConditionalNativeSelectedArm
+                result == ConditionalNativeIntegerResult(arm)
+                handlers == ConditionalNativeRows[arm].callbacks
+            IN IF result.failure = <<>>
+               THEN [callbacks |-> IF \E after : ConditionalNativeMaterializes(arm, after)
+                                   THEN <<ConditionalSnapshot(CHOOSE after : ConditionalNativeMaterializes(arm, after))>>
+                                   ELSE <<>>,
+                     reasons |-> <<>>]
+               ELSE [callbacks |-> <<>>,
+                     reasons |-> IF result.failure.site \in DOMAIN handlers THEN <<result.failure.payload>> ELSE <<>>]
+    """#
+    let certifiedVisitor = #"""
+        LET arm == ConditionalSelectedArm
+            terminal == ConditionalIntegerTerminal(arm)
+        IN IF terminal.failure = <<>>
+           THEN [callbacks |-> <<ConditionalSnapshot(ConditionalSourceSuccessor(arm, terminal))>>, reasons |-> <<>>]
+           ELSE [callbacks |-> <<>>, reasons |-> <<terminal.failure.payload>>]
+    """#
+    let definitions = #"""
+    ConditionalIntegerRun(arm) ==
+        LET rows == ConditionalIntegerRows(arm)
+        IN CHOOSE history : Arithmetic!AssignmentListHistory(FALSE, ConditionalBefore, rows, history)
+    LOCAL ConditionalGeneratedIntegerRun(arm) ==
+        LET rows == ConditionalIntegerRows(arm)
+        IN CHOOSE history : Arithmetic!AssignmentListHistory(TRUE, ConditionalBefore, rows, history)
+    ConditionalIntegerTerminal(arm) == ConditionalIntegerRun(arm)[Len(ConditionalIntegerRows(arm))]
+    \#(armSelection)
+    ConditionalNativeIntegerResult(arm) ==
+        LET visitor == ConditionalNativeRows[arm]
+        IN Arithmetic!NativeAssignmentCaptureResult(ConditionalBefore, visitor, Len(visitor.captures))
+    ConditionalNativeHistory(recording) ==
+    \#(afterPrefix(history, failure: "ConditionalNativeSharedHistory(recording)"))
 
     ConditionalMerge == INSTANCE NativePendingWriteFold WITH Vars <- ConditionalStateKeys, Values <- ConditionalIntValues \cup BOOLEAN, ActionLabels <- {ConditionalActionOrdinal}, FailureValues <- {}, NoFailure <- <<>>
     ConditionalNativeCompleted(arm) ==
@@ -1510,15 +1710,43 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
             completed == ConditionalNativeCompleted(arm)
         IN [i \in DOMAIN raw |-> <<raw[i][1],
             Arithmetic!CopyReferenceValue(ConditionalStateBefore, completed, raw[i][2])>>]
-    ConditionalNativeStep ==
-        LET arm == ConditionalNativeSelectedArm
-        IN IF ConditionalNativeIntegerResult(arm).failure = <<>>
-           THEN ConditionalMerge!NativePendingMergesEmit(
-                ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter,
+    \* Snapshot has no fields outside State. The send rule uses the pair <<nonState, state>>.
+    ConditionalSnapshot(state) == <<<<>>, state>>
+    ConditionalSourceSuccessor(arm, terminal) ==
+        LET row == ConditionalSourceRows[arm]
+        IN Arithmetic!CopyMaterializedState(ConditionalStateKeys, ConditionalStateBefore,
+                terminal.completed \o row.suffix, row.finalRoutes)
+    LOCAL ConditionalNativeMaterializes(arm, after) ==
+        /\ after = [key \in ConditionalStateKeys |-> after[key]]
+        /\ ConditionalMerge!NativePendingMergesEmit(ConditionalStateKeys, ConditionalStateBefore, after,
                 Len(ConditionalNativeRows[arm].writes), ConditionalNativeWrites(arm))
-           ELSE FALSE
+    ConditionalNativeStep ==
+    \#(afterPrefix(step, failure: "FALSE"))
+    \* The decoded catch sites append to the returned error array even when checking is nil.
+    ConditionalNativeVisitorOutput ==
+        [visitor \in {ConditionalSendVisitor} |->
+    \#(afterPrefix(visitor, failure: "ConditionalNativeSharedVisitorOutput", indentation: "        "))]
+    ConditionalCertifiedVisitorOutput ==
+    \#(afterPrefix(certifiedVisitor, failure: certifiedFailure, condition: "ConditionalSharedTerminal.failure # <<>>"))
     """#
-    let steps = #"""
+    let nativeGateFact = sharedPrefix ? "<1>nativePrefixPass, " : ""
+    let queueGateFacts = sharedPrefix ? nativeGateFact + "<1>prefixPass, " : ""
+    let callbackBranch = sharedPrefix ? "(IF site <= ConditionalSharedCount THEN <<>> ELSE arm - 1)" : "arm - 1"
+    let callbackCountDefinition = sharedPrefix ? ", ConditionalSharedCount" : ""
+    let afterSharedFailure = sharedPrefix
+        ? "\n           /\\ (ConditionalSharedTerminal.failure = <<>> => ConditionalSharedCount < terminal.failure.site)" : ""
+    let afterSharedFailureGoal = sharedPrefix
+        ? "\n                           /\\ (ConditionalSharedTerminal.failure = <<>> => ConditionalSharedCount < terminal.failure.site)" : ""
+    let afterSharedFailureProof = sharedPrefix ? #"""
+        <2>afterShared. ConditionalSharedTerminal.failure = <<>> => ConditionalSharedCount < slot
+            BY ONLY (arm \in ConditionalArms), <2>site, <2>node, <1>sharedRows, <1>sharedPasses, <1>sharedGuardColumns,
+                SMT DEF raw, Arithmetic!RenderedAssignmentFailsAt, Arithmetic!FirstRejectedRenderedGuard,
+                    Arithmetic!RenderedAssignmentsPass, Arithmetic!EveryRenderedGuardPasses
+
+    """# : ""
+    let afterSharedFailureFact = sharedPrefix ? "<2>afterShared, " : ""
+    let callbackSiteFact = sharedPrefix ? "<1>prefixPass, " : ""
+    let arithmeticInventory = #"""
     <1>integerRuns. \A arm \in ConditionalArms :
         LET rows == ConditionalIntegerRows(arm)
             history == ConditionalIntegerRun(arm)
@@ -1554,8 +1782,9 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
             DEF Arithmetic!SupportedAssignmentList
     <1>nativePlans. \A arm \in ConditionalArms :
         ConditionalNativeRows[arm].captures = ConditionalIntegerTable(arm).plans
-        BY ONLY <1>shape, IsaM("simp"), SMT
-            DEF ConditionalNativeRows, ConditionalIntegerTable, \#(integerDefinitions.joined(separator: ", "))
+        <2>. TAKE arm \in ConditionalArms
+    \#(nativePlanCases)
+        <2>. QED BY ONLY (arm \in ConditionalArms), <1>shape, \#(writeRoleCases), SMT
     <1>nativeReplay. \A arm \in ConditionalArms :
         ConditionalNativeIntegerResult(arm) = Arithmetic!NativeAssignmentPrefix(ConditionalIntegerTerminal(arm))
         <2>. TAKE arm \in ConditionalArms
@@ -1576,13 +1805,12 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
         <2>result. Arithmetic!NativeAssignmentCaptureResult(ConditionalBefore, plan, Len(rows)) =
             Arithmetic!NativeAssignmentPrefix(history[Len(rows)])
             BY ONLY <2>known, <2>routes, <1>integerEntry, Arithmetic!PhysicalNativeCaptureResultUsesTheCertifiedTerminal
-        <2>domain. /\ Len(rows) \in Nat /\ DOMAIN plan.captures = 1..Len(rows)
-            BY ONLY (arm \in ConditionalArms), <2>known, <1>integerRows, <1>nativePlans, SMT
-                DEF rows, raw, plan, Arithmetic!SupportedAssignmentList
-        <2>captures. plan.captures \in [1..Len(rows) -> {plan.captures[i] : i \in DOMAIN plan.captures}]
-            BY ONLY <2>domain, SMT
         <2>count. Len(plan.captures) = Len(rows)
-            BY ONLY <2>domain, <2>captures, SeqDef, LenProperties, SMT
+            <3>physical. Len(raw.plans) = IF arm = 1 THEN \#(planNames[0].count) ELSE \#(planNames[1].count)
+                BY ONLY (arm \in ConditionalArms), <1>shape, IsaM("simp"), SMT
+                    DEF raw, ConditionalIntegerTable, \#(tables.joined(separator: ", "))
+            <3>. QED BY ONLY (arm \in ConditionalArms), <1>nativePlans, <1>integerRows, <3>physical, SMT
+                DEF plan, raw, rows
         <2>. QED BY ONLY <2>result, <2>count DEF ConditionalNativeIntegerResult, ConditionalIntegerTerminal, plan, rows, history
     <1>nativeCallbacks. \A arm \in ConditionalArms :
         LET calls == ConditionalNativeRows[arm].callbacks
@@ -1591,7 +1819,7 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
         IN /\ DOMAIN calls = {site \in DOMAIN plans : \E n \in 1..plans[site].count : plans[site].kinds[n] = "add"}
            /\ \A site \in DOMAIN calls :
                   LET call == calls[site]
-                  IN /\ call.action = ConditionalActionOrdinal /\ call.branch = arm - 1
+                  IN /\ call.action = ConditionalActionOrdinal /\ call.branch = \#(callbackBranch)
                      /\ call.site = targets[site].binding /\ call.target = targets[site].field
                      /\ DOMAIN call.before = 1..(site - 1)
                      /\ \A i \in DOMAIN call.before :
@@ -1599,12 +1827,12 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
                             /\ call.before[i].target = targets[i].field
                             /\ call.before[i].slot = i
         BY ONLY <1>shape, IsaM("simp"), SMT
-            DEF ConditionalNativeRows, ConditionalAssignmentOrigins, ConditionalSourceRows, ConditionalActionOrdinal
+            DEF ConditionalNativeRows, ConditionalAssignmentOrigins, ConditionalSourceRows, ConditionalActionOrdinal\#(callbackCountDefinition)\#(callbackPlanDefinitions)
     <1>integerFailureSites. \A arm \in ConditionalArms :
         LET terminal == ConditionalIntegerTerminal(arm)
         IN terminal.failure # <<>> =>
             /\ terminal.failure.site \in DOMAIN ConditionalNativeRows[arm].callbacks
-            /\ DOMAIN terminal.completed = 1..(terminal.failure.site - 1)
+            /\ DOMAIN terminal.completed = 1..(terminal.failure.site - 1)\#(afterSharedFailure)
         <2>. TAKE arm \in ConditionalArms
         <2>. DEFINE rows == ConditionalIntegerRows(arm)
                     raw == ConditionalIntegerTable(arm)
@@ -1612,7 +1840,7 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
                     terminal == ConditionalIntegerTerminal(arm)
         <2>. SUFFICES ASSUME terminal.failure # <<>>
                      PROVE /\ terminal.failure.site \in DOMAIN ConditionalNativeRows[arm].callbacks
-                           /\ DOMAIN terminal.completed = 1..(terminal.failure.site - 1)
+                           /\ DOMAIN terminal.completed = 1..(terminal.failure.site - 1)\#(afterSharedFailureGoal)
             OBVIOUS
         <2>input. /\ Arithmetic!SupportedAssignmentList(rows)
                   /\ DOMAIN rows = DOMAIN raw.plans
@@ -1636,8 +1864,10 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
             BY ONLY <2>outcome, <2>site, <2>node, SMT
                 DEF terminal, ConditionalIntegerTerminal, rows, count, Arithmetic!RenderedAssignmentHistoryAt,
                     Arithmetic!RenderedAssignmentFailure
-        <2>. QED BY ONLY (arm \in ConditionalArms), <2>input, <2>site, <2>node, <2>reached, <1>nativePlans, <1>nativeCallbacks,
-            SMT DEF raw, Arithmetic!HistoryPrefix
+    \#(afterSharedFailureProof)    <2>. QED BY ONLY (arm \in ConditionalArms), <2>input, <2>site, <2>node, <2>reached, <1>nativePlans, <1>nativeCallbacks,
+            \#(afterSharedFailureFact)SMT DEF raw, Arithmetic!HistoryPrefix
+    """#
+    let historyProof = #"""
     <1>nativeHistory. ConditionalNativeHistory(TRUE) = ConditionalOrderedFailure(
         ConditionalSelectedArm, ConditionalIntegerTerminal(ConditionalSelectedArm))
         <2>. DEFINE arm == ConditionalSelectedArm
@@ -1648,7 +1878,7 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
         <2>replay. result = Arithmetic!NativeAssignmentPrefix(terminal)
             BY ONLY <1>selector, <1>nativeReplay DEF arm, result, terminal
         <2>success. CASE terminal.failure = <<>>
-            BY ONLY <2>success, <2>replay, <1>selected, SMT
+            BY ONLY <2>success, <2>replay, <1>selected, \#(nativeGateFact)SMT
                 DEF arm, terminal, result, ConditionalNativeHistory, ConditionalOrderedFailure, Arithmetic!NativeAssignmentPrefix
         <2>failure. CASE terminal.failure # <<>>
             <3>. DEFINE slot == terminal.failure.site
@@ -1658,8 +1888,8 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
                       /\ result.failure # <<>>
                       /\ result.failure.site = slot
                       /\ result.failure.payload = terminal.failure.payload
-                      /\ result.completed = terminal.completed
-                BY ONLY <2>failure, <2>replay, <1>selector, <1>integerFailureSites, SMT
+                      /\ result.completed = terminal.completed\#(sharedPrefix ? "\n                      /\\ ConditionalSharedCount < slot" : "")
+                BY ONLY <2>failure, <2>replay, <1>selector, <1>integerFailureSites, \#(callbackSiteFact)SMT
                     DEF arm, terminal, result, calls, slot, Arithmetic!NativeAssignmentPrefix
             <3>metadata. /\ call.action = ConditionalActionOrdinal /\ call.branch = arm - 1
                           /\ call.site = origins[slot].binding /\ call.target = origins[slot].field
@@ -1669,11 +1899,12 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
                                  /\ call.before[i].target = origins[i].field
                                  /\ call.before[i].slot = i
                 BY ONLY <1>selector, <3>site, <1>nativeCallbacks, SMT DEF arm, calls, call, origins
-            <3>. QED BY ONLY <3>site, <3>metadata, <1>selected, SMT
+            <3>. QED BY ONLY <3>site, <3>metadata, <1>selected, \#(nativeGateFact)SMT
                 DEF arm, terminal, result, call, calls, origins, slot, ConditionalNativeHistory,
                     ConditionalOrderedFailure, ConditionalLabeledFailure, ConditionalFailurePrefix
         <2>. QED BY ONLY <2>success, <2>failure, SMT
-
+    """#
+    let materializationInventory = #"""
     <1>nativeSuffix. \A arm \in ConditionalArms :
         ConditionalNativeRows[arm].suffix = ConditionalSourceRows[arm].suffix
     \#(suffixSteps)
@@ -1695,42 +1926,37 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
                     routes == ConditionalSourceRows[arm].finalRoutes
     \#(writeRoleSteps)
         <2>. QED BY ONLY (arm \in ConditionalArms), <1>shape, \#(writeRoleCases), SMT DEF raw, routes
-    <1>nativeMaterialized. \A arm \in ConditionalArms :
-        ConditionalMerge!NativePendingMergesEmit(
-            ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter,
-            Len(ConditionalNativeRows[arm].writes), ConditionalNativeWrites(arm))
-        <=> ConditionalStateAfter = Arithmetic!CopyMaterializedState(
-            ConditionalStateKeys, ConditionalStateBefore,
-            ConditionalIntegerTerminal(arm).completed \o ConditionalSourceRows[arm].suffix,
-            ConditionalSourceRows[arm].finalRoutes)
+    <1>nativeMaterialized. \A arm \in ConditionalArms : \A after :
+        ConditionalNativeMaterializes(arm, after) <=> after = ConditionalSourceSuccessor(arm, ConditionalIntegerTerminal(arm))
         <2>. TAKE arm \in ConditionalArms
+        <2>. TAKE after
         <2>. DEFINE raw == ConditionalNativeRows[arm].writes
                     writes == ConditionalNativeWrites(arm)
                     count == Len(raw)
                     targets == ConditionalMerge!PendingWriteKeys(writes, count)
-                    expected == Arithmetic!CopyMaterializedState(ConditionalStateKeys, ConditionalStateBefore,
-                        ConditionalIntegerTerminal(arm).completed \o ConditionalSourceRows[arm].suffix,
-                        ConditionalSourceRows[arm].finalRoutes)
+                    expected == ConditionalSourceSuccessor(arm, ConditionalIntegerTerminal(arm))
                     routes == ConditionalSourceRows[arm].finalRoutes
                     constraints == ConditionalMerge!NativePendingWriteConstraints(
-                        ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter, count, writes)
+                        ConditionalStateKeys, ConditionalStateBefore, after, count, writes)
         <2>columns. /\ count \in Nat
                     /\ \A i \in 1..count : writes[i][1] = raw[i][1] /\ raw[i][1] \in ConditionalStateKeys
             BY ONLY (arm \in ConditionalArms), <1>nativeWriteRoles, SMT DEF writes, raw, count, ConditionalNativeWrites
         <2>fold. ConditionalMerge!NativePendingMergesEmit(
-            ConditionalStateKeys, ConditionalStateBefore, ConditionalStateAfter, count, writes) <=> constraints
+            ConditionalStateKeys, ConditionalStateBefore, after, count, writes) <=> constraints
             BY ONLY <2>columns, ConditionalMerge!PendingMergeFoldMaterializesExactlyTheCompatibleWrites, SMT DEF constraints
         <2>written. \A i \in 1..count : expected[writes[i][1]] = writes[i][2]
             BY ONLY (arm \in ConditionalArms), <1>nativeWriteRoles, <1>nativeCompleted, <2>columns, SMT
-                DEF expected, count, raw, writes, routes, ConditionalNativeWrites, Arithmetic!CopyMaterializedState
+                DEF expected, count, raw, writes, routes, ConditionalNativeWrites, ConditionalSourceSuccessor,
+                    Arithmetic!CopyMaterializedState
         <2>preserved. \A key \in ConditionalStateKeys \ targets : expected[key] = ConditionalStateBefore[key]
             BY ONLY (arm \in ConditionalArms), <1>nativeWriteRoles, <2>columns, SMT
-                DEF expected, count, raw, routes, targets, ConditionalMerge!PendingWriteKeys, Arithmetic!CopyMaterializedState, Arithmetic!CopyReferenceValue
-        <2>frames. /\ expected = [key \in ConditionalStateKeys |-> expected[key]]
-                   /\ ConditionalStateAfter = [key \in ConditionalStateKeys |-> ConditionalStateAfter[key]]
-            BY ONLY SMT DEF expected, ConditionalStateAfter, Arithmetic!CopyMaterializedState
-        <2>forward. ASSUME constraints PROVE ConditionalStateAfter = expected
-            <3>frame. \A key \in ConditionalStateKeys : ConditionalStateAfter[key] = expected[key]
+                DEF expected, count, raw, routes, targets, ConditionalSourceSuccessor,
+                    ConditionalMerge!PendingWriteKeys, Arithmetic!CopyMaterializedState, Arithmetic!CopyReferenceValue
+        <2>frame. expected = [key \in ConditionalStateKeys |-> expected[key]]
+            BY ONLY SMT DEF expected, ConditionalSourceSuccessor, Arithmetic!CopyMaterializedState
+        <2>forward. ASSUME constraints, after = [key \in ConditionalStateKeys |-> after[key]]
+                    PROVE after = expected
+            <3>frame. \A key \in ConditionalStateKeys : after[key] = expected[key]
                 <4>. TAKE key \in ConditionalStateKeys
                 <4>touched. CASE key \in targets
                     <5>witness. PICK i \in 1..count : key = writes[i][1]
@@ -1741,14 +1967,212 @@ func conditionalNativeOutputProof(writeOrders: [[String]], integerDefinitions: [
                     BY ONLY (key \in ConditionalStateKeys), <4>untouched, constraints, <2>preserved, SMT
                         DEF constraints, targets, ConditionalMerge!NativePendingWriteConstraints
                 <4>. QED BY ONLY <4>touched, <4>untouched, SMT
-            <3>. QED BY ONLY <3>frame, <2>frames, SMT
-        <2>reverse. ConditionalStateAfter = expected => constraints
+            <3>. QED BY ONLY <3>frame, <2>frame, (after = [key \in ConditionalStateKeys |-> after[key]]), SMT
+        <2>reverse. after = expected => constraints
             BY ONLY <2>written, <2>preserved, SMT DEF constraints, targets, ConditionalMerge!NativePendingWriteConstraints
-        <2>. QED BY ONLY <2>fold, <2>forward, <2>reverse, SMT
+        <2>. QED BY ONLY <2>fold, <2>forward, <2>reverse, <2>frame, SMT
+            DEF ConditionalNativeMaterializes, raw, count, writes, expected
+    """#
+    let successorProof = #"""
     <1>nativeSuccess. ConditionalNativeStep <=>
         ConditionalOrderedStep(ConditionalSelectedArm, ConditionalIntegerTerminal(ConditionalSelectedArm))
-        BY ONLY <1>nativeMaterialized, <1>selected, <1>selector, <1>nativeReplay, SMT
+        BY ONLY <1>nativeMaterialized, <1>selected, <1>selector, <1>nativeReplay, \#(nativeGateFact)SMT
             DEF ConditionalNativeStep, ConditionalOrderedStep, Arithmetic!NativeAssignmentPrefix
+    <1>nativeQueue. ConditionalNativeVisitorOutput[ConditionalSendVisitor] = ConditionalCertifiedVisitorOutput
+        <2>. DEFINE arm == ConditionalSelectedArm
+                    terminal == ConditionalIntegerTerminal(arm)
+                    expected == ConditionalSourceSuccessor(arm, terminal)
+                    result == ConditionalNativeIntegerResult(arm)
+        <2>replay. result = Arithmetic!NativeAssignmentPrefix(terminal)
+            BY ONLY <1>selector, <1>nativeReplay DEF arm, terminal, result
+        <2>success. CASE terminal.failure = <<>>
+            <3>target. ConditionalNativeMaterializes(arm, expected) /\
+                (CHOOSE after : ConditionalNativeMaterializes(arm, after)) = expected
+                BY ONLY <1>selector, <1>nativeMaterialized, SMT DEF arm, terminal, expected
+            <3>. QED BY ONLY <2>success, <2>replay, <3>target, <1>selected, \#(queueGateFacts)SMT DEF arm, terminal, result, expected,
+                ConditionalNativeVisitorOutput, ConditionalCertifiedVisitorOutput, Arithmetic!NativeAssignmentPrefix
+        <2>failure. CASE terminal.failure # <<>>
+            <3>caught. terminal.failure.site \in DOMAIN ConditionalNativeRows[arm].callbacks
+                BY ONLY <2>failure, <1>selector, <1>integerFailureSites, SMT DEF arm, terminal
+            <3>. QED BY ONLY <2>failure, <2>replay, <3>caught, <1>selected, \#(queueGateFacts)SMT DEF arm, terminal, result,
+                ConditionalNativeVisitorOutput, ConditionalCertifiedVisitorOutput, Arithmetic!NativeAssignmentPrefix
+        <2>. QED BY ONLY <2>success, <2>failure, SMT
     """#
-    return (definitions, steps)
+    let inventory = arithmeticInventory + "\n" + materializationInventory
+    let selected = historyProof + "\n" + successorProof
+    if sharedPrefix {
+        let nativePrefixPass = #"""
+        <1>nativePrefixPass. ConditionalNativeAfterSharedPrefix
+            BY ONLY <1>nativePrefixReach, <1>prefixPass
+        """#
+        return (rowDefinitions, captureNames, definitions, "", inventory, nativePrefixPass + "\n" + selected)
+    }
+    // Keep the original declaration order for an empty prefix.
+    let steps = arithmeticInventory + "\n" + historyProof + "\n\n"
+        + materializationInventory + "\n" + successorProof
+    return (rowDefinitions, captureNames, definitions, steps, inventory, selected)
+}
+
+/// Bind the preselection observation to the independently decoded TLA probes
+/// and the single native visitor path ending at the selector.
+func conditionalSharedFailureProof(
+    native: NativeConditionalActionOutput, sharedCount: Int, guardNames: [String],
+    overflow: (aggregate: String, evaluationCheck: String)?, actionName: String, tableDefinitions: [String]
+) throws -> (planDefinitions: String, collectorDefinitions: String, observationDefinition: String,
+             inventorySteps: String, failureSteps: String) {
+    guard sharedCount > 0, native.sharedPrefix.capturePlans.count == sharedCount,
+          (overflow == nil) == guardNames.isEmpty,
+          overflow != nil || native.sharedPrefix.failureAppendSites.isEmpty else {
+        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+    }
+    let trace = try native.sharedPrefix.integerTrace(count: sharedCount)
+    let tables = (["ConditionalSharedTable"] + tableDefinitions).joined(separator: ", ")
+    let planDefinitions = #"""
+    ConditionalNativeSharedPlan == \#(trace)
+    ConditionalNativeSharedResult ==
+        Arithmetic!NativeAssignmentCaptureResult(ConditionalBefore, ConditionalNativeSharedPlan, ConditionalSharedCount)
+    ConditionalNativeAfterSharedPrefix == ConditionalNativeSharedResult.failure = <<>>
+    """#
+    let collectorDefinitions = #"""
+    ConditionalSharedEvent(terminal) ==
+        IF terminal.failure = <<>> THEN <<>>
+        ELSE LET origin == ConditionalSharedOrigins[terminal.failure.site]
+                 completed == terminal.completed
+                 before == [i \in DOMAIN completed |-> [
+                     binding |-> ConditionalSharedOrigins[i].binding,
+                     target |-> ConditionalSharedOrigins[i].field,
+                     value |-> completed[i]]]
+             IN <<[source |-> ConditionalEntry, action |-> ConditionalActionOrdinal, branch |-> <<>>,
+                   site |-> origin.binding, target |-> origin.field, payload |-> terminal.failure.payload, before |-> before]>>
+    ConditionalNativeSharedHistory(recording) ==
+        LET result == ConditionalNativeSharedResult
+            calls == ConditionalNativeSharedPlan.callbacks
+        IN IF ~recording \/ result.failure = <<>> THEN <<>>
+           ELSE IF result.failure.site \notin DOMAIN calls THEN <<>>
+           ELSE LET call == calls[result.failure.site]
+                    before == [i \in DOMAIN call.before |-> [
+                        binding |-> call.before[i].binding, target |-> call.before[i].target,
+                        value |-> result.completed[call.before[i].slot]]]
+                IN <<[source |-> ConditionalEntry, action |-> call.action, branch |-> call.branch,
+                      site |-> call.site, target |-> call.target, payload |-> result.failure.payload, before |-> before]>>
+    ConditionalNativeSharedVisitorOutput ==
+        LET result == ConditionalNativeSharedResult
+        IN [callbacks |-> <<>>,
+            reasons |-> IF result.failure # <<>> /\ result.failure.site \in DOMAIN ConditionalNativeSharedPlan.callbacks
+                        THEN <<result.failure.payload>> ELSE <<>>]
+    """#
+    let inventorySteps = #"""
+    <1>sharedNativeReplay. ConditionalNativeSharedResult = Arithmetic!NativeAssignmentPrefix(ConditionalSharedTerminal)
+        BY ONLY <1>sharedRows, <1>sharedRun, <1>integerEntry, <1>sharedNativeInventory,
+            Arithmetic!PhysicalNativeCaptureResultUsesTheCertifiedTerminal, SMT DEF
+            ConditionalSharedTerminal, ConditionalNativeSharedResult
+    <1>nativePrefixReach. ConditionalSharedTerminal.failure = <<>> => ConditionalNativeAfterSharedPrefix
+        BY ONLY <1>sharedNativeReplay, SMT DEF ConditionalNativeAfterSharedPrefix, Arithmetic!NativeAssignmentPrefix
+    <1>sharedNativeCallbacks.
+        LET calls == ConditionalNativeSharedPlan.callbacks
+            plans == ConditionalNativeSharedPlan.captures
+        IN /\ DOMAIN calls = {slot \in DOMAIN plans : \E node \in 1..plans[slot].count : plans[slot].kinds[node] = "add"}
+           /\ \A slot \in DOMAIN calls :
+                 LET call == calls[slot]
+                 IN /\ call.action = ConditionalActionOrdinal /\ call.branch = <<>>
+                    /\ call.site = ConditionalSharedOrigins[slot].binding
+                    /\ call.target = ConditionalSharedOrigins[slot].field
+                    /\ DOMAIN call.before = 1..(slot - 1)
+                    /\ \A i \in DOMAIN call.before :
+                           /\ call.before[i].binding = ConditionalSharedOrigins[i].binding
+                           /\ call.before[i].target = ConditionalSharedOrigins[i].field
+                           /\ call.before[i].slot = i
+        BY ONLY IsaM("simp"), SMT DEF ConditionalNativeSharedPlan, ConditionalSharedOrigins, ConditionalActionOrdinal
+    """#
+    guard let overflow else {
+        let failureSteps = #"""
+        <1>sharedTotal. Arithmetic!RenderedAssignmentsPass(ConditionalSharedTable, ConditionalSharedCount)
+            BY ONLY SMT DEF ConditionalSharedCount, \#(tables), Arithmetic!RenderedAssignmentsPass,
+                Arithmetic!EveryRenderedGuardPasses
+        <1>sharedFailure. ConditionalSharedTerminal.failure # <<>> => ConditionalSharedFailureObservations
+            BY ONLY <1>sharedPasses, <1>sharedTotal, SMT DEF ConditionalSharedFailureObservations
+        """#
+        return (planDefinitions, collectorDefinitions, "ConditionalSharedFailureObservations == FALSE", inventorySteps, failureSteps)
+    }
+    let guardDefinitions = (["ConditionalProbeGuards", overflow.evaluationCheck, overflow.aggregate] + guardNames)
+        .joined(separator: ", ")
+    let observationDefinition = #"""
+    ConditionalSharedFailureObservations ==
+        /\ ConditionalSharedTerminal.failure # <<>>
+        /\ ConditionalNativeSharedResult.failure # <<>>
+        /\ ActualConditionalHistory = ConditionalSharedEvent(ConditionalSharedTerminal)
+        /\ ConditionalNativeHistory(TRUE) = ConditionalSharedEvent(ConditionalSharedTerminal)
+        /\ ConditionalNativeHistory(FALSE) = <<>>
+        /\ ~Arithmetic!RenderedAssignmentsPass(ConditionalSharedTable, ConditionalSharedCount)
+        /\ ~ConditionalSelectedEvaluationCheck
+        /\ ~ConditionalPhysicalStep
+        /\ ~ENABLED Next
+        /\ ~ConditionalNativeStep
+        /\ ConditionalNativeVisitorOutput[ConditionalSendVisitor] =
+               [callbacks |-> <<>>, reasons |-> <<ConditionalSharedTerminal.failure.payload>>]
+        /\ ConditionalNativeVisitorOutput[ConditionalSendVisitor] = ConditionalCertifiedVisitorOutput
+    """#
+    let failureSteps = #"""
+    <1>sharedFailure. ConditionalSharedTerminal.failure # <<>> => ConditionalSharedFailureObservations
+        <2>. DEFINE terminal == ConditionalSharedTerminal
+                    rows == ConditionalSharedRows
+                    raw == ConditionalSharedTable
+                    count == ConditionalSharedCount
+                    result == ConditionalNativeSharedResult
+                    calls == ConditionalNativeSharedPlan.callbacks
+        <2>. SUFFICES ASSUME terminal.failure # <<>>
+                      PROVE ConditionalSharedFailureObservations
+            OBVIOUS DEF terminal
+        <2>failed. ~Arithmetic!RenderedAssignmentsPass(raw, count)
+            BY ONLY <1>sharedReached, (terminal.failure # <<>>), SMT DEF terminal, ConditionalSharedTerminal,
+                raw, count, Arithmetic!RenderedAssignmentHistoryAt
+        <2>first. PICK slot \in 1..count : \E node \in 1..raw.plans[slot].count :
+                  Arithmetic!RenderedAssignmentFailsAt(raw, count, slot, node)
+            BY ONLY <1>sharedRows, <1>sharedInventory, <2>failed, Arithmetic!WholeGuardTableHasAnExactFirstFailureSite,
+                SMT DEF rows, raw, count
+        <2>node. PICK node \in 1..raw.plans[slot].count : Arithmetic!RenderedAssignmentFailsAt(raw, count, slot, node)
+            BY ONLY <2>first
+        <2>reached. /\ terminal.failure.site = slot
+                    /\ raw.plans[slot].kinds[node] = "add"
+                    /\ terminal.failure = Arithmetic!RenderedAssignmentFailure(rows, ConditionalBefore, raw, slot, node)
+                    /\ terminal.completed = Arithmetic!HistoryPrefix(raw.roots, slot - 1)
+            BY ONLY <1>sharedReached, <2>first, <2>node, SMT DEF terminal, ConditionalSharedTerminal,
+                raw, count, Arithmetic!RenderedAssignmentHistoryAt, Arithmetic!RenderedAssignmentFailure
+        <2>chosen. PICK p \in DOMAIN ConditionalProbePositions : ConditionalProbePositions[p] = <<<<>>, slot, node>>
+            BY ONLY <2>first, <2>node, <2>reached, <1>probeInventory, SMT DEF raw, count
+        <2>fires. ConditionalProbeGuards[p]
+            BY ONLY <2>chosen, <2>node, <1>probeReach, SMT DEF raw, count
+        <2>eventData. /\ ConditionalProbePayloads[p] = terminal.failure.payload
+                      /\ ConditionalProbeBefore[p] = ConditionalProbeFailurePrefix(<<>>, terminal.completed)
+            BY ONLY <2>chosen, <2>fires, <2>reached, <1>probeValues, SMT DEF rows, raw
+        <2>history. ActualConditionalHistory = ConditionalSharedEvent(terminal)
+            BY ONLY <2>chosen, <2>fires, <2>eventData, <2>reached, <1>probeOne, (terminal.failure # <<>>), SMT
+                DEF ConditionalExportedProbe, ConditionalSharedEvent, ConditionalProbeFailurePrefix
+        <2>checking. ~ConditionalSelectedEvaluationCheck
+            BY ONLY <2>chosen, <2>fires, SMT DEF ConditionalSelectedEvaluationCheck, \#(guardDefinitions)
+        <2>physicalDisabled. ~ConditionalPhysicalStep
+            BY ONLY <2>failed, SMT DEF ConditionalPhysicalStep, \#(actionName), raw, count,
+                ConditionalSharedCount, \#(tables), Arithmetic!RenderedAssignmentsPass, Arithmetic!EveryRenderedGuardPasses
+        <2>disabled. ~ENABLED Next
+            BY ONLY <2>failed, ExpandENABLED, SMT DEF Next, \#(actionName), raw, count,
+                ConditionalSharedCount, \#(tables), Arithmetic!RenderedAssignmentsPass, Arithmetic!EveryRenderedGuardPasses
+        <2>nativePlans. ConditionalNativeSharedPlan.captures = raw.plans
+            BY ONLY IsaM("simp"), SMT DEF ConditionalNativeSharedPlan, raw, \#(tables)
+        <2>caught. /\ slot \in DOMAIN calls /\ DOMAIN terminal.completed = 1..(slot - 1)
+                   /\ result.failure # <<>> /\ result.failure.site = slot
+                   /\ result.failure.payload = terminal.failure.payload /\ result.completed = terminal.completed
+            BY ONLY <1>sharedNativeReplay, <1>sharedNativeCallbacks, <2>first, <2>node, <2>reached, <2>nativePlans,
+                (terminal.failure # <<>>), SMT DEF terminal, calls, result, Arithmetic!NativeAssignmentPrefix, Arithmetic!HistoryPrefix
+        <2>native. /\ ConditionalNativeSharedHistory(TRUE) = ConditionalSharedEvent(terminal)
+                   /\ ConditionalNativeSharedHistory(FALSE) = <<>>
+                   /\ ConditionalNativeSharedVisitorOutput =
+                          [callbacks |-> <<>>, reasons |-> <<terminal.failure.payload>>]
+            BY ONLY <2>caught, <2>reached, <1>sharedNativeCallbacks, (terminal.failure # <<>>), SMT DEF
+                calls, result, ConditionalSharedEvent, ConditionalNativeSharedHistory, ConditionalNativeSharedVisitorOutput
+        <2>. QED BY ONLY <2>caught, <2>history, <2>failed, <2>checking, <2>physicalDisabled, <2>disabled, <2>native,
+            (terminal.failure # <<>>), SMT DEF terminal, result, raw, count, ConditionalSharedFailureObservations,
+            ConditionalNativeAfterSharedPrefix, ConditionalNativeStep, ConditionalNativeHistory, ConditionalNativeVisitorOutput,
+            ConditionalCertifiedVisitorOutput
+    """#
+    return (planDefinitions, collectorDefinitions, observationDefinition, inventorySteps, failureSteps)
 }

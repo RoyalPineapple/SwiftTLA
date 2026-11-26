@@ -4,7 +4,8 @@ import SwiftTLA
 package enum OrderedRHSTLAProof {
     /// The source module owns independently selected authored rows and their certificate support.
     static func render(
-        _ rendered: RenderedSpecification, program: CompiledProgram, source: AuthoredCopySyntax.ArithmeticProofInput
+        _ rendered: RenderedSpecification, program: CompiledProgram, source: AuthoredCopySyntax.ArithmeticProofInput,
+        assignmentTargets: [ActionID: [BinderID: VariableID]]
     ) throws -> (name: String, bytes: Data, failureOperator: String?)? {
         let bundle = rendered.tlaBundle
         let layout = program.layout
@@ -49,8 +50,11 @@ package enum OrderedRHSTLAProof {
               destination.sourceName.utf8.elementsEqual((source.continuation ?? doneName).utf8) else { return nil }
         let entryControl = try CompiledValue.controlLocation(entry.id).rendered(using: layout)
         let endControl = try CompiledValue.controlLocation(destination.id).rendered(using: layout)
-        guard let physical = OrderedRHSPhysicalAction.decode(in: bundle.root.tla, action: step.renderedName,
-            body: body, fields: roots, counter: counter, destination: endControl.description) else { return nil }
+        guard let targets = assignmentTargets[step.id],
+              let decoded = OrderedRHSPhysicalAction.decode(in: bundle.root.tla, action: step.renderedName,
+                  body: body, fields: roots, counter: counter, destination: endControl.description,
+                  binderNames: program.binderNames, assignmentTargets: targets) else { return nil }
+        let physical = decoded.action
 
         // Preserve the original one-action packet. In a larger machine the selected action proof
         // has no conclusion about the other actions or the disjunction in Next.
@@ -206,6 +210,7 @@ package enum OrderedRHSTLAProof {
         LOCAL RHSOutputRaw ==
             \#(scoped)[plans |-> RHSOutputPlans, starts |-> RHSOutputStarts,
                         terms |-> \#(terms), guards |-> \#(guards), roots |-> \#(values)]\#(closed)
+        LOCAL RHSOutputLoweredTargets == \#(TLAValue.tuple(decoded.targets.map(TLAValue.string)))
         RHSOutputWriteRoutes == \#(writeRoutes)
         RHSOutputProbePositions == \#(positions)
         RHSOutputGuards == \#(failureGuards)
@@ -368,9 +373,11 @@ package enum OrderedRHSTLAProof {
                       /\ physical.right[node] = expected.right[node])
                 BY ONLY <1>physicalColumns, <1>sourceCells, <1>expectedCells, <1>kinds, <1>literals, <1>children, SMT
             <2>. QED BY ONLY <1>shape, <2>nodes DEF RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch, expected
+        <1>targetColumns. RHSOutputLoweredTargets = RHSOutputInput!MasterTargets
+            BY ONLY IsaM("simp") DEF RHSOutputLoweredTargets, RHSOutputInput!MasterTargets
         <1>targets. \A prior \in DOMAIN RHSOutputRows :
-            RHSOutputRows[prior].target = RHSOutputInput!MasterTargets[prior]
-            BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!MasterRows
+            RHSOutputRows[prior].target = RHSOutputLoweredTargets[prior]
+            BY ONLY <1>targetColumns, SMT DEF RHSOutputRows, RHSOutputInput!MasterRows
         <1>reads. \A node \in 1..expected.count : expected.kinds[node] = "read" =>
                 /\ expected.reads[node] \in RHSOutputInput!MasterFields
                 /\ RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, index - 1, expected.reads[node], physical.reads[node])
@@ -396,11 +403,11 @@ package enum OrderedRHSTLAProof {
                 BY ONLY <1>sourceDomain, <2>slot, SMT
                     DEF key, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeReadKeys, RHSOutputInput!MasterFields
             <2>positionColumns. /\ writer \in 0..(index - 1)
-                                /\ (writer = 0 \/ RHSOutputInput!MasterTargets[writer] = key)
+                                /\ (writer = 0 \/ RHSOutputLoweredTargets[writer] = key)
                                 /\ \A prior \in 1..(index - 1) :
-                                      RHSOutputInput!MasterTargets[prior] = key => prior <= writer
+                                      RHSOutputLoweredTargets[prior] = key => prior <= writer
                 BY ONLY <1>sourceDomain, <2>slot, SMT
-                    DEF key, reference, writer, RHSOutputInput!MasterTargets,
+                    DEF key, reference, writer, RHSOutputLoweredTargets,
                         RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeKinds, RHSOutputInput!MasterNodeReadKeys,
                         RHSOutputNodeReads, RHSOutputInput!Rule!CopyReceiptOrdinal
             <2>earlierRows. /\ 1..(index - 1) \subseteq DOMAIN RHSOutputRows

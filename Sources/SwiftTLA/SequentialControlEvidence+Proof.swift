@@ -71,23 +71,26 @@ extension SequentialControlEvidence {
             return try CompiledValue.controlLocation(match.id).rendered(using: layout).description
         }
 
-        func guardTerm(_ expression: StateExpr) throws -> String? {
+        func sourceField(named name: String) -> String? {
+            let matches = layout.variables.filter {
+                $0.declaration.origin == .source && $0.declaration.name.utf8.elementsEqual(name.utf8)
+            }
+            guard matches.count == 1 else { return nil }
+            return matches.first?.formalName
+        }
+
+        func scalarTerm(_ expression: StateExpr) throws -> String? {
             func binary(_ left: StateExpr, _ op: String, _ right: StateExpr) throws -> String? {
-                guard let lhs = try guardTerm(left), let rhs = try guardTerm(right) else { return nil }
+                guard let lhs = try scalarTerm(left), let rhs = try scalarTerm(right) else { return nil }
                 return "(\(lhs) \(op) \(rhs))"
             }
             func shortCircuit(_ left: StateExpr, _ right: StateExpr, whenTrue: Bool) throws -> String? {
-                guard let lhs = try guardTerm(left), let rhs = try guardTerm(right) else { return nil }
+                guard let lhs = try scalarTerm(left), let rhs = try scalarTerm(right) else { return nil }
                 return whenTrue ? "(IF \(lhs) THEN \(rhs) ELSE FALSE)" : "(IF \(lhs) THEN TRUE ELSE \(rhs))"
             }
 
             switch expression {
-            case .variable(let name):
-                let matches = layout.variables.filter {
-                    $0.declaration.origin == .source && $0.declaration.name.utf8.elementsEqual(name.utf8)
-                }
-                guard matches.count == 1 else { return nil }
-                return matches.first?.formalName
+            case .variable(let name): return sourceField(named: name)
             case .value(.int(let value)): return TLAValue.int(value).description
             case .value(.bool(let value)): return TLAValue.bool(value).description
             case .programCounter: return counter
@@ -103,7 +106,7 @@ extension SequentialControlEvidence {
             case .and(let left, let right): return try shortCircuit(left, right, whenTrue: true)
             case .or(let left, let right): return try shortCircuit(left, right, whenTrue: false)
             case .not(let operand):
-                guard let test = try guardTerm(operand) else { return nil }
+                guard let test = try scalarTerm(operand) else { return nil }
                 return "(~\(test))"
             default: return nil
             }
@@ -116,7 +119,6 @@ extension SequentialControlEvidence {
               }) else { return nil }
 
         let unchangedState = layout.variables.filter { $0.declaration.origin == .source }.map(\.formalName)
-        let frame = unchangedState.isEmpty ? "" : " /\\ UNCHANGED <<\(unchangedState.joined(separator: ", "))>>"
         var routeStatements: [String] = []
         var writeFreeStatements: [String] = []
         var writeFreeGuards: [String] = []
@@ -137,7 +139,7 @@ extension SequentialControlEvidence {
                 var conditions = ["\(counter) = \(initial)"]
                 for observation in branch.observations.dropFirst() {
                     guard case .guardValue(let expression) = observation else { continue }
-                    guard let predicate = try guardTerm(expression) else { return nil }
+                    guard let predicate = try scalarTerm(expression) else { return nil }
                     conditions.append(predicate)
                 }
                 let reached = conditions.joined(separator: " /\\ ")
@@ -152,13 +154,26 @@ extension SequentialControlEvidence {
                     transfer = "UNCHANGED \(counter)"
                     writes.insert("<<\"state\", \(TLAValue.string(counter))>>")
                 }
-                routes.append("(\(reached) /\\ \(transfer))")
+                var frame = [reached, transfer]
+                var written: Set<String> = []
+                for observation in branch.observations {
+                    guard case .write(let name, let expression) = observation else { continue }
+                    guard let field = sourceField(named: name), written.insert(field).inserted,
+                          let value = try scalarTerm(expression) else { return nil }
+                    frame.append("\(field)' = \(value)")
+                }
+                let unchanged = unchangedState.filter { !written.contains($0) }
+                if !unchanged.isEmpty {
+                    frame.append("UNCHANGED <<\(unchanged.joined(separator: ", "))>>")
+                }
+                let completeRoute = "(\(frame.joined(separator: " /\\ ")))"
+                routes.append(completeRoute)
                 if branch.observations.allSatisfy({
                     guard case .guardValue = $0 else { return false }
                     return true
                 }) {
                     writeFreeGuards.append("(\(reached))")
-                    writeFreeRoutes.append("(\(reached) /\\ \(transfer)\(frame))")
+                    writeFreeRoutes.append(completeRoute)
                 }
             }
             let effect = routes.isEmpty ? "FALSE" : routes.joined(separator: " \\/ ")

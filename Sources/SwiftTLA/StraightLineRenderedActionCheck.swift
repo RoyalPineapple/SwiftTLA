@@ -1701,16 +1701,21 @@ package enum StraightLineRenderedActionCheck {
     }
 
     package static func tokens(_ source: String) -> [String]? {
+        let text = source as NSString
+        return tokenSpans(source)?.map { text.substring(with: $0) }
+    }
+
+    package static func tokenSpans(_ source: String) -> [NSRange]? {
         guard let tokenPattern else { return nil }
         let text = source as NSString
         var offset = 0
-        var result: [String] = []
+        var result: [NSRange] = []
         while offset < text.length {
             guard let match = tokenPattern.firstMatch(in: source,
                     range: NSRange(location: offset, length: text.length - offset)),
                   match.range.location == offset else { return nil }
             let token = text.substring(with: match.range)
-            if token.first?.isWhitespace == false { result.append(token) }
+            if token.first?.isWhitespace == false { result.append(match.range) }
             offset = match.range.upperBound
         }
         return result
