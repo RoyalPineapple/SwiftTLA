@@ -1749,8 +1749,14 @@ package enum ConditionalActionEvidence {
                                  ELSE TRUE)
                         <6>. TAKE node \in 1..actualPlan.count
                         <6>other. CASE actualPlan.kinds[node] # "add"
-                            BY ONLY <6>other, <4>range, (node \in 1..actualPlan.count), SMT
-                                DEF actualPlan, actualGuards, \#(values), \#(planDefinitions)
+                            <7>coordinate. /\ node \in 1..\#(source)NodeCounts[index]
+                                           /\ \#(source)NodeKinds[index][node] # "add"
+                                BY ONLY <6>other, (node \in 1..actualPlan.count), <2>operands, <4>project, <4>sourceColumns, SMT
+                                    DEF expected, Arithmetic!PhysicalAssignmentOperandsMatch
+                            <7>guardValue. actualGuards[node] = TRUE
+                                BY ONLY <4>range, <7>coordinate, SMT DEF actualGuards, \#(values),
+                                    \#(source)NodeCounts, \#(source)NodeKinds
+                            <7>. QED BY ONLY <6>other, <7>guardValue, SMT
             \#(addCase)
                         <6>. QED BY ONLY <6>other, <6>add
                     <5>. QED BY ONLY <5>nodes DEF Arithmetic!RenderedRhsGuards
