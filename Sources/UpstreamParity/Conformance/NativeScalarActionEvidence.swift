@@ -1025,25 +1025,70 @@ private func nativeSequentialRhsProof(
         """)
     }
     definitions.append("\(witness) == \(finiteHistory(through: count))")
-    let names = [plan] + nodes + [witness]
-    let recurrence = ["PhysicalAssignmentRhsHistory", "GeneratedExpressionHistory", "GeneratedNode",
-                      "PhysicalRhsReadIndices", "PhysicalRhsBindings"].map { rule + $0 }
-    let check = (names + [armPlan, rule + "NativeAssignmentRhsPlan"] + recurrence).joined(separator: ", ")
+    let recurrenceFacts = (1...count).map { "<3>node\($0)" }
+    let recurrence = (1...count).map { index in
+        let tag = capture.columns.kinds[index - 1]
+        let prefix = finiteHistory(through: index - 1)
+        let isAddition = tag == .string("add")
+        let children = isAddition ? #"""
+
+                    <4>children. /\ (\#(prefix))[\#(plan).left[\#(index)]] = \#(witness)[\#(plan).left[\#(index)]]
+                                 /\ (\#(prefix))[\#(plan).right[\#(index)]] = \#(witness)[\#(plan).right[\#(index)]]
+                        BY ONLY <2>columns, SMT DEF left, right, \#(witness)
+        """# : ""
+        let childFact = isAddition ? ", <4>children" : ""
+        return #"""
+                <3>node\#(index). \#(witness)[\#(index)] = \#(rule)GeneratedNode(\#(index), \#(plan).kinds, \#(plan).literals,
+                    \#(rule)PhysicalRhsReadIndices(\#(plan)), \#(plan).left, \#(plan).right,
+                    \#(rule)PhysicalRhsBindings(\#(plan), \#(before), \#(completed)), \#(witness))
+                    <4>slot. \#(witness)[\#(index)] = \#(nodes[index])
+                        BY ONLY SMT DEF \#(witness)
+                    <4>tag. \#(plan).kinds[\#(index)] = \#(tag)
+                        BY ONLY <2>columns, SMT DEF kinds\#(children)
+                    <4>. QED BY ONLY <4>slot, <4>tag\#(childFact), SMT DEF \#(nodes[index]), \#(rule)GeneratedNode
+        """#
+    }.joined(separator: "\n")
     let conclusion = "\(rule)PhysicalAssignmentRhs(\(plan), \(before), \(completed)) = \(nodes[count])"
     let proof = #"""
     <1>rhs\#(ordinal). \#(conclusion)
+        <2>. DEFINE decodedCapture == \#(capture.tla)
+                    kinds == \#(TLAValue.tuple(capture.columns.kinds))
+                    left == \#(TLAValue.tuple(capture.columns.left))
+                    right == \#(TLAValue.tuple(capture.columns.right))
+        <2>capture. \#(armPlan).captures[\#(slot)] = decodedCapture
+            BY ONLY IsaM("simp") DEF \#(armPlan), decodedCapture
+        <2>decoded. \#(plan) = \#(rule)NativeAssignmentRhsPlan(decodedCapture)
+            BY ONLY <2>capture, SMT DEF \#(plan)
+        <2>columns. /\ \#(plan).count = \#(count)
+                     /\ \#(plan).kinds = kinds
+                     /\ \#(plan).left = left /\ \#(plan).right = right
+            BY ONLY <2>decoded, IsaM("simp") DEF decodedCapture, \#(rule)NativeAssignmentRhsPlan, kinds, left, right
         <2>shape. /\ \#(plan).count \in Nat \ {0}
                   /\ 1..\#(plan).count = \#(TLAValue.set(Set((1...count).map(TLAValue.int))))
                   /\ \A index \in 1..\#(plan).count : \#(plan).kinds[index] \in {"literal", "read", "add"}
                   /\ \A index \in 1..\#(plan).count : \#(plan).kinds[index] = "add" =>
                        /\ \#(plan).left[index] \in 1..(index - 1)
                        /\ \#(plan).right[index] \in 1..(index - 1)
-            BY ONLY SMT DEF \#(plan), \#(armPlan), \#(rule)NativeAssignmentRhsPlan
+            <3>tags. \A index \in 1..\#(count) : kinds[index] \in {"literal", "read", "add"}
+                BY ONLY SMT DEF kinds
+            <3>children. \A index \in 1..\#(count) : kinds[index] = "add" =>
+                /\ left[index] \in 1..(index - 1)
+                /\ right[index] \in 1..(index - 1)
+                BY ONLY SMT DEF kinds, left, right
+            <3>. QED BY ONLY <2>columns, <3>tags, <3>children, SMT
         <2>witness. \#(history)(\#(plan), \#(before), \#(completed), \#(witness))
-            BY ONLY <2>shape, SMT DEF \#(check)
+            <3>zero. \#(witness)[0] = \#(rule)Success(0)
+                BY ONLY SMT DEF \#(witness), \#(nodes[0])
+    \#(recurrence)
+            <3>. QED BY ONLY <2>shape, <3>zero, \#(recurrenceFacts.joined(separator: ", ")), SMT
+                DEF \#(rule)PhysicalAssignmentRhsHistory, \#(rule)GeneratedExpressionHistory
         <2>result. \#(rule)PhysicalAssignmentRhs(\#(plan), \#(before), \#(completed)) = \#(witness)[\#(plan).count]
             BY ONLY <2>shape, <2>witness, \#(rule)PhysicalAssignmentRhsAgreesWithWitness, SMT
-        <2>. QED BY ONLY <2>result, SMT DEF \#(witness), \#(plan), \#(armPlan), \#(rule)NativeAssignmentRhsPlan
+        <2>count. \#(plan).count = \#(count)
+            BY ONLY <2>columns, PTL
+        <2>root. \#(witness)[\#(count)] = \#(nodes[count])
+            BY ONLY SMT DEF \#(witness)
+        <2>. QED BY ONLY <2>result, <2>count, <2>root, SMT
     """#
     return (definitions, [plan] + nodes, proof, conclusion)
 }
