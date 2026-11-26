@@ -5467,8 +5467,8 @@
     {
       "path": "specifications/Disruptor",
       "name": "Disruptor",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "partially audited",
+      "gap": "Three bounded MC configurations matched locally on the full labeled graphs and their selected checks. The two symbolic AP configurations and hosted evidence remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5496,35 +5496,46 @@
           "path": "specifications/Disruptor/Disruptor_MPMC.tla",
           "role": "unclassified",
           "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/DisruptorMPMC.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Disruptor/Disruptor_SPMC.tla",
           "role": "unclassified",
           "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/DisruptorSPMC.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Disruptor/MCDisruptor_MPMC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/DisruptorMPMC.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Disruptor/MCDisruptor_SPMC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/DisruptorSPMC.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Disruptor/RingBuffer.tla",
           "role": "unclassified",
           "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/DisruptorMPMC.swift",
+            "Sources/UpstreamParity/Examples/DisruptorSPMC.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -5553,30 +5564,48 @@
           "module": "specifications/Disruptor/MCDisruptor_MPMC.tla",
           "configuration": "specifications/Disruptor/MCDisruptor_MPMC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/DisruptorMPMC.swift",
+              "scenario": "Upstream",
+              "caseID": "disruptor-mpmc"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/Disruptor/MCDisruptor_MPMC.tla",
           "configuration": "specifications/Disruptor/MCDisruptor_MPMC_liveliness.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/DisruptorMPMC.swift",
+              "scenario": "LivelinessCheck",
+              "caseID": "disruptor-mpmc-liveliness"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/Disruptor/MCDisruptor_SPMC.tla",
           "configuration": "specifications/Disruptor/MCDisruptor_SPMC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/DisruptorSPMC.swift",
+              "scenario": "Upstream",
+              "caseID": "disruptor-spmc"
+            }
+          ],
           "evidence": []
         }
       ],

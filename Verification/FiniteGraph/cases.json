@@ -3613,6 +3613,102 @@
       "moduleSHA256": "35ce7ae00bffee9c43ffe9b36de1d3383c7b2c65809b4686fdb84c309d488a7a",
       "cfgSHA256": "9fadf76c3a66a8fa807bf77a5c5d276e7a1dae385b64201acb5e41800075f687",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "disruptor-spmc",
+      "sourceModel": "disruptor-spmc",
+      "scenario": "Upstream",
+      "module": "disruptor/MCDisruptor_SPMC.tla",
+      "configuration": "disruptor/MCDisruptor_SPMC.cfg",
+      "imports": [
+        "disruptor/Disruptor_SPMC.tla",
+        "disruptor/RingBuffer.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCDisruptor_SPMC",
+          "importedModule": "Disruptor_SPMC"
+        },
+        {
+          "importingModule": "Disruptor_SPMC",
+          "importedModule": "RingBuffer"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Disruptor/MCDisruptor_SPMC.tla",
+        "sha256": "be3f2a2d60d4a6067b2d815822570a2f8c163b2b9b3a06b43d9a7c1f3eec4e39"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "be3f2a2d60d4a6067b2d815822570a2f8c163b2b9b3a06b43d9a7c1f3eec4e39",
+      "cfgSHA256": "54a8668fa7ca5b6aacfb5f00f0d864d366daa8b0b51366d4ef74609d7a9e754e",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "disruptor-mpmc",
+      "sourceModel": "disruptor-mpmc",
+      "scenario": "Upstream",
+      "module": "disruptor/MCDisruptor_MPMC.tla",
+      "configuration": "disruptor/MCDisruptor_MPMC.cfg",
+      "imports": [
+        "disruptor/Disruptor_MPMC.tla",
+        "disruptor/RingBuffer.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCDisruptor_MPMC",
+          "importedModule": "Disruptor_MPMC"
+        },
+        {
+          "importingModule": "Disruptor_MPMC",
+          "importedModule": "RingBuffer"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Disruptor/MCDisruptor_MPMC.tla",
+        "sha256": "def6ddaeb2a8bb3995421722e007e1d9b889502a8d8bd92a55f51289a1633e75"
+      },
+      "exploration": {
+        "maximumStateLimit": 125000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "def6ddaeb2a8bb3995421722e007e1d9b889502a8d8bd92a55f51289a1633e75",
+      "cfgSHA256": "536a5a14deb08f933d9091a213991d634bd2f2cccf0f92e25f22fefe273b1b44",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "disruptor-mpmc-liveliness",
+      "sourceModel": "disruptor-mpmc",
+      "scenario": "LivelinessCheck",
+      "module": "disruptor/MCDisruptor_MPMC.tla",
+      "configuration": "disruptor/MCDisruptor_MPMC_liveliness.cfg",
+      "imports": [
+        "disruptor/Disruptor_MPMC.tla",
+        "disruptor/RingBuffer.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCDisruptor_MPMC",
+          "importedModule": "Disruptor_MPMC"
+        },
+        {
+          "importingModule": "Disruptor_MPMC",
+          "importedModule": "RingBuffer"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Disruptor/MCDisruptor_MPMC.tla",
+        "sha256": "def6ddaeb2a8bb3995421722e007e1d9b889502a8d8bd92a55f51289a1633e75"
+      },
+      "exploration": {
+        "maximumStateLimit": 15000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "def6ddaeb2a8bb3995421722e007e1d9b889502a8d8bd92a55f51289a1633e75",
+      "cfgSHA256": "5bea496c83bd65d69485969c53697e601b46f8bb854256f806e2041047c67610",
+      "timeoutSeconds": 120
     }
   ]
 }
