@@ -1365,21 +1365,21 @@ package enum ConditionalActionEvidence {
                     <5>. DEFINE maps == \#(mapsColumn)
                                 predecessors == \#(predecessorColumn)
                     <5>edges. /\ predecessors[1] = 0
-                              /\ \A row \in 2..Len(rows) : predecessors[row] = row - 1
-                        BY ONLY <5>range, SMT DEF predecessors, \#(predecessorColumn)
+                              /\ \A position \in 1..prefixCount : predecessors[position + 1] = position
+                        BY ONLY <5>range, SMT DEF predecessors, \#(predecessorColumn), prefixCount
                     <5>edgeUpdates. /\ (predecessors[1] = 0 => maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys))
-                                    /\ \A row \in 2..Len(rows) :
-                                          LET prior == predecessors[row]
-                                          IN maps[row] = Arithmetic!CopyReplace(ConditionalIntKeys, maps[prior],
+                                    /\ \A position \in 1..prefixCount :
+                                          LET prior == predecessors[position + 1]
+                                          IN maps[position + 1] = Arithmetic!CopyReplace(ConditionalIntKeys, maps[prior],
                                               ConditionalIntegerFieldNames[\#(targetColumn)[prior]], <<"capture", prior>>)
-                        BY ONLY <5>range, SMT DEF maps, \#(mapsColumn), predecessors, \#(predecessorColumn),
+                        BY ONLY <5>range, SMT DEF maps, \#(mapsColumn), predecessors, \#(predecessorColumn), prefixCount,
                             \#(targetColumn), ConditionalIntegerFieldNames, ConditionalIntKeys,
                             Arithmetic!CopyEntryRoutes, Arithmetic!CopyReplace
                     <5>transitions. /\ maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
                                     /\ \A position \in 1..prefixCount :
                                         maps[position + 1] = Arithmetic!CopyReplace(ConditionalIntKeys, maps[position],
                                             ConditionalIntegerFieldNames[\#(targetColumn)[position]], <<"capture", position>>)
-                        BY ONLY <5>edges, <5>edgeUpdates, SMT DEF prefixCount
+                        BY ONLY <5>edges, <5>edgeUpdates, SMT
                     <5>. DEFINE scheduled == \#(scheduledColumn)
                                 origins == \#(origins)
                                 readColumn == \#(readColumn)
