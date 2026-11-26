@@ -34,6 +34,26 @@ struct SymmetryDomainAdmissionTests {
         _ = try spec.compile()
     }
 
+    @Test("Independent permutation groups reject a member shared by both parameters")
+    func independentDomainsCannotOverlap() {
+        let spec = TLASpec("OverlappingGroups") { scope in
+            let nodes = scope.parameter(as: Set<Int>.self,
+                in: NonEmptySubsets(of: Set<Int>([1, 2])), _name: "nodes")
+            let data = scope.parameter(as: Set<Int>.self,
+                in: NonEmptySubsets(of: Set<Int>([2, 3])), _name: "data")
+            Symmetry(_name: "Groups", independently: nodes, data)
+        }
+        do {
+            _ = try spec.compile()
+            Issue.record("Independent symmetry accepted overlapping groups")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidSymmetryDeclaration)
+            #expect(diagnostic.expected == "two nonempty disjoint symmetry domains")
+        } catch {
+            Issue.record("Unexpected compilation error: \(error)")
+        }
+    }
+
     @Test("Composite domains are rejected before distinct function keys can collide")
     func compositeMembersCannotCollapseDistinctFunctionKeys() {
         let atom = TLAValue.int(1)

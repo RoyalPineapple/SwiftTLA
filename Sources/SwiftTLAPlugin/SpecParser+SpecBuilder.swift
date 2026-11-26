@@ -1344,6 +1344,21 @@ extension ParserSession {
         named bindingName: String,
         into components: inout TLASpec
     ) -> SymmetrySetDecl? {
+        func setParameter(_ expression: ExprSyntax) -> ParameterReference? {
+            guard let name = expression.as(DeclReferenceExprSyntax.self),
+                  case .parameter(let reference)? = sourceScope.value(for: name),
+                  case .set(let member)? = sourceScope.shape(for: name), member.resolved else { return nil }
+            return reference
+        }
+        if let first = call.arguments.first(where: { $0.label?.text == "independently" }) {
+            let arguments = call.arguments.filter { $0.label?.text != "_name" }
+            guard arguments.count == 2, let last = arguments.last, last.label == nil,
+                  let a = setParameter(first.expression), let b = setParameter(last.expression) else {
+                components.diagnostics.append(.init(message: "Independent symmetry requires two typed set parameters.", source: call))
+                return nil
+            }
+            return .init(bindingName, domain: .independentParameters(a, b))
+        }
         guard call.arguments.filter({ $0.label == nil }).count == 1,
               let valuesSyntax = call.arguments.first(where: { $0.label == nil })?.expression
         else {
@@ -1357,9 +1372,7 @@ extension ParserSession {
         if let values = parseSymmetryValues(valuesSyntax) {
             return .init(bindingName, Set(values))
         }
-        if let parameter = valuesSyntax.as(DeclReferenceExprSyntax.self),
-           case .parameter(let reference)? = sourceScope.value(for: parameter),
-           case .set(let member)? = sourceScope.shape(for: parameter), member.resolved {
+        if let reference = setParameter(valuesSyntax) {
             return .init(bindingName, domain: .parameter(reference))
         }
         components.diagnostics.append(.init(

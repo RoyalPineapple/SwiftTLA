@@ -3810,6 +3810,60 @@
       "moduleSHA256": "d90063f6a9aef1cf51f9b1bb451460487b2d38e7e82d68a0d4eaf48cfc83106a",
       "cfgSHA256": "24068575cb139969f2f2ae88f8160d44bf280fbf02647032d933a84828be0b40",
       "timeoutSeconds": 300
+    },
+    {
+      "id": "flash-mutex",
+      "sourceModel": "flash-with-mutex",
+      "scenario": "MCFlashWithMutex",
+      "module": "flash-protocol/MCFlashWithMutex.tla",
+      "configuration": "flash-protocol/MCFlashWithMutex.cfg",
+      "imports": [
+        "flash-protocol/FlashWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCFlashWithMutex",
+          "importedModule": "FlashWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/FlashProtocol/MCFlashWithMutex.tla",
+        "sha256": "09cc038be1a3ff7beb58e2e985d77d4e4f42c7745f5fca329855d61538f92e0b"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "09cc038be1a3ff7beb58e2e985d77d4e4f42c7745f5fca329855d61538f92e0b",
+      "cfgSHA256": "64b702393058643b9265efef919f1b7d10b34b4110658e96714158cb2adf5b94",
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "german-mutex",
+      "sourceModel": "ap-german-mutex",
+      "scenario": "MCGermanCMPWithMutex",
+      "module": "german-protocol/MCGermanCMPWithMutex.tla",
+      "configuration": "german-protocol/MCGermanCMPWithMutex.cfg",
+      "imports": [
+        "german-protocol/GermanCMPWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCGermanCMPWithMutex",
+          "importedModule": "GermanCMPWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/MCGermanCMPWithMutex.tla",
+        "sha256": "6d14d6cfda26b8ff37b367e49302800f4b0fc368960a1597a64eab6cbb0b0657"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "6d14d6cfda26b8ff37b367e49302800f4b0fc368960a1597a64eab6cbb0b0657",
+      "cfgSHA256": "81ec679d1d535f1498d88803a63eb4624bd406f19af3828d18286d6900a6e127",
+      "timeoutSeconds": 120
     }
   ]
 }

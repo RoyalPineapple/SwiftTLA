@@ -6536,7 +6536,7 @@
       "path": "specifications/FlashProtocol",
       "name": "FLASH Cache-Coherence Protocol",
       "audit": "partial",
-      "gap": "APFlashWithMutex has a local TLC comparison. The two-domain symmetry configuration, FairSpec liveness configuration, and hosted checks remain open.",
+      "gap": "APFlashWithMutex has a local TLC comparison. MCFlashWithMutex also matches locally with independent node and data symmetry. The FairSpec liveness configuration and hosted checks remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -6568,8 +6568,10 @@
           "path": "specifications/FlashProtocol/MCFlashWithMutex.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/FlashWithMutex.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/FlashProtocol/MCFlashWithMutexLive.tla",
@@ -6600,10 +6602,16 @@
           "module": "specifications/FlashProtocol/MCFlashWithMutex.tla",
           "configuration": "specifications/FlashProtocol/MCFlashWithMutex.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/FlashWithMutex.swift",
+              "scenario": "MCFlashWithMutex",
+              "caseID": "flash-mutex"
+            }
+          ],
           "evidence": []
         },
         {
@@ -6683,7 +6691,7 @@
       "path": "specifications/GermanProtocol",
       "name": "German Cache-Coherence Protocol",
       "audit": "partially audited",
-      "gap": "All three published AP configurations matched their pinned upstream graphs, selected invariants and deadlock checks in local TLC runs. The three MC configurations, including symmetry and refinement, and hosted evidence remain open.",
+      "gap": "All three published AP configurations matched their pinned upstream graphs, selected invariants and deadlock checks in local TLC runs. MCGermanCMPWithMutex matched the raw labeled graph and the configured node-symmetry orbits locally. The Control and Data refinements and final-revision hosted checks remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -6744,8 +6752,10 @@
           "path": "specifications/GermanProtocol/MCGermanCMPWithMutex.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GermanCMPWithMutex.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/GermanProtocol/MCGermanControl.tla",
@@ -6815,10 +6825,16 @@
           "module": "specifications/GermanProtocol/MCGermanCMPWithMutex.tla",
           "configuration": "specifications/GermanProtocol/MCGermanCMPWithMutex.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GermanCMPWithMutex.swift",
+              "scenario": "MCGermanCMPWithMutex",
+              "caseID": "german-mutex"
+            }
+          ],
           "evidence": []
         },
         {

@@ -2236,6 +2236,8 @@ private struct CanonicalSpecificationEncoder {
             switch set.domain {
             case .finite(let values): domain = node("finite", [canonicalList(values.map(canonicalValue).sorted())])
             case .parameter(let reference): domain = node("parameter", [reference.name])
+            case .independentParameters(let first, let second):
+                domain = node("independent-parameters", [first.name, second.name])
             }
             return node("symmetry-set", [set.variableName, domain])
         }
@@ -2828,12 +2830,12 @@ private extension CompiledModuleMetadata {
             ($0.reference, try renderer.binderName($0.binder))
         })
         for symmetry in symmetrySets {
-            guard let domain = symmetry.domain.renderedSet(parameterNames: symmetryParameterNames) else {
+            guard let permutations = symmetry.domain.renderedPermutations(parameterNames: symmetryParameterNames) else {
                 throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
                     path: "symmetrySets.\(symmetry.variableName)", expected: "a rendered model parameter",
                     actual: "a missing parameter", nextSafeAction: "Use a model-owned parameter.")
             }
-            lines.append("Symm\(symmetry.variableName) == Permutations(\(domain))")
+            lines.append("Symm\(symmetry.variableName) == \(permutations)")
         }
         if !symmetrySets.isEmpty { lines.append("") }
 

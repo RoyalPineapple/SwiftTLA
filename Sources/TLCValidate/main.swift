@@ -19,6 +19,7 @@ default:
       reference capture|compare --case <id> --module <root.tla> --config <model.cfg> --output <new-directory> [--native <directory>] [Importer=path/to/Import.tla ...]
       native list | run --case <id-or-all> --output <directory> --maximum-states <positive-integer>
       oracle run --case <id-or-all> --output <directory> --maximum-states <positive-integer>
+      oracle export --case <id> --output <new-directory>
       oracle cache-key --case <id> --maximum-states <positive-integer>
       compare run --case <id-or-all> --native <directory> --oracle <directory> --output <directory>
       upstream list | run --case <id-or-all> --output <directory> | cache-key --case <id>

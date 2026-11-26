@@ -372,12 +372,12 @@ extension CompiledModuleMetadata {
   private func authoredPlusCalSymmetry(layout: CompiledLayout, parameterNames: [String]) throws -> [String] {
     let names = Dictionary(uniqueKeysWithValues: zip(layout.parameters.map(\.reference), parameterNames))
     return try symmetrySets.map { symmetry in
-      guard let domain = symmetry.domain.renderedSet(parameterNames: names) else {
+      guard let permutations = symmetry.domain.renderedPermutations(parameterNames: names) else {
         throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
           path: "symmetrySets.\(symmetry.variableName)", expected: "a rendered model parameter",
           actual: "a missing parameter", nextSafeAction: "Use a model-owned parameter.")
       }
-      return "Symm\(symmetry.variableName) == Permutations(\(domain))"
+      return "Symm\(symmetry.variableName) == \(permutations)"
     }
   }
 }

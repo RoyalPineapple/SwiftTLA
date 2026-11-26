@@ -531,6 +531,12 @@ package struct FlashWithMutexModel: Sendable {
                 Bind(data, to: Set<Atom>([Atom.second(Text.d1), Atom.second(Text.d2)]))
                 Bind(undefined, to: absentText)
             }
+            let cacheSymmetry = Symmetry(independently: nodes, data)
+            Validation("MCFlashWithMutex") {
+                Bind(nodes, to: Set<Atom>([Atom.first(Symbol.n1), Atom.first(Symbol.n2)]))
+                Bind(data, to: Set<Atom>([Atom.first(Symbol.d1), Atom.first(Symbol.d2)]))
+                Bind(undefined, to: absentSymbol)
+            }.usingSymmetry(cacheSymmetry)
         }
     }
 }
