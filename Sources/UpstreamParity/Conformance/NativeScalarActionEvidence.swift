@@ -708,6 +708,7 @@ func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram,
 struct SequentialNativeProof {
     let definitions: String
     let theorem: String
+    let hasFullFailures: Bool
 }
 
 func sequentialNativeProof(_ source: String, program: CompiledProgram) throws -> SequentialNativeProof {
@@ -753,6 +754,9 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
     var actionFacts: [String] = []
     var failureSteps: [String] = []
     var failureFacts: [String] = []
+    var fullFailureConclusions: [String] = []
+    var fullFailureSteps: [String] = []
+    var fullFailureFacts: [String] = []
     var nativeActions: [String] = []
     var failureActions: [String] = []
     var rhsProofs: [String] = []
@@ -861,11 +865,11 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
             steps.append(prefix + "Emits")
             failures.append(prefix + "Failure")
         }
+        let selector = try row.visit.map { try comparison($0.predicate) }
         let event: String
         let errors: String
-        if let visit = row.visit {
+        if let guardText = selector {
             guard steps.count == 2, failures.count == 2 else { throw invalid }
-            let guardText = try comparison(visit.predicate)
             event = "IF \(name)Arm1Reached THEN (IF \(guardText) THEN \(steps[0]) ELSE \(steps[1])) ELSE FALSE"
             errors = "IF \(name)Arm1Reached THEN (IF \(guardText) THEN \(failures[0]) ELSE \(failures[1])) ELSE <<>>"
         } else {
@@ -907,6 +911,84 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
                         NativeSequentialRule!NativeAssignmentStart, NativeSequentialRule!NativeAssignmentStep,
                         \#(rhsExpansion)
             """#)
+        let action = program.layout.actions[index].id
+        let regions = program[action].body.orderedAlternativeFailureRegions(afterControlGuardOf: counter.id)
+        if regions.filter({ !$0.bindings.isEmpty }).count == 1 {
+            guard regions.count == row.plans.count else { throw invalid }
+            for (arm, region) in regions.enumerated() where !region.bindings.isEmpty {
+                let prefix = name + "Arm\(arm + 1)"
+                let source = "TLASequentialAuthoredHistory\(index + 1)Arm\(arm + 1)"
+                let sourceFailure = "AuthoredSequentialActionFailure\(index + 1)Branch\(arm + 1)"
+                guard row.plans.enumerated().allSatisfy({ $0.offset == arm || $0.element.failureAppendSites.isEmpty })
+                else { throw invalid }
+                let active = selector.map { arm == 0 ? $0 : "~" + $0 }
+                let recorded = "\(prefix)RecordedFailure(TRUE)"
+                let observed = active.map { "IF \(name)Arm1Reached /\\ \($0) THEN \(recorded) ELSE <<>>" } ?? recorded
+                let conclusion = #"""
+                LET observed == \#(observed)
+                    authored == \#(source)
+                IN /\ DOMAIN observed = DOMAIN authored
+                   /\ \A i \in DOMAIN authored :
+                       observed[i] = [action |-> authored[i].action, branch |-> authored[i].branch,
+                           site |-> authored[i].site, target |-> authored[i].target,
+                           payload |-> authored[i].payload, before |-> authored[i].before]
+                """#
+                let otherSourceBranches = row.plans.indices.filter { $0 != arm }.map { "\(authoredFailure)Branch\($0 + 1)" }
+                let sourceDispatchDefinitions = ([authoredFailure] + otherSourceBranches).joined(separator: ", ")
+                let capture = "\(prefix)Capture\(row.plans[arm].captures.count)"
+                let recorder = "\(prefix)RecordedFailure"
+                let callback = "\(prefix)AppendCalls"
+                let otherRecorders = row.plans.indices.filter { $0 != arm }.flatMap { other in
+                    ["Reached", "Failure", "RecordedFailure", "AppendCalls"].map { "\(name)Arm\(other + 1)\($0)" }
+                }
+                let dispatchDefs = (["\(name)Failures", "\(prefix)Failure"] + otherRecorders).joined(separator: ", ")
+                let callbackSites = row.plans[arm].failureAppendSites
+                let siteFacts = callbackSites.map { "<3>site\($0)" }
+                let facts = (siteFacts.isEmpty ? "" : siteFacts.joined(separator: ", ") + ", ")
+                let slotProofs = callbackSites.map { slot in
+                    """
+                            <3>site\(slot). active /\\ \(capture).failure.site = \(slot) => observed[1] = expected
+                                BY ONLY <2>selected, SMT
+                                    DEF active, expected, observed, authored, \(source), \(recorder), \(callback), \(prefix)Failure
+                    """
+                }.joined(separator: "\n")
+                let fact = "<1>full\(index + 1)arm\(arm + 1)"
+                let predicateLines = conclusion.split(separator: "\n").map { "    " + $0 }
+                fullFailureConclusions.append("    /\\ (\n" + predicateLines.joined(separator: "\n") + "\n    )")
+                fullFailureFacts.append(fact)
+                fullFailureSteps.append(#"""
+                \#(fact).
+                \#(predicateLines.joined(separator: "\n"))
+                    <2>payload. \#(name)Failures = \#(sourceFailure)
+                        BY ONLY AuthoredSequentialTypedEntry, NativeSequentialDispatchUsesAuthoredFailures, SMT
+                            DEF NativeSequentialLabeledFailures, NativeSequentialRoutes, NativeSequentialAuthoredLabels,
+                                NativeSequentialFailures, AuthoredSequentialLabels, AuthoredSequentialFirstFailure,
+                                AuthoredSequentialVisitorFailure, \#(sourceDispatchDefinitions)
+                    <2>. DEFINE observed == \#(observed)
+                                 authored == \#(source)
+                                 active == \#(sourceFailure) # <<>>
+                                 expected == [action |-> authored[1].action, branch |-> authored[1].branch,
+                                     site |-> authored[1].site, target |-> authored[1].target,
+                                     payload |-> authored[1].payload, before |-> authored[1].before]
+                    <2>projection. active => /\ observed = \#(recorder)(TRUE)
+                                             /\ observed # <<>>
+                                             /\ \#(sourceFailure) = \#(prefix)Failure
+                        BY ONLY <2>payload, SMT DEF active, observed, \#(dispatchDefs)
+                    <2>empty. ~active => observed = <<>> /\ authored = <<>>
+                        BY ONLY <2>payload, SMT DEF active, observed, authored, \#(source), \#(dispatchDefs)
+                    <2>selected. active => /\ \#(capture).failure.site \in \#(TLAValue.set(Set(callbackSites.map(TLAValue.int))))
+                                           /\ observed = \#(recorder)(TRUE)
+                                           /\ \#(sourceFailure) = \#(prefix)Failure
+                        BY ONLY <2>projection, SMT DEF \#(recorder), \#(callback)
+                    <2>domains. active => DOMAIN observed = {1} /\ DOMAIN authored = {1}
+                        BY ONLY <2>projection, SMT DEF active, authored, \#(source), \#(recorder)
+                    <2>record. active => observed[1] = expected
+                    \#(slotProofs)
+                        <3>. QED BY ONLY <2>selected, \#(facts)SMT
+                    <2>. QED BY ONLY <2>empty, <2>domains, <2>record, SMT DEF observed, authored, expected
+                """#)
+            }
+        }
         actionSteps.append(#"""
                 <2>. QED BY ONLY AuthoredSequentialTypedEntry, NativeSequentialDecodedRhsOutcomes, \#(materializationFacts.joined(separator: ", ")), SMT
                     DEF \#(name), \#(row.formalLabel), \#(planDefinitions), AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts,
@@ -931,6 +1013,19 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
 
         """#
     }
+    let fullFailureTheorem = fullFailureFacts.isEmpty ? "" : #"""
+    NativeSequentialFullFailureHistoriesMatch ==
+    \#(fullFailureConclusions.joined(separator: "\n"))
+
+    THEOREM NativeSequentialRecorderUsesAuthoredHistories ==
+        AuthoredSequentialTypedEntry => NativeSequentialFullFailureHistoriesMatch
+    PROOF
+    <1>. SUFFICES ASSUME AuthoredSequentialTypedEntry
+                  PROVE NativeSequentialFullFailureHistoriesMatch BY PTL
+    \#(fullFailureSteps.joined(separator: "\n"))
+    <1>. QED BY ONLY \#(fullFailureFacts.joined(separator: ", ")), PTL DEF NativeSequentialFullFailureHistoriesMatch
+
+    """#
     let theorem = #"""
     \#(rhsTheorem)
     THEOREM NativeSequentialDispatchUsesEmittedLabeledSteps ==
@@ -964,6 +1059,8 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
     <1>. QED BY ONLY \#(failureFacts.joined(separator: ", ")), IsaM("simp"), SMT
         DEF NativeSequentialLabeledFailures, NativeSequentialRoutes, NativeSequentialAuthoredLabels,
             NativeSequentialFailures, AuthoredSequentialLabels, AuthoredSequentialFirstFailure, AuthoredSequentialVisitorFailure
+
+    \#(fullFailureTheorem)
     """#
     let failureCases = rows.indices.map { index in
         let visitor = "NativeSequentialRoutes[\(index + 1)].visitor"
@@ -993,7 +1090,7 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
     NativeSequentialLabeledFailures(label) ==
         CASE \#(failureCases) [] OTHER -> <<>>
     """#
-    return .init(definitions: definitions, theorem: theorem)
+    return .init(definitions: definitions, theorem: theorem, hasFullFailures: !fullFailureFacts.isEmpty)
 }
 
 /// Instantiate the existing physical history recurrence on the decoded capture's finite node range.
@@ -2530,7 +2627,7 @@ func conditionalSharedFailureProof(
                     calls == ConditionalNativeSharedPlan.callbacks
         <2>. SUFFICES ASSUME terminal.failure # <<>>
                       PROVE ConditionalSharedFailureObservations
-            OBVIOUS DEF terminal
+            BY DEF terminal
         <2>failed. ~Arithmetic!RenderedAssignmentsPass(raw, count)
             BY ONLY <1>sharedReached, (terminal.failure # <<>>), SMT DEF terminal, ConditionalSharedTerminal,
                 raw, count, Arithmetic!RenderedAssignmentHistoryAt
