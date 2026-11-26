@@ -909,7 +909,27 @@ package func formalSequenceContains(_ sequence: StateExpr, _ element: StateExpr)
     .exists(.setLiteral([element]), sought, .exists(positions, index, match)))
 }
 
+package func formalSequenceAllSatisfy(_ sequence: StateExpr, parameter: String, predicate: StateExpr) -> StateExpr {
+  let names = sequence.freeVariableNames.union(predicate.freeVariableNames).union([parameter])
+  let receiver = StateExpr.freshBoundName("__sequence", avoiding: names)
+  let index = StateExpr.freshBoundName("__index", avoiding: names)
+  let positions = StateExpr.integerRange(.int(1), .tupleLength(.variable(receiver)))
+  let element = StateExpr.tupleDynamicAccess(.variable(receiver), .variable(index))
+  return .letValue(receiver, sequence, .forAll(positions, index, .letValue(parameter, element, predicate)))
+}
+
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  /// Tests the elements of this sequence. An empty sequence satisfies every predicate.
+  @_disfavoredOverload
+  public func allSatisfy<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    _ predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Bool> {
+    let parameter = generatedBinderName(file: file, line: line, column: column)
+    let element = WithValue<ExpressionValue.Element>(expression: .variable(parameter))
+    return Expr(formalSequenceAllSatisfy(stateExpr, parameter: parameter, predicate: predicate(element).stateExpr))
+  }
+
   @_disfavoredOverload
   public func contains(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<Bool> {
     Expr(formalSequenceContains(stateExpr, element.stateExpr))
@@ -1242,6 +1262,14 @@ extension TypedExpression where ExpressionValue: FormalSequenceValue {
 }
 
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  /// Counts matching positions, including repeated values.
+  public func count<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    where predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Int> {
+    selecting(file: file, line: line, column: column, where: predicate).count
+  }
+
   /// Selects formal sequence members that satisfy `predicate`.
   public func selecting<Predicate: TypedExpression<Bool>>(
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,

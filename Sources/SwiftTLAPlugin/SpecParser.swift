@@ -839,6 +839,7 @@ final class ParserSession {
         let arguments = call.arguments.filter { !["file", "line", "column"].contains($0.label?.text ?? "") }
         let name: String
         let domains: [ExprSyntax]
+        var sequenceAllSatisfy = false
         let closure: ClosureExprSyntax
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            let kind = CollectionPredicateKind(rawValue: member.declName.baseName.sourceIdentifierName),
@@ -851,6 +852,9 @@ final class ParserSession {
                 closure = explicit
             } else { return nil }
             name = kind == .contains ? "Exists" : "ForAll"
+            if kind == .allSatisfy, case .array = typedFacadeValueType(receiver, scope: scope) {
+                sequenceAllSatisfy = true
+            }
             domains = [receiver]
         } else {
             guard let trailing = call.trailingClosure else { return nil }
@@ -887,6 +891,9 @@ final class ParserSession {
               var predicate = decodeTypedFacadeValue(bodySyntax, scope: predicateScope) else {
             algorithmParseFailure = algorithmParseFailure ?? "\(name) could not decode its predicate."
             return nil
+        }
+        if sequenceAllSatisfy, let sequence = bindings.first {
+            return formalSequenceAllSatisfy(sequence.domain, parameter: sequence.name, predicate: predicate)
         }
         for binding in bindings.reversed() {
             predicate = name == "ForAll"
@@ -1293,21 +1300,15 @@ final class ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.sourceIdentifierName == "selecting",
+           ["selecting", "count"].contains(member.declName.baseName.sourceIdentifierName),
            let sequenceSyntax = member.base,
            let sequence = decodeTypedFacadeValue(sequenceSyntax, scope: scope),
-           let closure = call.trailingClosure
-               ?? call.arguments.first(where: { $0.label?.text == "where" })?.expression.as(ClosureExprSyntax.self),
-           closure.statements.count == 1,
-           case .expr(let bodySyntax) = closure.statements.first?.item,
-           closureParameterNames(in: closure).count == 1 {
-            let binder = closureParameterNames(in: closure)[0]
-            guard let predicate = decodeTypedFacadeValue(
-                bodySyntax,
-                scope: scope.extending(binding: binder, to: .variable(binder),
-                    shape: typedFacadeValueType(sequenceSyntax, scope: scope)?.selectedElement)
-            ) else { return nil }
-            return .sequenceSelect(sequence, binder, predicate)
+           let closure = collectionClosure(in: call, argumentLabel: "where") {
+            let elementScope = scope.extending(binding: closure.sourceName, to: .variable(closure.binder),
+                shape: typedFacadeValueType(sequenceSyntax, scope: scope)?.selectedElement)
+            guard let predicate = decodeTypedFacadeValue(closure.body, scope: elementScope) else { return nil }
+            let selected = StateExpr.sequenceSelect(sequence, closure.binder, predicate)
+            return member.declName.baseName.sourceIdentifierName == "count" ? .tupleLength(selected) : selected
         }
         if let subscriptCall = expression.as(SubscriptCallExprSyntax.self),
            subscriptCall.arguments.count == 1,
@@ -2293,7 +2294,7 @@ final class ParserSession {
             return typedFacadeValueType(candidates, scope: scope)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.sourceIdentifierName == "integerDivided",
+           ["integerDivided", "count"].contains(member.declName.baseName.sourceIdentifierName),
            decodeTypedFacadeValue(expression, scope: scope) != nil {
             return .int
         }
@@ -2403,7 +2404,7 @@ final class ParserSession {
         return nil
     }
 
-    private func collectionClosure(in call: FunctionCallExprSyntax)
+    private func collectionClosure(in call: FunctionCallExprSyntax, argumentLabel: String? = nil)
         -> (body: ExprSyntax, sourceName: String, binder: String)? {
         guard call.additionalTrailingClosures.isEmpty else { return nil }
         let arguments = call.arguments.filter { !["file", "line", "column"].contains($0.label?.text ?? "") }
@@ -2411,7 +2412,7 @@ final class ParserSession {
         if arguments.isEmpty, let trailing = call.trailingClosure {
             closure = trailing
         } else if call.trailingClosure == nil, arguments.count == 1, let argument = arguments.first,
-                  argument.label == nil, let explicit = argument.expression.as(ClosureExprSyntax.self) {
+                  argument.label?.text == argumentLabel, let explicit = argument.expression.as(ClosureExprSyntax.self) {
             closure = explicit
         } else { return nil }
         guard closure.statements.count == 1,
@@ -3303,7 +3304,9 @@ extension ParserSession {
               case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
 
-        if case .set = scope.shape(for: collectionReference) { return nil }
+        let shape = scope.shape(for: collectionReference)
+        if case .set = shape { return nil }
+        if kind == .allSatisfy, case .array = shape { return nil }
         let sourceName = collectionReference.baseName.sourceIdentifierName
         let collection = scope.value(for: collectionReference) ?? .variable(sourceName)
         let parameter = generatedBinderName(

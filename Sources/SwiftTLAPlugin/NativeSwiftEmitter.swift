@@ -1148,8 +1148,25 @@ struct NativeSwiftEmitter {
             let method = all ? "allSatisfy" : "contains"
             let previousType = nativeBinderTypes.updateValue(element, forKey: binding)
             defer { nativeBinderTypes[binding] = previousType }
-            if case .integerRange = node.children[0].operation {
-                let range = node.children[0]
+            let domainNode = node.children[0]
+            if !all, case .setLiteral = domainNode.operation, domainNode.children.count == 1,
+               let argument = domainNode.children.first, argument.resultType == element, expressionValues.isEmpty {
+                let value = try self.expression(argument, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                return "(try { (\(binder(binding)): \(try swiftType(element))) throws -> \(nativeBoolType) in \(try emit(1)) }(\(value)))"
+            }
+            let comparison = node.children[1]
+            if !all, case .equal = comparison.operation,
+               case .boundValue(let sought) = comparison.children[1].computation.operation, sought != binding,
+               let array = indexedArray(domainNode, index: binding, lookup: comparison.children[0].computation) {
+                let receiver = try self.expression(array, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                // Reuse the compiled equality, including nominal projections and formal string identity.
+                let lookup = comparison.children[0].computation
+                expressionValues[lookup] = "_arrayElement"
+                defer { expressionValues.removeValue(forKey: lookup) }
+                return "(try (\(receiver)).contains(where: { (_arrayElement: \(try swiftType(lookup.resultType))) throws -> \(nativeBoolType) in \(try emit(1)) }))"
+            }
+            if case .integerRange = domainNode.operation {
+                let range = domainNode
                 let lower = try self.expression(range.children[0], state: state,
                     substitutions: substitutions, activeFunctions: activeFunctions)
                 let upper = try self.expression(range.children[1], state: state,
@@ -1493,6 +1510,13 @@ struct NativeSwiftEmitter {
             }())
             """
         case .tupleLength:
+            let selected = node.children[0]
+            if case .sequenceSelect(let binding) = selected.operation,
+               case .array(let element) = selected.children[0].resultType, expressionValues.isEmpty {
+                let array = try self.expression(selected.children[0], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                let test = try self.expression(selected.children[1], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                return "(try (\(array)).count(where: { (\(binder(binding)): \(try swiftType(element))) throws -> \(nativeBoolType) in \(test) }))"
+            }
             if case .tuple(let elements) = childType(0) {
                 return "(try { () throws -> \(nativeIntType) in _ = \(try emit(0)); return \(elements.count) }())"
             }
@@ -1693,6 +1717,51 @@ struct NativeSwiftEmitter {
         }
     }
 
+    /// Match the same array at every position of its complete one-based range.
+    private func indexedArray(_ range: CompiledExpression, index: BinderID, lookup: CompiledExpression) -> CompiledExpression? {
+        guard expressionValues.isEmpty, case .integerRange = range.operation,
+              range.children[0].operation == .value(.integer(1)),
+              case .tupleLength = range.children[1].operation, case .tupleDynamicAccess = lookup.operation
+        else { return nil }
+        let array = range.children[1].children[0]
+        guard case .array(let element) = array.resultType, case .boundValue = array.operation,
+              lookup.resultType == element, lookup.children[0].operation == array.operation,
+              lookup.children[0].resultType == array.resultType, lookup.children[1].operation == .boundValue(index)
+        else { return nil }
+        return array
+    }
+
+    /// Recognize the one-based quantifier emitted by formalSequenceAllSatisfy.
+    private mutating func arrayAllSatisfy(
+        receiver: CompiledExpression, binding: BinderID, quantifier: CompiledExpression,
+        state: String, substitutions: [BinderID: String], activeFunctions: Set<ResolvedFunctionID>
+    ) throws -> String? {
+        guard case .array(let elementType) = receiver.resultType,
+              case .forAll(let index) = quantifier.operation else { return nil }
+        let range = quantifier.children[0], body = quantifier.children[1]
+        guard case .letValue(let element) = body.operation,
+              let arrayReference = indexedArray(range, index: index, lookup: body.children[0]),
+              arrayReference.operation == .boundValue(binding), arrayReference.resultType == receiver.resultType
+        else { return nil }
+
+        // Keep the indexed form if the predicate observes either hidden binder or changes evaluation context.
+        let predicate = body.children[1]
+        var pending = [predicate]
+        while let node = pending.popLast() {
+            switch node.operation {
+            case .boundValue(let id) where id == binding || id == index: return nil
+            case .nextState, .stutteringStep, .enabledAction, .call, .checkedCall,
+                 .operatorReference, .operatorApplication, .letIn: return nil
+            default: pending.append(contentsOf: node.children)
+            }
+        }
+        let array = try expression(receiver, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        let previous = nativeBinderTypes.updateValue(elementType, forKey: element)
+        defer { nativeBinderTypes[element] = previous }
+        let test = try expression(predicate, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        return "(try (\(array)).allSatisfy { (\(binder(element)): \(try swiftType(elementType))) throws -> \(nativeBoolType) in \(test) })"
+    }
+
     private mutating func controlExpression(
         _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
@@ -1713,6 +1782,10 @@ struct NativeSwiftEmitter {
             body += hasOtherwise ? "return \(try emit(node.children.count - 1))" : "throw NativeMachineEvaluationError.noMatchingCase"
             return "(try { () throws -> \(try swiftType(result)) in\n\(body)\n}())"
         case .letValue(let binding):
+            if let direct = try arrayAllSatisfy(receiver: node.children[0], binding: binding, quantifier: node.children[1],
+                state: state, substitutions: substitutions, activeFunctions: activeFunctions) {
+                return direct
+            }
             let result = node.resultType
             var nested = substitutions
             nested[binding] = "(try \(binder(binding))())"

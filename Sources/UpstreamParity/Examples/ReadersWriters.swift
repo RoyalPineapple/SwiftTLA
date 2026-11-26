@@ -77,9 +77,8 @@ package struct ReadersWritersModel {
             typeOK {
                 readers.isSubset(of: actors)
                 writers.isSubset(of: actors)
-                IntRange(1, through: requestQueue.count).allSatisfy { i in
-                    let request = requestQueue[i]
-                    return (request.kind == "read" || request.kind == "write")
+                requestQueue.allSatisfy { request in
+                    (request.kind == "read" || request.kind == "write")
                         && actors.contains(request.actor)
                 }
             }
