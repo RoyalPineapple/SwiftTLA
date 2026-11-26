@@ -1281,20 +1281,44 @@
       "timeoutSeconds": 60
     },
     {
-      "id": "multicar-elevator",
+      "id": "elevator-safety-small",
       "sourceModel": "multicar-elevator",
-      "scenario": "MultiCarElevator",
-      "module": "multicar-elevator/MultiCarElevator.tla",
-      "configuration": "multicar-elevator/MultiCarElevator.cfg",
+      "scenario": "ElevatorSafetySmall",
+      "module": "multicar-elevator/Elevator.tla",
+      "configuration": "multicar-elevator/ElevatorSafetySmall.cfg",
       "imports": [],
       "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiCarElevator/Elevator.tla",
+        "sha256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203"
+      },
       "exploration": {
         "maximumStateLimit": 100000,
         "symmetryReduction": "disabled"
       },
-      "moduleSHA256": "af971fe32f8e8fe62e39985201894929beb0e85c99504d6db56350701bcaead5",
-      "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593",
-      "timeoutSeconds": 60
+      "moduleSHA256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203",
+      "cfgSHA256": "9032b54c14239b6f1a4bd17695a64c8b0d383fb29eb4625c749a2f4381379fb3",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "elevator-liveness-medium",
+      "sourceModel": "multicar-elevator",
+      "scenario": "ElevatorLivenessMedium",
+      "module": "multicar-elevator/Elevator.tla",
+      "configuration": "multicar-elevator/ElevatorLivenessMedium.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiCarElevator/Elevator.tla",
+        "sha256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203",
+      "cfgSHA256": "3e6d67656512a5d2e4795c7de9c13d510096608e506c56f31f0fa4eb618d9290",
+      "timeoutSeconds": 600
     },
     {
       "id": "tlcmc-graph-1",

@@ -8144,23 +8144,25 @@
     {
       "path": "specifications/MultiCarElevator",
       "name": "Multi-Car Elevator System",
-      "audit": "not audited",
-      "gap": "The existing multicar-elevator case compares Sources/UpstreamParity/Examples/MultiCarElevator.swift with a repository-owned MultiCarElevator.tla fixture. Its finite-graph declaration has no pinned upstream sourceInput and establishes no mapping to the required Elevator.tla configurations. Audit the upstream module roles and every published configuration before assigning coverage. The ordinary-record and typed-Do migration of this existing fixture concerns DSL cleanup only.",
-      "legacyCleanupComplete": false,
+      "audit": "partially audited",
+      "gap": "All five published bindings are authored. ElevatorSafetySmall and ElevatorLivenessMedium matched the pinned upstream initial states, labeled graphs and selected checks locally. The three larger configurations and hosted admission remain open.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/MultiCarElevator/Elevator_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "Elevator_proof extends Elevator and TLAPS to prove TypeCorrect and SafetyCorrect. It has no model configuration of its own.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/MultiCarElevator/Elevator.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/MultiCarElevator.swift"
+          ],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -8178,10 +8180,16 @@
           "module": "specifications/MultiCarElevator/Elevator.tla",
           "configuration": "specifications/MultiCarElevator/ElevatorLivenessMedium.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/MultiCarElevator.swift",
+              "scenario": "ElevatorLivenessMedium",
+              "caseID": "elevator-liveness-medium"
+            }
+          ],
           "evidence": []
         },
         {
@@ -8208,10 +8216,16 @@
           "module": "specifications/MultiCarElevator/Elevator.tla",
           "configuration": "specifications/MultiCarElevator/ElevatorSafetySmall.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/MultiCarElevator.swift",
+              "scenario": "ElevatorSafetySmall",
+              "caseID": "elevator-safety-small"
+            }
+          ],
           "evidence": []
         }
       ],
