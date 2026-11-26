@@ -9273,8 +9273,8 @@
     {
       "path": "specifications/SlidingPuzzles",
       "name": "Sliding Block Puzzle",
-      "audit": "pinned state machine and both published configurations inspected; implementation and hosted parity pending",
-      "gap": "Both configurations start from the same ten-piece Klotski board, check TypeOK and the deliberately violated KlotskiGoal invariant, and use one-cell translations of a uniquely identified adjacent piece into an empty cell. The animation root additionally selects an SVG-producing ALIAS; this trace output must not become part of graph-state identity. Implement the set-of-piece board and exact transition relation in typed #spec, retain the alias output for the animation configuration, and compare each decisive verdict and witness on both hosted paths. No configuration is implemented or credited yet.",
+      "audit": "Base Klotski configuration implemented and compared locally. Animation configuration remains open.",
+      "gap": "The base model preserves the published one-cell moves and the KlotskiGoal violation. The animation variant still needs its SVG trace alias. Hosted comparison remains open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -9288,8 +9288,10 @@
           "path": "specifications/SlidingPuzzles/SlidingPuzzles.tla",
           "role": "configured root",
           "reason": "Defines the set-of-piece Klotski state and one-cell move relation; its published configuration selects TypeOK and deliberately violated KlotskiGoal.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SlidingPuzzles.swift"
+          ],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -9297,10 +9299,16 @@
           "module": "specifications/SlidingPuzzles/SlidingPuzzles.tla",
           "configuration": "specifications/SlidingPuzzles/SlidingPuzzles.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SlidingPuzzles.swift",
+              "scenario": "Upstream",
+              "caseID": "sliding-puzzles"
+            }
+          ],
           "evidence": []
         },
         {

@@ -247,6 +247,28 @@ struct ParameterDerivedDictionaryKeyFailuresModel: Sendable {
 }
 
 @TLAModel
+struct CoordinateCandidateFailuresModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("CoordinateCandidateFailuresModel") { scope in
+            let coordinates = scope.sharedVar(initial: Set<Pair<Int, Int>>([
+                Pair(first: 0, second: -5), Pair(first: -1, second: 4), Pair(first: -1, second: 3)
+            ]))
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                With(coordinates) { point in
+                    result.set(If(point.first() == -1 && point.second() == 3,
+                        then: 1 / divisor, else: 1 % modulus))
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
 struct StateDependentStringCandidateFailuresModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 

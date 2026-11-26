@@ -3709,6 +3709,27 @@
       "moduleSHA256": "def6ddaeb2a8bb3995421722e007e1d9b889502a8d8bd92a55f51289a1633e75",
       "cfgSHA256": "5bea496c83bd65d69485969c53697e601b46f8bb854256f806e2041047c67610",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "sliding-puzzles",
+      "sourceModel": "sliding-puzzles",
+      "scenario": "Upstream",
+      "comparisonMode": "exhaustive",
+      "module": "sliding-puzzles/SlidingPuzzles.tla",
+      "configuration": "sliding-puzzles/SlidingPuzzles.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SlidingPuzzles/SlidingPuzzles.tla",
+        "sha256": "df0d6a46542a0b1aa7cdb5141923df2ea3770d241e4ca5afde0cb5c2234e76fd"
+      },
+      "exploration": {
+        "maximumStateLimit": 30000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "df0d6a46542a0b1aa7cdb5141923df2ea3770d241e4ca5afde0cb5c2234e76fd",
+      "cfgSHA256": "d2f036ba8283a1251147761577de2f25d6c1a19aa6e40800628c658a50442a16",
+      "timeoutSeconds": 60
     }
   ]
 }

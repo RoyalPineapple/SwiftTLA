@@ -837,6 +837,16 @@ struct CompiledTLARenderer {
         switch type {
         case .int: return "\(member) <= \(other)"
         case .bool: return "(\(member) = FALSE \\/ \(other) = TRUE)"
+        case .tuple(let fields):
+            // CompiledValue compares tuple members lexicographically.
+            var suffix = "TRUE"
+            for (offset, field) in fields.enumerated().reversed() {
+                let left = "\(member)[\(offset + 1)]"
+                let right = "\(other)[\(offset + 1)]"
+                guard let order = try canonicalLeastPredicate(field, left, right) else { return nil }
+                suffix = suffix == "TRUE" ? order : "(IF \(left) = \(right) THEN \(suffix) ELSE \(order))"
+            }
+            return suffix
         default:
             guard let members = choiceMembers(type), !members.isEmpty,
                   members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }

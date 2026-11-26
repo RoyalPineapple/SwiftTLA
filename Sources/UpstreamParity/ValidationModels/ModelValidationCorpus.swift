@@ -72,6 +72,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "byzpaxos-voteproof", scenarios: { try PublishedVoteProofModel.validationScenarios() }),
     .init(id: "span-tree", scenarios: { try PublishedSpanTreeModel.validationScenarios() }),
     .init(id: "span-tree-four", scenarios: { try AllFourNodeSpanTreesModel.validationScenarios() }),
+    .init(id: "sliding-puzzles", scenarios: { try SlidingPuzzlesModel.validationScenarios() }),
     .init(id: "disruptor-spmc", scenarios: { try DisruptorSPMCModel.validationScenarios() }),
     .init(id: "disruptor-mpmc", scenarios: { try DisruptorMPMCModel.validationScenarios() }),
     .init(id: "ap-german-control", scenarios: { try APGermanControlModel.validationScenarios() }),

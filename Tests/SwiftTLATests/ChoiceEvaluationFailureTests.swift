@@ -175,6 +175,18 @@ struct ChoiceEvaluationFailureTests {
         })
     }
 
+    @Test("Coordinate candidates report the failure at the lexicographically first coordinate")
+    func coordinateFailureOrder() throws {
+        let machine = try CoordinateCandidateFailuresModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+
+        let tla = try CoordinateCandidateFailuresModel.render().tlaBundle.root.tla
+        let left = "__SwiftTLAFirstFailingCandidate0", right = "__SwiftTLAEarlierCandidate0"
+        #expect(tla.contains("(IF \(left)[1] = \(right)[1] THEN \(left)[2] <= \(right)[2] ELSE \(left)[1] <= \(right)[1])"))
+    }
+
     @Test("Unranked state-dependent string candidates cannot claim ordered TLA failure parity")
     func stateDependentStringCandidateFailureOrder() throws {
         let machine = try StateDependentStringCandidateFailuresModel.makeMachine()
