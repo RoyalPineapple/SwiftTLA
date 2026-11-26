@@ -55,7 +55,9 @@ package struct SequentialControlEvidence: Sendable {
                 }
             }
             // Captures are compared by value and visit order. Final writes are simultaneous.
-            effects += writes.sorted(by: { $0.key < $1.key }).map { .write($0.key, $0.value) }
+            if control != .disabled {
+                effects += writes.sorted(by: { $0.key < $1.key }).map { .write($0.key, $0.value) }
+            }
             return .init(observations: effects, control: control)
         }
     }
@@ -70,6 +72,7 @@ package struct SequentialControlEvidence: Sendable {
     package enum Control: Sendable, Equatable {
         case transfer(ControlLocationReference)
         case unchanged
+        case disabled
     }
 
     package let authored: Machine
@@ -94,7 +97,7 @@ package struct SequentialControlEvidence: Sendable {
         var loweredActions: [Action] = []
         for action in lowered.actions {
             guard action.bindings.isEmpty else { return nil }
-            let paths = ActionNormalization.branches(of: action.body)
+            let paths = ActionNormalization.branches(of: action.body) { [.guard_($0)] }
             let branches = paths.compactMap { loweredBranch($0, counter: counter.name) }
             guard branches.count == paths.count else { return nil }
             loweredActions.append(.init(label: action.name, branches: branches))
@@ -150,7 +153,8 @@ package struct SequentialControlEvidence: Sendable {
         var observed: [Observation] = []
         while let statement = remaining.popFirst() {
             switch statement {
-            case .when(.value(.bool(false))): return []
+            case .when(.value(.bool(false))):
+                return [.init(observations: observed + [.guardValue(.value(.bool(false)))], control: .disabled)]
             case .when(.value(.bool(true))): continue
             case .when(let condition): observed.append(.guardValue(condition))
             case .set(.root(let target), let value): observed.append(.write(target, value))
@@ -201,6 +205,8 @@ package struct SequentialControlEvidence: Sendable {
                 nodes.append(.expression(right))
                 nodes.append(.expression(left))
             case .guard_(.value(.bool(true))): continue
+            case .guard_(.value(.bool(false))):
+                return .init(observations: observations + [.guardValue(.value(.bool(false)))], control: .disabled)
             case .guard_(let condition): observations.append(.guardValue(condition))
             case .define(let name, let value, let body):
                 observations.append(.capture(name, value))

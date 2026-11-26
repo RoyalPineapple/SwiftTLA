@@ -1076,7 +1076,9 @@ extension NativeSwiftEmitter {
         source: String, writes: [(id: Int, slot: String, value: String)],
         conditions: [(id: Int, value: String)]
     ) {
-        let alternativeRegions = action.bindings.isEmpty ? action.body.orderedAlternativeFailureRegions : []
+        let counter = program.layout.variables.first { $0.declaration.origin == .programCounter }?.id
+        let alternativeRegions = action.bindings.isEmpty
+            ? action.body.orderedAlternativeFailureRegions(afterControlGuardOf: counter) : []
         var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(action.body, 0, [])]
         var nextID = 1
         var declarations: [String] = []
@@ -2489,7 +2491,9 @@ func verifyGeneratedActionWriteOutput(
         visitor.name.text == "_visitUpdates\($0.id.ordinal)"
     }
     let observesAlternatives = observedAction.map { program[$0.id].bindings.isEmpty } == true
-    let alternativeRegions = observesAlternatives ? action.orderedAlternativeFailureRegions : []
+    let counter = program.layout.variables.first { $0.declaration.origin == .programCounter }?.id
+    let alternativeRegions = observesAlternatives
+        ? action.orderedAlternativeFailureRegions(afterControlGuardOf: counter) : []
     var bodies: [Int: [String]] = [:]
     var failureRecordings: [Int: [String]] = [:]
     var firstStatements: [Int: Syntax] = [:]

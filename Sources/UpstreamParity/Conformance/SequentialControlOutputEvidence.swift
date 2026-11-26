@@ -115,11 +115,62 @@ package enum SequentialControlOutputEvidence {
         <1>successfulSpec. Spec => [][AuthoredSequentialSuccessfulStep]_vars
             BY ONLY <1>alwaysTyped, <1>step, PTL DEF Spec, vars
         """#
+        let comparesBehaviors = authoredInitialFrame != nil && entryTypes != nil
+            && source.hasPlainBehavior && compilation.semantics.behavior.fairness.isEmpty
+        let behaviorDefinition = comparesBehaviors ? #"AuthoredSequentialBehavior == AuthoredSequentialInitialBindings /\ AuthoredSequentialInitialControl /\ [][AuthoredSequentialSuccessfulStep]_vars"# : ""
+        let behaviorConclusion = comparesBehaviors ? #"/\ (Spec <=> AuthoredSequentialBehavior)"# : ""
+        let behaviorFact = comparesBehaviors ? ", <1>sameBehavior" : ""
+        let behaviorSteps = comparesBehaviors ? #"""
+        <1>initialFrame. Init <=> (AuthoredSequentialInitialBindings /\ AuthoredSequentialInitialControl)
+            BY ONLY SMT DEF Init, AuthoredSequentialInitialBindings, AuthoredSequentialInitialControl
+        <1>sourceTypes. AuthoredSequentialBehavior => []AuthoredSequentialTypedEntry
+            <2>entry. AuthoredSequentialInitialBindings => AuthoredSequentialTypedEntry
+                BY ONLY SMT DEF AuthoredSequentialInitialBindings, AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts
+            <2>preserve. AuthoredSequentialTypedEntry /\ [AuthoredSequentialSuccessfulStep]_vars => AuthoredSequentialTypedEntry'
+                BY ONLY AuthoredSequentialSuccessPreservesTypedEntry, <1>typedStutter, PTL
+            <2>. QED BY ONLY <2>entry, <2>preserve, PTL DEF AuthoredSequentialBehavior
+        <1>emittedStep. AuthoredSequentialTypedEntry /\ [AuthoredSequentialSuccessfulStep]_vars => [Next]_vars
+            BY ONLY AuthoredSequentialSuccessIsExactlyTheEmittedStep, PTL
+        <1>sameBehavior. Spec <=> AuthoredSequentialBehavior
+            BY ONLY <1>initialFrame, <1>successfulSpec, <1>sourceTypes, <1>emittedStep, PTL DEF Spec, vars, AuthoredSequentialBehavior
+        """# : ""
         let nativeConclusion = nativeProof == nil ? "" : #"""
         /\ (AuthoredSequentialTypedEntry =>
                 \A label : NativeSequentialLabeledStep(label) <=> TLASequentialLabeledStep(label))
+            /\ (AuthoredSequentialTypedEntry =>
+                \A label : NativeSequentialLabeledFailures(label) = AuthoredSequentialFirstFailure(label))
         """#
-        let nativeFact = nativeProof == nil ? "" : ", NativeSequentialDispatchUsesEmittedLabeledSteps"
+        let nativeFact = nativeProof == nil ? "" :
+            ", NativeSequentialDispatchUsesEmittedLabeledSteps, NativeSequentialDispatchUsesAuthoredFailures"
+        let selection = TLAValue.tuple(invariants.sorted().map(TLAValue.string))
+        let failurePrefix = "__SwiftTLAAnyEvaluationFailure"
+        let aggregateFailureNames = actual.tla.split(separator: "\n").compactMap { row -> String? in
+            guard let name = row.split(separator: " ", maxSplits: 1).first, name.hasPrefix(failurePrefix),
+                  isTLADeclarationName(String(name)) else { return nil }
+            return String(name)
+        }
+        let authoredFailureNames = control.split(separator: "\n").compactMap { row -> String? in
+            guard row.hasPrefix("AuthoredSequentialActionFailure"), let name = row.split(separator: " ").first else {
+                return nil
+            }
+            return String(name)
+        }
+        guard nativeProof == nil || !authoredFailureNames.isEmpty else { return nil }
+        let check = authoredFailureNames.isEmpty ? nil : invariants.first
+        let failureConclusion = check.map {
+            "/\\ (Spec => [](\($0) <=> AuthoredSequentialNoReachedFailure))"
+        } ?? ""
+        let failureSteps = check.map { check in
+            let definitions = ([check, "AuthoredSequentialTypedEntry", "AuthoredSequentialMachineInts",
+                "AuthoredSequentialNoReachedFailure"] + aggregateFailureNames + authoredFailureNames).joined(separator: ", ")
+            return #"""
+            <1>failureCheck. AuthoredSequentialTypedEntry => (\#(check) <=> AuthoredSequentialNoReachedFailure)
+                BY ONLY SMT DEF \#(definitions)
+            <1>configuredFailures. Spec => [](\#(check) <=> AuthoredSequentialNoReachedFailure)
+                BY ONLY <1>alwaysTyped, <1>failureCheck, PTL
+            """#
+        } ?? ""
+        let failureFact = check == nil ? "" : ", <1>configuredFailures"
         let configured = #"""
         ---- MODULE \#(configuredModule) ----
         EXTENDS \#(controlModule), CallerInputPageBlock1
@@ -127,7 +178,9 @@ package enum SequentialControlOutputEvidence {
         \* \#(pages)
         SequentialActualCFG == [i \in 1..CallerInputSize |-> CallerInputByte[i - 1]]
         SequentialNormalCFG == \#(bytes)
+        SequentialSelectedEvaluationChecks == \#(selection)
         \#(initialDefinition)
+        \#(behaviorDefinition)
         \#(nativeProof?.definitions ?? "")
         \#(nativeProof?.theorem ?? "")
 
@@ -137,6 +190,9 @@ package enum SequentialControlOutputEvidence {
             \#(initialConclusion)
             /\ (Spec => [][AuthoredSequentialStep]_vars)
             \#(typedConclusions)
+            /\ SequentialSelectedEvaluationChecks = \#(selection)
+            \#(failureConclusion)
+            \#(behaviorConclusion)
             \#(nativeConclusion)
             /\ (~AuthoredSequentialGuard => ~ENABLED Next)
             /\ (AuthoredSequentialWriteFreeGuard => ENABLED Next)
@@ -151,8 +207,11 @@ package enum SequentialControlOutputEvidence {
             BY ONLY <1>domain, <1>bytes, SMT DEF SequentialActualCFG, SequentialNormalCFG
         \#(initialStep)
         \#(typedSteps)
+        \#(behaviorSteps)
+        \#(failureSteps)
         <1>. QED BY ONLY <1>configuration, ActualSpecUsesOnlyAuthoredSequentialControl,
-            ActualLoweredRoutesUseTheDeclaredSequentialConstructors\#(initialFact)\#(typedFacts)\#(nativeFact)
+            ActualLoweredRoutesUseTheDeclaredSequentialConstructors\#(initialFact)\#(typedFacts)\#(nativeFact)\#(failureFact)\#(behaviorFact)
+            DEF SequentialSelectedEvaluationChecks
 
         ====
 

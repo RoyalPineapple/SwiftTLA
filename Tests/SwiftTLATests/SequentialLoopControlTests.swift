@@ -75,6 +75,28 @@ struct SequentialLoopControlTests {
         let proof = try #require(try SequentialControlOutputEvidence.proof(authoredSource: authored,
             modelName: modelName, spec: FinishingLoop.spec, rendered: rendered,
             native: (Data(members.utf8), operations, checking)))
+        let equivalence = "Spec <=>"
+        #expect(String(decoding: proof.configured, as: UTF8.self).contains(equivalence))
+        let plain = "#spec(\"FinishingLoop\") {\n            let loop = Algorithm(label: \"Loop\", scoped:"
+        let authoredText = String(decoding: authored, as: UTF8.self)
+        try #require(authoredText.components(separatedBy: plain).count == 2)
+        let fair = authoredText.replacingOccurrences(of: plain,
+            with: plain.replacingOccurrences(of: "scoped:", with: "fairness: .weak, scoped:"))
+        try #require(fair != authoredText)
+        let fairProof = try #require(try SequentialControlOutputEvidence.proof(authoredSource: Data(fair.utf8),
+            modelName: modelName, spec: FinishingLoop.spec, rendered: rendered,
+            native: (Data(members.utf8), operations, checking)))
+        #expect(!String(decoding: fairProof.configured, as: UTF8.self).contains(equivalence))
+
+        let recorder = try #require(members.range(of: "SwiftTLA._recordNativeAlternativeFailure("))
+        let target = try #require(members.range(of: #"target: [0-9]+"#, options: .regularExpression,
+            range: recorder.upperBound..<members.endIndex))
+        let targetOrdinal = try #require(Int(members[target].dropFirst("target: ".count)))
+        let wrongTarget = members.replacingCharacters(in: target, with: "target: \(targetOrdinal + 1)")
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try SequentialControlOutputEvidence.proof(authoredSource: authored, modelName: modelName,
+                spec: FinishingLoop.spec, rendered: rendered, native: (Data(wrongTarget.utf8), operations, checking))
+        }
         let rejected = members.replacingOccurrences(of: "try SwiftTLA._nativeIntAdd(", with: "try SwiftTLA._nativeIntSubtract(")
         #expect(rejected != members)
         #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
@@ -118,7 +140,7 @@ struct SequentialLoopControlTests {
             let declaration = try #require(Parser.parse(source: source).statements.compactMap {
                 $0.item.as(StructDeclSyntax.self)
             }.first { $0.name.text == "FinishingLoop" })
-            let model = try ModelSpecificationSyntax.find(in: declaration.memberBlock.members, defaultName: declaration.name.text)
+            let model = try #require(try ModelSpecificationSyntax.find(in: declaration.memberBlock.members, defaultName: declaration.name.text))
             let enums = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
             let spec = SpecParser.parseSpecClosure(named: model.name, model.closure, sourceTypes: .init(enums: enums))
             let (compilation, evidence) = try spec.compileRetainingSequentialControl()
@@ -139,5 +161,77 @@ struct SequentialLoopControlTests {
         try #require(matched != nil)
         #expect(try SequentialControlOutputEvidence.proof(authoredSource: Data(swapped.utf8),
             modelName: "FinishingLoop", spec: spec, rendered: rendered) == nil)
+    }
+
+    @Test("A disabled loop step retains only failures reached before its guard")
+    func retainsOverflowBeforeDisabledGuard() throws {
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("SequentialLoopControlFixtures.swift")
+        let source = try String(contentsOf: fixture, encoding: .utf8)
+        let loop = "While(Step.advance, value < 1) {\n                    Assign(value, to: value + 1)"
+        try #require(source.components(separatedBy: loop).count == 2)
+        let assignment = "Assign(value, to: value + 9_223_372_036_854_775_807)"
+        let disabled = "When(false)"
+
+        for captureFirst in [true, false] {
+            let first = captureFirst ? assignment : disabled
+            let second = captureFirst ? disabled : assignment
+            let variant = source.replacingOccurrences(of: loop, with: """
+                While(Step.advance, value < 2) {
+                    \(first)
+                    \(second)
+                """)
+            try #require(variant != source)
+            let declaration = try #require(Parser.parse(source: variant).statements.compactMap {
+                $0.item.as(StructDeclSyntax.self)
+            }.first { $0.name.text == "FinishingLoop" })
+            let model = try #require(try ModelSpecificationSyntax.find(in: declaration.memberBlock.members, defaultName: declaration.name.text))
+            let enums = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
+            let spec = SpecParser.parseSpecClosure(named: model.name, model.closure, sourceTypes: .init(enums: enums))
+            let (compilation, evidence) = try spec.compileRetainingSequentialControl()
+            let control = try #require(evidence)
+            let authored = try #require(control.authored.canonicalTraces(sourceWrites: true))
+            let lowered = try #require(control.lowered.canonicalTraces(sourceWrites: false))
+            #expect(authored == lowered)
+            let blocked = try #require(lowered.actions.first?.branches.first { $0.control == .disabled })
+            let captures = blocked.observations.filter { if case .capture = $0 { return true }; return false }
+            #expect(captures.count == (captureFirst ? 1 : 0))
+
+            let runtime = CompiledRuntime(compilation: compilation)
+            let advance = try #require(compilation.layout.testActionID(named: "advance"))
+            let zero = try #require(try runtime.initialStates().first)
+            let value = try #require(compilation.layout.testVariableID(named: "value"))
+            let one = try zero.updating(value, to: .integer(1))
+            #expect(try runtime.successors(for: advance, from: zero).isEmpty)
+            if captureFirst {
+                #expect(throws: EvalError.integerOverflow(.addition, operands: [1, Int.max])) {
+                    try runtime.successors(for: advance, from: one)
+                }
+            } else {
+                #expect(try runtime.successors(for: advance, from: one).isEmpty)
+            }
+
+            let rendered = try compilation.render()
+            #expect(rendered.intrinsicInvariantNames.isEmpty == !captureFirst)
+
+            var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+            let program = emitter.program
+            let counter = try #require(program.layout.variables.first { $0.declaration.origin == .programCounter })
+            let regions = program[program.layout.actions[0].id].body.orderedAlternativeFailureRegions(afterControlGuardOf: counter.id)
+            if captureFirst {
+                let binding = try #require(regions.first?.bindings.first)
+                #expect(binding.target == value)
+            } else {
+                #expect(regions.isEmpty)
+            }
+            let members = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+            let library = fixture.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Sources/SwiftTLA")
+            let operations = try Data(contentsOf: library.appendingPathComponent("NativeMachineOperations.swift"))
+            let checking = try Data(contentsOf: library.appendingPathComponent("CheckingContext.swift"))
+            _ = try #require(try SequentialControlOutputEvidence.proof(authoredSource: Data(variant.utf8),
+                modelName: model.name, spec: spec, rendered: rendered,
+                native: (Data(members.utf8), operations, checking)))
+        }
     }
 }

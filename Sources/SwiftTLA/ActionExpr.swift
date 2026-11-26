@@ -33,6 +33,10 @@ extension NamedAction {
         }
         if !displaced.isEmpty {
             var choice = completed
+            if case .and(.guard_(.equal(.programCounter, .controlLocation)), let selected) = choice,
+               case .ifElse = selected {
+                choice = selected
+            }
             while case .define(_, _, let body) = choice { choice = body }
             switch choice {
             case .or, .ifElse:

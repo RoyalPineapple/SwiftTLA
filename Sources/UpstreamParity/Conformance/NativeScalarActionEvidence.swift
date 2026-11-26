@@ -94,6 +94,7 @@ private struct ActionInstructions {
     var writes: [ActionWrite] = []
     var failureAppendSites: [Int] = []
     var conditionalFailureCalls: [NativeConditionalFailureCall] = []
+    var disabled = false
 
     var tla: String {
         "[captures |-> \(actionTuple(captures.map(\.tla))), "
@@ -712,7 +713,9 @@ struct SequentialNativeProof {
 func sequentialNativeProof(_ source: String, program: CompiledProgram) throws -> SequentialNativeProof {
     let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
     let rows = try decodeScalarActions(source, program: program, predicate: nil, controlledFork: true)
-    guard let counter = program.layout.variables.first(where: { $0.declaration.origin == .programCounter }),
+    guard !rows.isEmpty, Set(rows.map(\.visitor)) == Set(1...rows.count),
+          Set(rows.map(\.label)).count == rows.count,
+          let counter = program.layout.variables.first(where: { $0.declaration.origin == .programCounter }),
           program.layout.variables.filter({ $0.declaration.origin == .source })
             .allSatisfy({ program.variableTypes[$0.id] == .int }) else { throw invalid }
     let fields = program.layout.variables.map(\.formalName)
@@ -748,6 +751,8 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
     var actionDefinitions: [String] = []
     var actionSteps: [String] = []
     var actionFacts: [String] = []
+    var failureSteps: [String] = []
+    var failureFacts: [String] = []
     var nativeActions: [String] = []
     var failureActions: [String] = []
     for (index, row) in rows.enumerated() {
@@ -775,23 +780,54 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
                 """)
             }
             let final = "\(captured)\(plan.captures.count)"
+            guard plan.failureAppendSites.count == plan.conditionalFailureCalls.count else { throw invalid }
+            let calls = try zip(plan.failureAppendSites, plan.conditionalFailureCalls).map { slot, call -> String in
+                guard call.location == .arm(arm), call.action == index,
+                      call.before.count == slot - 1 else { throw invalid }
+                let before = actionTuple(call.before.enumerated().map { prior, binding in
+                    "[slot |-> \(prior + 1), binding |-> \(binding.binding), target |-> \(binding.target)]"
+                })
+                return "slot = \(slot) -> [action |-> \(call.action), branch |-> \(arm), "
+                    + "site |-> \(call.site), target |-> \(call.target), before |-> \(before)]"
+            }
             let sites = TLAValue.set(Set(plan.failureAppendSites.map(TLAValue.int)))
+            let dispatch = calls.isEmpty ? "slot" : "CASE " + calls.joined(separator: " [] ")
+            let appendCalls = "[slot \\in \(sites) |-> \(dispatch)]"
+            let emits = plan.disabled ? "FALSE" : #"""
+            IF \#(prefix)Reached THEN
+                IF \#(final).failure = <<>> THEN
+                    NativeSequentialRule!NativePendingMergesEmit(NativeSequentialFields, NativeSequentialBefore, NativeSequentialAfter,
+                        Len(\#(prefix)Plan.writes), \#(prefix)Writes)
+                ELSE FALSE
+            ELSE FALSE
+            """#
             plans.append(#"""
             \#(prefix)Reached == \#(counter.formalName) = \#(prefix)Plan.guards[1]
             \#(prefix)Writes == NativeSequentialRule!NativeCopyWrites(\#(prefix)Plan, NativeSequentialBefore, \#(final).completed)
             \#(prefix)Emits ==
-                IF \#(prefix)Reached THEN
-                    IF \#(final).failure = <<>> THEN
-                        NativeSequentialRule!NativePendingMergesEmit(NativeSequentialFields, NativeSequentialBefore, NativeSequentialAfter,
-                            Len(\#(prefix)Plan.writes), \#(prefix)Writes)
-                    ELSE FALSE
-                ELSE FALSE
+            \#(emits.split(separator: "\n").map { "    " + $0 }.joined(separator: "\n"))
+            \#(prefix)AppendCalls == \#(appendCalls)
+            \#(prefix)RecordedFailure(recording) ==
+                LET reached == \#(final)
+                    calls == \#(prefix)AppendCalls
+                IN IF recording /\ \#(prefix)Reached THEN
+                       IF reached.failure # <<>> THEN
+                           IF reached.failure.site \in DOMAIN calls THEN
+                               LET call == calls[reached.failure.site]
+                               IN <<[action |-> call.action, branch |-> call.branch,
+                                     site |-> call.site, target |-> call.target, payload |-> reached.failure.payload,
+                                     before |-> [i \in DOMAIN call.before |->
+                                         [binding |-> call.before[i].binding, target |-> call.before[i].target,
+                                          value |-> reached.completed[call.before[i].slot]]]]>>
+                           ELSE <<>>
+                       ELSE <<>>
+                   ELSE <<>>
             \#(prefix)Failure ==
-                IF \#(prefix)Reached THEN
-                    IF \#(final).failure # <<>> THEN
-                        IF \#(final).failure.site \in \#(sites) THEN <<\#(final).failure.payload>> ELSE <<>>
-                    ELSE <<>>
-                ELSE <<>>
+                LET recorded == \#(prefix)RecordedFailure(TRUE)
+                IN IF recorded = <<>> THEN <<>>
+                   ELSE <<[label |-> \#(TLAValue.string(row.label)), pc |-> \#(counter.formalName),
+                           site |-> \#(final).failure.site, payload |-> recorded[1].payload,
+                           completed |-> [i \in DOMAIN recorded[1].before |-> recorded[1].before[i].value]]>>
             """#)
             let fact = "<2>frame\(arm + 1)"
             actionSteps.append(#"""
@@ -826,13 +862,26 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
         let fact = "<1>action\(index + 1)"
         actionFacts.append(fact)
         let planDefinitions = plans.flatMap { block in
-            block.split(separator: "\n").compactMap { line in
-                line.contains(" ==") ? line.split(separator: " ").first : nil
+            block.split(separator: "\n").compactMap { line -> Substring? in
+                guard line.hasPrefix(name), line.contains(" ==") else { return nil }
+                return line.prefix { $0 != "(" && $0 != " " }
             }
         }.joined(separator: ", ")
         actionSteps.insert(#"""
             \#(fact). \#(name) <=> \#(row.formalLabel)
             """#, at: actionSteps.count - materializationFacts.count)
+        let failureFact = "<1>failure\(index + 1)"
+        failureFacts.append(failureFact)
+        let authoredFailure = "AuthoredSequentialActionFailure\(index + 1)"
+        let authoredBranches = row.plans.indices.map { "\(authoredFailure)Branch\($0 + 1)" }.joined(separator: ", ")
+        failureSteps.append(#"""
+            \#(failureFact). \#(name)Failures = AuthoredSequentialVisitorFailure(\#(index + 1))
+                BY ONLY AuthoredSequentialTypedEntry, NativeSequentialRule!CheckedAdditionRule, SMT
+                    DEF AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts, AuthoredSequentialVisitorFailure,
+                        \#(authoredFailure), \#(authoredBranches), \#(name)Failures, \#(planDefinitions), NativeSequentialBefore,
+                        NativeSequentialRule!NativeAssignmentStart, NativeSequentialRule!NativeAssignmentStep,
+                        NativeSequentialRule!NativeAssignmentRhsPlan, NativeSequentialRule!PhysicalAssignmentRhs
+            """#)
         actionSteps.append(#"""
                 <2>. QED BY ONLY AuthoredSequentialTypedEntry, \#(materializationFacts.joined(separator: ", ")), SMT
                     DEF \#(name), \#(row.formalLabel), \#(planDefinitions), AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts,
@@ -865,7 +914,22 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
     <1>. QED BY ONLY <1>routes, <1>domains, <1>slots,
         NativeSequentialDispatch!CertifiedNativeDispatchUsesTheLabeledCatalog, SMT
         DEF NativeSequentialLabeledStep, TLASequentialLabeledStep
+
+    THEOREM NativeSequentialDispatchUsesAuthoredFailures ==
+        AuthoredSequentialTypedEntry =>
+            (\A label : NativeSequentialLabeledFailures(label) = AuthoredSequentialFirstFailure(label))
+    PROOF
+    <1>. SUFFICES ASSUME AuthoredSequentialTypedEntry
+                  PROVE \A label : NativeSequentialLabeledFailures(label) = AuthoredSequentialFirstFailure(label) BY PTL
+    \#(failureSteps.joined(separator: "\n"))
+    <1>. QED BY ONLY \#(failureFacts.joined(separator: ", ")), IsaM("simp"), SMT
+        DEF NativeSequentialLabeledFailures, NativeSequentialRoutes, NativeSequentialAuthoredLabels,
+            NativeSequentialFailures, AuthoredSequentialLabels, AuthoredSequentialFirstFailure, AuthoredSequentialVisitorFailure
     """#
+    let failureCases = rows.indices.map { index in
+        let visitor = "NativeSequentialRoutes[\(index + 1)].visitor"
+        return "label = NativeSequentialAuthoredLabels[\(visitor)] -> NativeSequentialFailures[\(visitor)]"
+    }.joined(separator: " [] ")
     let definitions = #"""
     LOCAL NativeSequentialFields == \#(keys)
     LOCAL NativeSequentialBefore == \#(snapshot(""))
@@ -888,9 +952,7 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
     TLASequentialLabeledStep(label) ==
         NativeSequentialDispatch!CatalogLabeledBranches(TLASequentialActions, NativeSequentialAuthoredLabels, label)
     NativeSequentialLabeledFailures(label) ==
-        UNION {LET reasons == NativeSequentialFailures[NativeSequentialRoutes[slot].visitor]
-               IN {reasons[k] : k \in DOMAIN reasons} :
-                    slot \in {i \in DOMAIN NativeSequentialRoutes : NativeSequentialAuthoredLabels[NativeSequentialRoutes[i].visitor] = label}}
+        CASE \#(failureCases) [] OTHER -> <<>>
     """#
     return .init(definitions: definitions, theorem: theorem)
 }
@@ -1449,7 +1511,9 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
     }
     let byName = Dictionary(uniqueKeysWithValues: zip(names, parts))
     let action = program.layout.actions[index].id
-    let regions = predicate == nil ? [] : program[action].body.orderedAlternativeFailureRegions
+    let counter = program.layout.variables.first { $0.declaration.origin == .programCounter }?.id
+    let regions = controlledFork ? program[action].body.orderedAlternativeFailureRegions(afterControlGuardOf: counter)
+        : (predicate == nil ? [] : program[action].body.orderedAlternativeFailureRegions)
     var visited: Set<String> = []
     let stateReads: [(String, ActionReference)] = fields.map {
         ($0.before, .init(kind: "state", value: .string($0.name), type: $0.type))
@@ -1470,6 +1534,10 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let formal = scope.map { "_ \($0.local): \($0.value.type), " }.joined()
+        let signature = "func \(name)(\(formal)_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws"
+        if controlledFork, sameWords(syntaxWords(part), "\(signature) { return }") {
+            return (["return"], false, nil)
+        }
         let tokens = syntaxWords(body)
         let prefix = words("{ do {")
         let handler = "} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {"
@@ -1477,7 +1545,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
         let lexical = scope.map(\.local)
         let recording: String
         let conditionalFailure: NativeConditionalFailureCall?
-        if predicate != nil,
+        if predicate != nil || controlledFork,
            let actionPart = body.statements.first?.item.as(DoStmtSyntax.self),
            let catchBody = actionPart.catchClauses.first?.body.statements, catchBody.count == 2,
            let observer = catchBody.first {
@@ -1503,7 +1571,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             }
             conditionalFailure = decoded
             recording = observer.description + "\n"
-        } else if predicate == nil {
+        } else if predicate == nil && !controlledFork {
             conditionalFailure = nil
             let linear = nativeOrderedIntAssignmentFailureSource(actionOrdinal: index, preceding: lexical)
             let observed = words("\(handler)\n\(linear)\n\(append)")
@@ -1517,7 +1585,6 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let core = Array(tokens.dropFirst(prefix.count).dropLast(suffix.count))
-        let signature = "func \(name)(\(formal)_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws"
         guard sameWords(syntaxWords(part), """
             \(signature) {
                 do { \(core.joined(separator: " ")) }
@@ -1566,6 +1633,12 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                 break parts
             }
             let argument = scope.map { "\($0.local), " }.joined()
+            if controlledFork, core == ["return"] {
+                guard pending.isEmpty, instructions.writes.isEmpty, instructions.guards.count == entryGuards
+                else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+                instructions.disabled = true
+                break parts
+            }
             if sameWords(core, "try emit(updates)") { continue }
             if let control {
                 for location in locations where sameWords(core, """
@@ -1617,9 +1690,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                        let \(local) = \(rhs.joined(separator: " "))
                        try \(child)(\(argument)\(local), updates, emit)
                        """) {
-                        guard recordsFailure || controlledFork else {
-                            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-                        }
+                        guard recordsFailure else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
                         instructions.captures.append(.expression(try nativeArithmeticCapture(decoded.steps, reads: reads.map { $0.1 })))
                         // The verified catch appends the reached error; the continuation requires a completed capture.
                         let index = instructions.captures.count

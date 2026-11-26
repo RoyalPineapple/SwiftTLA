@@ -148,7 +148,11 @@ package struct AlgorithmModel: Sendable {
                     return .step(.init(label: step.label, statements: plan.statements, loopCondition: step.loopCondition))
                 }
                 var displacedTargets: [String: String] = [:]
-                let statements = scheduleAtomicStatements(step.statements, binding: binding, recordAssignment: record) {
+                let controlledLoop = processes.isEmpty && procedures.isEmpty
+                    && step.loopCondition != nil && step.loopCondition != .value(.bool(true))
+                    && step.loopCondition != .value(.bool(false))
+                let statements = scheduleAtomicStatements(step.statements, binding: binding, recordAssignment: record,
+                    retainingDisabledTargets: controlledLoop) {
                     displacedTargets[$0] = $1
                 }
                 return .step(.init(label: step.label, statements: statements, loopCondition: step.loopCondition,
@@ -858,7 +862,8 @@ private func scheduleDirectScalarCopies(
 
 func scheduleAtomicStatements(
     _ statements: [AlgorithmStatementModel], binding: () -> String,
-    recordAssignment: ((String, String) -> Void)? = nil, displace: (String, String) -> Void
+    recordAssignment: ((String, String) -> Void)? = nil, retainingDisabledTargets: Bool = false,
+    displace: (String, String) -> Void
 ) -> [AlgorithmStatementModel] {
     // Snapshot each write where it occurs, then publish one assignment per
     // root at the end of the atomic branch. PlusCal labels require that form.
@@ -890,6 +895,12 @@ func scheduleAtomicStatements(
             next[target.root] = .variable(name)
             return [.letBinding(variable: name, value: updated,
                 schedule(suffix, assignments: pending, replacements: next))]
+        case .when(.value(.bool(false))) where retainingDisabledTargets:
+            // The guard drops the pending writes, but checked captures before it can still fail.
+            for assignment in assignments {
+                if case .variable(let capture) = assignment.value { displace(capture, assignment.target.root) }
+            }
+            return [statement] + continued([])
         case .when, .assert, .skip, .rejected:
             return [statement.mappingExpressions(expression)] + continued([])
         case .letBinding(let variable, let value, let body):

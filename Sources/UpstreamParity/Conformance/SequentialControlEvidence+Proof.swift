@@ -43,6 +43,7 @@ extension SequentialControlEvidence {
             switch value {
             case .transfer(let destination): .tuple([.string("transfer"), location(destination)])
             case .unchanged: .tuple([.string("unchanged")])
+            case .disabled: .tuple([.string("disabled")])
             }
         }
         func table(_ machine: Machine, includeWrites: Bool) -> TLAValue? {
@@ -136,13 +137,18 @@ extension SequentialControlEvidence {
         func whenDefined(_ checks: [String], then value: String) -> String {
             checks.reversed().reduce(value) { "(IF \($1) THEN \($0) ELSE FALSE)" }
         }
-        func defined(_ expression: StateExpr) throws -> [String] {
+        typealias EvaluationCheck = (test: String, payload: String)
+        func defined(_ expression: StateExpr) throws -> [EvaluationCheck] {
             switch expression {
             case .add(let left, let right), .subtract(let left, let right):
-                guard let value = try scalarTerm(expression) else {
+                guard let value = try scalarTerm(expression),
+                      let lhs = try scalarTerm(left), let rhs = try scalarTerm(right) else {
                     throw CompiledValueType.diagnostic("sequentialControl", "expected a scalar arithmetic term")
                 }
-                return try defined(left) + defined(right) + ["\(value) \\in AuthoredSequentialMachineInts"]
+                let operation: String
+                if case .add = expression { operation = "addition" } else { operation = "subtraction" }
+                let payload = "<<\"integerOverflow\", \"\(operation)\", <<\(lhs), \(rhs)>>>>"
+                return try defined(left) + defined(right) + [(value + " \\in AuthoredSequentialMachineInts", payload)]
             case .and(let left, let right), .or(let left, let right):
                 let lhs = try defined(left)
                 let rhs = try defined(right)
@@ -152,7 +158,7 @@ extension SequentialControlEvidence {
                 }
                 let test: String
                 if case .and = expression { test = condition } else { test = "(~\(condition))" }
-                return lhs + ["(IF \(test) THEN \(whenDefined(rhs, then: "TRUE")) ELSE TRUE)"]
+                return lhs + rhs.map { ("(IF \(test) THEN \($0.test) ELSE TRUE)", $0.payload) }
             case .equal(let left, let right), .notEqual(let left, let right),
                  .lessThan(let left, let right), .lessOrEqual(let left, let right),
                  .greaterThan(let left, let right), .greaterOrEqual(let left, let right):
@@ -172,6 +178,9 @@ extension SequentialControlEvidence {
         let unchangedState = sourceFields.map(\.formalName)
         var routeStatements: [String] = []
         var successfulSteps: [String] = []
+        var failureSteps: [String] = []
+        var failureNames: [String] = []
+        var hasFallibleGuards = false
         var successfulRouteStatements: [String] = []
         var successProofSteps: [String] = []
         var successProofFacts: [String] = []
@@ -185,6 +194,7 @@ extension SequentialControlEvidence {
         for (action, declared) in zip(actions, physicalTrace.actions) {
             var routes: [String] = []
             var successfulRoutes: [String] = []
+            var failureRoutes: [String] = []
             var writeFreeRoutes: [String] = []
             var entries: Set<String> = []
             var writes: Set<String> = []
@@ -209,6 +219,8 @@ extension SequentialControlEvidence {
                 case .unchanged:
                     transfer = "UNCHANGED \(counter)"
                     writes.insert("<<\"state\", \(TLAValue.string(counter))>>")
+                case .disabled:
+                    transfer = "FALSE"
                 }
                 var frame = [reached, transfer]
                 var written: Set<String> = []
@@ -225,22 +237,43 @@ extension SequentialControlEvidence {
                 let completeRoute = "(\(frame.joined(separator: " /\\ ")))"
                 routes.append(completeRoute)
                 if proveSuccessfulRoutes {
-                    var reachedChecks = ["\(counter) = \(initial)"]
+                    var checks = [(test: "\(counter) = \(initial)", onFailure: "<<>>")]
+                    var completed: [String] = []
+                    let label = TLAValue.string(action.sourceName)
                     for observation in branch.observations.dropFirst() {
+                        let expression: StateExpr
+                        let isCapture: Bool
                         switch observation {
-                        case .guardValue(let expression):
-                            guard let condition = try scalarTerm(expression) else { return nil }
-                            reachedChecks += try defined(expression)
-                            reachedChecks.append(condition)
-                        case .capture(_, let expression):
-                            guard try scalarTerm(expression) != nil else { return nil }
-                            reachedChecks += try defined(expression)
+                        case .guardValue(let guardValue):
+                            expression = guardValue
+                            isCapture = false
+                        case .capture(_, let capture):
+                            expression = capture
+                            isCapture = true
                         case .write, .endCapture:
-                            break
+                            continue
+                        }
+                        guard let value = try scalarTerm(expression) else { return nil }
+                        let evaluation = try defined(expression)
+                        if isCapture {
+                            let site = completed.count + 1
+                            let prior = "<<\(completed.joined(separator: ", "))>>"
+                            checks += evaluation.map { check in
+                                (check.test, "<<[label |-> \(label), pc |-> \(counter), site |-> \(site), payload |-> \(check.payload), completed |-> \(prior)]>>")
+                            }
+                            completed.append(value)
+                        } else {
+                            hasFallibleGuards = hasFallibleGuards || !evaluation.isEmpty
+                            checks += evaluation.map { ($0.test, "<<>>") }
+                            checks.append((value, "<<>>"))
                         }
                     }
                     let updates = frame.dropFirst().joined(separator: " /\\ ")
-                    successfulRoutes.append("(\(whenDefined(reachedChecks, then: updates)))")
+                    successfulRoutes.append("(\(whenDefined(checks.map(\.test), then: updates)))")
+                    let first = checks.reversed().reduce("<<>>") { rest, check in
+                        "(IF \(check.test) THEN \(rest) ELSE \(check.onFailure))"
+                    }
+                    failureRoutes.append(first)
                 }
                 if branch.observations.allSatisfy({
                     guard case .guardValue = $0 else { return false }
@@ -258,6 +291,17 @@ extension SequentialControlEvidence {
                 let slot = successfulSteps.count + 1
                 let step = "AuthoredSequentialSuccessfulAction\(slot)"
                 successfulSteps.append("LOCAL \(step) == \(success)")
+                let failure = "AuthoredSequentialActionFailure\(slot)"
+                let branches = failureRoutes.enumerated().map { index, branch in
+                    let name = "\(failure)Branch\(index + 1)"
+                    failureSteps.append("\(name) == \(branch)")
+                    return name
+                }
+                let first = branches.reversed().reduce("<<>>") { rest, branch in
+                    "(IF \(branch) # <<>> THEN \(branch) ELSE \(rest))"
+                }
+                failureSteps.append("\(failure) == \(first)")
+                failureNames.append(failure)
                 successfulRouteStatements.append("/\\ (\(action.renderedName) <=> \(step))")
                 successProofSteps.append(#"""
                 <1>complete\#(slot). \#(step) => \#(action.renderedName)
@@ -320,8 +364,19 @@ extension SequentialControlEvidence {
         } else {
             declaredProof = ""
         }
-        let declaredImport = declared == nil ? "" : ", Naturals"
+        let declaredImport = declared == nil ? "" : ", Naturals, Sequences"
         let successImport = proveSuccessfulRoutes ? ", Integers" : ""
+        let failuresBySlot = failureNames.enumerated().map { "slot = \($0.offset + 1) -> \($0.element)" }
+        let failuresByLabel = zip(actions, failureNames).map { action, failure in
+            "label = \(TLAValue.string(action.sourceName)) -> \(failure)"
+        }
+        let noReachedFailure = failureNames.map { "\($0) = <<>>" }.joined(separator: " /\\ ")
+        let failureProof = !hasFallibleGuards && proveSuccessfulRoutes ? #"""
+        \#(failureSteps.joined(separator: "\n"))
+        AuthoredSequentialVisitorFailure(slot) == CASE \#(failuresBySlot.joined(separator: " [] ")) [] OTHER -> <<>>
+        AuthoredSequentialFirstFailure(label) == CASE \#(failuresByLabel.joined(separator: " [] ")) [] OTHER -> <<>>
+        AuthoredSequentialNoReachedFailure == \#(noReachedFailure)
+        """# : ""
         let successProof = proveSuccessfulRoutes ? #"""
 
         AuthoredSequentialMachineInts == \#(TLAValue.int(Int.min))..\#(TLAValue.int(Int.max))
@@ -344,6 +399,8 @@ extension SequentialControlEvidence {
                       PROVE Next <=> AuthoredSequentialSuccessfulStep BY PTL
         <1>. QED BY ONLY AuthoredSequentialTypedEntry, ActualTLAUsesTheDefinedAuthoredRoutes,
             ActualRenderedSequentialActionInventory, PTL DEF AuthoredSequentialSuccessfulStep
+
+        \#(failureProof)
 
         THEOREM AuthoredSequentialSuccessPreservesTypedEntry ==
             AuthoredSequentialTypedEntry /\ AuthoredSequentialSuccessfulStep => AuthoredSequentialTypedEntry'
@@ -597,14 +654,19 @@ extension SequentialControlEvidence {
                                 DEF branches, action, constructor, entry, exit, DeclaredDynamicWhile, DeclaredWhileExit,
                                     DeclaredEntryGuard, DeclaredFollowing, DeclaredEntry, DeclaredOwner, DeclaredDone,
                                     DeclaredCount, DeclaredSequentialConstructors, LoweredSequentialSemantics
+                        <5>disabled. (branches[\#(branch)][2] = <<"disabled">>) <=>
+                                    (branches[\#(branch)][1][Len(branches[\#(branch)][1])] = DeclaredFalseGuard)
+                            BY ONLY IsaM("simp")
+                                DEF branches, action, DeclaredFalseGuard, LoweredSequentialSemantics
                         <5>control. ~DeclaredBodyTransfers(constructor) /\ branches[\#(branch)] # exit /\
+                                    branches[\#(branch)][2] # <<"disabled">> /\
                                     (constructor.loop = <<>> \/ DeclaredDynamicWhile(constructor)) =>
                                 branches[\#(branch)][2] = <<"transfer", IF constructor.loop = <<>> THEN following ELSE entry>>
                             BY ONLY IsaM("simp")
                                 DEF branches, action, constructor, entry, following, exit, DeclaredDynamicWhile, DeclaredBodyTransfers,
                                     DeclaredWhileExit, DeclaredEntryGuard, DeclaredFollowing, DeclaredEntry, DeclaredOwner,
                                     DeclaredDone, DeclaredCount, DeclaredSequentialConstructors, LoweredSequentialSemantics
-                        <5>. QED BY ONLY <5>guards, <5>control DEF DeclaredBranchMatches
+                        <5>. QED BY ONLY <5>guards, <5>disabled, <5>control DEF DeclaredBranchMatches
                     """#
                 }.joined(separator: "\n        ")
                 return #"""
@@ -664,11 +726,14 @@ extension SequentialControlEvidence {
         LOCAL DeclaredTerminalRow ==
             <<DeclaredTerminalLabel, <<<< <<DeclaredEntryGuard(DeclaredDone)>>, <<"unchanged">> >>>> >>
 
+        LOCAL DeclaredFalseGuard == <<"guard", <<"literal", FALSE>>>>
+
         LOCAL DeclaredBranchMatches(constructor, entry, following, exit, observed) ==
             /\ observed[1][1] = DeclaredEntryGuard(entry)
+            /\ ((observed[2] = <<"disabled">>) <=> (observed[1][Len(observed[1])] = DeclaredFalseGuard))
             /\ (DeclaredDynamicWhile(constructor) /\ observed # exit =>
                     observed[1][2] = <<"guard", constructor.loop>>)
-            /\ (~DeclaredBodyTransfers(constructor) /\ observed # exit /\
+            /\ (~DeclaredBodyTransfers(constructor) /\ observed # exit /\ observed[2] # <<"disabled">> /\
                     (constructor.loop = <<>> \/ DeclaredDynamicWhile(constructor)) =>
                     observed[2] = <<"transfer", IF constructor.loop = <<>> THEN following ELSE entry>>)
 
