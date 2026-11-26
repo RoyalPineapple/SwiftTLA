@@ -1009,6 +1009,7 @@ private func nativeSequentialRhsProof(
     let history = "\(rule)PhysicalAssignmentRhsHistory"
     let nodes = (0...count).map { "\(name)Node\($0)" }
     func finiteHistory(through end: Int) -> String {
+        if end == 0 { return "[i \\in 0..0 |-> \(nodes[0])]" }
         let cases = (0..<end).map { "i = \($0) -> \(nodes[$0])" }
         return "[i \\in 0..\(end) |-> CASE \((cases + ["OTHER -> \(nodes[end])"]).joined(separator: " [] "))]"
     }
@@ -1020,7 +1021,7 @@ private func nativeSequentialRhsProof(
         definitions.append("""
         \(nodes[index]) == \(rule)GeneratedNode(\(index), \(plan).kinds, \(plan).literals,
             \(rule)PhysicalRhsReadIndices(\(plan)), \(plan).left, \(plan).right,
-            \(rule)PhysicalRhsBindings(\(plan), \(before), \(completed), \(finiteHistory(through: index - 1))
+            \(rule)PhysicalRhsBindings(\(plan), \(before), \(completed)), \(finiteHistory(through: index - 1)))
         """)
     }
     definitions.append("\(witness) == \(finiteHistory(through: count))")
