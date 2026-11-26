@@ -21,6 +21,21 @@ struct CanonicalBinaryStateTests {
         }
     }
 
+    @Test("a tuple VIEW retains repeated and reordered full-state fields byte for byte")
+    func encodesTupleViewFromFullState() throws {
+        let a = TLAValue.function([.int(1): .set([.string("é")])])
+        let b = TLAValue.tuple([.string("e\u{301}")])
+        let full = try state([("z", b), ("a", a)])
+        var representative = CanonicalBinaryState.Encoder()
+        var key = CanonicalBinaryState.Encoder()
+        try representative.encode(full, tupleView: [1, 0, 1], key: &key)
+        #expect(try key.bytes == CanonicalBinaryState.encode(state([("View", .tuple([b, a, b]))]), viewed: true))
+        #expect(try representative.bytes == CanonicalBinaryState.encode(full))
+        #expect(throws: CanonicalBinaryState.CodingError.malformed) {
+            try representative.encode(full, tupleView: [2], key: &key)
+        }
+    }
+
     @Test("a state value has a versioned, unambiguous byte identity")
     func exactStateBytes() throws {
         let projection = try state([("x", .int(1))])

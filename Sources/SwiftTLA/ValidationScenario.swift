@@ -125,6 +125,10 @@ public protocol ModelValidationScenario: Sendable {
         checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
         fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
+    func captureValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
+        observe: (MachineValidationObservation<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
     func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
         atLevel level: Int) throws -> TLAStateProjection
     func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> Bool?
@@ -214,6 +218,37 @@ extension ModelValidationScenario {
         try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
             stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
+    }
+
+    /// Custom scenarios may implement only the event stream. Keep their traversal and recover
+    /// the discovery level at this boundary. Generated captures get the level from the checker.
+    public func captureValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
+        observe: (MachineValidationObservation<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+        var levels: [Int] = []
+        func level(after predecessor: Int?) throws -> Int {
+            guard let predecessor else { return 1 }
+            guard levels.indices.contains(predecessor) else { throw ExplorationError.configurationMismatch }
+            let (level, overflow) = levels[predecessor].addingReportingOverflow(1)
+            guard !overflow else { throw ExplorationError.levelOverflow }
+            return level
+        }
+        return try runValidation(initialMachines: initialMachines, maximumStates: maximumStates, checking: checking,
+            stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, fairness: fairness) { event in
+            let observedLevel: Int?
+            switch event {
+            case .state(let id, _, let initial, let predecessor, _):
+                guard id == levels.count, initial == (predecessor == nil) else { throw ExplorationError.configurationMismatch }
+                let discovered = try level(after: predecessor)
+                levels.append(discovered)
+                observedLevel = discovered
+            case .invariantFailure(_, _, let predecessor, _), .reachability(_, _, let predecessor, _):
+                observedLevel = try level(after: predecessor)
+            default: observedLevel = nil
+            }
+            try observe(.init(event: event, checkingLevel: observedLevel, identity: nil))
+        }
     }
 
     public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,

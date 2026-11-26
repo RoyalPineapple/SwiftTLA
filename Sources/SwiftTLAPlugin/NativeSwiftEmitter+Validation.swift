@@ -34,7 +34,11 @@ extension NativeSwiftEmitter {
         let identifiers = properties.map { propertyCases[$0.id]! }
         let hasConfiguration = !program.layout.parameters.isEmpty
         var scenarios: [String] = []
+        let projectionSlots = Dictionary(uniqueKeysWithValues: program.layout.variables.sorted {
+            $0.formalName.utf8.lexicographicallyPrecedes($1.formalName.utf8)
+        }.enumerated().map { ($0.element.id, $0.offset) })
         var viewRuns: [String] = []
+        var captures: [String] = []
         var viewProjections: [String] = []
         var postconditionCases: [String] = []
         for (index, scenario) in program.behavior.validationScenarios.enumerated() {
@@ -63,6 +67,26 @@ extension NativeSwiftEmitter {
                 defer { checkingLevelName = previousCheckingLevelName }
                 let identity = try expression(view, state: "machine.snapshot.")
                 let projected = try expression(view, state: "snapshot.")
+                let slots = view.children.compactMap { child -> Int? in
+                    guard case .stateVariable(let id) = child.operation,
+                          program.variableTypes[id] == child.resultType else { return nil }
+                    return projectionSlots[id]
+                }
+                let project: String
+                if view.operation == .tupleLiteral, case .tuple(let types) = view.resultType,
+                   types.declaration == nil, types.elements == view.children.map(\.resultType), slots.count == types.count {
+                    project = "{ _ in .tupleFields(\(slots)) }"
+                } else {
+                    let value = try formalValue("identity", type: view.resultType)
+                    project = "{ identity in .evaluated(try SwiftTLA._nativeFormalProjection([.init(token: SwiftTLA._nativeFormalProjectionToken(validating: \"View\")!, value: \(value))])) }"
+                }
+                captures.append("""
+                case \(index):
+                    return try MachineValidator.capture(initialMachines: initialMachines, maximumStates: maximumStates,
+                        checking: checking, stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability,
+                        fairness: fairness, identity: { machine, level in \(identity) },
+                        project: \(project), observe: observe)
+                """)
                 viewRuns.append("""
                 case \(index):
                     return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
@@ -187,6 +211,19 @@ extension NativeSwiftEmitter {
                     return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
                         checking: checking, stopOnViolation: stopOnViolation,
                         stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
+                default: throw ExplorationError.configurationMismatch
+                }
+            }
+            public func captureValidation(initialMachines: [Machine], maximumStates: \(nativeIntType), checking: ModelChecks<Property>,
+                stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
+                fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
+                observe: (MachineValidationObservation<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+                switch selectedView {
+                \(captures.joined(separator: "\n"))
+                case nil:
+                    return try MachineValidator.capture(initialMachines: initialMachines, maximumStates: maximumStates,
+                        checking: checking, stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability,
+                        fairness: fairness, observe: observe)
                 default: throw ExplorationError.configurationMismatch
                 }
             }

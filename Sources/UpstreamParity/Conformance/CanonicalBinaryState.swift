@@ -23,6 +23,27 @@ enum CanonicalBinaryState {
             try CanonicalBinaryState.encode(projection, viewed: viewed,
                 into: &bytes, lengthPatches: &lengthPatches)
         }
+
+        /// The two wire records share values, but carry different headers and field orders.
+        mutating func encode(_ full: TLAStateProjection, tupleView positions: [Int],
+                             key: inout Encoder) throws {
+            var ranges: [Range<Int>] = []
+            try CanonicalBinaryState.encode(full, viewed: false, into: &bytes,
+                lengthPatches: &lengthPatches) { ranges.append($0) }
+            key.bytes.removeAll(keepingCapacity: true)
+            key.lengthPatches.removeAll(keepingCapacity: true)
+            key.bytes.append(viewVersion)
+            try appendCount(1, to: &key.bytes)
+            try appendString("View", to: &key.bytes)
+            let tuple = beginValue(tag: 6, to: &key.bytes)
+            try appendCount(positions.count, to: &key.bytes)
+            for position in positions {
+                guard ranges.indices.contains(position) else { throw CodingError.malformed }
+                key.bytes.append(bytes[ranges[position]])
+            }
+            try finishValue(lengthOffset: tuple, in: key.bytes, patches: &key.lengthPatches)
+            apply(key.lengthPatches, to: &key.bytes)
+        }
     }
 
     static func encode(_ projection: TLAStateProjection, viewed: Bool = false) throws -> Data {
@@ -33,7 +54,8 @@ enum CanonicalBinaryState {
 
     private static func encode(
         _ projection: TLAStateProjection, viewed: Bool, into output: inout Data,
-        lengthPatches: inout [LengthPatch]
+        lengthPatches: inout [LengthPatch],
+        fieldEncoded: (Range<Int>) -> Void = { _ in }
     ) throws {
         output.removeAll(keepingCapacity: true)
         output.reserveCapacity(512)
@@ -46,7 +68,9 @@ enum CanonicalBinaryState {
         try appendCount(entries.count, to: &output)
         for entry in entries {
             try appendString(entry.token.description, to: &output)
+            let start = output.count
             try encode(entry.value, to: &output, lengthPatches: &lengthPatches)
+            fieldEncoded(start..<output.count)
         }
         apply(lengthPatches, to: &output)
     }

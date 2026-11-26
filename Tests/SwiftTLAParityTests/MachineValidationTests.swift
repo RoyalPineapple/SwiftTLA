@@ -65,6 +65,44 @@ struct MachineValidationTests {
         #expect(failures == [2])
     }
 
+    @Test("capture carries the discovered identity and the concrete level of an excluded failure")
+    func capturesIdentityAndFailureAtTheirActualLevels() throws {
+        let configuration = try ConstraintBoundaryCounter.Configuration(safetyLimit: 2)
+        let view = try #require(TLAStateProjection.Token(validating: "View"))
+        var evaluated: [Int] = []
+        var discovered: [Int] = []
+        var failures: [Int] = []
+        let result = try MachineValidator.capture(
+            initialMachines: ConstraintBoundaryCounter.initialMachines(configuration: configuration),
+            maximumStates: 3, checking: .init(properties: [.Bounded], checkDeadlock: false),
+            stopOnViolation: false, stopOnReachability: false, fairness: [],
+            identity: { machine, _ in
+                evaluated.append(machine.state.count)
+                return machine.state.count % 2
+            }, project: { value in .evaluated(try .init(validating: [.init(token: view, value: .int(value))])) }
+        ) { observation in
+            switch observation.event {
+            case .state(_, let snapshot, _, _, _):
+                guard case .evaluated(let key) = observation.identity else {
+                    Issue.record("A discovery must carry its evaluated VIEW")
+                    return
+                }
+                #expect(key.value(for: view) == .int(snapshot.state.count % 2))
+                discovered.append(try #require(observation.checkingLevel))
+            case .invariantFailure(_, let snapshot, let predecessor, let action):
+                #expect(observation.identity == nil)
+                #expect(predecessor == 1 && action == .advance)
+                #expect(observation.checkingLevel == 3)
+                failures.append(snapshot.state.count)
+            default: break
+            }
+        }
+        #expect(evaluated == [0, 1])
+        #expect(discovered == [1, 2])
+        #expect(failures == [2])
+        #expect(result.states == 2 && result.edges == 1)
+    }
+
     @Test("a view merges admitted initial states but still checks an excluded initial state")
     func checksInitialConstraintBeforeViewLookup() throws {
         var initialValues: [Int] = []

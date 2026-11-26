@@ -1061,6 +1061,14 @@ Validation("published") { Bind(Node, to: fiveNodes) }
 View-based exploration records complete representative states for diagnostics,
 but graph equality compares the complete, typed view values and labeled edges.
 Representatives chosen by the two independent checkers need not be identical.
+During native capture the checker supplies the event's snapshot and search level.
+The generated scenario supplies the identity already evaluated for an admitted
+state. For a VIEW made of direct field reads in a tuple, the writer can assemble
+the key from the same encoded fields it writes in the full representative.
+A failed check on an excluded successor retains that successor's snapshot and
+level even when an admitted state has the same VIEW. Ordinary checking can run
+without producing formal projections or graph bytes.
+
 The view may include `scope.checkingLevel` when a trace must distinguish a
 revisited model state at a later breadth-first depth. Initial states have level
 1, and each successor is evaluated at its source level plus 1 in native checking

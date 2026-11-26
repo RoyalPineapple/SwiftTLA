@@ -75,6 +75,25 @@ public enum MachineValidationEvent<Machine: StateMachine>: Sendable {
     case evaluationFailure(source: Int, action: Machine.Action, reason: NativeMachineEvaluationError)
 }
 
+/// Formal identity of an observed VIEW. Field positions use the complete projection's
+/// canonical field order and the VIEW's declared tuple order.
+public enum ValidationCaptureIdentity: Sendable {
+    case evaluated(TLAStateProjection)
+    case tupleFields([Int])
+}
+
+public struct MachineValidationObservation<Machine: StateMachine>: Sendable {
+    public let event: MachineValidationEvent<Machine>
+    public let checkingLevel: Int?
+    public let identity: ValidationCaptureIdentity?
+
+    public init(event: MachineValidationEvent<Machine>, checkingLevel: Int?, identity: ValidationCaptureIdentity?) {
+        self.event = event
+        self.checkingLevel = checkingLevel
+        self.identity = identity
+    }
+}
+
 public struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable {
     public enum Completion: Equatable, Sendable {
         case exhausted
@@ -134,7 +153,7 @@ public enum MachineValidator {
             initialFailure: initialOutcomes.firstFailure, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
             stopOnReachability: stopOnReachability, fairness: fairness, identity: { machine, _ in machine.snapshot },
-            usesView: false, emit: emit)
+            usesView: false, emit: { event, _, _ in try emit(event) })
     }
 
     public static func run<Machine: StateMachine>(
@@ -148,7 +167,7 @@ public enum MachineValidator {
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, fairness: fairness, identity: { machine, _ in machine.snapshot }, usesView: false, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, identity: { machine, _ in machine.snapshot }, usesView: false, emit: { event, _, _ in try emit(event) })
     }
 
     /// The identity is a typed state function. Equal identities share one exploration node;
@@ -168,7 +187,7 @@ public enum MachineValidator {
             initialFailure: initialOutcomes.firstFailure, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
             stopOnReachability: stopOnReachability, fairness: fairness, identity: { machine, _ in try identity(machine) },
-            usesView: true, emit: emit)
+            usesView: true, emit: { event, _, _ in try emit(event) })
     }
 
     public static func run<Machine: StateMachine, Identity: Hashable & Sendable>(
@@ -184,7 +203,7 @@ public enum MachineValidator {
         try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
             stopOnReachability: stopOnReachability, fairness: fairness, identity: { machine, _ in try identity(machine) },
-            usesView: true, emit: emit)
+            usesView: true, emit: { event, _, _ in try emit(event) })
     }
 
     /// The checking level is the BFS depth exposed by TLCGet("level"): initial
@@ -203,7 +222,7 @@ public enum MachineValidator {
             initialFailure: initialOutcomes.firstFailure, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
             stopOnReachability: stopOnReachability, fairness: fairness, identity: identity,
-            usesView: true, emit: emit)
+            usesView: true, emit: { event, _, _ in try emit(event) })
     }
 
     public static func run<Machine: StateMachine, Identity: Hashable & Sendable>(
@@ -218,7 +237,36 @@ public enum MachineValidator {
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, fairness: fairness, identity: identity, usesView: true, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, identity: identity, usesView: true, emit: { event, _, _ in try emit(event) })
+    }
+
+    public static func capture<Machine: StateMachine>(
+        initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
+        observe: (MachineValidationObservation<Machine>) throws -> Void
+    ) throws -> MachineValidationSummary<Machine.Property> {
+        try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability,
+            fairness: fairness, identity: { machine, _ in machine.snapshot }, usesView: false) { event, level, _ in
+            try observe(.init(event: event, checkingLevel: level, identity: nil))
+        }
+    }
+
+    /// Generated scenarios project an identity for evidence only when a state event needs it.
+    public static func capture<Machine: StateMachine, Identity: Hashable & Sendable>(
+        initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
+        identity: (Machine, Int) throws -> Identity,
+        project: (Identity) throws -> ValidationCaptureIdentity,
+        observe: (MachineValidationObservation<Machine>) throws -> Void
+    ) throws -> MachineValidationSummary<Machine.Property> {
+        try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability,
+            fairness: fairness, identity: identity, usesView: true) { event, level, value in
+            try observe(.init(event: event, checkingLevel: level, identity: try value.map(project)))
+        }
     }
 
     private static func runWithIdentity<Machine: StateMachine, Identity: Hashable & Sendable>(
@@ -231,7 +279,7 @@ public enum MachineValidator {
         fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
         identity: (Machine, Int) throws -> Identity,
         usesView: Bool,
-        emit: (MachineValidationEvent<Machine>) throws -> Void
+        emit: (MachineValidationEvent<Machine>, Int?, Identity?) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         let startedAt = DispatchTime.now().uptimeNanoseconds
@@ -291,9 +339,9 @@ public enum MachineValidator {
                   orderedActionFailureHistory: orderedActionFailureHistory)
         }
 
-        func emitEvent(_ event: MachineValidationEvent<Machine>) throws {
+        func emitEvent(_ event: MachineValidationEvent<Machine>, level: Int? = nil, identity: Identity? = nil) throws {
             let started = DispatchTime.now().uptimeNanoseconds
-            try emit(event)
+            try emit(event, level, identity)
             eventNanoseconds += DispatchTime.now().uptimeNanoseconds - started
         }
 
@@ -328,19 +376,19 @@ public enum MachineValidator {
             return (hash, result)
         }
 
-        func checkInvariants(_ machine: Machine, atLevel level: Int, predecessor: Int?, action: Machine.Action?) throws -> Bool {
+        func checkInvariants(_ machine: Machine, atLevel level: Int, predecessor: Int?, action: Machine.Action?, identity: Identity? = nil) throws -> Bool {
             let started = DispatchTime.now().uptimeNanoseconds
             let failures = try machine.violatedInvariants(checking: checking.properties, atLevel: level)
             invariantNanoseconds += DispatchTime.now().uptimeNanoseconds - started
             for property in failures {
                 violated.insert(property)
                 try emitEvent(.invariantFailure(property: property, snapshot: machine.snapshot,
-                                           predecessor: predecessor, action: action))
+                                           predecessor: predecessor, action: action), level: level, identity: identity)
             }
             return !failures.isEmpty
         }
 
-        func checkReachability(_ machine: Machine, predecessor: Int?, action: Machine.Action?) throws -> Bool {
+        func checkReachability(_ machine: Machine, atLevel level: Int, predecessor: Int?, action: Machine.Action?, identity: Identity? = nil) throws -> Bool {
             var found = false
             let started = DispatchTime.now().uptimeNanoseconds
             let matches = try machine.matchedReachabilityProperties(checking: checking.properties)
@@ -352,7 +400,7 @@ public enum MachineValidator {
                 guard reached.insert(property).inserted else { continue }
                 found = true
                 try emitEvent(.reachability(property: property, snapshot: machine.snapshot,
-                                       predecessor: predecessor, action: action))
+                                       predecessor: predecessor, action: action), level: level, identity: identity)
             }
             return found
         }
@@ -368,7 +416,7 @@ public enum MachineValidator {
             maximumLevel = max(maximumLevel, level)
             if initial { initialCount += 1 }
             try emitEvent(.state(id: id, snapshot: snapshot, initial: initial,
-                            predecessor: predecessor, action: action))
+                            predecessor: predecessor, action: action), level: level, identity: value)
             return id
         }
 
@@ -381,8 +429,8 @@ public enum MachineValidator {
                 let value = admitted ? try identity(machine, 1) : nil
                 let lookup = value.map(stateID)
                 if !admitted || lookup?.1 == nil {
-                    let reached = try checkReachability(machine, predecessor: nil, action: nil)
-                    let failed = try checkInvariants(machine, atLevel: 1, predecessor: nil, action: nil)
+                    let reached = try checkReachability(machine, atLevel: 1, predecessor: nil, action: nil, identity: value)
+                    let failed = try checkInvariants(machine, atLevel: 1, predecessor: nil, action: nil, identity: value)
                     if failed && stopOnViolation { return summary(.decisiveViolation) }
                     if reached && stopOnReachability { return summary(.decisiveReachability) }
                 }
@@ -392,7 +440,7 @@ public enum MachineValidator {
                 }
                 continue
             }
-            let reached = try checkReachability(machine, predecessor: nil, action: nil)
+            let reached = try checkReachability(machine, atLevel: 1, predecessor: nil, action: nil)
             let failed = try checkInvariants(machine, atLevel: 1, predecessor: nil, action: nil)
             if failed && stopOnViolation { return summary(.decisiveViolation) }
             if reached && stopOnReachability { return summary(.decisiveReachability) }
@@ -440,7 +488,7 @@ public enum MachineValidator {
                         } catch { fairnessFailure = error }
                     }
                     if !permitted {
-                        let reached = try checkReachability(successor, predecessor: source, action: action)
+                        let reached = try checkReachability(successor, atLevel: successorLevel, predecessor: source, action: action)
                         let failed = try checkInvariants(successor, atLevel: successorLevel,
                             predecessor: source, action: action)
                         if failed && stopOnViolation { decision = .decisiveViolation; return false }
@@ -452,7 +500,7 @@ public enum MachineValidator {
                     // excluded boundary; an excluded successor adds no graph edge.
                     if usesView {
                         if try !constraintHolds(successor) {
-                            let reached = try checkReachability(successor, predecessor: source, action: action)
+                            let reached = try checkReachability(successor, atLevel: successorLevel, predecessor: source, action: action)
                             let failed = try checkInvariants(successor, atLevel: successorLevel,
                                 predecessor: source, action: action)
                             if failed && stopOnViolation { decision = .decisiveViolation; return false }
@@ -468,8 +516,8 @@ public enum MachineValidator {
                         try emitEvent(.edge(source: source, action: action, target: target))
                         return true
                     }
-                    let reached = try checkReachability(successor, predecessor: source, action: action)
-                    let failed = try checkInvariants(successor, atLevel: successorLevel, predecessor: source, action: action)
+                    let reached = try checkReachability(successor, atLevel: successorLevel, predecessor: source, action: action, identity: value)
+                    let failed = try checkInvariants(successor, atLevel: successorLevel, predecessor: source, action: action, identity: value)
                     if failed && stopOnViolation {
                         decision = .decisiveViolation
                         return false
