@@ -2989,7 +2989,7 @@ package enum ConditionalActionEvidence {
             BY ONLY DEF Spec, vars
         \#(invariantProof)<1>behavior. \#(behaviorStatement)
             BY ONLY \#(initFact)\#(typeFacts)<1>spec, <1>always, PTL DEF ConditionalConfiguredBehavior
-        <1>. QED BY ONLY \#(selection), \#(initFact)\#(typeFacts)<1>checked, <1>behavior, PTL
+        <1>. QED BY ONLY \#(selection), \#(initFact)\#(typeFacts)<1>checked, <1>behavior, Zenon
 
         ====
         """#
