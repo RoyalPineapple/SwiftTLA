@@ -3274,6 +3274,64 @@
       "moduleSHA256": "b923b4753fe9dbf250d46e4fed0472b91f1e79056c80660d7268b0e3e5eabecd",
       "cfgSHA256": "c0ad171f9cda7abe84a6a2f1cc4b5b408d419f2d47843d79134590eb0efb4af1",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "car-talk-puzzle-1",
+      "sourceModel": "car-talk-puzzle",
+      "scenario": "Arithmetic",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "car-talk-puzzle-1/MC.tla",
+      "configuration": "car-talk-puzzle-1/MC.cfg",
+      "imports": [
+        "car-talk-puzzle-1/CarTalkPuzzle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC",
+          "importedModule": "CarTalkPuzzle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_1/MC.tla",
+        "sha256": "8ab5978a5b30bf5441128aa73faa7ca0053091668f1184d0d4e1a3e114923f77"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "8ab5978a5b30bf5441128aa73faa7ca0053091668f1184d0d4e1a3e114923f77",
+      "cfgSHA256": "d9086990bab69dfba2d38eeb720cc334fadbb6774d31975f1f76c4994f36dd51",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "car-talk-puzzle-2",
+      "sourceModel": "car-talk-puzzle",
+      "scenario": "AllSolutions",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "car-talk-puzzle-2/MC.tla",
+      "configuration": "car-talk-puzzle-2/MC.cfg",
+      "imports": [
+        "car-talk-puzzle-2/CarTalkPuzzle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC",
+          "importedModule": "CarTalkPuzzle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_2/MC.tla",
+        "sha256": "606a965959c3002132ae96bc203ef86e8c2b1412ccd9737676e47a07a5ac7418"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "606a965959c3002132ae96bc203ef86e8c2b1412ccd9737676e47a07a5ac7418",
+      "cfgSHA256": "86e1b803ac8f847615cd60f5a83f4ba3dc8b94518e0a75cd102e837abcf37f07",
+      "timeoutSeconds": 600
     }
   ]
 }

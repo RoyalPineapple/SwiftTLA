@@ -52,3 +52,4 @@ Verification/FiniteGraph/fixtures/mc-live-internal-memory/* whitespace=-blank-at
 Verification/FiniteGraph/fixtures/simple-math/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/print-values/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/glowing-raccoon/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/car-talk-puzzle-*/* whitespace=-blank-at-eol,-blank-at-eof
