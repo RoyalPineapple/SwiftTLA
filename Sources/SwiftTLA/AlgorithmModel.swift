@@ -863,10 +863,17 @@ private func scheduleDirectScalarCopies(
     return (body, .init(reads: reads, writes: writes))
 }
 
+package struct ScheduledAtomicBindingWrite: Sendable {
+    package let predecessor: String?
+    package let target: String
+    package let binding: String
+}
+
 package struct ScheduledAtomicAssignment: Sendable {
-    let target: String
+    let update: ScheduledAtomicBindingWrite
     let incomingBindings: [String: StateExpr]
-    let predecessor: String?
+
+    var target: String { update.target }
 }
 
 func scheduleAtomicStatements(
@@ -878,12 +885,12 @@ func scheduleAtomicStatements(
     // root at the end of the atomic branch. PlusCal labels require that form.
     struct Replacements {
         var bindings: [String: StateExpr] = [:]
-        var predecessor: String?
+        var lastWrite: ScheduledAtomicBindingWrite?
 
-        func recording(_ target: String, as name: String) -> Self {
+        func recording(_ update: ScheduledAtomicBindingWrite) -> Self {
             var result = self
-            result.bindings[target] = .variable(name)
-            result.predecessor = name
+            result.bindings[update.target] = .variable(update.binding)
+            result.lastWrite = update
             return result
         }
     }
@@ -904,17 +911,18 @@ func scheduleAtomicStatements(
         }
         switch statement {
         case .set(let target, let value):
-            let name = binding()
+            let update = ScheduledAtomicBindingWrite(predecessor: replacements.lastWrite?.binding,
+                target: target.root, binding: binding())
             let updated = expression(target.assigning(value))
-            recordAssignment?(name, .init(target: target.root, incomingBindings: replacements.bindings,
-                predecessor: replacements.predecessor))
-            if case .variable(let capture)? = replacements.bindings[target.root] {
-                displace(capture, target.root)
+            let next = replacements.recording(update)
+            recordAssignment?(update.binding, .init(update: update, incomingBindings: replacements.bindings))
+            if case .variable(let capture)? = replacements.bindings[update.target] {
+                displace(capture, update.target)
             }
-            let pending = assignments.filter { $0.target.root != target.root }
-                + [.init(target: .root(target.root), value: .variable(name))]
-            return [.letBinding(variable: name, value: updated,
-                schedule(suffix, assignments: pending, replacements: replacements.recording(target.root, as: name)))]
+            let pending = assignments.filter { $0.target.root != update.target }
+                + [.init(target: .root(update.target), value: .variable(update.binding))]
+            return [.letBinding(variable: update.binding, value: updated,
+                schedule(suffix, assignments: pending, replacements: next))]
         case .when(.value(.bool(false))) where retainingDisabledTargets:
             // The guard drops the pending writes, but checked captures before it can still fail.
             for assignment in assignments {

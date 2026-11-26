@@ -168,6 +168,20 @@ THEOREM TwoLastDirectCopiesHaveTheSamePosition ==
     PROVE left = right
     BY SMT DEF LastDirectCopy
 
+THEOREM RecordedWriterSuppliesTheProjectedRead ==
+    ASSUME NEW keys, NEW copies, NEW prefix \in Nat, prefix \in 0..Len(copies),
+           NEW key \in keys, NEW writer, LastDirectCopy(copies, prefix, key, writer)
+    PROVE DirectCopyRoutes(keys, copies)[prefix][key] = DirectCopyReference(key, writer)
+PROOF
+<1>exists. \E slot \in 0..prefix : LastDirectCopy(copies, prefix, key, slot)
+    BY ONLY LastDirectCopy(copies, prefix, key, writer), SMT DEF LastDirectCopy
+<1>choice. LastDirectCopy(copies, prefix, key, DirectCopyWriter(copies, prefix, key))
+    BY ONLY <1>exists, SMT DEF DirectCopyWriter
+<1>unique. DirectCopyWriter(copies, prefix, key) = writer
+    BY ONLY (prefix \in Nat), <1>choice, LastDirectCopy(copies, prefix, key, writer),
+        TwoLastDirectCopiesHaveTheSamePosition, SMT
+<1>. QED BY ONLY (prefix \in 0..Len(copies)), (key \in keys), <1>unique, SMT DEF DirectCopyRoutes
+
 THEOREM RecordingTheTargetDeterminesTheNextWriter ==
     ASSUME NEW copies, NEW index \in Nat, index > 0, NEW key, NEW writer,
            LastDirectCopy(copies, index - 1, key, writer)
