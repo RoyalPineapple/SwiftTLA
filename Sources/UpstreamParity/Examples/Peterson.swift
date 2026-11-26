@@ -19,12 +19,12 @@ package struct PetersonModel: ParameterlessGeneratedModel {
     }
 
     private enum Step: String, CaseIterable {
-        case a0
-        case a1
-        case a2
-        case a3
-        case cs
-        case a4
+        case noncriticalSection = "a0"
+        case raiseInterestFlag = "a1"
+        case giveOtherProcessPriority = "a2"
+        case awaitPermissionToEnter = "a3"
+        case criticalSection = "cs"
+        case clearInterestFlag = "a4"
     }
 
     package static var spec: TLASpec {
@@ -39,20 +39,20 @@ package struct PetersonModel: ParameterlessGeneratedModel {
                 let turn = scope.sharedVar(initial: Process.one)
 
                 Each(Process.all) { process in
-                    Do(Step.a0) {
+                    Do(Step.noncriticalSection) {
                         Skip()
                     }
-                    Do(Step.a1) {
+                    Do(Step.raiseInterestFlag) {
                         c.set(c.updating(process, to: true))
                     }
-                    Do(Step.a2) {
+                    Do(Step.giveOtherProcessPriority) {
                         turn.set(If(
                             process == .one,
                             then: Process.two,
                             else: Process.one
                         ))
                     }
-                    Do(Step.a3) {
+                    Do(Step.awaitPermissionToEnter) {
                         Let(If(
                                 process == .one,
                                 then: Process.two,
@@ -61,12 +61,12 @@ package struct PetersonModel: ParameterlessGeneratedModel {
                             When(c[other] == false || turn == process)
                         }
                     }
-                    Do(Step.cs) {
+                    Do(Step.criticalSection) {
                         Skip()
                     }
-                    Do(Step.a4) {
+                    Do(Step.clearInterestFlag) {
                         c.set(c.updating(process, to: false))
-                        Goto(Step.a0)
+                        Goto(Step.noncriticalSection)
                     }
                 }
 
@@ -74,30 +74,30 @@ package struct PetersonModel: ParameterlessGeneratedModel {
                     Process.all.contains(turn)
                     Process.all.allSatisfy { process in
                         (c[process] == false || c[process] == true)
-                            && process.isAt(anyOf: Step.a0, .a1, .a2, .a3, .cs, .a4)
+                            && process.isAt(anyOf: Step.noncriticalSection, .raiseInterestFlag, .giveOtherProcessPriority, .awaitPermissionToEnter, .criticalSection, .clearInterestFlag)
                     }
                 }
 
-                let holders = Process.all.filter { process in process.isAt(anyOf: Step.cs, .a4) }
+                let holders = Process.all.filter { process in process.isAt(anyOf: Step.criticalSection, .clearInterestFlag) }
                 Inv {
                     Process.all.allSatisfy { process in
-                        c[process] == process.isAt(anyOf: Step.a2, .a3, .cs, .a4)
+                        c[process] == process.isAt(anyOf: Step.giveOtherProcessPriority, .awaitPermissionToEnter, .criticalSection, .clearInterestFlag)
                     }
                     Process.all.allSatisfy { process in
-                        !process.isAt(anyOf: Step.cs, .a4) || turn == process
+                        !process.isAt(anyOf: Step.criticalSection, .clearInterestFlag) || turn == process
                             || If(process == .one, then: Process.two, else: Process.one)
-                                .isAt(anyOf: Step.a0, .a1, .a2)
+                                .isAt(anyOf: Step.noncriticalSection, .raiseInterestFlag, .giveOtherProcessPriority)
                     }
                     holders.count <= 1
                 }
             }
             let L = Instance(of: LockModel.self) {}
             let lockPC = Dictionary<Process, String>.mapping(over: Process.all) { process in
-                If(process.isAt(anyOf: Step.a0), then: "l0", else:
-                    If(process.isAt(anyOf: Step.a1, .a2, .a3), then: "l1", else:
-                        If(process.isAt(anyOf: Step.cs), then: "cs", else: "l2")))
+                If(process.isAt(anyOf: Step.noncriticalSection), then: "l0", else:
+                    If(process.isAt(anyOf: Step.raiseInterestFlag, .giveOtherProcessPriority, .awaitPermissionToEnter), then: "l1", else:
+                        If(process.isAt(anyOf: Step.criticalSection), then: "cs", else: "l2")))
             }
-            let held = Process.all.contains { process in process.isAt(anyOf: Step.cs, .a4) }
+            let held = Process.all.contains { process in process.isAt(anyOf: Step.criticalSection, .clearInterestFlag) }
             Refinement("LSpec", instance: L) {
                 Map(\.lock, from: If(held, then: 0, else: 1))
                 Map(\.pc, projecting: lockPC)

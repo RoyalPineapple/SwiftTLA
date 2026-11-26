@@ -7,7 +7,19 @@ import SwiftTLAMacros
 @TLAModel
 package struct BarriersModel: Sendable {
     private enum Step: String, CaseIterable {
-        case a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12
+        case startBarrierRound = "a0"
+        case lockForArrival = "a1"
+        case countArrival = "a2"
+        case checkForLastArrival = "a3"
+        case openFirstGate = "a4"
+        case unlockAfterArrival = "a5"
+        case passFirstGate = "a6"
+        case lockForDeparture = "a7"
+        case countDeparture = "a8"
+        case checkForLastDeparture = "a9"
+        case openSecondGate = "a10"
+        case unlockAfterDeparture = "a11"
+        case passSecondGate = "a12"
     }
 
     package static var spec: TLASpec {
@@ -28,35 +40,35 @@ package struct BarriersModel: Sendable {
                 let rdv = scope.sharedVar(initial: 0)
 
                 Each(processes) { process in
-                    Do(Step.a0) { Skip() }
-                    Do(Step.a1) {
+                    Do(Step.startBarrierRound) { Skip() }
+                    Do(Step.lockForArrival) {
                         When(lock == 1)
                         lock.set(0)
                     }
-                    Do(Step.a2) { rdv += 1 }
-                    Do(Step.a3) {
-                        If(rdv == N) { Goto(Step.a4) } else: { Goto(Step.a5) }
+                    Do(Step.countArrival) { rdv += 1 }
+                    Do(Step.checkForLastArrival) {
+                        If(rdv == N) { Goto(Step.openFirstGate) } else: { Goto(Step.unlockAfterArrival) }
                     }
-                    Do(Step.a4) { gate_1 += N }
-                    Do(Step.a5) { lock.set(1) }
-                    Do(Step.a6) {
+                    Do(Step.openFirstGate) { gate_1 += N }
+                    Do(Step.unlockAfterArrival) { lock.set(1) }
+                    Do(Step.passFirstGate) {
                         When(gate_1 > 0)
                         gate_1.set(gate_1 - 1)
                     }
-                    Do(Step.a7) {
+                    Do(Step.lockForDeparture) {
                         When(lock == 1)
                         lock.set(0)
                     }
-                    Do(Step.a8) { rdv.set(rdv - 1) }
-                    Do(Step.a9) {
-                        If(rdv == 0) { Goto(Step.a10) } else: { Goto(Step.a11) }
+                    Do(Step.countDeparture) { rdv.set(rdv - 1) }
+                    Do(Step.checkForLastDeparture) {
+                        If(rdv == 0) { Goto(Step.openSecondGate) } else: { Goto(Step.unlockAfterDeparture) }
                     }
-                    Do(Step.a10) { gate_2 += N }
-                    Do(Step.a11) { lock.set(1) }
-                    Do(Step.a12) {
+                    Do(Step.openSecondGate) { gate_2 += N }
+                    Do(Step.unlockAfterDeparture) { lock.set(1) }
+                    Do(Step.passSecondGate) {
                         When(gate_2 > 0)
                         gate_2.set(gate_2 - 1)
-                        Goto(Step.a0)
+                        Goto(Step.startBarrierRound)
                     }
                 }
 
@@ -65,36 +77,83 @@ package struct BarriersModel: Sendable {
                     gate_1 >= 0
                     gate_2 >= 0
                     Int.all.contains(rdv)
-                    processes.allSatisfy { p in
-                        p.isAt(anyOf: Step.a0, .a1, .a2, .a3, .a4, .a5, .a6, .a7, .a8, .a9, .a10, .a11, .a12)
+                    processes.allSatisfy { process in
+                        process.isAt(anyOf:
+                            Step.startBarrierRound, .lockForArrival, .countArrival,
+                            .checkForLastArrival, .openFirstGate, .unlockAfterArrival,
+                            .passFirstGate, .lockForDeparture, .countDeparture,
+                            .checkForLastDeparture, .openSecondGate, .unlockAfterDeparture,
+                            .passSecondGate
+                        )
                     }
                 }
-                let critical = processes.filter { p in p.isAt(anyOf: Step.a2, .a3, .a4, .a5, .a8, .a9, .a10, .a11) }
+                let critical = processes.filter { process in
+                    process.isAt(anyOf:
+                        Step.countArrival, .checkForLastArrival, .openFirstGate,
+                        .unlockAfterArrival, .countDeparture, .checkForLastDeparture,
+                        .openSecondGate, .unlockAfterDeparture
+                    )
+                }
                 LockInv {
                     critical.count <= 1
                     critical.isEmpty || lock == 0
                 }
-                let firstChamber = processes.filter { p in p.isAt(anyOf: Step.a0, .a1, .a2, .a3, .a4, .a5, .a6) }
-                let secondChamber = processes.filter { p in p.isAt(anyOf: Step.a7, .a8, .a9, .a10, .a11, .a12) }
-                let enteringFirst = processes.contains { p in p.isAt(anyOf: Step.a0, .a1, .a2, .a3, .a4) }
-                let enteringSecond = processes.contains { p in p.isAt(anyOf: Step.a7, .a8, .a9, .a10) }
+                let firstChamber = processes.filter { process in
+                    process.isAt(anyOf:
+                        Step.startBarrierRound, .lockForArrival, .countArrival,
+                        .checkForLastArrival, .openFirstGate, .unlockAfterArrival, .passFirstGate
+                    )
+                }
+                let secondChamber = processes.filter { process in
+                    process.isAt(anyOf:
+                        Step.lockForDeparture, .countDeparture, .checkForLastDeparture,
+                        .openSecondGate, .unlockAfterDeparture, .passSecondGate
+                    )
+                }
+                let enteringFirst = processes.contains { process in
+                    process.isAt(anyOf:
+                        Step.startBarrierRound, .lockForArrival, .countArrival,
+                        .checkForLastArrival, .openFirstGate
+                    )
+                }
+                let enteringSecond = processes.contains { process in
+                    process.isAt(anyOf:
+                        Step.lockForDeparture, .countDeparture, .checkForLastDeparture,
+                        .openSecondGate
+                    )
+                }
                 Inv {
                     IntRange(0, through: N).contains(gate_1)
                     IntRange(0, through: N).contains(gate_2)
-                    rdv == processes.filter { p in p.isAt(anyOf: Step.a3, .a4, .a5, .a6, .a7, .a8) }.count
-                    gate_1 <= 0 || processes.contains { p in p.isAt(anyOf: Step.a5, .a6) }
-                    gate_2 <= 0 || processes.contains { p in p.isAt(anyOf: Step.a11, .a12) }
+                    rdv == processes.filter { process in
+                        process.isAt(anyOf:
+                            Step.checkForLastArrival, .openFirstGate, .unlockAfterArrival,
+                            .passFirstGate, .lockForDeparture, .countDeparture
+                        )
+                    }.count
+                    gate_1 <= 0 || processes.contains { process in
+                        process.isAt(anyOf: Step.unlockAfterArrival, .passFirstGate)
+                    }
+                    gate_2 <= 0 || processes.contains { process in
+                        process.isAt(anyOf: Step.unlockAfterDeparture, .passSecondGate)
+                    }
                     gate_1 == 0 || gate_2 == 0
                     !enteringFirst || !enteringSecond
                     gate_1 <= firstChamber.count
                     !enteringFirst || gate_1 == 0
-                    processes.allSatisfy { p in
-                        !p.isAt(anyOf: Step.a4) || (rdv == N && processes.allSatisfy { q in p == q || q.isAt(anyOf: Step.a6) })
+                    processes.allSatisfy { process in
+                        !process.isAt(anyOf: Step.openFirstGate)
+                            || (rdv == N && processes.allSatisfy { other in
+                                process == other || other.isAt(anyOf: Step.passFirstGate)
+                            })
                     }
                     gate_2 <= secondChamber.count
                     !enteringSecond || gate_2 == 0
-                    processes.allSatisfy { p in
-                        !p.isAt(anyOf: Step.a10) || (rdv == 0 && processes.allSatisfy { q in p == q || q.isAt(anyOf: Step.a12) })
+                    processes.allSatisfy { process in
+                        !process.isAt(anyOf: Step.openSecondGate)
+                            || (rdv == 0 && processes.allSatisfy { other in
+                                process == other || other.isAt(anyOf: Step.passSecondGate)
+                            })
                     }
                 }
                 FlushInv {
@@ -103,9 +162,13 @@ package struct BarriersModel: Sendable {
                 }
             }
             let abstract = Instance(of: BarrierModel.self) { Bind(\.N, to: N) }
-            let translatedPC = Dictionary<Int, String>.mapping(over: processes) { p in
-                If(p.isAt(anyOf: Step.a1, .a2, .a3, .a4, .a5, .a6, .a7, .a8, .a9, .a10), then: "b1", else:
-                    If(p.isAt(anyOf: Step.a0) || gate_2 > 0, then: "b0", else: "b1"))
+            let translatedPC = Dictionary<Int, String>.mapping(over: processes) { process in
+                If(process.isAt(anyOf:
+                    Step.lockForArrival, .countArrival, .checkForLastArrival, .openFirstGate,
+                    .unlockAfterArrival, .passFirstGate, .lockForDeparture, .countDeparture,
+                    .checkForLastDeparture, .openSecondGate
+                ), then: "b1", else:
+                    If(process.isAt(anyOf: Step.startBarrierRound) || gate_2 > 0, then: "b0", else: "b1"))
             }
             Refinement("BSpec", instance: abstract) { Map(\.pc, projecting: translatedPC) }
             Validation("published") { Bind(N, to: 6) }

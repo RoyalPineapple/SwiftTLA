@@ -13,7 +13,7 @@ import SwiftTLAMacros
 @TLAModel
 package struct BinarySearchModel: Sendable {
     private enum Step: String, CaseIterable {
-        case a
+        case probeMidpointOrFinish = "a"
     }
 
     package static var spec: TLASpec {
@@ -33,7 +33,7 @@ package struct BinarySearchModel: Sendable {
                 let high: SharedVariable<Int> = scope.sharedVar(initial: seq.count)
                 let result = scope.sharedVar(initial: 0)
 
-                While(Step.a, low <= high && result == 0) {
+                While(Step.probeMidpointOrFinish, low <= high && result == 0) {
                     Let((low + high).integerDivided(by: 2)) { mid in
                         Let(seq[mid.expr]) { middleValue in
                             If(middleValue == val) {

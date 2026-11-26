@@ -16,8 +16,8 @@ package struct PrisonersModel: Sendable {
     }
 
     private enum Step: String, CaseIterable {
-        case counterStep = "CounterStep"
-        case nonCounterStep = "NonCounterStep"
+        case countSignalOrFlipSwitchB = "CounterStep"
+        case signalCounterOrFlipSwitchB = "NonCounterStep"
     }
 
     package static var spec: TLASpec {
@@ -36,7 +36,7 @@ package struct PrisonersModel: Sendable {
             let Safety = Temporal()
             let Liveness = Temporal()
 
-            let counterStep = Do(Step.counterStep) {
+            let countSignalOrFlipSwitchB = Do(Step.countSignalOrFlipSwitchB) {
                 If(switchAUp) {
                     switchAUp.set(false)
                     count += 1
@@ -44,7 +44,7 @@ package struct PrisonersModel: Sendable {
                     switchBUp.set(!switchBUp)
                 }
             }
-            let nonCounterStep = Do(Step.nonCounterStep, over: OtherPrisoner) { prisoner in
+            let signalCounterOrFlipSwitchB = Do(Step.signalCounterOrFlipSwitchB, over: OtherPrisoner) { prisoner in
                 If(!switchAUp && timesSwitched[prisoner] < 2) {
                     switchAUp.set(true)
                     timesSwitched[prisoner] += 1
@@ -53,8 +53,8 @@ package struct PrisonersModel: Sendable {
                 }
             }
 
-            WeakFairness(counterStep)
-            WeakFairness(each: nonCounterStep)
+            WeakFairness(countSignalOrFlipSwitchB)
+            WeakFairness(each: signalCounterOrFlipSwitchB)
 
             let done = count == 2 * (Prisoner.count - 1)
             Invariant("TypeOK") {
