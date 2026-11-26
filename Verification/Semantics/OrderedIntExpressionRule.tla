@@ -3263,6 +3263,93 @@ CompilerOccurrenceTree(view, count) ==
     /\ \A child \in 2..count : \E parent \in 1..(child - 1) :
         view.kinds[parent] = "add" /\ child \in {view.left[parent], view.right[parent]}
 
+\* Reviewed scheduleAtomicStatements root assignment semantics: target.assigning
+\* returns the RHS unchanged and substituteVariables receives the pre-write map
+\* of variable names to fresh variable expressions. These StateExpr.replace
+\* clauses project that result at the existing typed M2 occurrence IDs.
+StateExprReplaceReadName(replacements, name) ==
+    IF name \in DOMAIN replacements THEN replacements[name] ELSE name
+
+StateExprSourceOccurrence(view, origin) ==
+    LET kind == view.kinds[origin]
+    IN [origin |-> origin, kind |-> kind,
+        payload |-> CASE kind = "literal" -> view.literals[origin]
+                     [] kind = "read" -> view.reads[origin] [] OTHER -> 0,
+        left |-> IF kind = "add" THEN view.left[origin] ELSE 0,
+        right |-> IF kind = "add" THEN view.right[origin] ELSE 0]
+
+StateExprReplaceConstructor(view, replacements, returned, origin) ==
+    LET source == StateExprSourceOccurrence(view, origin)
+    IN IF DOMAIN replacements = {} THEN source
+       ELSE CASE source.kind = "read" ->
+                   [source EXCEPT !.payload = StateExprReplaceReadName(replacements, @)]
+              [] source.kind = "add" ->
+                   [source EXCEPT !.left = returned[@].origin,
+                                  !.right = returned[@].origin]
+              [] OTHER -> source
+
+StateExprReplaceReturns(view, replacements, returned) ==
+    /\ returned = [origin \in DOMAIN view.kinds |-> returned[origin]]
+    /\ \A origin \in DOMAIN view.kinds :
+          returned[origin] = StateExprReplaceConstructor(view, replacements, returned, origin)
+
+StateExprReplaceProjection(view, replacements) ==
+    [origin \in DOMAIN view.kinds |->
+        LET source == StateExprSourceOccurrence(view, origin)
+        IN IF source.kind = "read"
+           THEN [source EXCEPT !.payload = StateExprReplaceReadName(replacements, @)]
+           ELSE source]
+
+THEOREM StateExprReplacementHasAUniqueProjection ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count), NEW replacements
+    PROVE /\ StateExprReplaceReturns(view, replacements, StateExprReplaceProjection(view, replacements))
+          /\ \A returned : StateExprReplaceReturns(view, replacements, returned) =>
+                 returned = StateExprReplaceProjection(view, replacements)
+          /\ \A origin \in DOMAIN view.kinds : view.kinds[origin] = "read" =>
+                 StateExprReplaceProjection(view, replacements)[origin].payload =
+                     StateExprReplaceReadName(replacements, view.reads[origin])
+PROOF
+<1>. DEFINE origins == DOMAIN view.kinds
+            projection == StateExprReplaceProjection(view, replacements)
+<1>children. \A origin \in origins : view.kinds[origin] = "add" =>
+    /\ view.left[origin] \in origins /\ view.right[origin] \in origins
+    BY ONLY CompilerOccurrenceTree(view, count), SMT DEF origins, CompilerOccurrenceTree
+<1>constructor. ASSUME NEW returned, \A child \in origins : returned[child].origin = child
+                PROVE \A origin \in origins :
+                    StateExprReplaceConstructor(view, replacements, returned, origin) = projection[origin]
+    <2>. TAKE origin \in origins
+    <2>links. view.kinds[origin] = "add" =>
+        /\ returned[view.left[origin]].origin = view.left[origin]
+        /\ returned[view.right[origin]].origin = view.right[origin]
+        BY ONLY <1>children, (origin \in origins), (\A child \in origins : returned[child].origin = child), SMT
+    <2>. QED BY ONLY (origin \in origins), <2>links, SMT
+        DEF origins, projection, StateExprReplaceProjection, StateExprReplaceConstructor,
+            StateExprSourceOccurrence, StateExprReplaceReadName
+<1>table. projection = [origin \in origins |-> projection[origin]]
+    BY ONLY IsaM("simp"), SMT DEF origins, projection, StateExprReplaceProjection
+<1>coordinates. \A origin \in origins : projection[origin].origin = origin
+    BY ONLY SMT DEF origins, projection, StateExprReplaceProjection, StateExprSourceOccurrence
+<1>constructs. StateExprReplaceReturns(view, replacements, projection)
+    BY ONLY <1>table, <1>coordinates, <1>constructor, SMT DEF origins, StateExprReplaceReturns
+<1>unique. \A returned : StateExprReplaceReturns(view, replacements, returned) => returned = projection
+    <2>. TAKE returned
+    <2>. SUFFICES ASSUME StateExprReplaceReturns(view, replacements, returned)
+                  PROVE returned = projection
+        OBVIOUS
+    <2>locals. /\ returned = [origin \in origins |-> returned[origin]]
+               /\ \A origin \in origins :
+                      returned[origin] = StateExprReplaceConstructor(view, replacements, returned, origin)
+        BY ONLY StateExprReplaceReturns(view, replacements, returned) DEF origins, StateExprReplaceReturns
+    <2>roots. \A origin \in origins : returned[origin].origin = origin
+        BY ONLY <2>locals, SMT DEF StateExprReplaceConstructor, StateExprSourceOccurrence
+    <2>projected. \A origin \in origins : returned[origin] = projection[origin]
+        BY ONLY <2>locals, <2>roots, <1>constructor, SMT
+    <2>. QED BY ONLY <2>locals, <2>projected, <1>table, SMT
+<1>names. \A origin \in origins : view.kinds[origin] = "read" =>
+    projection[origin].payload = StateExprReplaceReadName(replacements, view.reads[origin])
+    BY ONLY SMT DEF origins, projection, StateExprReplaceProjection, StateExprSourceOccurrence
+<1>. QED BY ONLY <1>constructs, <1>unique, <1>names DEF origins, projection
+
 \* Insert after CompilerOccurrenceTree and before CompilerScheduledOccurrences.
 \* expressions/source use one-based histories; Swift position remains zero-based.
 \* mass is erased ghost data, recording prefix subtree sizes, never Swift storage.

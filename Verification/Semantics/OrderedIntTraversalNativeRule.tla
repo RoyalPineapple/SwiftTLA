@@ -3,6 +3,12 @@ EXTENDS OrderedIntTraversalPassProof, FiniteSets
 
 LOCAL ArraySets == INSTANCE FiniteSetTheorems
 LOCAL ArrayPrefix == INSTANCE SequencePrefixRule
+LOCAL ArrayEdits == INSTANCE SequenceExpressionConstructorRules
+    WITH Elements <- SeedFrames, FailureValues <- {}, NoFailure <- <<>>
+
+\* Swift Array.append retains the old cells and stores the operand at the old count.
+\* SourceAppendValue expresses those cells at the corresponding one-based indices.
+LOCAL NativeAppend(sequence, element) == ArrayEdits!SourceAppendValue(sequence, element)
 
 \* The checked visitor reads Array.count, calls sequenceElement at count,
 \* then calls sequencePrefix at count - 1 and sequenceAppend three times.
@@ -44,7 +50,7 @@ NativeTraversalExpandedPending(stack, left, right) ==
     LET previous == ArrayPrefix!SourceSequencePrefix(stack,
                        NativeTraversalCount(stack) - NativeStackExpansion.prefixDrop)
         pushes == NativeTraversalPushes(stack, left, right)
-    IN Append(Append(Append(previous, pushes[1]), pushes[2]), pushes[3])
+    IN NativeAppend(NativeAppend(NativeAppend(previous, pushes[1]), pushes[2]), pushes[3])
 
 NativeTraversalReturnedField(stack, left, right, field) ==
     LET writes == <<NativeTraversalExpandedPending(stack, left, right), left, right>>
@@ -123,9 +129,32 @@ PROOF
            /\ pushes[3] = <<left, FALSE>>
         BY ONLY <1>last, <2>nonempty, ActualNativeExpansionBindsTheAuthoredOperands, SMT
             DEF NativeStackExpansionUsesAuthoredOperands, NativeTraversalPushes, AuthoredStackExpansion
+    <2>. DEFINE prefix == SubSeq(stack, 1, Len(stack) - 1)
+                pushes == NativeTraversalPushes(stack, left, right)
+                first == Append(prefix, pushes[1])
+                second == Append(first, pushes[2])
+    <2>prefixType. prefix \in Seq(SeedFrames)
+        BY ONLY (stack \in Seq(SeedFrames)), <2>nonempty, LenProperties, SubSeqProperties, SMT
+            DEF prefix
+    <2>frames. /\ pushes[1] \in SeedFrames
+               /\ pushes[2] \in SeedFrames
+               /\ pushes[3] \in SeedFrames
+        BY ONLY (stack \in Seq(SeedFrames)), (left \in SeedIntValues), (right \in SeedIntValues),
+            <2>nonempty, <2>pushes, LenProperties, ElementOfSeq, SMT DEF pushes, SeedFrames
+    <2>first. /\ NativeAppend(prefix, pushes[1]) = first
+              /\ first \in Seq(SeedFrames)
+        BY ONLY <2>prefixType, <2>frames, ArrayEdits!AppendRetainsEveryIndex, AppendProperties, SMT
+            DEF first, NativeAppend
+    <2>second. /\ NativeAppend(first, pushes[2]) = second
+               /\ second \in Seq(SeedFrames)
+        BY ONLY <2>first, <2>frames, ArrayEdits!AppendRetainsEveryIndex, AppendProperties, SMT
+            DEF second, NativeAppend
+    <2>third. NativeAppend(second, pushes[3]) = Append(second, pushes[3])
+        BY ONLY <2>second, <2>frames, ArrayEdits!AppendRetainsEveryIndex, SMT DEF NativeAppend
     <2>calls. NativeTraversalExpandedPending(stack, left, right) =
                 SeedPhysicalPendingReplacement(stack, left, right)
-        BY ONLY <2>prefix, <2>pushes, SMT DEF NativeTraversalExpandedPending, SeedPhysicalPendingReplacement
+        BY ONLY <2>prefix, <2>pushes, <2>first, <2>second, <2>third, SMT
+            DEF NativeTraversalExpandedPending, SeedPhysicalPendingReplacement, prefix, pushes, first, second
     <2>. QED BY ONLY (stack \in Seq(SeedFrames)), (left \in SeedIntValues), (right \in SeedIntValues),
         <2>nonempty, <2>calls, SeedPhysicalPendingReplacementMatchesTheSource, Isa
 <1>. QED BY ONLY <1>enabled, <1>replacement, Isa

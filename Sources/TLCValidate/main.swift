@@ -27,7 +27,7 @@ default:
       temporal-symmetry run --output <directory>
       initial-failure prepare --authored-source <swift-file> --native-source <swift-file> --output <directory>
       initial-failure prepare-arithmetic --authored-source <swift-file> --native-source <swift-file> --output <directory>
-      initial-failure prepare-conditional --authored-source <swift-file> --native-source <swift-file> --proof <tla-file> --output <directory>
+      initial-failure prepare-conditional --authored-source <swift-file> --native-source <swift-file> --proof <tla-file> --operations <swift-file> --checking <swift-file> --output <directory>
     """, stderr)
     exit(1)
 }
@@ -185,10 +185,10 @@ private func runInitialFailure(arguments: [String]) -> Never {
 }
 
 private func runConditionalPreparation(arguments: [String]) -> Never {
-    guard arguments.count == 9, arguments[1] == "--authored-source", arguments[3] == "--native-source",
-          arguments[5] == "--proof", arguments[7] == "--output",
-          [2, 4, 6, 8].allSatisfy({ !arguments[$0].isEmpty }) else {
-        fputs("initial-failure: expected prepare-conditional --authored-source <swift-file> --native-source <swift-file> --proof <tla-file> --output <directory>\n", stderr)
+    guard arguments.count == 13, arguments[1] == "--authored-source", arguments[3] == "--native-source",
+          arguments[5] == "--proof", arguments[7] == "--operations", arguments[9] == "--checking",
+          arguments[11] == "--output", [2, 4, 6, 8, 10, 12].allSatisfy({ !arguments[$0].isEmpty }) else {
+        fputs("initial-failure: expected prepare-conditional --authored-source <swift-file> --native-source <swift-file> --proof <tla-file> --operations <swift-file> --checking <swift-file> --output <directory>\n", stderr)
         exit(2)
     }
     do {
@@ -200,7 +200,9 @@ private func runConditionalPreparation(arguments: [String]) -> Never {
         try checkNativeOrigin(native, authored: authored)
         try ConditionalActionEvidence.prepare(sourceSHA: sourceSHA, authoredSource: Data(contentsOf: authored),
             nativeSource: native, proofSource: Data(contentsOf: URL(fileURLWithPath: arguments[6])),
-            to: URL(fileURLWithPath: arguments[8]).standardizedFileURL)
+            helpers: (try Data(contentsOf: URL(fileURLWithPath: arguments[8])),
+                      try Data(contentsOf: URL(fileURLWithPath: arguments[10]))),
+            to: URL(fileURLWithPath: arguments[12]).standardizedFileURL)
         print("conditional: prepared actual native routing")
         exit(0)
     } catch {

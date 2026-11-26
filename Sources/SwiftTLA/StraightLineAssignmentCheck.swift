@@ -610,7 +610,8 @@ package enum StraightLineAssignmentCheck {
     }
 
     static func verifySequential(_ algorithm: AlgorithmModel, scheduledCopies: [String: ScalarCopyReceipt],
-                                 lowered: TLASpec, enumerateInitialControl: Bool)
+                                 lowered: TLASpec, enumerateInitialControl: Bool,
+                                 scheduledTargets: [String: [String: String]]? = nil)
         throws -> (actionNames: Set<String>, scalarCopies: [String: ScalarCopyReceipt]) {
         let steps = algorithm.sequentialSteps
         guard steps.contains(where: { $0.loopCondition == nil }) else { return ([], [:]) }
@@ -664,7 +665,8 @@ package enum StraightLineAssignmentCheck {
             let atomic = AtomicStep(model: step)
             let action = lowered.actions[index].bindings.isEmpty ? lowered.actions[index].body : nil
             if let verified = try verifySequentialIntAssignments(atomic, lowered: action,
-                stateRoots: roots, control: (entry, next), scheduledCopy: scheduledCopies[step.label.name]) {
+                stateRoots: roots, control: (entry, next), scheduledCopy: scheduledCopies[step.label.name],
+                scheduledTargets: orderedIntSteps ? scheduledTargets.map { $0[step.label.name] ?? [:] } : nil) {
                 scalarCopies[step.label.name] = verified.scalarCopy
                 continue
             }
@@ -805,7 +807,14 @@ package enum StraightLineAssignmentCheck {
     }
 
     package struct AtomicBranchContinuationReceipt: Sendable {
+        package struct Definition: Sendable {
+            package let name: String
+            package let rhs: StateExpr
+            package let target: String
+        }
+
         package struct Branch: Sendable {
+            package let definitions: [Definition]?
             package let captures: [[TLAValue]]
             package let sourceCaptures: [[TLAValue]]
             package let targets: [String]
@@ -856,7 +865,7 @@ package enum StraightLineAssignmentCheck {
     }
 
     package static func checkedAtomicBranchContinuations(
-        _ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>
+        _ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>, retainingDefinitions: Bool
     ) throws -> AtomicBranchContinuationReceipt? {
         let statements = step.model.statements
         guard step.bindings.isEmpty, let fork = statements.firstIndex(where: {
@@ -910,6 +919,17 @@ package enum StraightLineAssignmentCheck {
             var plans: [[TLAValue]] = []
             var sourcePlans: [[TLAValue]] = []
             var targets: [String] = []
+            var definitions: [AtomicBranchContinuationReceipt.Definition]?
+        }
+        // StateExpr.replace preserves the constructor tokens for binder-free expressions.
+        // Only a source read takes one lookup in the incoming writer map.
+        func applyingWrites(_ writes: [String: TLAValue], to source: [TLAValue]) -> [TLAValue] {
+            guard !writes.isEmpty else { return source }
+            return source.map { term in
+                guard case .tuple(let parts) = term, parts.count == 2, parts[0] == .string("state"),
+                      case .string(let name) = parts[1] else { return term }
+                return writes[name] ?? term
+            }
         }
         func advance(_ assignments: [AlgorithmAssignmentModel], from before: Captures) throws -> Captures {
             var result = before
@@ -917,14 +937,15 @@ package enum StraightLineAssignmentCheck {
                 guard case .define(let name, let rhs, let rest) = result.remaining,
                       !sourceNames.contains(name), result.physical[name] == nil,
                       let source = atomicBranchTerm(assignment.value, read: initial),
-                      let expected = atomicBranchTerm(assignment.value, read: { result.authored[$0] ?? initial($0) }),
                       let actual = atomicBranchTerm(rhs, read: { result.physical[$0] ?? initial($0) }),
-                      actual == expected else { throw failure }
+                      actual == applyingWrites(result.authored, to: source) else { throw failure }
                 result.plans.append(actual)
                 result.sourcePlans.append(source)
-                result.targets.append(assignment.target.root)
+                let target = assignment.target.root
+                result.targets.append(target)
+                result.definitions?.append(.init(name: name, rhs: rhs, target: target))
                 let reference: TLAValue = .tuple([.string("capture"), .int(result.plans.count)])
-                result.authored[assignment.target.root] = reference
+                result.authored[target] = reference
                 result.physical[name] = reference
                 result.remaining = rest
             }
@@ -962,18 +983,19 @@ package enum StraightLineAssignmentCheck {
             var expected = branch.authored
             for root in stateRoots where expected[root] == nil { expected[root] = initial(root) }
             guard published == expected else { throw failure }
-            return .init(captures: branch.plans, sourceCaptures: branch.sourcePlans, targets: branch.targets,
-                         writes: ordered)
+            return .init(definitions: branch.definitions, captures: branch.plans,
+                         sourceCaptures: branch.sourcePlans, targets: branch.targets, writes: ordered)
         }
 
-        let preceding = try advance(prefix, from: .init(remaining: lowered))
+        let preceding = try advance(prefix, from: .init(remaining: lowered,
+            definitions: retainingDefinitions ? [] : nil))
         let predicate: [TLAValue]?
         let actual: (ActionExpr, ActionExpr)
         switch (condition, preceding.remaining) {
         case (.some(let test), .ifElse(let rendered, let first, let second)):
-            guard let expected = atomicBranchTerm(test, read: { preceding.authored[$0] ?? initial($0) }),
+            guard let source = atomicBranchTerm(test, read: initial),
                   let observed = atomicBranchTerm(rendered, read: { preceding.physical[$0] ?? initial($0) }),
-                  observed == expected else { throw failure }
+                  observed == applyingWrites(preceding.authored, to: source) else { throw failure }
             predicate = observed
             actual = (first, second)
         case (.none, .or(let first, let second)):
@@ -996,7 +1018,7 @@ package enum StraightLineAssignmentCheck {
     private static func verifySequentialIntAssignments(
         _ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
         control: (entry: ControlLocationReference, next: ControlLocationReference)?,
-        scheduledCopy: ScalarCopyReceipt? = nil
+        scheduledCopy: ScalarCopyReceipt? = nil, scheduledTargets: [String: String]? = nil
     ) throws -> VerifiedSequentialIntAction? {
         guard control != nil, step.bindings.isEmpty, !step.model.statements.isEmpty else { return nil }
         var source: [(root: String, expression: StateExpr)] = []
@@ -1051,6 +1073,10 @@ package enum StraightLineAssignmentCheck {
                       !stateRoots.contains(name),
                       capturePositions[name] == nil,
                       matches(source[captured].expression, value) else { throw mismatch() }
+                if let scheduledTargets {
+                    guard scheduledTargets[name]?.utf8.elementsEqual(source[captured].root.utf8) == true
+                    else { throw mismatch() }
+                }
                 if let scheduledCopy {
                     guard case .variable(let read) = value,
                           scheduledCopy.reads.indices.contains(captured),
@@ -1076,6 +1102,9 @@ package enum StraightLineAssignmentCheck {
         guard guardSeen, controlWriteSeen, captured == source.count,
               writes.count == stateRoots.count,
               stateRoots.allSatisfy({ writes[$0] == current[$0] }) else { throw mismatch() }
+        if let scheduledTargets {
+            guard scheduledTargets.count == captured else { throw mismatch() }
+        }
         if let scheduledCopy {
             guard scheduledCopy.reads.count == captured,
                   scheduledCopy.writes == writes.mapValues(reference) else { throw mismatch() }
@@ -1147,9 +1176,10 @@ package enum StraightLineAssignmentCheck {
               control == nil || (sawControlGuard && sawControlWrite) else { throw mismatch() }
     }
 
+    @discardableResult
     static func verifyCompiled(_ action: NamedAction, bindings compiledBindings: [CompiledActionBinding],
                                body: CompiledActionExpr,
-                               layout: CompiledLayout) throws {
+                               layout: CompiledLayout, bodyBinderOrdinals: Range<Int>? = nil) throws -> Range<Int>? {
         let stateIDs = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.declaration.name, $0.id)
         })
@@ -1193,41 +1223,44 @@ package enum StraightLineAssignmentCheck {
                 if case .bool = member { return true }
                 return false
             } == true
-        }) else { return }
+        }) else { return nil }
         let parameterNames = Set(action.bindings.map(\.name))
         var pendingSource = [action.body]
         var definedNames: Set<String> = []
         var readNames: Set<String> = []
+        let checkingBodyBinderOrdinals = bodyBinderOrdinals != nil
         while let node = pendingSource.popLast() {
             switch node {
             case .define(let name, let expression, let child):
-                guard definedNames.insert(name).inserted else { return }
-                guard simple(expression, reads: &readNames) else { return }
+                guard definedNames.insert(name).inserted,
+                      simple(expression, reads: &readNames, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals)
+                else { return nil }
                 pendingSource.append(child)
             case .and(let left, let right), .or(let left, let right):
                 pendingSource.append(right)
                 pendingSource.append(left)
             case .guard_(let predicate):
-                guard simple(predicate, reads: &readNames) else { return }
-            case .assign(.named, let expression):
-                guard simple(expression, reads: &readNames) else { return }
-            case .assign(.programCounter, let expression):
-                guard simple(expression, reads: &readNames) else { return }
+                guard simple(predicate, reads: &readNames, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals)
+                else { return nil }
+            case .assign(.named, let expression), .assign(.programCounter, let expression):
+                guard simple(expression, reads: &readNames, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals)
+                else { return nil }
             case .unchanged(.named):
                 break
             case .ifElse(let predicate, let yes, let no):
-                guard simple(predicate, reads: &readNames) else { return }
+                guard simple(predicate, reads: &readNames, checkingBodyBinderOrdinals: checkingBodyBinderOrdinals)
+                else { return nil }
                 pendingSource.append(no)
                 pendingSource.append(yes)
             default:
-                return
+                return nil
             }
         }
         guard parameterNames.count == action.bindings.count,
               parameterNames.isDisjoint(with: Set(stateIDs.keys)),
               parameterNames.isDisjoint(with: definedNames),
               readNames.isSubset(of: Set(stateIDs.keys).union(definedNames).union(parameterNames))
-        else { return }
+        else { return nil }
 
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(
@@ -1245,6 +1278,10 @@ package enum StraightLineAssignmentCheck {
                 switch source {
                 case .add(let left, let right):
                     guard compiled.operation == .add, compiled.children.count == 2 else { return false }
+                    pending.append((right, compiled.children[1]))
+                    pending.append((left, compiled.children[0]))
+                case .lessThan(let left, let right) where checkingBodyBinderOrdinals:
+                    guard compiled.operation == .lessThan, compiled.children.count == 2 else { return false }
                     pending.append((right, compiled.children[1]))
                     pending.append((left, compiled.children[0]))
                 case .divide(let left, let right), .modulo(let left, let right):
@@ -1328,6 +1365,7 @@ package enum StraightLineAssignmentCheck {
         }
         var bindings = Dictionary(uniqueKeysWithValues: zip(action.bindings, compiledBindings)
             .map { ($0.name, $1.binder) })
+        var expectedBodyBinders = bodyBinderOrdinals?.makeIterator()
         var pending: [CompiledVisit] = [.pair(action.body, body)]
         while let next = pending.popLast() {
             switch next {
@@ -1339,6 +1377,7 @@ package enum StraightLineAssignmentCheck {
                       .define(let binder, let value, let compiledChild)):
                     guard bindings[name] == nil, usedBinders.insert(binder).inserted,
                           matching(expression, value, bindings: bindings) else { throw mismatch() }
+                    if checkingBodyBinderOrdinals, expectedBodyBinders?.next() != binder.ordinal { throw mismatch() }
                     bindings[name] = binder
                     pending.append(.unbind(name))
                     pending.append(.pair(child, compiledChild))
@@ -1369,9 +1408,11 @@ package enum StraightLineAssignmentCheck {
                 }
             }
         }
+        guard expectedBodyBinders?.next() == nil else { throw mismatch() }
+        return bodyBinderOrdinals
     }
 
-    private static func simple(_ expression: StateExpr, reads: inout Set<String>) -> Bool {
+    private static func simple(_ expression: StateExpr, reads: inout Set<String>, checkingBodyBinderOrdinals: Bool) -> Bool {
         var pending = [expression]
         while let node = pending.popLast() {
             switch node {
@@ -1379,6 +1420,9 @@ package enum StraightLineAssignmentCheck {
             case .value, .parameter: break
             case .add(let left, let right), .divide(let left, let right),
                  .modulo(let left, let right):
+                pending.append(right)
+                pending.append(left)
+            case .lessThan(let left, let right) where checkingBodyBinderOrdinals:
                 pending.append(right)
                 pending.append(left)
             case .equal(let left, let right), .and(let left, let right), .or(let left, let right),

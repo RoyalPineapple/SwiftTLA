@@ -15,7 +15,8 @@ private struct RecordedActionFailure: Encodable {
     }
 
     let action: Int
-    let branch: Int
+    let branch: Int?
+    let phase: String?
     let site: Int
     let target: Int
     let before: [Binding]
@@ -24,7 +25,14 @@ private struct RecordedActionFailure: Encodable {
     init(_ occurrence: ValidationActionFailureOccurrence) {
         source = occurrence.source
         action = occurrence.failure.action
-        branch = occurrence.failure.branch
+        switch occurrence.failure.location {
+        case .arm(let ordinal):
+            branch = ordinal
+            phase = nil
+        case .sharedPrefix:
+            branch = nil
+            phase = "sharedPrefix"
+        }
         site = occurrence.failure.site
         target = occurrence.failure.target
         before = occurrence.failure.before.map { Binding(binding: $0.binding, target: $0.target, value: $0.value) }

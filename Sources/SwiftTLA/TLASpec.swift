@@ -319,6 +319,7 @@ public struct TLASpec: Sendable {
   package var algorithmPhase: AlgorithmPhase
   var orderedIntProofActionNames: Set<String> = []
   var scalarCopyRoutes: [String: StraightLineAssignmentCheck.ScalarCopyReceipt] = [:]
+  var sequentialAssignmentTargets: [String: [String: String]] = [:]
   package var sourceSpecDefaultDeadlockWitness = false
   package var orderedIntSourceComponents: [_OrderedIntSourceComponent]?
   package var diagnostics: [SourceParseDiagnostic] = []

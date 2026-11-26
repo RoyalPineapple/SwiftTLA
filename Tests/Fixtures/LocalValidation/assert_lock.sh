@@ -238,9 +238,20 @@ probe_package="$tmp/peer" PROBE_FREE_PERCENT=10 run_validation port-build
 probe_package="$tmp/peer" run_validation port-build
 [[ "$status" -eq 0 && -x "$(<"$tmp/peer/cache-path")/tlc-validate" ]]
 [[ ! "$(<"$tmp/peer/cache-path")" -ef "$(<"$repo/cache-path")" ]]
+release_lock_holder
+run_validation proof-prepare "$tmp/evidence" "$tmp/checked.tla"
+[[ "$status" -eq 64 && "$output" == *"waiting for compiler products"* ]]
 rm "$repo/hold"
 wait "$product_pid"
-release_lock_holder
+mkdir -p "$repo/scripts"
+cat > "$repo/scripts/prepare-initial-proof.py" <<'PYTHON'
+from pathlib import Path
+import sys
+assert Path(sys.argv[2]).samefile(Path("cache-path").read_text().strip())
+print("prepared-with-built-products")
+PYTHON
+run_validation proof-prepare "$tmp/evidence" "$tmp/checked.tla"
+[[ "$status" -eq 0 && "$output" == *prepared-with-built-products* ]]
 run_validation swiftpm-test Probe
 [[ "$status" -eq 0 && "$output" == *product-test-ran* ]]
 rm "$tmp/bin/swift"

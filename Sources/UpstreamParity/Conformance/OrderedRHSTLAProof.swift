@@ -4,7 +4,8 @@ import SwiftTLA
 package enum OrderedRHSTLAProof {
     /// The source module owns independently selected authored rows and their certificate support.
     static func render(
-        _ rendered: RenderedSpecification, program: CompiledProgram, source: AuthoredCopySyntax.ArithmeticProofInput
+        _ rendered: RenderedSpecification, program: CompiledProgram, source: AuthoredCopySyntax.ArithmeticProofInput,
+        assignmentTargets: [ActionID: [BinderID: VariableID]]
     ) throws -> (name: String, bytes: Data, failureOperator: String?)? {
         let bundle = rendered.tlaBundle
         let layout = program.layout
@@ -49,8 +50,11 @@ package enum OrderedRHSTLAProof {
               destination.sourceName.utf8.elementsEqual((source.continuation ?? doneName).utf8) else { return nil }
         let entryControl = try CompiledValue.controlLocation(entry.id).rendered(using: layout)
         let endControl = try CompiledValue.controlLocation(destination.id).rendered(using: layout)
-        guard let physical = OrderedRHSPhysicalAction.decode(in: bundle.root.tla, action: step.renderedName,
-            body: body, fields: roots, counter: counter, destination: endControl.description) else { return nil }
+        guard let targets = assignmentTargets[step.id],
+              let decoded = OrderedRHSPhysicalAction.decode(in: bundle.root.tla, action: step.renderedName,
+                  body: body, fields: roots, counter: counter, destination: endControl.description,
+                  binderNames: program.binderNames, assignmentTargets: targets) else { return nil }
+        let physical = decoded.action
 
         // Preserve the original one-action packet. In a larger machine the selected action proof
         // has no conclusion about the other actions or the disjunction in Next.
@@ -62,32 +66,11 @@ package enum OrderedRHSTLAProof {
         guard identifiers.allSatisfy(formalIdentifier), !bundle.root.tla.contains("RHSOutput"),
               ![bundle.root.name, source.name].contains(name) else { return nil }
 
-        let settings = bundle.root.tla.split(separator: "\n").compactMap { line -> String? in
-            guard let split = line.range(of: " == ") else { return nil }
-            let header = String(line[..<split.lowerBound])
-            return formalIdentifier(header) ? header : nil
-        }
-        func resolved(_ stem: String) -> String? {
-            let matches = settings.filter {
-                $0.hasPrefix(stem) && $0.dropFirst(stem.count).allSatisfy { $0 == "_" }
-            }
-            return matches.count == 1 ? matches.first : nil
-        }
-        let locations = physical.captures.enumerated().flatMap { offset, capture in
-            capture.additionNodes.map { (row: offset + 1, node: $0) }
-        }
-        var probes: [(failed: String, operands: String, operation: String, before: String)] = []
-        for offset in locations.indices {
-            let suffix = String(step.id.ordinal) + (offset == 0 ? "" : "_\(offset)")
-            guard let failure = resolved("__SwiftTLAOverflowFailure" + suffix),
-                  let operands = resolved("__SwiftTLAOverflowOperands" + suffix),
-                  let operation = resolved("__SwiftTLAOverflowOperation" + suffix),
-                  let before = resolved("__SwiftTLAOverflowBefore" + suffix)
-            else { return nil }
-            probes.append((failure, operands, operation, before))
-        }
-        let aggregate = resolved("__SwiftTLAAnyEvaluationFailure" + String(step.id.ordinal))
-        guard (aggregate == nil) == locations.isEmpty else { return nil }
+        guard let evidence = OrderedRHSPhysicalAction.overflowProbes(in: direct, actionOrdinal: step.id.ordinal,
+            paths: [physical.captures], requiringNamedBefore: true) else { return nil }
+        let probes = evidence.sites
+        let prefix = probes.compactMap(\.before)
+        guard prefix.count == probes.count else { return nil }
 
         func tuple(_ values: [String]) -> String { "<<\(values.joined(separator: ", "))>>" }
         let captures = physical.captures
@@ -109,17 +92,17 @@ package enum OrderedRHSTLAProof {
         let writeRoutes = TLAValue.function(Dictionary(uniqueKeysWithValues: physical.writes.map {
             (.string($0.key), $0.value)
         }))
-        let positions = tuple(locations.map { "<<\($0.row), \($0.node)>>" })
+        let positions = tuple(probes.map { "<<\($0.row), \($0.node)>>" })
         func definitions(_ names: [String]) -> String { names.map { ", " + $0 }.joined() }
-        let operationNames = definitions(probes.map(\.operation))
-        let operandNames = definitions(probes.map(\.operands))
-        let prefixNames = definitions(probes.map(\.before))
-        let predicateNames = definitions(probes.map(\.failed))
-        let aggregateName = definitions(aggregate.map { [$0] } ?? [])
-        let failureGuards = tuple(probes.map(\.failed))
-        let failureData = probes.map { site in
-            "(IF \(site.failed) THEN [operands |-> \(site.operands), "
-                + "operation |-> \(site.operation), prefix |-> \(site.before)] ELSE <<>>)"
+        let operationNames = definitions(probes.map(\.operation.name))
+        let operandNames = definitions(probes.map(\.operands.name))
+        let prefixNames = definitions(prefix.map(\.name))
+        let predicateNames = definitions(probes.map(\.failed.name))
+        let aggregateName = definitions(evidence.aggregate.map { [$0] } ?? [])
+        let failureGuards = tuple(probes.map(\.failed.name))
+        let failureData = zip(probes, prefix).map { site, frame in
+            "(IF \(site.failed.name) THEN [operands |-> \(site.operands.name), "
+                + "operation |-> \(site.operation.name), prefix |-> \(frame.name)] ELSE <<>>)"
         }.joined(separator: ",\n    ")
         let keys = TLAValue.set(Set(roots.map { .string($0.declaration.name) }))
         let pc = counter.formalName
@@ -210,7 +193,7 @@ package enum OrderedRHSTLAProof {
         RHSOutputEntry == \#(entryControl)
         RHSOutputExit == \#(endControl)
         RHSOutputSelected == \#(pc) = RHSOutputEntry
-        RHSOutputFailureSelected == \#(aggregate ?? "FALSE")
+        RHSOutputFailureSelected == \#(evidence.aggregate ?? "FALSE")
         RHSOutputCount == Len(RHSOutputRows)
 
         RHSOutputNodeCounts == \#(counts)
@@ -227,6 +210,7 @@ package enum OrderedRHSTLAProof {
         LOCAL RHSOutputRaw ==
             \#(scoped)[plans |-> RHSOutputPlans, starts |-> RHSOutputStarts,
                         terms |-> \#(terms), guards |-> \#(guards), roots |-> \#(values)]\#(closed)
+        LOCAL RHSOutputLoweredTargets == \#(TLAValue.tuple(decoded.targets.map(TLAValue.string)))
         RHSOutputWriteRoutes == \#(writeRoutes)
         RHSOutputProbePositions == \#(positions)
         RHSOutputGuards == \#(failureGuards)
@@ -389,9 +373,11 @@ package enum OrderedRHSTLAProof {
                       /\ physical.right[node] = expected.right[node])
                 BY ONLY <1>physicalColumns, <1>sourceCells, <1>expectedCells, <1>kinds, <1>literals, <1>children, SMT
             <2>. QED BY ONLY <1>shape, <2>nodes DEF RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch, expected
+        <1>targetColumns. RHSOutputLoweredTargets = RHSOutputInput!MasterTargets
+            BY ONLY IsaM("simp") DEF RHSOutputLoweredTargets, RHSOutputInput!MasterTargets
         <1>targets. \A prior \in DOMAIN RHSOutputRows :
-            RHSOutputRows[prior].target = RHSOutputInput!MasterTargets[prior]
-            BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!MasterRows
+            RHSOutputRows[prior].target = RHSOutputLoweredTargets[prior]
+            BY ONLY <1>targetColumns, SMT DEF RHSOutputRows, RHSOutputInput!MasterRows
         <1>reads. \A node \in 1..expected.count : expected.kinds[node] = "read" =>
                 /\ expected.reads[node] \in RHSOutputInput!MasterFields
                 /\ RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, index - 1, expected.reads[node], physical.reads[node])
@@ -417,11 +403,11 @@ package enum OrderedRHSTLAProof {
                 BY ONLY <1>sourceDomain, <2>slot, SMT
                     DEF key, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeReadKeys, RHSOutputInput!MasterFields
             <2>positionColumns. /\ writer \in 0..(index - 1)
-                                /\ (writer = 0 \/ RHSOutputInput!MasterTargets[writer] = key)
+                                /\ (writer = 0 \/ RHSOutputLoweredTargets[writer] = key)
                                 /\ \A prior \in 1..(index - 1) :
-                                      RHSOutputInput!MasterTargets[prior] = key => prior <= writer
+                                      RHSOutputLoweredTargets[prior] = key => prior <= writer
                 BY ONLY <1>sourceDomain, <2>slot, SMT
-                    DEF key, reference, writer, RHSOutputInput!MasterTargets,
+                    DEF key, reference, writer, RHSOutputLoweredTargets,
                         RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeKinds, RHSOutputInput!MasterNodeReadKeys,
                         RHSOutputNodeReads, RHSOutputInput!Rule!CopyReceiptOrdinal
             <2>earlierRows. /\ 1..(index - 1) \subseteq DOMAIN RHSOutputRows
@@ -1042,7 +1028,7 @@ package enum OrderedRHSTLAProof {
         ====
 
         """#
-        return (name, Data(proof.utf8), aggregate)
+        return (name, Data(proof.utf8), evidence.aggregate)
     }
 
     private static func controlDestination(in body: CompiledActionExpr, for counter: VariableID) -> ControlLocationID? {

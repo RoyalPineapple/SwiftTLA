@@ -121,19 +121,26 @@ package func nativeOrderedIntAssignmentFailureSource(actionOrdinal: Int, precedi
 
 private func nativeAlternativeFailureRecordingSource(regions: [AlternativeFailureRegion], site: BinderID,
     action: Int, lexical: [String], program: CompiledProgram) -> String? {
-    for region in regions {
-        guard let position = region.index(of: site) else { continue }
+    func recording(in region: AlternativeFailureRegion, at position: Int, prefix: String) -> String? {
         guard lexical.count == position else { return nil }
-        let prefix = zip(region.bindings.prefix(position), lexical).compactMap { origin, local -> String? in
+        let before = zip(region.bindings.prefix(position), lexical).compactMap { origin, local -> String? in
             guard let name = program.binderNames[origin.binder], "_\(name)_\(origin.binder.ordinal)" == local else {
                 return nil
             }
             return "(binding: \(origin.binder.ordinal), target: \(origin.target.ordinal), value: \(local))"
         }
-        guard prefix.count == position else { return nil }
-        return "SwiftTLA._recordNativeAlternativeFailure(&context, action: \(action), branch: \(region.armOrdinal), "
-            + "site: \(site.ordinal), target: \(region.bindings[position].target.ordinal), "
-            + "before: [\(prefix.joined(separator: ", "))], reason: failure)"
+        guard before.count == position else { return nil }
+        return prefix + "site: \(site.ordinal), target: \(region.bindings[position].target.ordinal), "
+            + "before: [\(before.joined(separator: ", "))], reason: failure)"
+    }
+    if let region = regions.first, let position = region.sharedIndex(of: site) {
+        return recording(in: region, at: position,
+            prefix: "SwiftTLA._recordNativeSharedPrefixFailure(&context, action: \(action), ")
+    }
+    for region in regions {
+        guard let position = region.index(of: site) else { continue }
+        return recording(in: region, at: position,
+            prefix: "SwiftTLA._recordNativeAlternativeFailure(&context, action: \(action), branch: \(region.armOrdinal), ")
     }
     return nil
 }

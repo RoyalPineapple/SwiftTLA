@@ -7,10 +7,11 @@ import SwiftTLACompilerSupport
 package enum CompilerStackSeedEvidence {
     private struct Receipt: Encodable {
         let compilationIdentity: String
+        let operationsSHA256: String
         let files: [String: String]
     }
 
-    package static func prepare(authoredSource: String, nativeSource: String, to output: URL) throws {
+    package static func prepare(authoredSource: String, nativeSource: String, operations: String, to output: URL) throws {
         let rendered = try OrderedIntTraversalPass.render()
         let root = rendered.tlaBundle.root
         guard case .compiled(let identity, _, _) = rendered.tlaBundle.provenance,
@@ -18,6 +19,7 @@ package enum CompilerStackSeedEvidence {
               let configuration = root.cfg else {
             throw EvidenceFormatError.invalidField(record: "OrderedIntTraversalPass", field: "generated render")
         }
+        try verifyTraversalSeedAppendRuntime(operations)
         let captured = try capturedRender(nativeSource)
         let authored = try authoredExpansion(authoredSource)
         guard captured.binding.authored == authored, captured.binding.formalAction == "expand",
@@ -52,7 +54,8 @@ package enum CompilerStackSeedEvidence {
         for (name, contents) in files {
             try contents.write(to: output.appendingPathComponent(name), options: .atomic)
         }
-        try encoder.encode(Receipt(compilationIdentity: identity.value, files: hashes))
+        try encoder.encode(Receipt(compilationIdentity: identity.value,
+                                   operationsSHA256: SHA256.hex(Data(operations.utf8)), files: hashes))
             .write(to: output.appendingPathComponent("files.json"), options: .atomic)
     }
 

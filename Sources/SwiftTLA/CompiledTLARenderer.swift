@@ -73,9 +73,13 @@ package struct AlternativeFailureRegion {
 
     package let armOrdinal: Int
     fileprivate let body: CompiledActionExpr
-    fileprivate let sharedBindingCount: Int
+    package let sharedBindingCount: Int
     fileprivate let selector: CompiledExpression?
     package let bindings: [(binder: BinderID, target: VariableID)]
+
+    package func sharedIndex(of site: BinderID) -> Int? {
+        bindings.indices.prefix(sharedBindingCount).first { bindings[$0].binder == site }
+    }
 
     package func index(of site: BinderID) -> Int? {
         bindings.indices.dropFirst(sharedBindingCount).first { bindings[$0].binder == site }
@@ -118,7 +122,7 @@ package extension CompiledActionExpr {
         case .or(let first, let second):
             branches = (first, second, nil)
         case .ifElse(let condition, let first, let second):
-            guard case .ifElse = self, condition.resultType == .bool,
+            guard condition.resultType == .bool,
                   condition.operation == .lessThan || condition.operation == .equal,
                   condition.children.count == 2, condition.children.allSatisfy(isIntValue) else { return [] }
             branches = (first, second, condition)
@@ -146,8 +150,15 @@ package extension CompiledActionExpr {
             }
             return true
         }
-        // The existing native history records a reached arm. A shared RHS must be total here.
-        guard prefix.allSatisfy({ isIntValue($0.value) }) else { return [] }
+        // Branchwise alternatives retain their total shared-prefix profile.
+        let sharedCanFail: Bool
+        if selector != nil {
+            guard prefix.allSatisfy({ $0.value.resultType == .int && isSupported($0.value) }) else { return [] }
+            sharedCanFail = prefix.contains { isFailureSite($0.value) }
+        } else {
+            guard prefix.allSatisfy({ isIntValue($0.value) }) else { return [] }
+            sharedCanFail = false
+        }
 
         func withPrefix(_ body: CompiledActionExpr) -> CompiledActionExpr {
             prefix.reversed().reduce(body) { rest, definition in
@@ -197,11 +208,12 @@ package extension CompiledActionExpr {
                           selector: selector, bindings: mapped), lastFailure != nil)
         }
         guard let first = arm(left, ordinal: 0), let second = arm(right, ordinal: 1),
-              first.canFail || second.canFail,
+              sharedCanFail || first.canFail || second.canFail,
               Set(first.region.bindings.dropFirst(prefix.count).map(\.binder))
                 .isDisjoint(with: second.region.bindings.dropFirst(prefix.count).map(\.binder)),
               first.region.bindings.prefix(prefix.count)
-                .elementsEqual(second.region.bindings.prefix(prefix.count), by: { $0.target == $1.target })
+                .elementsEqual(second.region.bindings.prefix(prefix.count),
+                    by: { $0.binder == $1.binder && $0.target == $1.target })
         else { return [] }
         return [first.region, second.region]
     }
@@ -507,55 +519,81 @@ struct CompiledTLARenderer {
         guard !regions.isEmpty else { return nil }
         let source = "<<\(layout.variables.map(\.formalName).joined(separator: ", "))>>"
 
-        let selection: (predicate: String, defined: String?)?
-        if let selector = regions.first?.selector {
-            guard let value = try? selectedCondition(selector) else { return nil }
-            selection = value
-        } else {
-            selection = nil
+        func event(_ failure: RenderedEvaluationFailure, in region: AlternativeFailureRegion,
+                   site: Int, branch: String, reached: String) -> String? {
+            guard let binding = failure.observedBinding, let before = failure.rhsBindingsBefore,
+                  before.count == site else { return nil }
+            let prefix = zip(region.bindings.prefix(site), before).compactMap { origin, lexical -> String? in
+                guard (try? binderName(origin.binder)) == lexical.name else { return nil }
+                return "[binding |-> \(origin.binder.ordinal), target |-> \(origin.target.ordinal), value |-> \(lexical.name)]"
+            }
+            guard prefix.count == before.count else { return nil }
+            let payload: String
+            switch failure.kind {
+            case .divisionByZero:
+                payload = "<<\"divisionByZero\">>"
+            case .negativeModuloDivisor:
+                guard let divisor = failure.operands else { return nil }
+                payload = "<<\"negativeModuloDivisor\", \(divisor)>>"
+            case .overflow(let operation):
+                guard let operands = failure.operands else { return nil }
+                payload = "<<\"integerOverflow\", \"\(operation.rawValue)\", \(operands)>>"
+            default:
+                return nil
+            }
+            let occurrence = "[source |-> \(source), action |-> \(ordinal), branch |-> \(branch), "
+                + "site |-> \(binding.ordinal), target |-> \(region.bindings[site].target.ordinal), payload |-> \(payload), "
+                + "before |-> \(renderRHSBindingPrefix(before, projecting: prefix))]"
+            return "(IF \(reached) THEN <<\(occurrence)>> ELSE <<>>)"
         }
 
-        // Arm failures use the actual lexical values captured on the reached path.
         var events: [String] = []
-        for region in regions {
-            guard let failures = try? evaluationFailures(region.body, retainingAllRHSBindings: true),
-                  selection != nil || !failures.isEmpty else { return nil }
+        if let first = regions.first, first.selector != nil, first.sharedBindingCount > 0 {
+            // Walk the complete action so prior LETs enclose the selector and a failing
+            // shared definition suppresses all later definitions and both alternatives.
+            guard let failures = try? evaluationFailures(action, retainingAllRHSBindings: true) else { return nil }
             for failure in failures {
-                guard let binding = failure.observedBinding, let before = failure.rhsBindingsBefore,
-                      let site = region.index(of: binding), before.count == site else {
-                    return nil
-                }
-                let prefix = zip(region.bindings.prefix(site), before).compactMap { origin, lexical -> String? in
-                    guard (try? binderName(origin.binder)) == lexical.name else { return nil }
-                    return "[binding |-> \(origin.binder.ordinal), target |-> \(origin.target.ordinal), value |-> \(lexical.name)]"
-                }
-                guard prefix.count == before.count else { return nil }
-                let payload: String
-                switch failure.kind {
-                case .divisionByZero:
-                    payload = "<<\"divisionByZero\">>"
-                case .negativeModuloDivisor:
-                    guard let divisor = failure.operands else { return nil }
-                    payload = "<<\"negativeModuloDivisor\", \(divisor)>>"
-                case .overflow(let operation):
-                    guard let operands = failure.operands else { return nil }
-                    payload = "<<\"integerOverflow\", \"\(operation.rawValue)\", \(operands)>>"
-                default:
-                    return nil
-                }
-                let occurrence = "[source |-> \(source), action |-> \(ordinal), branch |-> \(region.armOrdinal), "
-                    + "site |-> \(binding.ordinal), target |-> \(region.bindings[site].target.ordinal), payload |-> \(payload), "
-                    + "before |-> \(renderRHSBindingPrefix(before, projecting: prefix))]"
-                let reached: String
-                if let selection {
-                    let selected = region.armOrdinal == 0
-                        ? "(IF \(selection.predicate) THEN \(failure.predicate) ELSE FALSE)"
-                        : "(IF \(selection.predicate) THEN FALSE ELSE \(failure.predicate))"
-                    reached = selection.defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+                guard let binding = failure.observedBinding else { return nil }
+                if let site = first.sharedIndex(of: binding) {
+                    guard let entry = event(failure, in: first, site: site, branch: "<<>>",
+                                            reached: failure.predicate) else { return nil }
+                    events.append(entry)
                 } else {
-                    reached = failure.predicate
+                    guard let region = regions.first(where: { $0.index(of: binding) != nil }),
+                          let site = region.index(of: binding),
+                          let entry = event(failure, in: region, site: site, branch: String(region.armOrdinal),
+                                            reached: failure.predicate) else { return nil }
+                    events.append(entry)
                 }
-                events.append("(IF \(reached) THEN <<\(occurrence)>> ELSE <<>>)")
+            }
+        } else {
+            // The selector has no shared lexical bindings on this route.
+            let selection: (predicate: String, defined: String?)?
+            if let selector = regions.first?.selector {
+                guard let value = try? selectedCondition(selector) else { return nil }
+                selection = value
+            } else {
+                selection = nil
+            }
+
+            for region in regions {
+                guard let failures = try? evaluationFailures(region.body, retainingAllRHSBindings: true),
+                      selection != nil || !failures.isEmpty else { return nil }
+                for failure in failures {
+                    guard let binding = failure.observedBinding, let site = region.index(of: binding) else { return nil }
+                    let reached: String
+                    if let selection {
+                        let selected = region.armOrdinal == 0
+                            ? "(IF \(selection.predicate) THEN \(failure.predicate) ELSE FALSE)"
+                            : "(IF \(selection.predicate) THEN FALSE ELSE \(failure.predicate))"
+                        reached = selection.defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+                    } else {
+                        reached = failure.predicate
+                    }
+                    guard let entry = event(failure, in: region, site: site, branch: String(region.armOrdinal),
+                                            reached: reached) else { return nil }
+                    events.append(entry)
+                }
             }
         }
         return events.isEmpty ? nil : events.joined(separator: " \\o ")
@@ -628,15 +666,19 @@ struct CompiledTLARenderer {
         case .ifElse(let condition, let yes, let no):
             let conditionFailures = try expressionEvaluationFailures(condition)
             guard let selection = try selectedCondition(condition) else { return conditionFailures }
-            let selected = try evaluationFailures(yes).map {
+            let selected = try evaluationFailures(yes, retainingAllRHSBindings: retainingAllRHSBindings).map {
                 let failure = "(IF \(selection.predicate) THEN \($0.predicate) ELSE FALSE)"
                 return RenderedEvaluationFailure(predicate: selection.defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
-                    operands: $0.operands, kind: $0.kind)
+                    operands: $0.operands, kind: $0.kind,
+                    rhsBindingsBefore: retainingAllRHSBindings ? $0.rhsBindingsBefore : nil,
+                    observedBinding: retainingAllRHSBindings ? $0.observedBinding : nil)
             }
-            let unselected = try evaluationFailures(no).map {
+            let unselected = try evaluationFailures(no, retainingAllRHSBindings: retainingAllRHSBindings).map {
                 let failure = "(IF \(selection.predicate) THEN FALSE ELSE \($0.predicate))"
                 return RenderedEvaluationFailure(predicate: selection.defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
-                    operands: $0.operands, kind: $0.kind)
+                    operands: $0.operands, kind: $0.kind,
+                    rhsBindingsBefore: retainingAllRHSBindings ? $0.rhsBindingsBefore : nil,
+                    observedBinding: retainingAllRHSBindings ? $0.observedBinding : nil)
             }
             return conditionFailures + selected + unselected
         case .and(.guard_(let condition), let body):

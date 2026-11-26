@@ -62,6 +62,8 @@ struct CompiledLowerer {
     private let reservedRenderedNames: Set<String>
     private let rootOperators: [String: OperatorID]
     private let importedOperatorIDs: Set<OperatorID>
+    private let checkingBodyBinderOrdinals: Bool
+    private let sequentialAssignmentTargets: [String: [String: String]]
     private var operatorArities: [OperatorID: Int]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal: Int
@@ -72,16 +74,21 @@ struct CompiledLowerer {
     private(set) var operators = CompiledOperators()
     private(set) var modelValueNames: Set<String> = []
     private(set) var requiredStandardModules: Set<StandardModule> = []
+    private(set) var orderedActionBodyBinderOrdinals: [ActionID: Range<Int>] = [:]
+    private(set) var orderedSequentialAssignmentTargets: [ActionID: [BinderID: VariableID]] = [:]
 
     init(
         spec: TLASpec,
         closure: FormalModuleClosure,
         layout: CompiledLayout,
         incomingModuleParameters: [FormalModuleReplacement] = [],
-        importedOperatorNames: [String: String] = [:]
+        importedOperatorNames: [String: String] = [:],
+        checkingBodyBinderOrdinals: Bool = false
     ) {
         self.closure = closure
         self.layout = layout
+        self.checkingBodyBinderOrdinals = checkingBodyBinderOrdinals
+        sequentialAssignmentTargets = spec.sequentialAssignmentTargets
         nextBinderOrdinal = layout.parameters.count
         binderNames = Dictionary(uniqueKeysWithValues: layout.parameters.map { ($0.binder, $0.reference.name) })
         knownBinderNames = Set(binderNames.values)
@@ -1260,10 +1267,20 @@ struct CompiledLowerer {
         }
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
+        let firstBodyBinder = nextBinderOrdinal
+        let scheduledTargets = sequentialAssignmentTargets[action.name] ?? [:]
+        var assignmentTargets: [BinderID: VariableID] = [:]
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope,
-            displacedAssignmentTargets: action.displacedAssignmentTargets)
-        try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
-            body: body, layout: layout)
+            displacedAssignmentTargets: action.displacedAssignmentTargets,
+            scheduledTargets: scheduledTargets, assignmentTargets: &assignmentTargets)
+        guard assignmentTargets.count == scheduledTargets.count else {
+            throw Self.invalidTraversal(at: "actions.\(action.name).assignmentTargets")
+        }
+        if !assignmentTargets.isEmpty { orderedSequentialAssignmentTargets[id] = assignmentTargets }
+        let bodyBinderOrdinals = checkingBodyBinderOrdinals ? firstBodyBinder..<nextBinderOrdinal : nil
+        let ordered = try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
+            body: body, layout: layout, bodyBinderOrdinals: bodyBinderOrdinals)
+        if let ordered { orderedActionBodyBinderOrdinals[id] = ordered }
         try body.verifyBranchwiseContinuation(at: "actions.\(action.name).body")
         return CompiledAction(
             id: id,
@@ -2173,7 +2190,8 @@ struct CompiledLowerer {
         _ action: ActionExpr,
         at path: String,
         scope: BindingScope,
-        displacedAssignmentTargets: [String: String]
+        displacedAssignmentTargets: [String: String], scheduledTargets: [String: String],
+        assignmentTargets: inout [BinderID: VariableID]
     ) throws -> CompiledActionExpr {
         var tasks = [ActionLoweringTask.expression(action, path: path, scope: scope)]
         var lowered: [CompiledActionExpr] = []
@@ -2213,6 +2231,9 @@ struct CompiledLowerer {
                     }
                     let binder = try allocateBinder(name, in: scope, at: "\(taskPath).binder",
                         displacedAssignmentTarget: displacedTarget)
+                    if let target = scheduledTargets[name] {
+                        assignmentTargets[binder] = try variable(named: target, at: "\(taskPath).assign")
+                    }
                     var nested = scope
                     nested.values[name] = binder
                     let compiledValue = try lower(value, at: "\(taskPath).value", scope: scope)

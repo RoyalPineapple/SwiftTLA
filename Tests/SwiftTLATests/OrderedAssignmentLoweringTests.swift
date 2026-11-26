@@ -2609,6 +2609,20 @@ struct OrderedAssignmentLoweringTests {
         _ = try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
             enumerateInitialControl: false)
 
+        let proofLowered = try specification.loweredSourceModel(retainingSequentialAssignmentTargets: true)
+        var scheduled = proofLowered.sequentialAssignmentTargets
+        let repeated = try #require(scheduled["repeatWrites"])
+        #expect(repeated.count == 2 && repeated.values.allSatisfy { $0 == "x" })
+        let overwritten = try #require(repeated.keys.min())
+        scheduled["repeatWrites"]?[overwritten] = "y"
+        do {
+            _ = try StraightLineAssignmentCheck.verifySequential(source, scheduledCopies: [:],
+                lowered: proofLowered, enumerateInitialControl: false, scheduledTargets: scheduled)
+            Issue.record("Accepted a different destination for an overwritten capture with the same RHS")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.repeatWrites.orderedAssignments")
+        }
+
         func replacingSecondCapture(in action: ActionExpr, with replacement: StateExpr) -> ActionExpr {
             var captures = 0
             func replace(_ action: ActionExpr) -> ActionExpr {
