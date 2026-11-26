@@ -17,6 +17,21 @@ struct StateProjectionCapabilityTests {
         #expect(projected.value(for: token) == .tuple([distinct]))
     }
 
+    @Test("Formal identifiers use the same scalar rules at ASCII and Unicode boundaries")
+    func identifierAlphabet() {
+        func accepts(_ name: String) -> Bool { TLAStateProjection.Token(validating: name) != nil }
+        for byte in UInt8(0)...127 {
+            let scalar = Unicode.Scalar(byte)
+            #expect(accepts(String(scalar)) == (scalar == "_" || scalar.properties.isAlphabetic))
+            #expect(accepts("a" + String(scalar)) == (scalar.properties.isAlphabetic || scalar.properties.isIDContinue))
+        }
+        #expect(accepts("_aZ09"))
+        #expect(accepts("é2"))
+        #expect(accepts("a\u{301}"))
+        #expect(!accepts("\u{301}a"))
+        #expect(!accepts("é-"))
+    }
+
     @Test("Set projections retain complete values and locate invalid members")
     func validatesSetMembers() throws {
         let token = try #require(TLAStateProjection.Token(validating: "state"))

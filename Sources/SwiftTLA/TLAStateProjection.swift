@@ -35,6 +35,10 @@ public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
         fileprivate let identifier: String
 
         public init?(validating identifier: String) {
+            if Self.isASCIIIdentifier(identifier) {
+                self.identifier = identifier
+                return
+            }
             guard let first = identifier.unicodeScalars.first,
                   first.properties.isAlphabetic || first == "_",
                   identifier.unicodeScalars.dropFirst().allSatisfy({
@@ -43,6 +47,20 @@ public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
                 return nil
             }
             self.identifier = identifier
+        }
+
+        private static func isASCIIIdentifier(_ name: String) -> Bool {
+            name.utf8.withContiguousStorageIfAvailable { bytes in
+                guard !bytes.isEmpty else { return false }
+                for (index, byte) in bytes.enumerated() {
+                    switch byte {
+                    case 65...90, 97...122, 95: continue
+                    case 48...57 where index > 0: continue
+                    default: return false
+                    }
+                }
+                return true
+            } ?? false
         }
 
         public var description: String { identifier }
