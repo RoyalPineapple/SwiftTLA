@@ -14,6 +14,23 @@ package struct EWD840AnimationModel: Sendable {
         package static var defaultValue: Self { .white }
     }
 
+    package enum AnimationAction: String, TLAValueType {
+        case initial = "init"
+        case initiateProbe = "InitiateProbe"
+        case passToken = "PassToken"
+        case sendMessage = "SendMsg"
+        case deactivate = "Deactivate"
+
+        package static var defaultValue: Self { .initial }
+    }
+
+    @TLATuple
+    package struct AnimationHistory: Hashable, Sendable {
+        package let lastSender: Int
+        package let lastRecipient: Int
+        package let action: AnimationAction
+    }
+
     private enum Step: String, CaseIterable {
         case animInitiateProbe = "AnimInitiateProbe"
         case animPassToken = "AnimPassToken"
@@ -33,14 +50,14 @@ package struct EWD840AnimationModel: Sendable {
             let color: SharedVariable<[Int: Color]> = scope.sharedVar(initiallyIn: Functions(from: Node, to: colors))
             let tpos = scope.sharedVar(initial: N - 1)
             let tcolor = scope.sharedVar(initial: Color.black)
-            let history = scope.sharedVar(initial: Triple(first: 0, second: 0, third: "init"))
+            let history = scope.sharedVar(initial: AnimationHistory(lastSender: 0, lastRecipient: 0, action: AnimationAction.initial))
 
             let initiate = Do(Step.animInitiateProbe, when: tpos == 0
                 && (tcolor == Color.black || color[0] == Color.black)) {
                 tpos.set(N - 1)
                 tcolor.set(Color.white)
                 color[0].set(Color.white)
-                history.set(Triple.literal(history.first(), history.second(), "InitiateProbe"))
+                history.action.set(.initiateProbe)
             }
 
             let pass = Do(Step.animPassToken, over: Node) { i in
@@ -49,7 +66,7 @@ package struct EWD840AnimationModel: Sendable {
                 tpos.set(i - 1)
                 tcolor.set(If(color[i] == Color.black, then: Color.black, else: tcolor))
                 color[i].set(Color.white)
-                history.set(Triple.literal(history.first(), history.second(), "PassToken"))
+                history.action.set(.passToken)
             }
             WeakFairness(anyOf: [initiate, pass])
 
@@ -61,14 +78,14 @@ package struct EWD840AnimationModel: Sendable {
                     If(j > i) {
                         color[i].set(Color.black)
                     }
-                    history.set(Triple.literal(i, j, "SendMsg"))
+                    history.set(AnimationHistory.expression(lastSender: i, lastRecipient: j, action: AnimationAction.sendMessage))
                 }
             }
 
             Do(Step.animDeactivate, over: Node) { i in
                 When(active[i])
                 active[i].set(false)
-                history.set(Triple.literal(history.first(), history.second(), "Deactivate"))
+                history.action.set(.deactivate)
             }
 
             let terminationDetected = tpos == 0 && tcolor == Color.white

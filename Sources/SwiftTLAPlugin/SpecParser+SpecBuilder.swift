@@ -917,7 +917,7 @@ extension ParserSession {
            array.elements.allSatisfy({ initialValueTypeName(from: $0.expression) == element }) {
             return "Array<\(element)>"
         }
-        if let call = expression.as(FunctionCallExprSyntax.self), let record = nominalRecordType(call.calledExpression) {
+        if let call = expression.as(FunctionCallExprSyntax.self), let record = nominalStructType(call.calledExpression) {
             return record.swiftType
         }
         if let call = expression.as(FunctionCallExprSyntax.self),

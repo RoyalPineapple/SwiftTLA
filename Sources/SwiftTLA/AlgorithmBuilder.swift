@@ -1578,6 +1578,17 @@ extension AssignmentTarget where Value: FormalSetValue {
     }
 }
 
+extension AssignmentTarget where Value: _GeneratedTupleValue {
+    public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<Value, Field>) -> AlgorithmLValue<Field> {
+        let base = algorithmLValue
+        guard let slot = Value._formalTupleIndex(keyPath) else {
+            return AlgorithmLValue(model: base.model, sourceIssue: .formalDeclaration(
+                kind: "tuple field", name: String(reflecting: Value.self), problem: "key path does not identify a stored tuple field"))
+        }
+        return AlgorithmLValue(model: .function(base: base.model, key: .int(slot)), sourceIssue: base.sourceIssue)
+    }
+}
+
 extension AssignmentTarget where Value: _GeneratedRecordValue {
     public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<Value, Field>) -> AlgorithmLValue<Field> {
         let base = algorithmLValue

@@ -22,7 +22,11 @@ func nativeTypeKey(_ type: CompiledValueType) -> String {
     case .dictionary(let key, let value): return typeKeyNode("dictionary", [nativeTypeKey(key), nativeTypeKey(value)])
     case .record(let members): return typeKeyNode("record", fields(members))
     case .nominalRecord(let name, let members): return typeKeyNode("nominalRecord", [name] + fields(members))
-    case .tuple(let elements): return typeKeyNode("tuple", elements.map(nativeTypeKey))
+    case .tuple(let elements):
+        if let declaration = elements.declaration {
+            return typeKeyNode("nominalTuple", [declaration.name] + zip(declaration.labels, elements).map { typeKeyNode($0.0, [nativeTypeKey($0.1)]) })
+        }
+        return typeKeyNode("tuple", elements.map(nativeTypeKey))
     }
 }
 

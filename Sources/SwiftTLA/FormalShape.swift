@@ -133,7 +133,7 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         case .tuple(let items):
             let sourceItems: [CompiledValueType]?
             switch sourceType {
-            case .tuple(let elements)?: sourceItems = elements
+            case .tuple(let elements)?: sourceItems = elements.elements
             case .array(let element)?: sourceItems = Array(repeating: element, count: items.count)
             default: sourceItems = nil
             }

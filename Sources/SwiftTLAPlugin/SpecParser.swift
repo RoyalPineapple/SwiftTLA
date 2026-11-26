@@ -264,8 +264,9 @@ final class ParserSession {
     var constants: [ConstantDecl] = []
     let sourceTypes: SourceTypeMetadata
     let sourceTypeResolver: SourceTypeResolver
+    private lazy var hasNamedTuples = sourceTypes.structs.values.contains { $0.hasTLATupleAttribute }
 
-    func nominalRecordType(_ expression: ExprSyntax) -> CompiledValueType? {
+    func nominalStructType(_ expression: ExprSyntax) -> CompiledValueType? {
         var expression = expression
         if let member = expression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.sourceIdentifierName == "expression", let base = member.base {
@@ -274,14 +275,23 @@ final class ParserSession {
         guard let name = Self.sourceTypePath(expression)?.last,
               sourceTypes.structs[name] != nil || sourceTypes.aliases[name] != nil,
               let type = try? sourceTypeResolver.resolve(expression.trimmedDescription),
-              case .nominalRecord = type else { return nil }
+              type.recordFields != nil || type.tupleDeclaration != nil else { return nil }
         return type
     }
 
     private func decodeNominalRecord(_ call: FunctionCallExprSyntax, scope: TypedFacadeScope) -> StateExpr? {
-        guard let type = nominalRecordType(call.calledExpression), let declared = type.recordFields,
+        guard let type = nominalStructType(call.calledExpression),
               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
         if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self), scope.value(for: reference) != nil { return nil }
+        if case .tuple(let layout) = type, let declaration = layout.declaration {
+            guard call.arguments.map({ $0.label?.sourceIdentifierName }) == declaration.labels else { return nil }
+            let values = zip(call.arguments, layout).compactMap { argument, expected in
+                decodeTypedFacadeValue(argument.expression, scope: scope, expectedType: expected)
+            }
+            guard values.count == layout.count else { return nil }
+            return .tupleLiteral(values)
+        }
+        guard let declared = type.recordFields else { return nil }
         var fields: [StateRecordExpression.Field] = []
         for argument in call.arguments {
             guard let name = argument.label?.sourceIdentifierName,
@@ -295,7 +305,7 @@ final class ParserSession {
     private func projectImportedRecord(_ value: StateExpr, call: FunctionCallExprSyntax) -> StateExpr? {
         guard let witness = call.arguments.first(where: { $0.label?.text == "as" })?.expression
             .as(MemberAccessExprSyntax.self), witness.declName.baseName.sourceIdentifierName == "self",
-              let source = witness.base, let type = nominalRecordType(source), let fields = type.recordFields else {
+              let source = witness.base, let type = nominalStructType(source), let fields = type.recordFields else {
             return value
         }
         guard let shape = try? sourceTypeResolver.formalShape(for: source.trimmedDescription), shape.isSupported else {
@@ -431,7 +441,7 @@ final class ParserSession {
         if let domain = builtinDomain(expression, scope: sourceScope) { return domain.value }
         if let enabled = decodeStepEnabledness(expression, scope: sourceScope) { return enabled }
         if let integer = SourceIntegerLiteral.value(expression) { return .value(.int(integer)) }
-        if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
+        if let call = expression.as(FunctionCallExprSyntax.self), nominalStructType(call.calledExpression) != nil {
             return decodeNominalRecord(call, scope: sourceScope)
         }
         if let precedingMembers = decodePrecedingFormalMembers(expression) {
@@ -517,6 +527,9 @@ final class ParserSession {
            let base = memberAccess.base,
            let selfExpr = decodeStateExpr(base) {
             let propName = memberAccess.declName.baseName.sourceIdentifierName
+            if hasNamedTuples, let index = typedFacadeValueType(base, scope: sourceScope)?.tupleDeclaration?.labels.firstIndex(of: propName) {
+                return .tupleAccess(selfExpr, index + 1)
+            }
             switch propName {
             case "stateExpr": return selfExpr
             case "expr": return selfExpr
@@ -1307,7 +1320,12 @@ final class ParserSession {
         if let member = expression.as(MemberAccessExprSyntax.self),
            let baseSyntax = member.base,
            let base = decodeTypedFacadeValue(baseSyntax, scope: scope) {
-            if let fields = typedFacadeValueType(baseSyntax, scope: scope)?.recordFields,
+            let baseType = typedFacadeValueType(baseSyntax, scope: scope)
+            if let declaration = baseType?.tupleDeclaration,
+               let index = declaration.labels.firstIndex(of: member.declName.baseName.sourceIdentifierName) {
+                return .tupleAccess(base, index + 1)
+            }
+            if let fields = baseType?.recordFields,
                let field = fields.first(where: { $0.name == member.declName.baseName.sourceIdentifierName }) {
                 return .recordAccess(base, field.name)
             }
@@ -1720,7 +1738,7 @@ final class ParserSession {
             return decodeDictionaryLiteral(dictionary, scope: scope,
                 expectedType: typedFacadeValueType(expression, scope: scope))
         }
-        if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
+        if let call = expression.as(FunctionCallExprSyntax.self), nominalStructType(call.calledExpression) != nil {
             return decodeNominalRecord(call, scope: scope)
         }
         if let call = expression.as(FunctionCallExprSyntax.self), isSwiftCollectionConstructor(call, named: "Array") {
@@ -2172,9 +2190,13 @@ final class ParserSession {
             return scope.shape(for: reference)
         }
         if let member = expression.as(MemberAccessExprSyntax.self), let base = member.base,
-           let field = typedFacadeValueType(base, scope: scope)?.recordFields?.first(where: {
-               $0.name == member.declName.baseName.sourceIdentifierName
-           }) { return field.type }
+           let baseType = typedFacadeValueType(base, scope: scope) {
+            let name = member.declName.baseName.sourceIdentifierName
+            if case .tuple(let layout) = baseType, let slot = layout.declaration?.labels.firstIndex(of: name) {
+                return layout[slot]
+            }
+            if let field = baseType.recordFields?.first(where: { $0.name == name }) { return field.type }
+        }
         if let member = expression.as(MemberAccessExprSyntax.self), let base = member.base,
            member.declName.baseName.sourceIdentifierName == "rawValue",
            let name = typedFacadeValueType(base, scope: scope)?.enumerationType,
@@ -2221,6 +2243,9 @@ final class ParserSession {
            let name = Self.sourceTypePath(source)?.joined(separator: ".") {
             return try? sourceTypeResolver.resolve(name)
         }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           let base = member.base, member.declName.baseName.sourceIdentifierName == "head", call.arguments.isEmpty,
+           case .array(let element) = typedFacadeValueType(base, scope: scope) { return element }
         if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
            scope.recursiveOperator(for: reference) != nil {
             return scope.shape(for: reference)
@@ -2311,7 +2336,7 @@ final class ParserSession {
             if let key, let value { return .set(.dictionary(key, value)) }
         }
         if compilerGrammarName(in: call.calledExpression) == "Sum" { return .int }
-        if let record = nominalRecordType(call.calledExpression) { return record }
+        if let record = nominalStructType(call.calledExpression) { return record }
         if isSwiftCollectionConstructor(call, named: "Array"),
            call.calledExpression.is(ArrayExprSyntax.self) {
             return try? sourceTypeResolver.resolve(call.calledExpression.trimmedDescription)

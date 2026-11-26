@@ -79,7 +79,7 @@ extension NativeSwiftEmitter {
             let item = try checkedView("entry.value", from: sourceValue, to: targetValue)
             return "\(try dictionaryConstructor(target))(uniqueKeysWithValues: try (\(value)).map { entry in (\(key), \(item)) })"
         case (.tuple(let inputs), .tuple(let outputs)) where inputs.count == outputs.count:
-            return try checkedFields(value, from: source, to: target, inputs: inputs, outputs: outputs)
+            return try checkedFields(value, from: source, to: target, inputs: inputs.elements, outputs: outputs.elements)
         default:
             return "(try { (_: \(try swiftType(source))) throws -> \(try swiftType(target)) in throw NativeMachineEvaluationError.noMatchingCase }(\(value)))"
         }
@@ -97,7 +97,7 @@ extension NativeSwiftEmitter {
 
     func checkedFields(_ value: String, from source: CompiledValueType, to target: CompiledValueType, inputs: [CompiledValueType], outputs: [CompiledValueType]) throws -> String {
         let fields = try inputs.indices.map { index in
-            "\(fieldName(target, index: index, escaped: false)): \(try checkedView("value." + fieldName(source, index: index), from: inputs[index], to: outputs[index]))"
+            fieldArgument(try checkedView(fieldRead("value", type: source, index: index), from: inputs[index], to: outputs[index]), type: target, index: index)
         }.joined(separator: ", ")
         return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in \(try swiftType(target))(\(fields)) }(\(value)))"
     }
@@ -231,7 +231,7 @@ extension NativeSwiftEmitter {
             """)
         case (.tuple(let a), .tuple(let b)):
             let fields = try zip(a, b).enumerated().map { index, types in
-                try compare("lhs." + fieldName(left, index: index), types.0, "rhs." + fieldName(right, index: index), types.1)
+                try compare(fieldRead("lhs", type: left, index: index), types.0, fieldRead("rhs", type: right, index: index), types.1)
             }.joined(separator: "\n")
             return try closure(fields + "\nreturn \(a.count < b.count)")
         default:

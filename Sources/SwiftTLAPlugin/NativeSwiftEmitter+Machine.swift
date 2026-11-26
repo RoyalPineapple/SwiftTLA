@@ -345,10 +345,10 @@ extension NativeSwiftEmitter {
                     hashBody = rank + "\nhasher.combine(rank(value))"
                 case .tuple(let elements):
                     equalityBody = elements.enumerated().map {
-                        "guard \(equal($0.element, "lhs." + fieldName(type, index: $0.offset), "rhs." + fieldName(type, index: $0.offset))) else { return false }"
+                        "guard \(equal($0.element, fieldRead("lhs", type: type, index: $0.offset), fieldRead("rhs", type: type, index: $0.offset))) else { return false }"
                     }.joined(separator: "\n") + "\nreturn true"
                     hashBody = elements.enumerated().map {
-                        hash($0.element, "value." + fieldName(type, index: $0.offset), into: "hasher")
+                        hash($0.element, fieldRead("value", type: type, index: $0.offset), into: "hasher")
                     }.joined(separator: "\n")
                 case .array(let element):
                     equalityBody = "return lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { pair in \(equal(element, "pair.0", "pair.1")) }"
@@ -504,7 +504,7 @@ extension NativeSwiftEmitter {
         for (index, type) in typeDeclarations.records.enumerated() {
             let elements: [CompiledValueType]
             switch type {
-            case .tuple(let items): elements = items
+            case .tuple(let items): elements = items.elements
             case .record(let fields), .nominalRecord(_, let fields): elements = fields.map(\.type)
             default: throw unsupported("record declaration")
             }

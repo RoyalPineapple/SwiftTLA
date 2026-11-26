@@ -6,6 +6,12 @@ import SwiftTLAMacros
 
 @TLAModel
 package struct ReadersWritersModel {
+    @TLATuple
+    package struct Request: Hashable, Sendable {
+        package let kind: String
+        package let actor: Int
+    }
+
     package enum Step: String, CaseIterable {
         case enqueueReadRequest = "TryRead"
         case enqueueWriteRequest = "TryWrite"
@@ -23,25 +29,25 @@ package struct ReadersWritersModel {
             let actors = IntRange(1, through: actorCount)
             let readers = scope.sharedVar(initial: Set<Int>())
             let writers = scope.sharedVar(initial: Set<Int>())
-            let requestQueue = scope.sharedVar(tlaName: "waiting", initial: Array<Pair<String, Int>>([]))
+            let requestQueue = scope.sharedVar(tlaName: "waiting", initial: Array<Request>([]))
 
             let enqueueReadRequest = Do(Step.enqueueReadRequest, over: actors) { actor in
-                let request = Pair<String, Int>.literal("read", actor)
+                let request = Request.expression(kind: "read", actor: actor)
                 When(!requestQueue.contains(request))
                 requestQueue.append(request)
             }
             let enqueueWriteRequest = Do(Step.enqueueWriteRequest, over: actors) { actor in
-                let request = Pair<String, Int>.literal("write", actor)
+                let request = Request.expression(kind: "write", actor: actor)
                 When(!requestQueue.contains(request))
                 requestQueue.append(request)
             }
             let grantNextRequest = Do(Step.grantNextRequest, when: !requestQueue.isEmpty && writers.isEmpty) {
                 let request = requestQueue.head()
-                If(request.first() == "read") {
-                    readers.insert(request.second())
+                If(request.kind == "read") {
+                    readers.insert(request.actor)
                 } else: {
-                    When(request.first() == "write" && readers.isEmpty)
-                    writers.insert(request.second())
+                    When(request.kind == "write" && readers.isEmpty)
+                    writers.insert(request.actor)
                 }
                 requestQueue.set(requestQueue.tail())
             }
@@ -73,8 +79,8 @@ package struct ReadersWritersModel {
                 writers.isSubset(of: actors)
                 IntRange(1, through: requestQueue.count).allSatisfy { i in
                     let request = requestQueue[i]
-                    return (request.first() == "read" || request.first() == "write")
-                        && actors.contains(request.second())
+                    return (request.kind == "read" || request.kind == "write")
+                        && actors.contains(request.actor)
                 }
             }
             let safety = Invariant("Safety")

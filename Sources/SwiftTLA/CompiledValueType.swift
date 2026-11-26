@@ -8,6 +8,29 @@ package struct CompiledFieldType: Hashable, Sendable {
 
 }
 
+/// The slots are always positional. A declared tuple additionally carries its Swift identity and labels.
+package struct CompiledTupleLayout: Hashable, Sendable, RandomAccessCollection {
+    package struct Declaration: Hashable, Sendable {
+        package let name: String
+        package let labels: [String]
+        package init(name: String, labels: [String]) { self.name = name; self.labels = labels }
+    }
+    package let declaration: Declaration?
+    package private(set) var elements: [CompiledValueType]
+
+    package init(_ elements: [CompiledValueType], declaration: Declaration? = nil) {
+        precondition(declaration == nil || declaration?.labels.count == elements.count)
+        self.elements = elements
+        self.declaration = declaration
+    }
+    package var startIndex: Int { elements.startIndex }
+    package var endIndex: Int { elements.endIndex }
+    package subscript(index: Int) -> CompiledValueType {
+        get { elements[index] }
+        set { elements[index] = newValue }
+    }
+}
+
 /// Compiler value types carried through checking and backend generation.
 package indirect enum CompiledValueType: Hashable, Sendable {
     case unknown
@@ -21,7 +44,14 @@ package indirect enum CompiledValueType: Hashable, Sendable {
     case dictionary(CompiledValueType, CompiledValueType)
     case record([CompiledFieldType])
     case nominalRecord(String, [CompiledFieldType])
-    case tuple([CompiledValueType])
+    case tuple(CompiledTupleLayout)
+
+    package static func tuple(_ elements: [CompiledValueType]) -> Self { .tuple(CompiledTupleLayout(elements)) }
+
+    package var tupleDeclaration: CompiledTupleLayout.Declaration? {
+        if case .tuple(let layout) = self { return layout.declaration }
+        return nil
+    }
 
     package var unionAlternatives: [CompiledValueType]? {
         switch self {
@@ -59,9 +89,14 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .dictionary(let key, let value): [key, value]
         case .oneOf(let first, let second): [first, second]
         case .record(let fields), .nominalRecord(_, let fields): fields.map(\.type)
-        case .tuple(let values), .union(let values): values
+        case .tuple(let layout): layout.elements
+        case .union(let values): values
         default: []
         }
+    }
+
+    package var componentsRecursivelyContainString: Bool {
+        self == .string || components.contains { $0.componentsRecursivelyContainString }
     }
 
     private func embeds(_ other: CompiledValueType) -> Bool {
@@ -72,7 +107,9 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case (.array(let a), .array(let b)), (.set(let a), .set(let b)): return a.embeds(b)
         case (.dictionary(let a, let b), .dictionary(let c, let d)): return a.embeds(c) && b.embeds(d)
         case (.oneOf(let a, let b), .oneOf(let c, let d)): return a.embeds(c) && b.embeds(d)
-        case (.tuple(let a), .tuple(let b)), (.union(let a), .union(let b)):
+        case (.tuple(let a), .tuple(let b)):
+            return a.declaration == b.declaration && a.count == b.count && zip(a, b).allSatisfy { $0.embeds($1) }
+        case (.union(let a), .union(let b)):
             return a.count == b.count && zip(a, b).allSatisfy { $0.embeds($1) }
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
             return zip(a, b).allSatisfy { $0.type.embeds($1.type) }
@@ -102,7 +139,7 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .array(let element): "[\(element.swiftType)]"
         case .dictionary(let key, let value): "[\(key.swiftType): \(value.swiftType)]"
         case .record(let fields): "(" + fields.map { "\($0.name): \($0.type.swiftType)" }.joined(separator: ", ") + ")"
-        case .tuple(let elements): "(" + elements.map(\.swiftType).joined(separator: ", ") + ")"
+        case .tuple(let elements): elements.declaration?.name ?? ("(" + elements.map(\.swiftType).joined(separator: ", ") + ")")
         }
     }
 
@@ -113,7 +150,8 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .dictionary(let key, let value): key.resolved && value.resolved
         case .oneOf(let first, let second): first.resolved && second.resolved
         case .record(let fields), .nominalRecord(_, let fields): fields.allSatisfy { $0.type.resolved }
-        case .tuple(let elements), .union(let elements): elements.allSatisfy(\.resolved)
+        case .tuple(let elements): elements.allSatisfy(\.resolved)
+        case .union(let elements): elements.allSatisfy(\.resolved)
         default: true
         }
     }
@@ -131,7 +169,9 @@ package indirect enum CompiledValueType: Hashable, Sendable {
                 + second.missingTypePaths(from: path + ".second")
         case .record(let fields), .nominalRecord(_, let fields):
             return fields.flatMap { $0.type.missingTypePaths(from: path + "." + $0.name) }
-        case .tuple(let elements), .union(let elements):
+        case .tuple(let layout):
+            return layout.enumerated().flatMap { $0.element.missingTypePaths(from: path + "[\($0.offset + 1)]") }
+        case .union(let elements):
             return elements.enumerated().flatMap {
                 $0.element.missingTypePaths(from: path + "[\($0.offset + 1)]")
             }
@@ -166,7 +206,10 @@ extension CompiledValueType {
         case (.oneOf(let af, let as_), .oneOf(let bf, let bs)):
             return .oneOf(try merge(af, bf), try merge(as_, bs))
         case (.tuple(let a), .tuple(let b)) where a.count == b.count:
-            return .tuple(try zip(a, b).map { try merge($0, $1) })
+            guard a.declaration == nil || b.declaration == nil || a.declaration == b.declaration else {
+                throw diagnostic("tuple", "incompatible declared tuple types")
+            }
+            return .tuple(CompiledTupleLayout(try zip(a, b).map { try merge($0, $1) }, declaration: a.declaration ?? b.declaration))
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
             return .record(try zip(a, b).map { .init(name: $0.name, type: try merge($0.type, $1.type)) })
         case (.nominalRecord(let aName, let a), .nominalRecord(let bName, let b))

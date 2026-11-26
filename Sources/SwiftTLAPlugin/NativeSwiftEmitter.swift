@@ -101,6 +101,12 @@ struct NativeSwiftEmitter {
     }
 
     func swiftType(_ type: CompiledValueType) throws -> String {
+        if let declaration = type.tupleDeclaration {
+            guard NativeTypeDeclarations.supportsPublicValueType(type) else {
+                throw unsupported("@TLATuple \(declaration.name) contains a field requiring different native storage")
+            }
+            return declaration.name
+        }
         switch type {
         case .int: return nativeIntType
         case .bool: return nativeBoolType
@@ -170,12 +176,31 @@ struct NativeSwiftEmitter {
         switch type {
         case .record(let fields), .nominalRecord(_, let fields): return escaped ? "`\(fields[index].name)`" : fields[index].name
         case .tuple(let elements):
+            if let label = elements.declaration?.labels[index] { return escaped ? "`\(label)`" : label }
             if NativeTypeDeclarations.usesPublicTuple(type) {
                 return ["first", "second", "third", "fourth", "fifth"][index]
             }
             return elements.count == 2 ? (index == 0 ? "first" : "second") : "element\(index + 1)"
         default: preconditionFailure("Field naming requires resolved record or tuple types")
         }
+    }
+
+    // A Swift String retains its original code units, but its native equality is canonical.
+    // Re-enter the formal string representation before comparing or projecting a tuple slot.
+    private func storesSwiftString(_ type: CompiledValueType, index: Int) -> Bool {
+        guard case .tuple(let layout) = type, layout.declaration != nil,
+              typeDeclarations.names[type] == nil else { return false }
+        return layout[index] == .string
+    }
+
+    func fieldRead(_ base: String, type: CompiledValueType, index: Int) -> String {
+        let read = base + "." + fieldName(type, index: index)
+        return storesSwiftString(type, index: index) ? "\(nativeStringValueType)(formalString: \(read))" : read
+    }
+
+    func fieldArgument(_ value: String, type: CompiledValueType, index: Int) -> String {
+        let argument = storesSwiftString(type, index: index) ? "(\(value)).formalString" : value
+        return fieldName(type, index: index, escaped: false) + ": " + argument
     }
 
     func finiteCaseName(_ members: [CompiledValue], index: Int) -> String {
@@ -240,7 +265,7 @@ struct NativeSwiftEmitter {
             return "\(try swiftType(type))()"
         case (.tuple(let values), .tuple(let elements)) where values.count == elements.count:
             let name = try swiftType(type)
-            return "\(name)(\(try values.indices.map { index in "\(fieldName(type, index: index, escaped: false)): \(try literal(values[index], as: elements[index]))" }.joined(separator: ", ")))"
+            return "\(name)(\(try values.indices.map { index in fieldArgument(try literal(values[index], as: elements[index]), type: type, index: index) }.joined(separator: ", ")))"
         case (.function(let values), .dictionary(let key, let element)):
             if values.isEmpty { return "\(try swiftType(type))()" }
             return "[\(try values.keys.sorted().map { "\(try literal($0, as: key)): \(try literal(values[$0]!, as: element))" }.joined(separator: ", "))]"
@@ -289,14 +314,14 @@ struct NativeSwiftEmitter {
         let destinationFields: [CompiledValueType]?
         switch (source, destination) {
         case (.tuple(let input), .tuple(let output)):
-            sourceFields = input; destinationFields = output
+            sourceFields = input.elements; destinationFields = output.elements
         case (.record(let input), .record(let output)):
             sourceFields = input.map(\.type); destinationFields = output.map(\.type)
         default: sourceFields = nil; destinationFields = nil
         }
         if let sourceFields, let destinationFields {
             let arguments = try zip(sourceFields, destinationFields).enumerated().map { index, pair in
-                "\(fieldName(destination, index: index, escaped: false)): \(try projected("source." + fieldName(source, index: index), from: pair.0, to: pair.1))"
+                fieldArgument(try projected(fieldRead("source", type: source, index: index), from: pair.0, to: pair.1), type: destination, index: index)
             }.joined(separator: ", ")
             return "({ (source: \(try swiftType(source))) -> \(try swiftType(destination)) in \(try swiftType(destination))(\(arguments)) })(\(value))"
         }
@@ -319,6 +344,7 @@ struct NativeSwiftEmitter {
     func containsSourceNominal(_ type: CompiledValueType) -> Bool {
         var pending = [type]
         while let value = pending.popLast() {
+            if value.tupleDeclaration != nil { return true }
             if case .nominalRecord = value { return true }
             if case .named(let name) = value, program.enums.cases[name] != nil { return true }
             pending.append(contentsOf: value.components)
@@ -440,7 +466,7 @@ struct NativeSwiftEmitter {
             }.joined(separator: "\n") + "\nreturn false"
         case .tuple(let elements):
             body = try elements.enumerated().map { index, element in
-                "if lhs.\(fieldName(type, index: index)) != rhs.\(fieldName(type, index: index)) { return (\(try ordering(element)))(lhs.\(fieldName(type, index: index)), rhs.\(fieldName(type, index: index))) }"
+                "if \(fieldRead("lhs", type: type, index: index)) != \(fieldRead("rhs", type: type, index: index)) { return (\(try ordering(element)))(\(fieldRead("lhs", type: type, index: index)), \(fieldRead("rhs", type: type, index: index))) }"
             }.joined(separator: "\n") + "\nreturn false"
         case .union, .oneOf: body = try unionOrdering(type)
         case .unknown: throw unsupported("unresolved structural order")
@@ -1131,7 +1157,7 @@ struct NativeSwiftEmitter {
             case .dictionary where node.children.isEmpty:
                 return "\(try swiftType(node.resultType))()"
             case .tuple:
-                return "\(try swiftType(result))(\(try node.children.indices.map { index in "\(fieldName(result, index: index, escaped: false)): \(try emit(index))" }.joined(separator: ", ")))"
+                return "\(try swiftType(result))(\(try node.children.indices.map { index in fieldArgument(try emit(index), type: result, index: index) }.joined(separator: ", ")))"
             default: throw unsupported("tuple literal")
             }
         case .subset:
@@ -1410,7 +1436,7 @@ struct NativeSwiftEmitter {
         case .tupleAccess(let index):
             let source = childType(0)
             if case .tuple = source {
-                let field = "\(try emit(0)).\(fieldName(source, index: index - 1))"
+                let field = fieldRead(try emit(0), type: source, index: index - 1)
                 return field
             }
             let elements = try nativeSequenceElements(emit(0), source: source)
@@ -1525,10 +1551,10 @@ struct NativeSwiftEmitter {
             case .tuple(let elements):
                 if case .value(.integer(let index)) = argument {
                     if index >= 1, index <= elements.count {
-                        access = "return _functionValue.\(fieldName(source, index: index - 1))"
+                        access = "return \(fieldRead("_functionValue", type: source, index: index - 1))"
                     } else { access = "throw NativeMachineEvaluationError.tupleIndexOutsideDomain(_functionArgument)" }
                 } else {
-                    let cases = elements.indices.map { "case \($0 + 1): return _functionValue.\(fieldName(source, index: $0))" }.joined(separator: "\n")
+                    let cases = elements.indices.map { "case \($0 + 1): return \(fieldRead("_functionValue", type: source, index: $0))" }.joined(separator: "\n")
                     access = "switch _functionArgument { \(cases)\ndefault: throw NativeMachineEvaluationError.tupleIndexOutsideDomain(_functionArgument) }"
                 }
             case .record(let fields), .nominalRecord(_, let fields):
@@ -1536,7 +1562,7 @@ struct NativeSwiftEmitter {
                     if let index = fields.firstIndex(where: { $0.name.utf8.elementsEqual(name.utf8) }) { access = "return _functionValue.\(fieldName(source, index: index))" }
                     else { access = "throw NativeMachineEvaluationError.recordFieldUnavailable(_functionArgument)" }
                 } else {
-                    let cases = try fields.indices.map { "case \(try literal(.string(fields[$0].name), as: .string)): return _functionValue.\(fieldName(source, index: $0))" }.joined(separator: "\n")
+                    let cases = try fields.indices.map { "case \(try literal(.string(fields[$0].name), as: .string)): return \(fieldRead("_functionValue", type: source, index: $0))" }.joined(separator: "\n")
                     access = "switch _functionArgument { \(cases)\ndefault: throw NativeMachineEvaluationError.recordFieldUnavailable(_functionArgument) }"
                 }
             default: throw unsupported("function application")
@@ -1578,6 +1604,17 @@ struct NativeSwiftEmitter {
                 update = "return SwiftTLA._NativeMachineOperations.functionUpdated(_originalValue, at: _updatedKey, to: _replacementValue)"
             case .array:
                 update = "return SwiftTLA._NativeMachineOperations.sequenceUpdated(_originalValue, at: _updatedKey, to: _replacementValue)"
+            case .tuple(let slots):
+                guard case .value(.integer(let index)) = key, index > 0, index <= slots.count else {
+                    throw unsupported("EXCEPT tuple slot")
+                }
+                let arguments = slots.indices.map { slot in
+                    let value = slot == index - 1 ? "_replacementValue" : fieldRead("_originalValue", type: originalType, index: slot)
+                    return fieldArgument(value, type: originalType, index: slot)
+                }.joined(separator: ", ")
+                update = "return \(try swiftType(originalType))(\(arguments))"
+                retainsOriginal = slots.count > 1
+                evaluatesKey = false
             case .record(let fields), .nominalRecord(_, let fields):
                 let selected: Int?
                 if case .value(.string(let name)) = key {

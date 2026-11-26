@@ -741,7 +741,7 @@ package struct CompiledTypeChecker: Sendable {
         case (.dictionary(let ak, let av), .dictionary(let bk, let bv)):
             return .dictionary(try operandContext(ak, bk), try operandContext(av, bv))
         case (.tuple(let a), .tuple(let b)) where a.count == b.count:
-            return .tuple(try zip(a, b).map { try operandContext($0, $1) })
+            return .tuple(CompiledTupleLayout(try zip(a, b).map { try operandContext($0, $1) }, declaration: a.declaration ?? b.declaration))
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
             return .record(try zip(a, b).map { .init(name: $0.name, type: try operandContext($0.type, $1.type)) })
         case (.oneOf, _), (.union, _): return lhs
@@ -908,7 +908,7 @@ package struct CompiledTypeChecker: Sendable {
             if values.isEmpty, case .dictionary = expected {
                 result = expected
             } else if case .tuple(let hints) = expected, hints.count == values.count {
-                result = .tuple(try zip(values, hints).map { try literal($0, expected: $1) })
+                result = .tuple(CompiledTupleLayout(try zip(values, hints).map { try literal($0, expected: $1) }, declaration: hints.declaration))
             } else {
                 let hint: CompiledValueType = if case .array(let type) = expected { type } else { .unknown }
                 let types = try values.map { try literal($0, expected: hint) }
@@ -1218,7 +1218,7 @@ package struct CompiledTypeChecker: Sendable {
         }
         let result: CompiledValueType
         if case .tuple(let hints) = expected, hints.count == types.count {
-            result = .tuple(types)
+            result = .tuple(CompiledTupleLayout(types, declaration: hints.declaration))
         } else {
             let hint: CompiledValueType = if case .array(let value) = expected { value } else { .unknown }
             if expected == .unknown, !types.isEmpty, types.allSatisfy({ $0 == .unknown }) { result = .tuple(types) }
@@ -1228,7 +1228,7 @@ package struct CompiledTypeChecker: Sendable {
         let checked = try checkedType(result, expected: expected)
         let operands: [CompiledValueType]
         switch checked.computationType {
-        case .tuple(let types): operands = types
+        case .tuple(let types): operands = types.elements
         case .array(let item): operands = Array(repeating: item, count: types.count)
         default: throw CompiledValueType.diagnostic("tuple", "expected tuple or sequence representation")
         }
@@ -1457,7 +1457,7 @@ package struct CompiledTypeChecker: Sendable {
                         let children = expression.children
                         let contexts: [CompiledValueType]
                         if case .tuple(let hints) = expected, hints.count == children.count {
-                            contexts = hints
+                            contexts = hints.elements
                         } else {
                             let hint: CompiledValueType = if case .array(let item) = expected { item } else { .unknown }
                             contexts = Array(repeating: hint, count: children.count)
@@ -2347,7 +2347,7 @@ package struct CompiledTypeChecker: Sendable {
                     }
                     let keyType: CompiledValueType
                     switch source.resultType {
-                    case .array: keyType = .int
+                    case .array, .tuple: keyType = .int
                     case .dictionary(let domain, _): keyType = domain
                     case .record, .nominalRecord: keyType = .string
                     case .unknown: keyType = .unknown
@@ -2361,6 +2361,11 @@ package struct CompiledTypeChecker: Sendable {
                     let valueType: CompiledValueType
                     switch source.resultType {
                     case .array(let item), .dictionary(_, let item): valueType = item
+                    case .tuple(let slots):
+                        guard case .value(.integer(let index)) = key.operation, index > 0, index <= slots.count else {
+                            throw CompiledValueType.diagnostic("except", "expected a constant tuple index within the declared slots")
+                        }
+                        valueType = slots[index - 1]
                     case .record(let fields), .nominalRecord(_, let fields):
                         if case .value(.string(let name)) = key.operation {
                             valueType = fields.first { $0.name == name }?.type ?? .unknown
@@ -2384,7 +2389,7 @@ package struct CompiledTypeChecker: Sendable {
                     switch source.resultType {
                     case .array: result = .array(value.resultType)
                     case .dictionary(let domain, _): result = .dictionary(domain, value.resultType)
-                    case .record, .nominalRecord: result = source.resultType
+                    case .record, .nominalRecord, .tuple: result = source.resultType
                     case .unknown: result = .dictionary(key.resultType, value.resultType)
                     default: throw CompiledValueType.diagnostic("except", "unsupported update shape \(source.resultType.swiftType)")
                     }

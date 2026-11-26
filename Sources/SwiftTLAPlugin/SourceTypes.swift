@@ -350,6 +350,11 @@ final class SourceTypeResolver {
                     views.append(.init(name: field, shape: value.view))
                 }
             }
+            if declaration.hasTLATupleAttribute {
+                let layout = CompiledTupleLayout(fields.map(\.type), declaration:
+                    .init(name: Self.qualifiedName(of: declaration), labels: fields.map(\.name)))
+                return .init(type: .tuple(layout), view: .tuple(views.map(\.shape)))
+            }
             return .init(type: .nominalRecord(Self.qualifiedName(of: declaration), fields), view: .record(views))
         }
         let view: FormalValueShape

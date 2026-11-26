@@ -56,3 +56,38 @@ The checker treats members as distinct unless the model explicitly declares
 and justifies symmetry. A collection or process population alone never enables
 symmetry reduction. See [DSLDesign.md](DSLDesign.md) for the configuration and
 symmetry contracts.
+
+## Named tuple values
+
+Use an ordinary Swift struct for a record. Add `@TLATuple` when its formal
+representation must be positional, for example to match an upstream trace.
+
+```swift
+@TLATuple
+struct Request: Hashable, Sendable {
+    let kind: String
+    let actor: Int
+}
+```
+
+`Request(kind: "read", actor: 2)` encodes as `<<"read", 2>>`. Inside a model,
+`Request.expression(kind: "read", actor: worker)` can include symbolic values.
+Read the same fields as `request.kind` and `request.actor`. A tuple may have
+zero or more stored fields. Their declaration order determines their positions
+in the formal value. Reordering fields changes the trace format.
+
+A generated state field declared as `[Request]` contains ordinary `Request`
+values. To read a tuple from a formal trace, decode it as the declared type:
+
+```swift
+let traceValue = TLAValue.tuple([.string("read"), .int(2)])
+let request = Request(formalValue: traceValue)
+```
+
+Here `request?.actor` is `2`. A missing slot or a string in the actor slot
+returns `nil`. The upstream tuple carries no Swift type name.
+
+Inside a `Do` block, select a named tuple field and call `.set` to replace
+just that slot. For example, `history.action.set(.passToken)` keeps the sender
+and recipient in their original positions. The generated machine still exposes
+the ordinary Swift value through `machine.state.history`.

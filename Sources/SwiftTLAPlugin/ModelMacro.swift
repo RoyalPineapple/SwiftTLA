@@ -410,7 +410,8 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
         in context: some MacroExpansionContext
     ) throws -> [AttributeSyntax] {
         if let record = member.as(StructDeclSyntax.self) {
-            guard !TLASpecVerifier.inheritedTypeNames(in: record.inheritanceClause).contains("TLAValueType"),
+            guard !record.hasTLATupleAttribute,
+                  !TLASpecVerifier.inheritedTypeNames(in: record.inheritanceClause).contains("TLAValueType"),
                   let source = declaration.memberBlock.members.compactMap({ $0.decl.as(StructDeclSyntax.self) })
                     .first(where: { $0.name.sourceIdentifierName == record.name.sourceIdentifierName }),
                   let model = try? TLASpecVerifier.parseAndVerify(declaration) else { return [] }

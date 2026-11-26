@@ -1364,3 +1364,27 @@ func finiteDomainIndex<Domain: FiniteTLAValueDomain>(_ index: Domain) -> StateEx
   }
   return .value(value)
 }
+
+/// Swift field names for the ordered slots of a generated tuple.
+public protocol _GeneratedTupleValue: FormalTupleValue {
+  static func _formalTupleIndex(_ keyPath: PartialKeyPath<Self>) -> Int?
+}
+
+extension _GeneratedTupleValue {
+  public static func _tupleFieldType<Field: TLAValueType>(_: KeyPath<Self, Field>) -> Field.Type { Field.self }
+
+  public static func _tupleField<Field: TLAValueType>(_ value: TLAValue, as: Field.Type) -> Field? {
+    guard let field = Field(formalValue: value), field.preservesFormalValue(value) else { return nil }
+    return field
+  }
+}
+
+extension TypedExpression where ExpressionValue: _GeneratedTupleValue {
+  @_disfavoredOverload
+  public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<ExpressionValue, Field>) -> Expr<Field> {
+    guard let index = ExpressionValue._formalTupleIndex(keyPath) else {
+      return Expr(.sourceIssue(.formalDeclaration(kind: "tuple field", name: String(reflecting: ExpressionValue.self), problem: "key path does not identify a stored tuple field")))
+    }
+    return Expr(.tupleAccess(stateExpr, index))
+  }
+}

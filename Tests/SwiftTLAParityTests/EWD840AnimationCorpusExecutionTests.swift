@@ -79,24 +79,25 @@ struct EWD840AnimationCorpusExecutionTests {
             $0.state.active[0] == true && $0.state.active[1] == false
         })
         #expect(machine.state.tpos == 1)
-        #expect(machine.state.history == Triple(first: 0, second: 0, third: "init"))
+        #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(0), .string("init")]))
 
         _ = try machine.send(.AnimSendMsg(i: 0))
         #expect(machine.state.active[1] == true)
         #expect(machine.state.color[0] == .black)
-        #expect(machine.state.history == Triple(first: 0, second: 1, third: "SendMsg"))
+        #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(1), .string("SendMsg")]))
 
         _ = try machine.send(.AnimDeactivate(i: 1))
         #expect(machine.state.active[1] == false)
-        #expect(machine.state.history == Triple(first: 0, second: 1, third: "Deactivate"))
+        #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(1), .string("Deactivate")]))
 
         _ = try machine.send(.AnimPassToken(i: 1))
         #expect(machine.state.tpos == 0)
-        #expect(machine.state.history == Triple(first: 0, second: 1, third: "PassToken"))
+        #expect(machine.state.history.action == .passToken)
+        #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(1), .string("PassToken")]))
 
         _ = try machine.send(.AnimInitiateProbe)
         #expect(machine.state.tpos == 1)
-        #expect(machine.state.history == Triple(first: 0, second: 1, third: "InitiateProbe"))
+        #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(1), .string("InitiateProbe")]))
 
         let rendered = try EWD840AnimationModel.render(configuration: configuration)
         #expect(rendered.tlaBundle.root.tla.contains("EXTENDS Integers, Naturals, TLC"))

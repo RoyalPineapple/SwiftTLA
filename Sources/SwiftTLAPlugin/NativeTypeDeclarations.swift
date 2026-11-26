@@ -12,13 +12,14 @@ struct NativeTypeDeclarations: Sendable {
     let modelValueCases: [String: String]
 
     static func usesPublicTuple(_ type: CompiledValueType) -> Bool {
-        guard case .tuple(let elements) = type, [2, 3, 5].contains(elements.count) else { return false }
+        guard case .tuple(let elements) = type, elements.declaration == nil, [2, 3, 5].contains(elements.count) else { return false }
         return elements.allSatisfy(supportsPublicValueType)
     }
 
     private static func containsNominal(_ type: CompiledValueType) -> Bool {
         var pending = [type]
         while let value = pending.popLast() {
+            if value.tupleDeclaration != nil { return true }
             switch value {
             case .named, .nominalRecord: return true
             default: pending.append(contentsOf: value.components)
@@ -27,7 +28,7 @@ struct NativeTypeDeclarations: Sendable {
         return false
     }
 
-    private static func supportsPublicValueType(_ type: CompiledValueType) -> Bool {
+    static func supportsPublicValueType(_ type: CompiledValueType) -> Bool {
         switch type {
         case .int, .bool, .string, .named: return true
         case .nominalRecord(_, let fields):
@@ -44,6 +45,11 @@ struct NativeTypeDeclarations: Sendable {
         case .set(let element):
             return !containsNominal(element) && supportsPublicValueType(element)
         case .array(let element): return supportsPublicValueType(element)
+        case .tuple(let layout) where layout.declaration != nil:
+            return layout.allSatisfy { field in
+                field == .string || (supportsPublicValueType(field) &&
+                    (field.tupleDeclaration != nil || !field.componentsRecursivelyContainString))
+            }
         case .tuple: return usesPublicTuple(type)
         default: return false
         }
@@ -138,6 +144,7 @@ struct NativeTypeDeclarations: Sendable {
             case .dictionary(let key, let value) where Self.containsNominal(key):
                 registerIdentity(key)
                 registerIdentity(value)
+            case .tuple where type.tupleDeclaration != nil: break
             case .nominalRecord:
                 nominalRecords.append(type)
                 if !Self.supportsPublicValueType(type) {

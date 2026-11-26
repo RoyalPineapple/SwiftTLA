@@ -26,7 +26,7 @@ public struct RecordValueMacro: ExtensionMacro, MemberMacro {
         """)]
     }
 
-    private static func recordFields(_ record: StructDeclSyntax) throws -> [(name: String, type: String)] {
+    static func recordFields(_ record: StructDeclSyntax) throws -> [(name: String, type: String)] {
         try record.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) }
             .filter { !$0.modifiers.contains { $0.name.text == "static" || $0.name.text == "class" } }
             .flatMap { variable in
@@ -40,7 +40,7 @@ public struct RecordValueMacro: ExtensionMacro, MemberMacro {
             }
     }
 
-    private static func accessPrefix(for record: StructDeclSyntax, in context: some MacroExpansionContext) -> String {
+    static func accessPrefix(for record: StructDeclSyntax, in context: some MacroExpansionContext) -> String {
         func level(_ modifiers: DeclModifierListSyntax) -> Int {
             for modifier in modifiers {
                 switch modifier.name.text {

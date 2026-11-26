@@ -1889,10 +1889,13 @@ extension ParserSession {
         }
         if let access = expression.as(MemberAccessExprSyntax.self),
            let base = access.base,
-           let fields = typedFacadeValueType(base, scope: scope)?.recordFields,
-           let field = fields.first(where: { $0.name == access.declName.baseName.sourceIdentifierName }),
+           let type = typedFacadeValueType(base, scope: scope),
            let target = algorithmTarget(base, scope: scope) {
-            return .field(target, field.name)
+            let name = access.declName.baseName.sourceIdentifierName
+            if let slot = type.tupleDeclaration?.labels.firstIndex(of: name) {
+                return .function(base: target, key: .int(slot + 1))
+            }
+            if let field = type.recordFields?.first(where: { $0.name == name }) { return .field(target, field.name) }
         }
         if let access = expression.as(MemberAccessExprSyntax.self),
            access.declName.baseName.sourceIdentifierName == "algorithmLValue",

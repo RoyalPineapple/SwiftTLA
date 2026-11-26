@@ -64,8 +64,9 @@ extension NativeSwiftEmitter {
         case .array(let element):
             return "SwiftTLA.TLAValue.tuple(try \(value).map { (element) throws -> SwiftTLA.TLAValue in \(try formalValue("element", type: element)) })"
         case .tuple(let elements):
+            if elements.isEmpty, elements.declaration != nil { return value + ".tlaValue" }
             let values = try elements.enumerated().map {
-                try formalValue(value + "." + fieldName(type, index: $0.offset), type: $0.element)
+                try formalValue(fieldRead(value, type: type, index: $0.offset), type: $0.element)
             }
             return "SwiftTLA.TLAValue.tuple([\(values.joined(separator: ", "))])"
         case .record(let fields), .nominalRecord(_, let fields):
@@ -165,7 +166,7 @@ extension NativeSwiftEmitter {
                 """)
         case .tuple(let elements):
             let decoded = try elements.enumerated().map { index, element in
-                "\(fieldName(type, index: index)): \(try formalJSONValue("items[\(index)]", type: element))"
+                fieldArgument(try formalJSONValue("items[\(index)]", type: element), type: type, index: index)
             }.joined(separator: ", ")
             return decode("""
                 guard case .array(let items) = \(value), items.count == \(elements.count) else { \(invalid) }
