@@ -38,6 +38,13 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         }
     }
 
+    package var hasRecordDomain: Bool {
+        if case .oneOf(let first, let second) = self {
+            return first.hasRecordDomain && second.hasRecordDomain
+        }
+        return recordFields != nil
+    }
+
     package func updatingRecordFields(_ fields: [CompiledFieldType]) throws -> Self {
         switch self {
         case .record: return .record(fields)

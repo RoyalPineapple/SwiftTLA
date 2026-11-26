@@ -3203,6 +3203,77 @@
       "moduleSHA256": "ae2a1c05f63e8e49ff6b330410bb65b5ee8090b1e8528d398281d46a25236abc",
       "cfgSHA256": "f54a258a36d38b839260cf27a2f986163baa5be829bb96b88216b3025cf0216a",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "turing-paxos-tiny",
+      "sourceModel": "turing-paxos-tiny",
+      "scenario": "tiny",
+      "module": "turing-paxos-consensus/MCPaxos.tla",
+      "configuration": "turing-paxos-consensus/MCPaxosTiny.cfg",
+      "imports": [
+        "turing-paxos-consensus/Paxos.tla",
+        "turing-paxos-consensus/Voting.tla",
+        "turing-paxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCPaxos",
+          "importedModule": "Paxos"
+        },
+        {
+          "importingModule": "Paxos",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
+        "sha256": "b923b4753fe9dbf250d46e4fed0472b91f1e79056c80660d7268b0e3e5eabecd"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b923b4753fe9dbf250d46e4fed0472b91f1e79056c80660d7268b0e3e5eabecd",
+      "cfgSHA256": "c0ad171f9cda7abe84a6a2f1cc4b5b408d419f2d47843d79134590eb0efb4af1",
+      "timeoutSeconds": 120
     }
   ]
 }

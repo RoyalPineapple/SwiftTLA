@@ -115,6 +115,16 @@ extension NativeSwiftEmitter {
         return "(\(prefix){ (value: \(try swiftType(source)))\(throwing) -> \(try swiftType(target)) in\nswitch value { \(cases) } }(\(value)))"
     }
 
+    func recordDomainCases(_ type: CompiledValueType, resultType: String, pattern: (String) -> String) throws -> [String] {
+        if let fields = type.recordFields {
+            let keys = try fields.map { try literal(.string($0.name), as: .string) }
+            return ["case \(pattern("_")): return \(resultType)([\(keys.joined(separator: ", "))])"]
+        }
+        guard case .oneOf(let first, let second) = type else { throw unsupported("DOMAIN") }
+        return try recordDomainCases(first, resultType: resultType) { pattern(".first(\($0))") }
+            + recordDomainCases(second, resultType: resultType) { pattern(".second(\($0))") }
+    }
+
     func unionOrdering(_ type: CompiledValueType) throws -> String {
         guard let alternatives = type.unionAlternatives else { throw unsupported("union ordering source") }
         let cases = try alternatives.enumerated().flatMap { leftIndex, left in

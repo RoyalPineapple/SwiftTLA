@@ -8592,8 +8592,8 @@
     {
       "path": "specifications/PaxosHowToWinATuringAward",
       "name": "Paxos (How to Win a Turing Award)",
-      "audit": "MCConsensus and MCVoting matched their original graphs and selected properties locally, including the Voting refinement to Consensus.",
-      "gap": "Both MCPaxos configurations and hosted evidence remain open.",
+      "audit": "MCConsensus and MCVoting matched their original graphs and selected properties locally, including the Voting refinement to Consensus. MCPaxosTiny matched its original graph, Inv, deadlock check and Voting refinement.",
+      "gap": "MCPaxosSmall and hosted evidence remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -8618,7 +8618,9 @@
           "path": "specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringPaxos.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8634,7 +8636,9 @@
           "path": "specifications/PaxosHowToWinATuringAward/Paxos.tla",
           "role": "unclassified",
           "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringPaxos.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8685,10 +8689,16 @@
           "module": "specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
           "configuration": "specifications/PaxosHowToWinATuringAward/MCPaxosTiny.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TuringPaxos.swift",
+              "scenario": "tiny",
+              "caseID": "turing-paxos-tiny"
+            }
+          ],
           "evidence": []
         },
         {

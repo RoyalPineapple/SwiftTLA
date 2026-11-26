@@ -87,6 +87,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "btree-kvstore", scenarios: { try KeyValueStoreModel.validationScenarios() }),
     .init(id: "turing-paxos-consensus", scenarios: { try TuringConsensusModel.validationScenarios() }),
     .init(id: "turing-paxos-voting", scenarios: { try TuringVotingModel.validationScenarios() }),
+    .init(id: "turing-paxos-tiny", scenarios: { try TuringPaxosModel.validationScenarios() }),
     .init(id: "paxos-mc-consensus", scenarios: { try PaxosInductiveConsensusModel.validationScenarios() }),
     .init(id: "simple-allocator", scenarios: { try SimpleAllocatorModel.validationScenarios() }),
     .init(id: "spanning", scenarios: { try SpanningModel.validationScenarios() }),
