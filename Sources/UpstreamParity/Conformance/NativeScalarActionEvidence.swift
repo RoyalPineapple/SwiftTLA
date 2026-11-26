@@ -2659,8 +2659,7 @@ func conditionalSharedFailureProof(
             BY ONLY <2>failed, SMT DEF ConditionalPhysicalStep, \#(actionName), raw, count,
                 ConditionalSharedCount, \#(tables), Arithmetic!RenderedAssignmentsPass, Arithmetic!EveryRenderedGuardPasses
         <2>disabled. ~ENABLED Next
-            BY ONLY <2>failed, ExpandENABLED, SMT DEF Next, \#(actionName), raw, count,
-                ConditionalSharedCount, \#(tables), Arithmetic!RenderedAssignmentsPass, Arithmetic!EveryRenderedGuardPasses
+            BY ONLY <2>checking, ConditionalFailedCheckDisablesEmittedNext, PTL
         <2>nativePlans. ConditionalNativeSharedPlan.captures = raw.plans
             BY ONLY IsaM("simp"), SMT DEF ConditionalNativeSharedPlan, raw, \#(tables)
         <2>caught. /\ slot \in DOMAIN calls /\ DOMAIN terminal.completed = 1..(slot - 1)
