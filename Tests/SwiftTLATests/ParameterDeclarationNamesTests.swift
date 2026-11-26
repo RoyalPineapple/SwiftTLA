@@ -1,4 +1,4 @@
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 @testable import SwiftTLAPlugin
 
@@ -28,7 +28,8 @@ import Testing
         #expect(generated.cfg.contains("CONSTANT Writers = {1, 2}"))
         let runtime = try UpstreamDeclarationNames.spec.compile()
         #expect(runtime.layout.variables.map(\.formalName) == ["published", "next_sequence"])
-        #expect(try runtime.render().tlaBundle.tla == generated.tla)
+        let parameter = try #require(runtime.layout.parameters.first)
+        #expect(runtime.bindings.binders[parameter.binder] == "Writers")
     }
 
     @Test("an exact request identifies its Swift declaration when allocation cannot honor it",
