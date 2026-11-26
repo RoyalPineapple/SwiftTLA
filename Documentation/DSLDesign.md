@@ -141,6 +141,20 @@ Generate valid, unambiguous TLA+ identifiers from declaration identities and
 source names. A display label containing spaces or punctuation must not become
 an unchecked formal identifier.
 
+When matching a published module, use `tlaName:` on a model parameter or shared
+state declaration to request its exact TLA+ spelling.
+
+```swift
+let writers = scope.parameter(tlaName: "Writers", as: Set<ThreadID>.self, in: writerSets)
+let nextSequence = scope.sharedVar(tlaName: "next_sequence", initial: 0)
+```
+
+Use `writers` in `Bind` and `Configuration.writers`, and `nextSequence` in
+assignments and `State.nextSequence`. The CFG binds `Writers`, and formal
+states and traces use `next_sequence`. Compilation diagnoses an invalid,
+reserved, or conflicting request. Omit the argument for automatic naming.
+Process and procedure locals keep their existing scope-qualified naming.
+
 Write a validation scenario directly inside `#spec`, for example
 `Validation("exhaustive", label: "Exhaustive check") {}.checkingDeadlock(false)`.
 The first string literal names the scenario. Write `Algorithm("protocolAlgorithm") { ... }`

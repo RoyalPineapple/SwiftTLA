@@ -91,7 +91,7 @@ extension TLASpec {
       names.formUnion(invariants.map(\.name) + reachabilityProperties.map(\.name)
         + temporalProperties.map(\.name) + refinements.map(\.name))
     }
-    if includingVariables { names.formUnion(variables.map(\.name)) }
+    if includingVariables { names.formUnion(variables.map { $0.tlaName ?? $0.name }) }
     if includingActions { names.formUnion(actions.map(\.name)) }
     return names
   }

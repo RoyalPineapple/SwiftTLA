@@ -4,6 +4,15 @@ import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
 
+func requestedTLAName(_ call: FunctionCallExprSyntax, declaration: String) throws(SourceParseDiagnostic) -> String? {
+    let arguments = call.arguments.filter { $0.label?.text == "tlaName" }
+    guard let argument = arguments.first else { return nil }
+    guard arguments.count == 1, let name = argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
+        throw .init(message: "Declaration '\(declaration)' requires one literal tlaName; received \(argument.expression.trimmedDescription).", source: argument)
+    }
+    return name
+}
+
 extension ParserSession {
     // MARK: - Unified spec builder parser
 
@@ -210,7 +219,7 @@ extension ParserSession {
                 do {
                     let displayLabel = try declarationDisplayLabel(call, kind: "parameter")
                     let shape = try sourceTypeResolver.resolve(typeName)
-                    let reference = ParameterReference(name: sourceName, displayLabel: displayLabel,
+                    let reference = ParameterReference(name: sourceName, tlaName: try requestedTLAName(call, declaration: sourceName), displayLabel: displayLabel,
                         sourceOffset: binding.positionAfterSkippingLeadingTrivia.utf8Offset,
                         sourceLength: binding.trimmedDescription.utf8.count)
                     components.parameters.append(.init(reference: reference, swiftType: typeName, domain: domain))
@@ -562,7 +571,7 @@ extension ParserSession {
                 let stateType = sourceTypeResolver.normalizedStateType(variable.generatedSwiftType, resolved: valueType)
                 components.variables[components.variables.count - 1] = .init(
                     name: variable.name, initialization: variable.initialization,
-                    displayLabel: variable.displayLabel,
+                    tlaName: variable.tlaName, displayLabel: variable.displayLabel,
                     generatedSwiftType: stateType.spelling,
                     resolvedValueType: stateType.resolved,
                     origin: variable.origin)
@@ -589,7 +598,9 @@ extension ParserSession {
 
         if callName == "SharedVar" {
             let displayLabel: String?
+            let tlaName: String?
             do {
+                tlaName = try requestedTLAName(fc, declaration: patternName)
                 displayLabel = try declarationDisplayLabel(fc, kind: "state")
             } catch {
                 components.diagnostics.append(error)
@@ -611,11 +622,11 @@ extension ParserSession {
             if let range = domain?.expression,
                let domain = finiteStateVariableDomain(range, declaredElementType: varTypeName, scope: sourceScope) {
                 components.variables.append(.init(name: name, initialization: .memberOf(domain.expression),
-                    displayLabel: displayLabel, generatedSwiftType: varTypeName ?? domain.elementType, origin: .source))
+                    tlaName: tlaName, displayLabel: displayLabel, generatedSwiftType: varTypeName ?? domain.elementType, origin: .source))
             } else if let value = args.first(where: { $0.label?.text == "initial" })?.expression,
                       let initial = decodeTypedFacadeValue(value, scope: sourceScope, expectedEnumType: varTypeName) {
                 components.variables.append(.init(name: name, initialization: .expression(initial),
-                    displayLabel: displayLabel, generatedSwiftType: varTypeName ?? initialValueTypeName(from: value), origin: .source))
+                    tlaName: tlaName, displayLabel: displayLabel, generatedSwiftType: varTypeName ?? initialValueTypeName(from: value), origin: .source))
             } else {
                 if let input = domain ?? args.first(where: { $0.label?.text == "initial" }) {
                     let kind = domain == nil ? "initializer" : "domain"

@@ -3,6 +3,54 @@ import Testing
 @testable import SwiftTLAPlugin
 
 @Suite struct ParameterDeclarationNamesTests {
+    @Test("exact upstream names survive configuration, execution and formal export")
+    func exactNamesAcrossGeneratedMachine() throws {
+        let configuration = try UpstreamDeclarationNames.Configuration(writers: [1, 2])
+        let scenario = try #require(UpstreamDeclarationNames.validationScenarios().first)
+        #expect(scenario.configuration == configuration)
+        var machine = try UpstreamDeclarationNames.makeMachine(configuration: configuration)
+        #expect(machine.configuration.writers == [1, 2])
+        #expect(machine.state.published == -1)
+        _ = try machine.send(.publish)
+        #expect(machine.state.published == 0)
+        #expect(machine.state.nextSequence == 1)
+        let projection = try machine.formalProjection(of: machine.snapshot)
+        let sequence = try #require(TLAStateProjection.Token(validating: "next_sequence"))
+        #expect(projection.value(for: sequence) == .int(1))
+        let graph = try scenario.explore(maximumStates: 4)
+        let violation = try #require(graph.safetyViolations.first { $0.value.contains(.invariant(.Unpublished)) })
+        let trace = try graph.trace(to: violation.key)
+        #expect(trace.compactMap(\.action) == [.publish])
+        #expect(try trace.map { try machine.formalProjection(of: $0.state).value(for: sequence) } == [.int(0), .int(1)])
+        let generated = try scenario.render().tlaBundle
+        #expect(generated.tla.contains("CONSTANTS Writers"))
+        #expect(generated.tla.contains("next_sequence'"))
+        #expect(generated.cfg.contains("CONSTANT Writers = {1, 2}"))
+        let runtime = try UpstreamDeclarationNames.spec.compile()
+        #expect(runtime.layout.variables.map(\.formalName) == ["published", "next_sequence"])
+        #expect(try runtime.render().tlaBundle.tla == generated.tla)
+    }
+
+    @Test("an exact request identifies its Swift declaration when allocation cannot honor it",
+          arguments: ["published", "Writers", "IF", "Init", "vars", "Bad-Name", ""])
+    func rejectsUnavailableExactNames(_ requested: String) throws {
+        let spec = SpecParser.parseSpecClosure(named: "UnavailableName", try parseSpecTestClosure("""
+            { scope in
+                let writers = scope.parameter(tlaName: "Writers", as: Bool.self)
+                let published = scope.sharedVar(initial: -1)
+                let nextSequence = scope.sharedVar(tlaName: "\(requested)", initial: 0)
+            }
+            """))
+        do {
+            _ = try spec.compile()
+            Issue.record("Accepted unavailable name '\(requested)'")
+        } catch let error as CompilationDiagnostic {
+            #expect(error.code == .invalidFormalDeclaration)
+            #expect(error.description.contains("nextSequence"))
+            #expect(error.description.contains("'\(requested)'"))
+        }
+    }
+
     @Test("parameter labels appear in typed configuration and compilation reports")
     func exposesParameterDisplayNames() throws {
         let compiled = try LabeledParametersModel.spec.compile()

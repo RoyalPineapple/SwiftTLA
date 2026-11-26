@@ -173,7 +173,7 @@ enum AlgorithmLowerer {
             NamedVar(
                 name: state.root,
                 initialization: state.initialization,
-                displayLabel: state.displayLabel,
+                tlaName: state.tlaName, displayLabel: state.displayLabel,
                 generatedSwiftType: state.swiftTypeName,
                 resolvedValueType: state.resolvedValueType,
                 origin: .source
@@ -597,7 +597,7 @@ enum AlgorithmLowerer {
             NamedVar(
                 name: state.root,
                 initialization: state.initialization,
-                displayLabel: state.displayLabel,
+                tlaName: state.tlaName, displayLabel: state.displayLabel,
                 generatedSwiftType: state.swiftTypeName,
                 resolvedValueType: state.resolvedValueType,
                 origin: .source
