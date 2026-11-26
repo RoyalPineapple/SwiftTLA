@@ -967,7 +967,8 @@ struct NativeSwiftEmitter {
             let snapshot = state.hasSuffix(".") ? String(state.dropLast()) : state
             let arguments = machineArguments.isEmpty ? "" : ", " + machineArguments
             let checking = checkingContextName.map { ", checking: &\($0)" } ?? ""
-            return "(try Self._isEnabled\(id.ordinal)(in: \(snapshot)\(arguments)\(checking)))"
+            let selected = node.children.isEmpty ? "" : ", for: \(try emit(0))"
+            return "(try Self._isEnabled\(id.ordinal)(in: \(snapshot)\(selected)\(arguments)\(checking)))"
         case .convert:
             return try projected(emit(0), from: childType(0), to: node.resultType)
         case .assertView:

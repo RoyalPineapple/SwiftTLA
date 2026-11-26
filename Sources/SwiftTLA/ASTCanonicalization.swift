@@ -494,7 +494,9 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .choose(let set, let variable, let predicate, let preferredType):
                 tasks.append(.bind(.choose(preferredType), variable: variable, body: predicate, environment: environment))
                 tasks.append(.expression(set, environment: environment))
-            case .enabledAction(let name): parts.append("enabled(\(name))")
+            case .enabledAction(let name, let argument):
+                if let argument { schedule("enabled[\(name)]", [argument], environment: environment) }
+                else { parts.append("enabled(\(name))") }
             case .printReturning(let value, let result):
                 schedule([value, result], environment: environment) { "print(\($0[0]),\($0[1]))" }
             case .printT(let value):

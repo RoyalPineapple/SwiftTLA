@@ -424,6 +424,11 @@ public struct AtomicStep: SpecComponent {
 
     public var enabled: Expr<Bool> { Expr(.enabledAction(model.label.name)) }
 
+    /// Whether this one-argument action has a successor for the given domain member.
+    public func isEnabled<Value>(for argument: some TypedExpression<Value>) -> Expr<Bool> {
+        Expr(.enabledAction(model.label.name, argument: argument.stateExpr))
+    }
+
     package init(model: AlgorithmStepModel, bindings: [ActionBinding] = []) {
         self.model = model
         self.bindings = bindings

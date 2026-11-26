@@ -1421,11 +1421,13 @@ struct CompiledLowerer {
                         )
                     }
                     lowered.append(.init(expression: .controlLocation(location), operatorReferences: []))
-                case .enabledAction(let name):
-                    lowered.append(.init(
-                        expression: .enabledAction(try action(named: name, at: path)),
-                        operatorReferences: []
-                    ))
+                case .enabledAction(let name, let argument):
+                    let id = try action(named: name, at: path)
+                    if let argument {
+                        scheduleUnary(argument, at: path, scope: scope, operation: .enabledAction(id), on: &tasks)
+                    } else {
+                        lowered.append(.init(expression: .enabledAction(id), operatorReferences: []))
+                    }
                 case .assertView(let value, let shape):
                     guard shape.isSupported else {
                         throw CompilationDiagnostic(

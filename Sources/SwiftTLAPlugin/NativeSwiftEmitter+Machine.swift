@@ -1227,6 +1227,9 @@ extension NativeSwiftEmitter {
         for index in program.behavior.enabledActionIndices {
             let action = program.behavior.actions[index]
             guard enabledActionIDs.contains(action.id) else { continue }
+            let unary = action.bindings.count == 1
+            let selectionParameter = try unary ? ", for selected: \(swiftType(program.bindingTypes[action.bindings[0].binder]!))? = nil" : ""
+            let selectionArgument = unary ? ", for: selected" : ""
             var loops = ""
             var closing = ""
             var arguments: [String] = []
@@ -1234,15 +1237,16 @@ extension NativeSwiftEmitter {
                 let name = binder(binding.binder)
                 let domain = try actionDomain(binding, state: "state.")
                 loops += "for \(name) in \(domain) {\n"
+                if unary { loops += "if let selected, selected != \(name) { continue }\n" }
                 closing += "}\n"
                 arguments.append("\(name): \(name)")
             }
             declarations += try nativeDeclarations("""
-            private static func _isEnabled\(action.id.ordinal)(in state: Snapshot\(configurationParameters)) throws -> \(nativeBoolType) {
+            private static func _isEnabled\(action.id.ordinal)(in state: Snapshot\(selectionParameter)\(configurationParameters)) throws -> \(nativeBoolType) {
                 var context: CheckingContext<CheckingRegisters>?
-                return try _isEnabled\(action.id.ordinal)(in: state\(configurationArguments), checking: &context)
+                return try _isEnabled\(action.id.ordinal)(in: state\(selectionArgument)\(configurationArguments), checking: &context)
             }
-            private static func _isEnabled\(action.id.ordinal)(in state: Snapshot\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?) throws -> \(nativeBoolType) {
+            private static func _isEnabled\(action.id.ordinal)(in state: Snapshot\(selectionParameter)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?) throws -> \(nativeBoolType) {
                 \(loops)
                 var enabled = false
                 let failures = try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(configurationArguments), checking: &context) { _ in enabled = true }

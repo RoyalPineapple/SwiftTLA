@@ -1489,7 +1489,15 @@ struct CompiledTLARenderer {
                     tasks.append(.expression(expression.children[0]))
                 case .controlLocation(let location): parts.append(try controlLocationName(location))
                 case .operatorReference(let operation): parts.append(try operatorName(operation))
-                case .enabledAction(let action): parts.append("ENABLED \(try actionReference(action))")
+                case .enabledAction(let id):
+                    if let argument = expression.children.first {
+                        guard actions[id.ordinal].bindings.count == 1, let binding = actions[id.ordinal].bindings.first else { throw missing("unary action", id.ordinal) }
+                        let name = layout.actions[id.ordinal].renderedName
+                        schedule([.text("(IF "), .expression(argument), .text(" \\in "), .expression(binding.domain),
+                            .text(" THEN ENABLED \(name)("), .expression(argument), .text(") ELSE FALSE)")])
+                    } else {
+                        parts.append("ENABLED \(try actionReference(id))")
+                    }
                 case .convert:
                     tasks.append(.expression(expression.children[0]))
                 case .call(let id):

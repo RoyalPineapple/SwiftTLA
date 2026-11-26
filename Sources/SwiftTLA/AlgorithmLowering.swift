@@ -1190,8 +1190,8 @@ enum AlgorithmLowerer {
             case .choose(let set, let variable, let predicate, let preferredType):
                 return .choose(rewritten(set, localRoots: localRoots), variable,
                     rewritten(predicate, localRoots: localRoots.subtracting([variable])), preferredType: preferredType)
-            case .enabledAction:
-                return expression
+            case .enabledAction(let name, let argument):
+                return .enabledAction(name, argument: argument.map { rewritten($0, localRoots: localRoots) })
             case .sequenceFromSet(let set): return .sequenceFromSet(rewritten(set, localRoots: localRoots))
             case .sequenceFromFunction(let function): return .sequenceFromFunction(rewritten(function, localRoots: localRoots))
             case .printT(let value): return .printT(rewritten(value, localRoots: localRoots))

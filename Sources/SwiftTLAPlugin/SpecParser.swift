@@ -2003,12 +2003,17 @@ final class ParserSession {
     }
 
     private func decodeStepEnabledness(_ expression: ExprSyntax, scope: TypedFacadeScope) -> StateExpr? {
-        guard let member = expression.as(MemberAccessExprSyntax.self),
-              member.declName.baseName.sourceIdentifierName == "enabled",
+        let call = expression.as(FunctionCallExprSyntax.self)
+        guard let member = (call?.calledExpression ?? expression).as(MemberAccessExprSyntax.self),
               let reference = member.base?.as(DeclReferenceExprSyntax.self),
               scope.value(for: reference) == nil,
               let step = specBindings.atomicSteps[reference.baseName.sourceIdentifierName] else { return nil }
-        return step.enabled.stateExpr
+        let name = member.declName.baseName.sourceIdentifierName
+        guard let call else { return name == "enabled" ? step.enabled.stateExpr : nil }
+        guard name == "isEnabled", call.arguments.count == 1, let arg = call.arguments.first,
+              arg.label?.text == "for", call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+              let value = decodeTypedFacadeValue(arg.expression, scope: scope) else { return nil }
+        return .enabledAction(step.model.label.name, argument: value)
     }
 
     private func decodeEnumCase(

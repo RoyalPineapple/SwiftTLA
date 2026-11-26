@@ -347,6 +347,7 @@ private enum EvaluatorTask {
         arguments: [CompiledFormalCallArgument],
         argumentScope: EvaluatorScope
     )
+    case boundEnabledness(ActionID)
     case callReturn
     case localDomain(CompiledExpression, scope: EvaluatorScope)
     case store(EvaluatorThunk)
@@ -357,20 +358,20 @@ struct CompiledEvaluator: Sendable {
     let operators: CompiledOperators
     let functions: [ResolvedFunction]
     let bindings: CompiledBindings
-    let enabledActions: Set<ActionID>
+    let isEnabled: @Sendable (ActionID, CompiledValue?) throws -> Bool
 
     init(
         state: CompiledState,
         operators: CompiledOperators,
         functions: [ResolvedFunction] = [],
         bindings: CompiledBindings = .init(),
-        enabledActions: Set<ActionID> = []
+        isEnabled: @escaping @Sendable (ActionID, CompiledValue?) throws -> Bool = { _, _ in false }
     ) {
         self.variableValue = { try state.value(for: $0) }
         self.operators = operators
         self.functions = functions
         self.bindings = bindings
-        self.enabledActions = enabledActions
+        self.isEnabled = isEnabled
     }
 
     init(
@@ -388,7 +389,7 @@ struct CompiledEvaluator: Sendable {
         self.operators = operators
         self.functions = functions
         self.bindings = bindings
-        self.enabledActions = []
+        self.isEnabled = { _, _ in throw CompiledEvaluationError.unresolvedOperator }
     }
 
     func evaluate(_ expression: CompiledExpression) throws -> CompiledValue {
@@ -731,6 +732,9 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.expression(body, callScope))
                 }
 
+            case .boundEnabledness(let id):
+                let argument = try popValue(from: &values)
+                values.append(.boolean(try isEnabled(id, argument)))
             case .callReturn:
                 recursiveDepth -= 1
 
@@ -925,7 +929,12 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.collectionStart(.choose(binder), body: predicate, scope: scope))
                     tasks.append(.expression(set, scope))
                 case .enabledAction(let action):
-                    values.append(.boolean(enabledActions.contains(action)))
+                    if let argument = expression.children.first {
+                        tasks.append(.boundEnabledness(action))
+                        tasks.append(.expression(argument, scope))
+                    } else {
+                        values.append(.boolean(try isEnabled(action, nil)))
+                    }
                 case .foldFunction(let parameters):
                     let body = expression.children[0]
                     let initial = expression.children[1]

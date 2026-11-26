@@ -3,6 +3,25 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct ActionDomainTests {
+    @Test("a bound enabledness query checks its domain and only executes the requested action argument")
+    func checksOnlyRequestedArgument() throws {
+        let spec = TLASpec(name: "BoundEnabledness", variables: [.init(name: "value", initial: .int(0))],
+            actions: [.init(name: "divide", body: .assign(.named("value"), .integerDivide(.int(1), .variable("by"))),
+                bindings: [.init(name: "by", values: [.int(0), .int(1)])])],
+            invariants: [
+                .init(name: "Valid", body: .enabledAction("divide", argument: .int(1))),
+                .init(name: "Outside", body: .enabledAction("divide", argument: .int(2))),
+                .init(name: "Fails", body: .enabledAction("divide", argument: .int(0)))
+            ])
+        let compilation = try spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let state = try #require(try runtime.initialStates().first)
+        let checks = compilation.semantics.behavior.invariants
+        #expect(try runtime.invariantHolds(checks[0], in: state))
+        #expect(try !runtime.invariantHolds(checks[1], in: state))
+        #expect(throws: EvalError.divisionByZero) { try runtime.invariantHolds(checks[2], in: state) }
+    }
+
     @Test("enabled-action dependencies in domains determine evaluation order")
     func ordersDomainDependencies() throws {
         let spec = canonicalTestSpec(variables: [("value", .value(.int(0)))], actions: [

@@ -141,10 +141,9 @@ package struct MultiCarElevator: Sendable {
             }
             exitElevator
             let closeElevatorDoors = Do(Step.closeElevatorDoors, over: Elevator) { e in
-                let car = ElevatorState[e]
-                When(car.doorsOpen)
-                When(car.direction == "Stationary" || FormalCall(as: Set<PersonID>.self, "PeopleWaiting", car.floor, car.direction).isEmpty)
-                When(FormalCall(as: Set<PersonID>.self, "GettingOff", e).isEmpty)
+                When(ElevatorState[e].doorsOpen)
+                When(!enterElevator.isEnabled(for: e))
+                When(!exitElevator.isEnabled(for: e))
                 ElevatorState[e].doorsOpen.set(false)
             }
             closeElevatorDoors
@@ -161,7 +160,7 @@ package struct MultiCarElevator: Sendable {
             let stopElevator = Do(Step.stopElevator, over: Elevator) { e in
                 let car = ElevatorState[e]
                 let next = If(car.direction == "Up", then: car.floor + 1, else: car.floor - 1)
-                When(!car.doorsOpen && !FormalCall(as: Bool.self, "OpenRequested", e) && !Floor.contains(next))
+                When(!car.doorsOpen && !openElevatorDoors.isEnabled(for: e) && !Floor.contains(next))
                 ElevatorState[e].direction.set("Stationary")
             }
             stopElevator

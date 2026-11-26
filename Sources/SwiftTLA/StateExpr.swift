@@ -341,7 +341,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case forAll(StateExpr, String, StateExpr)
     case exists(StateExpr, String, StateExpr)
     case choose(StateExpr, String, StateExpr, preferredType: _SelectionResultTypeHint? = nil)
-    case enabledAction(String)
+    case enabledAction(String, argument: StateExpr? = nil)
 
     case sequenceFromSet(StateExpr)
     case sequenceFromFunction(StateExpr)

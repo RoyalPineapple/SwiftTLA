@@ -16,8 +16,10 @@ extension StateExpr {
         }
         while let (expression, bound) = pending.popLast() {
             switch expression {
-            case .sourceIssue, .value, .integerSet, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
+            case .sourceIssue, .value, .integerSet, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter, .currentProcess, .programCounter, .procedureStack, .controlLocation:
                 break
+            case .enabledAction(_, let argument):
+                if let argument { pending.append((argument, bound)) }
             case .setCheckingRegister(_, let value):
                 pending.append((value, bound))
             case .variable(let name):

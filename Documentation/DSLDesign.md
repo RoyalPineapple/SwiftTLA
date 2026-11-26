@@ -283,7 +283,7 @@ WeakFairness(finish)
 ```
 
 `step.enabled` tests whether the step has a successor, including its guards and local choices.
-Parameterized steps quantify over their configured arguments. An empty argument domain makes the step disabled.
+On a parameterized step, `step.enabled` tests whether any configured argument enables it. For a step with one parameter, `enterElevator.isEnabled(for: car)` checks just that car. A value outside the configured domain returns `false`.
 `WeakFairness(step)` and `StrongFairness(step)` refer to that same registered action.
 For a parameterized independent step, these forms apply to the action as a whole.
 `WeakFairness(each: step)` and `StrongFairness(each: step)` instead apply separately

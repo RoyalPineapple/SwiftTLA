@@ -2583,7 +2583,15 @@ package struct CompiledTypeChecker: Sendable {
             if inputs.types.canProjectRead(existing, to: expected) { return .init(type: expected, computationType: existing) }
             else { result = try CompiledValueType.merge(existing, expected); variables[id] = result }
         case .controlLocation: result = .controlLocation
-        case .enabledAction: result = .bool
+        case .enabledAction(let id):
+            guard let argument = expression.children.first else { result = .bool; break }
+            let parameters = inputs.semantics.behavior.actions[id.ordinal].bindings
+            guard parameters.count == 1, let parameter = parameters.first else {
+                throw CompiledValueType.diagnostic("isEnabled(for:)", "expected a step with one action parameter")
+            }
+            let domain = try checkOperand(parameter.domain, expected: .set(bindings[parameter.binder] ?? .unknown))
+            let value = try checkOperand(argument, expected: element(domain.resultType))
+            return try checkedType(.bool, expected: expected, children: [value])
         case .randomSubset:
             let count = try checkOperand(expression.children[0], expected: .int)
             let domain = try checkOperand(expression.children[1], expected: expected == .unknown ? .set(.unknown) : expected)

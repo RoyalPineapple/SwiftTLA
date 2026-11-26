@@ -264,6 +264,7 @@ extension CompiledExpression {
                 visit(binding.value, scope: binding.scope)
             case .enabledAction(let action):
                 enabledActions.insert(action)
+                for argument in expression.children { visit(argument, scope: scope) }
             case .stateVariable(let variable):
                 variables.insert(variable)
             case .operatorReference(let id):
