@@ -15,7 +15,10 @@ package struct LockHSModel: Sendable {
         package let val: Int
     }
     package typealias Stutter = OneOf<Idle, Pending>
-    private enum Step: String, CaseIterable { case NoStutter, l1HS }
+    private enum Step: String, CaseIterable {
+        case advanceOutsideAcquisition = "NoStutter"
+        case acquireLockOrAdvanceHistory = "l1HS"
+    }
 
     package static var spec: TLASpec {
         #spec("LockHS") { scope in
@@ -27,7 +30,7 @@ package struct LockHSModel: Sendable {
             let idle = s == Stutter.first(Idle(top: "top"))
             let pending = s.assuming(Pending.self)
 
-            Do(Step.NoStutter, when: idle) {
+            Do(Step.advanceOutsideAcquisition, when: idle) {
                 With(processes) { process in
                     When(pc[process] == "l0" || pc[process] == "cs" || pc[process] == "l2")
                     If(pc[process] == "l0") {
@@ -42,7 +45,7 @@ package struct LockHSModel: Sendable {
                     }
                 }
             }
-            Do(Step.l1HS, over: processes) { process in
+            Do(Step.acquireLockOrAdvanceHistory, over: processes) { process in
                 If(idle) {
                     When(pc[process] == "l1" && lock == 1)
                     lock.set(0)

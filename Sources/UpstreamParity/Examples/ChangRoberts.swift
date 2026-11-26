@@ -17,7 +17,10 @@ package struct ChangRobertsModel: Sendable {
         package static let finiteValues = allCases
     }
 
-    private enum Step: String, CaseIterable { case n0, n1 }
+    private enum Step: String, CaseIterable {
+        case sendIDIfInitiator = "n0"
+        case processIncomingID = "n1"
+    }
 
     package static var spec: TLASpec {
         #spec("ChangRoberts") { model in
@@ -43,12 +46,12 @@ package struct ChangRobertsModel: Sendable {
 
                 Each(Node, fairness: .weak) { node in
                     let successor = If(node == N, then: 1, else: node + 1)
-                    Do(Step.n0) {
+                    Do(Step.sendIDIfInitiator) {
                         If(initiator[node]) {
                             msgs[successor].set(msgs[successor].inserting(Id[node]))
                         }
                     }
-                    Loop(Step.n1) {
+                    Loop(Step.processIncomingID) {
                         With(msgs[node]) { candidate in
                             msgs[node].set(msgs[node].removing(candidate))
                             If(state[node] == ProcessState.lost || candidate < Id[node]) {

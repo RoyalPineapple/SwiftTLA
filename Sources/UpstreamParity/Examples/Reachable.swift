@@ -13,7 +13,10 @@ package struct ReachableModel: Sendable {
         package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
-    private enum Step: String, CaseIterable { case a, terminating = "Terminating" }
+    private enum Step: String, CaseIterable {
+        case processFrontierOrFinish = "a"
+        case terminating = "Terminating"
+    }
 
     package static var spec: TLASpec {
         #spec("MCReachable") { scope in
@@ -43,7 +46,7 @@ package struct ReachableModel: Sendable {
             let vroot = scope.sharedVar(initial: root)
             let pc = scope.sharedVar(initial: "a")
 
-            let advance = Do(Step.a) {
+            let processFrontierOrFinish = Do(Step.processFrontierOrFinish) {
                 When(pc == "a")
                 If(vroot.isEmpty) {
                     pc.set("Done")
@@ -62,7 +65,7 @@ package struct ReachableModel: Sendable {
                 When(pc == "Done")
                 Skip()
             }
-            WeakFairness(anyOf: [advance, terminating])
+            WeakFairness(anyOf: [processFrontierOrFinish, terminating])
 
             let wellTyped = marked.isSubset(of: nodes) && vroot.isSubset(of: nodes)
                 && Set<String>(["a", "Done"]).contains(pc) && (pc != "Done" || vroot.isEmpty)

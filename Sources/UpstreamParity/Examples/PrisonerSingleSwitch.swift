@@ -14,7 +14,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
         package static let finiteValues = allCases
     }
 
-    private enum Step: String, CaseIterable { case wardenAction = "WardenAction" }
+    private enum Step: String, CaseIterable { case visitSwitchRoom = "WardenAction" }
 
     package static var spec: TLASpec {
         #spec("Prisoner") { scope in
@@ -38,7 +38,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
             let has_visited = scope.sharedVar(initial: Set<String>())
             let Terminating = Temporal()
 
-            let wardenAction = Do(Step.wardenAction, over: Prisoner) { prisoner in
+            let visitSwitchRoom = Do(Step.visitSwitchRoom, over: Prisoner) { prisoner in
                 If(prisoner == DesignatedCounter) {
                     If(light == Light.on) {
                         light.set(Light.off)
@@ -53,7 +53,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
                 }
                 has_visited.insert(prisoner)
             }
-            WeakFairness(each: wardenAction)
+            WeakFairness(each: visitSwitchRoom)
 
             Invariant("TypeOK") {
                 IntRange(1, through: VictoryThreshold + 1).contains(count)
