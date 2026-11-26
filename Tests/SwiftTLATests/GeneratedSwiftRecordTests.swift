@@ -84,6 +84,12 @@ struct GeneratedSwiftRecordTests {
         #expect(unchanged.state.history.map(\.count) == [0])
     }
 
+    @Test("dictionary domain equality uses modeled key identity in both operand orders")
+    func comparesDictionaryKeysByTheirFields() throws {
+        let machine = try GeneratedSwiftRecord.makeMachine()
+        #expect(try machine.violatedInvariants(checking: [.DictionaryKeyIdentity], atLevel: 1).isEmpty)
+    }
+
     @Test("record expression fields retain their Swift field types")
     func readsTypedFields() throws {
         let record = Expr<GeneratedSwiftRecord.Packet>(.variable("packet"))

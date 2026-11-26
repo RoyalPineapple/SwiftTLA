@@ -973,6 +973,25 @@ struct NativeSwiftEmitter {
                 activeFunctions: activeFunctions)
             return "(try { () throws -> \(nativeBoolType) in switch \(value) { \(cases.joined(separator: "\n")) } }())"
         }
+        func dictionaryDomainEquality(_ domainIndex: Int) throws -> String? {
+            let domain = node.children[domainIndex]
+            let keys = node.children[1 - domainIndex]
+            guard case .domain = domain.operation, expressionValues[domain] == nil,
+                  let receiver = domain.children.first, case .dictionary(let key, _) = receiver.resultType,
+                  domain.resultType == .set(key), keys.resultType == domain.resultType,
+                  keys.operation != .integerRange else { return nil }
+            let function = try self.expression(receiver, state: state, substitutions: substitutions,
+                activeFunctions: activeFunctions)
+            let table = "let _domainTable: \(try swiftType(receiver.resultType)) = \(function)"
+            let expected = "let _domainKeys: \(try swiftType(keys.resultType)) = \(try emit(1 - domainIndex))"
+            let bindings = domainIndex == 0 ? [table, expected] : [expected, table]
+            return """
+            (try { () throws -> \(nativeBoolType) in
+                \(bindings.joined(separator: "\n"))
+                return _domainTable.count == _domainKeys.count && _domainKeys.allSatisfy { _domainTable[$0] != nil }
+            }())
+            """
+        }
         func domainRangeEquality(
             domain: CompiledExpression, range: CompiledExpression, domainFirst: Bool
         ) throws -> String? {
@@ -1026,6 +1045,7 @@ struct NativeSwiftEmitter {
         case .assertView:
             return try checkedView(emit(0), from: childType(0), to: node.resultType)
         case .equal:
+            if let match = try dictionaryDomainEquality(0) ?? dictionaryDomainEquality(1) { return match }
             if let structural = try nominalEquality(negated: false) { return structural }
             if let shape = try recordShapeEquality(domain: node.children[0], keys: node.children[1])
                 ?? recordShapeEquality(domain: node.children[1], keys: node.children[0]) { return shape }

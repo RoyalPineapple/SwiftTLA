@@ -62,6 +62,14 @@ struct GeneratedSwiftRecord {
                     && lookup.keys.cardinality == 2
                     && lookup[Packet(count: 1, ready: false)] == 1
             }
+            let expectedKeys = Set<Int>([0, 1]).mapping { count in Packet.expression(count: count, ready: false) }
+            let differentKeys = Set<Int>([0, 9]).mapping { count in Packet.expression(count: count, ready: false) }
+            Invariant("DictionaryKeyIdentity") {
+                lookup.keys == expectedKeys
+                expectedKeys == lookup.keys
+                !(differentKeys == lookup.keys)
+                !(lookup.keys == Set<Packet>([Packet(count: 0, ready: false)]))
+            }
             Invariant("RecordForAll") {
                 !ForAll(in: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { $0.count == 1 }
                     && !ForAll(in: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { $0.count == 2 }

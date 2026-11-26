@@ -4,7 +4,7 @@ import SwiftTLAMacros
 @TLAModel
 struct IntegerRangeDomainEqualityModel: Sendable {
     enum Step: String, CaseIterable {
-        case check, reversed, large, domainFirstFailure, rangeFirstFailure
+        case check, reversed, large, domainFirstFailure, rangeFirstFailure, domainBeforeKeys, keysBeforeDomain
     }
 
     static var spec: TLASpec {
@@ -26,6 +26,13 @@ struct IntegerRangeDomainEqualityModel: Sendable {
             }
             Do(Step.large) {
                 Assign(result, to: values.keys == IntRange(0, through: 9_223_372_036_854_775_807))
+            }
+            let invalidKeys = Set<Int>([]).inserting((9_223_372_036_854_775_807 + zero) + 1)
+            Do(Step.domainBeforeKeys) {
+                Assign(result, to: invalidDomain == invalidKeys)
+            }
+            Do(Step.keysBeforeDomain) {
+                Assign(result, to: invalidKeys == invalidDomain)
             }
             Do(Step.domainFirstFailure) {
                 Assign(result, to: invalidDomain == IntRange(0, through: 9_223_372_036_854_775_807))

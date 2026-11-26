@@ -179,6 +179,20 @@ struct IntegerRangeDomainEqualityTests {
         }
     }
 
+    @Test("dictionary key-set equality reports the first failing operand")
+    func preservesKeySetFailureOrder() throws {
+        var machine = try IntegerRangeDomainEqualityModel.makeMachine(configuration: .init(
+            members: [], lower: 1, upper: 2))
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.domainBeforeKeys)
+        }
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try machine.send(.keysBeforeDomain)
+        }
+        #expect(machine.snapshot == before)
+    }
+
     @Test("domain equality preserves operand failure order")
     func preservesFailureOrder() throws {
         var machine = try IntegerRangeDomainEqualityModel.makeMachine(configuration: .init(
