@@ -812,6 +812,7 @@ package enum StraightLineAssignmentCheck {
             package let rhs: StateExpr
             package let target: String
             package let incomingBindings: [String: StateExpr]
+            package let predecessor: String?
         }
 
         package struct Branch: Sendable {
@@ -949,7 +950,7 @@ package enum StraightLineAssignmentCheck {
                     guard let scheduled = scheduledAssignments?[name],
                           scheduled.target.utf8.elementsEqual(target.utf8) else { throw failure }
                     result.definitions?.append(.init(name: name, rhs: rhs, target: scheduled.target,
-                        incomingBindings: scheduled.incomingBindings))
+                        incomingBindings: scheduled.incomingBindings, predecessor: scheduled.predecessor))
                 }
                 let reference: TLAValue = .tuple([.string("capture"), .int(result.plans.count)])
                 result.authored[target] = reference
