@@ -41,7 +41,7 @@ package struct TuringPaxosModel: Sendable {
     package static var spec: TLASpec {
         #spec("TuringPaxos") { scope in
             Extends(.integers, .finiteSets)
-            let MaxBallot = scope.parameter(as: Int.self, in: 1...1)
+            let MaxBallot = scope.parameter(as: Int.self, in: 1...2)
             let values = scope.parameter(as: Set<Atom>.self, in: Set<Set<Atom>>([Set([.v1, .v2])]))
             let ballots = IntRange(0, through: MaxBallot)
             let acceptors = scope.parameter(as: Set<Atom>.self, in: Set<Set<Atom>>([Set([.a1, .a2, .a3])]))
@@ -149,6 +149,13 @@ package struct TuringPaxosModel: Sendable {
             prop_1560336937635612000
             Validation("tiny") {
                 Bind(MaxBallot, to: 1)
+                Bind(acceptors, to: Set<Atom>([.a1, .a2, .a3]))
+                Bind(quorums, to: Set<Set<Atom>>([[Atom.a1, Atom.a2], [Atom.a1, Atom.a3], [Atom.a2, Atom.a3]]))
+                Bind(None, to: Atom.none)
+                Bind(values, to: Set<Atom>([.v1, .v2]))
+            }
+            Validation("small") {
+                Bind(MaxBallot, to: 2)
                 Bind(acceptors, to: Set<Atom>([.a1, .a2, .a3]))
                 Bind(quorums, to: Set<Set<Atom>>([[Atom.a1, Atom.a2], [Atom.a1, Atom.a3], [Atom.a2, Atom.a3]]))
                 Bind(None, to: Atom.none)

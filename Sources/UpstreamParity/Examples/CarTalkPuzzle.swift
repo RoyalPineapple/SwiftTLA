@@ -42,6 +42,11 @@ package struct CarTalkPuzzleModel: Sendable {
                 Bind(P, to: 4)
                 Bind(findSolutions, to: true)
             }.checkingDeadlock(false)
+            Validation("FivePieceSolutions") {
+                Bind(N, to: 121)
+                Bind(P, to: 5)
+                Bind(findSolutions, to: true)
+            }.checkingDeadlock(false)
         }
     }
 }

@@ -2889,8 +2889,8 @@
     {
       "path": "specifications/acp",
       "name": "Atomic Commitment Protocol",
-      "audit": "The simple-broadcast configuration with three participants matched locally across typed Swift, generated TLA and the pinned original TLC graph on 8 initial states, 54,944 reachable states and 218,120 labeled transitions. The published configuration selects Spec, leaves all properties unselected and disables deadlock checking. The two-participant non-blocking configuration matched locally across the same three machines on 4 initial states, 4,284 reachable states and 13,924 labeled transitions. AC1, AC2, AC3_1, AC3_2, AC4_alt and AC5 held. Its deadlock check is disabled. The early-decision variant violated its sole selected property AC1. The Swift machine replayed the 12 published actions and reached commit for one participant and abort for the other. A separate exhaustive graph comparison matched 4 initial states, 13,756 reachable states and 44,984 labeled transitions across Swift, generated TLA and the pinned original.",
-      "gap": "Hosted validation of the atomic-commit ports and the separate Apalache configuration remain open.",
+      "audit": "The simple-broadcast configuration with three participants matched locally across typed Swift, generated TLA and the pinned original TLC graph on 8 initial states, 54,944 reachable states and 218,120 labeled transitions. The published configuration selects Spec, leaves all properties unselected and disables deadlock checking. The two-participant non-blocking configuration matched locally across the same three machines on 4 initial states, 4,284 reachable states and 13,924 labeled transitions. AC1, AC2, AC3_1, AC3_2, AC4_alt and AC5 held. Its deadlock check is disabled. The early-decision variant violated its sole selected property AC1. The Swift machine replayed the 12 published actions and reached commit for one participant and abort for the other. A separate exhaustive graph comparison matched 4 initial states, 13,756 reachable states and 44,984 labeled transitions across Swift, generated TLA and the pinned original. The AP configuration matched the pinned graph and TypeInv using string participant values.",
+      "gap": "Hosted validation of the atomic-commit ports remains open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -2943,7 +2943,9 @@
           "path": "specifications/acp/APACP_SB.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -3000,10 +3002,16 @@
           "module": "specifications/acp/APACP_SB.tla",
           "configuration": "specifications/acp/APACP_SB.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/AtomicCommitProtocol.swift",
+              "scenario": "APACP_SB",
+              "caseID": "ap-acp-sb"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -3948,7 +3956,7 @@
       "path": "specifications/CarTalkPuzzle",
       "name": "The Car Talk Puzzle",
       "audit": "Models 1 and 2 matched the complete cached upstream PrintT outputs in native Swift and generated TLA+: the arithmetic pair and all eleven four-piece solutions.",
-      "gap": "Model_3 requests AllSolutions for N=121 and P=5. Its published outcome, local port, and hosted evidence remain open. The unconfigured source and unused operators still need disposition.",
+      "gap": "The FivePieceSolutions scenario implements Model_3 (N=121, P=5). Its published result is unknown. Local output parity and hosted evidence remain open. The unconfigured source and unused operators still need disposition.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "manifestBlob": "fe1b3437d23b51f20ba1b34453aa310e0e410b3f",
@@ -8610,8 +8618,8 @@
     {
       "path": "specifications/PaxosHowToWinATuringAward",
       "name": "Paxos (How to Win a Turing Award)",
-      "audit": "MCConsensus and MCVoting matched their original graphs and selected properties locally, including the Voting refinement to Consensus. MCPaxosTiny matched its original graph, Inv, deadlock check and Voting refinement.",
-      "gap": "MCPaxosSmall and hosted evidence remain open.",
+      "audit": "MCConsensus and MCVoting matched their original graphs and selected properties locally, including the Voting refinement to Consensus. MCPaxosTiny matched its original graph, Inv, deadlock check and Voting refinement. MCPaxosSmall matched the pinned graph, Inv, deadlock check and Voting refinement at MaxBallot 2.",
+      "gap": "Hosted validation remains open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -8697,10 +8705,16 @@
           "module": "specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
           "configuration": "specifications/PaxosHowToWinATuringAward/MCPaxosSmall.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TuringPaxos.swift",
+              "scenario": "small",
+              "caseID": "turing-paxos-small"
+            }
+          ],
           "evidence": []
         },
         {

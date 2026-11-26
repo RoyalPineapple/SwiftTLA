@@ -3332,6 +3332,104 @@
       "moduleSHA256": "606a965959c3002132ae96bc203ef86e8c2b1412ccd9737676e47a07a5ac7418",
       "cfgSHA256": "86e1b803ac8f847615cd60f5a83f4ba3dc8b94518e0a75cd102e837abcf37f07",
       "timeoutSeconds": 600
+    },
+    {
+      "id": "ap-acp-sb",
+      "sourceModel": "acp-sb",
+      "scenario": "APACP_SB",
+      "module": "acp/APACP_SB.tla",
+      "configuration": "acp/APACP_SB.cfg",
+      "imports": [
+        "acp/ACP_SB.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APACP_SB",
+          "importedModule": "ACP_SB"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/acp/APACP_SB.tla",
+        "sha256": "90e34d935e521e19974ff9d35f55f31f8934b96242fd32fd410d7b0c87f09b27"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "90e34d935e521e19974ff9d35f55f31f8934b96242fd32fd410d7b0c87f09b27",
+      "cfgSHA256": "517623bccc510b7904b3685f17e511618aa98860880efadfcf0c8fa1de9590ac",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "turing-paxos-small",
+      "sourceModel": "turing-paxos-tiny",
+      "scenario": "small",
+      "module": "turing-paxos-consensus/MCPaxos.tla",
+      "configuration": "turing-paxos-consensus/MCPaxosSmall.cfg",
+      "imports": [
+        "turing-paxos-consensus/Paxos.tla",
+        "turing-paxos-consensus/Voting.tla",
+        "turing-paxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCPaxos",
+          "importedModule": "Paxos"
+        },
+        {
+          "importingModule": "Paxos",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
+        "sha256": "b923b4753fe9dbf250d46e4fed0472b91f1e79056c80660d7268b0e3e5eabecd"
+      },
+      "exploration": {
+        "maximumStateLimit": 250000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b923b4753fe9dbf250d46e4fed0472b91f1e79056c80660d7268b0e3e5eabecd",
+      "cfgSHA256": "337dbd8b7423c553ef2bf74573be3b5b44c0d3ccee4427af1c50d92f3d80c4a0",
+      "timeoutSeconds": 600
     }
   ]
 }
