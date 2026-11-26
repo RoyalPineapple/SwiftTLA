@@ -75,6 +75,7 @@ package struct AlternativeFailureRegion {
     fileprivate let body: CompiledActionExpr
     package let sharedBindingCount: Int
     fileprivate let selector: CompiledExpression?
+    fileprivate let entryGuard: CompiledExpression?
     package let bindings: [(binder: BinderID, target: VariableID)]
 
     package func sharedIndex(of site: BinderID) -> Int? {
@@ -88,6 +89,23 @@ package struct AlternativeFailureRegion {
 
 package extension CompiledActionExpr {
     var orderedAlternativeFailureRegions: [AlternativeFailureRegion] {
+        alternativeFailureRegions()
+    }
+
+    func orderedAlternativeFailureRegions(afterControlGuardOf counter: VariableID?) -> [AlternativeFailureRegion] {
+        guard let counter,
+              case .and(.guard_(let entry), let choice) = self,
+              case .ifElse = choice,
+              entry.operation == .equal, entry.children.count == 2,
+              entry.children[0].operation == .stateVariable(counter),
+              case .controlLocation = entry.children[1].operation else {
+            return orderedAlternativeFailureRegions
+        }
+        return choice.alternativeFailureRegions(entryGuard: entry, counter: counter)
+    }
+
+    private func alternativeFailureRegions(entryGuard: CompiledExpression? = nil, counter: VariableID? = nil)
+        -> [AlternativeFailureRegion] {
         typealias Definition = (binder: BinderID, value: CompiledExpression)
 
         func splitDefinitions(_ body: CompiledActionExpr) -> ([Definition], CompiledActionExpr) {
@@ -183,11 +201,20 @@ package extension CompiledActionExpr {
                 case .and(let left, let right):
                     pending.append(right)
                     pending.append(left)
+                case .assign(let target, let value) where target == counter:
+                    guard value.children.isEmpty else { return nil }
+                    switch value.operation {
+                    case .controlLocation: break
+                    case .stateVariable(let id) where id == target: break
+                    default: return nil
+                    }
                 case .assign(let target, let value) where isIntValue(value) || (selector != nil && isBoolValue(value)):
                     if case .boundValue(let binder) = value.operation {
                         guard targets.updateValue(target, forKey: binder) == nil else { return nil }
                     }
-                case .guard_(let condition) where condition.operation == .value(.boolean(true)) && condition.children.isEmpty:
+                case .guard_(let condition) where condition.children.isEmpty &&
+                    (condition.operation == .value(.boolean(true))
+                     || (entryGuard != nil && condition.operation == .value(.boolean(false)))):
                     break
                 case .unchanged:
                     break
@@ -205,7 +232,7 @@ package extension CompiledActionExpr {
                 mapped.append((binder, target))
             }
             return (.init(armOrdinal: ordinal, body: withPrefix(body), sharedBindingCount: prefix.count,
-                          selector: selector, bindings: mapped), lastFailure != nil)
+                          selector: selector, entryGuard: entryGuard, bindings: mapped), lastFailure != nil)
         }
         guard let first = arm(left, ordinal: 0), let second = arm(right, ordinal: 1),
               sharedCanFail || first.canFail || second.canFail,
@@ -515,8 +542,15 @@ struct CompiledTLARenderer {
     }
 
     func fullAlternativeFailureHistory(_ action: CompiledActionExpr, ordinal: Int) -> String? {
-        let regions = action.orderedAlternativeFailureRegions
-        guard !regions.isEmpty else { return nil }
+        let regions = action.orderedAlternativeFailureRegions(afterControlGuardOf: layout.programCounterID())
+        guard let first = regions.first else { return nil }
+        let entry: String?
+        if let guardExpression = first.entryGuard {
+            guard let rendered = try? state(guardExpression) else { return nil }
+            entry = rendered
+        } else {
+            entry = nil
+        }
         let source = "<<\(layout.variables.map(\.formalName).joined(separator: ", "))>>"
 
         func event(_ failure: RenderedEvaluationFailure, in region: AlternativeFailureRegion,
@@ -590,9 +624,10 @@ struct CompiledTLARenderer {
                     } else {
                         reached = failure.predicate
                     }
-                    guard let entry = event(failure, in: region, site: site, branch: String(region.armOrdinal),
-                                            reached: reached) else { return nil }
-                    events.append(entry)
+                    let guarded = entry.map { "(IF \($0) THEN \(reached) ELSE FALSE)" } ?? reached
+                    guard let observed = event(failure, in: region, site: site, branch: String(region.armOrdinal),
+                                               reached: guarded) else { return nil }
+                    events.append(observed)
                 }
             }
         }

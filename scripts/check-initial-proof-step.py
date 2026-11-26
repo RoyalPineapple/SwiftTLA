@@ -72,6 +72,35 @@ def validate_arithmetic_packet(packet, source_sha):
 
     validate_send_packet(packet, preparation, "arithmeticPublicSendBinding",
                          "SwiftTLAArithmeticPublicSendBinding", arithmetic["nativeSourceSHA256"])
+    loop = preparation.get("sequentialLoopControl", {})
+    loop_source = "Tests/SwiftTLATests/SequentialLoopControlFixtures.swift"
+    loop_inputs = packet / "proof-inputs"
+    loop_members = loop_inputs / "FinishingLoopNativeMembers.swift"
+    loop_compiled = packet / "native-finishing-loop-source.swift"
+    if ("nativeMembers" in loop or any(path.exists() or path.is_symlink() for path in (loop_members, loop_compiled))):
+        loop_fixture = loop_inputs / Path(loop_source).name
+        loop_files = loop.get("files", {})
+        runtime_sources = ["Sources/SwiftTLA/NativeMachineOperations.swift", "Sources/SwiftTLA/CheckingContext.swift"]
+        runtime_paths = {name: packet / "arithmetic-send" / Path(name).name for name in runtime_sources}
+        runtime_hashes = loop.get("runtimeInputsSHA256", {})
+        if (loop.get("sourceSHA") != source_sha or loop.get("authoredSource") != loop_source
+                or loop.get("compilerModule") != "SwiftTLATests"
+                or loop.get("macroPluginSHA256") != preparation.get("macroPluginSHA256")
+                or not loop.get("sourceOrigin")
+                or loop.get("matchingSourceAccurateTokens") is not True
+                or loop.get("nativeMembers") != loop_members.name
+                or loop.get("nativeMembersSHA256") != loop_files.get(loop_members.name)
+                or any(path.is_symlink() or not path.is_file()
+                       for path in (loop_members, loop_compiled, loop_fixture, *runtime_paths.values()))
+                or digest(loop_members) != loop.get("nativeMembersSHA256")
+                or digest(loop_compiled) != loop.get("compiledMembersSHA256")
+                or loop_compiled.read_text().splitlines()[-1:] != [loop["sourceOrigin"]]
+                or set(runtime_hashes) != set(runtime_sources)
+                or any(runtime_hashes[name] != digest(path) or runtime_hashes[name] != preparation.get("inputs", {}).get(name)
+                       for name, path in runtime_paths.items())
+                or digest(loop_fixture) != loop_files.get(loop_fixture.name)
+                or digest(loop_fixture) != preparation.get("inputs", {}).get(loop_source)):
+            raise ValueError("FinishingLoop native members differ from the retained compiler or source")
     copy = preparation.get("orderedCopyNativeOutput", {})
     conditional = preparation.get("conditionalOverflowHistory", {})
     conditional_members = "GeneratedScalarConditionalOverflowProofModelNativeMembers.swift"

@@ -94,6 +94,7 @@ private struct ActionInstructions {
     var writes: [ActionWrite] = []
     var failureAppendSites: [Int] = []
     var conditionalFailureCalls: [NativeConditionalFailureCall] = []
+    var disabled = false
 
     var tla: String {
         "[captures |-> \(actionTuple(captures.map(\.tla))), "
@@ -704,6 +705,348 @@ func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram,
     """
 }
 
+struct SequentialNativeProof {
+    let definitions: String
+    let theorem: String
+}
+
+func sequentialNativeProof(_ source: String, program: CompiledProgram) throws -> SequentialNativeProof {
+    let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
+    let rows = try decodeScalarActions(source, program: program, predicate: nil, controlledFork: true)
+    guard !rows.isEmpty, Set(rows.map(\.visitor)) == Set(1...rows.count),
+          Set(rows.map(\.label)).count == rows.count,
+          let counter = program.layout.variables.first(where: { $0.declaration.origin == .programCounter }),
+          program.layout.variables.filter({ $0.declaration.origin == .source })
+            .allSatisfy({ program.variableTypes[$0.id] == .int }) else { throw invalid }
+    let fields = program.layout.variables.map(\.formalName)
+    let keys = TLAValue.set(Set(fields.map(TLAValue.string)))
+    let integerFields = TLAValue.set(Set(fields.filter { $0 != counter.formalName }.map(TLAValue.string)))
+    let readPrefixes = try program.layout.variables.filter { $0.declaration.origin == .source }.map {
+        (words("state.state.\(try nativeSourceIdentifier($0.declaration.name))"), $0.formalName)
+    }
+    func comparison(_ predicate: [String]) throws -> String {
+        guard predicate.first == "(", predicate.last == ")" else { throw invalid }
+        let terms = predicate.dropFirst().dropLast()
+        let operators = ["<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "=", "!=": "#"]
+        guard let pivot = terms.firstIndex(where: { operators[$0] != nil }),
+              let relation = operators[terms[pivot]] else { throw invalid }
+        func operand(_ tokens: ArraySlice<String>) throws -> String {
+            if let state = readPrefixes.first(where: { tokens.elementsEqual($0.0) }) { return state.1 }
+            if let number = Int(tokens.joined()), sameWords(Array(tokens), String(number)) {
+                return TLAValue.int(number).description
+            }
+            throw invalid
+        }
+        return try "(\(operand(terms[..<pivot])) \(relation) \(operand(terms[(pivot + 1)...])))"
+    }
+    func snapshot(_ suffix: String) -> String {
+        let cases = fields.map { "key = \(TLAValue.string($0)) -> \($0)\(suffix)" }
+        return "[key \\in \(keys) |-> CASE \(cases.joined(separator: " [] "))]"
+    }
+    let formalLabels = TLAValue.tuple(rows.map { .string($0.formalLabel) })
+    let authoredLabels = TLAValue.tuple(rows.map { .string($0.label) })
+    let routes = actionTuple(rows.map {
+        "[handle |-> \(TLAValue.string($0.handle)), formal |-> \(TLAValue.string($0.formalLabel)), visitor |-> \($0.visitor)]"
+    })
+    var actionDefinitions: [String] = []
+    var actionSteps: [String] = []
+    var actionFacts: [String] = []
+    var failureSteps: [String] = []
+    var failureFacts: [String] = []
+    var nativeActions: [String] = []
+    var failureActions: [String] = []
+    var rhsProofs: [String] = []
+    var rhsFacts: [String] = []
+    for (index, row) in rows.enumerated() {
+        let name = "NativeSequentialVisitor\(index + 1)"
+        var plans: [String] = []
+        var steps: [String] = []
+        var failures: [String] = []
+        var rhsDefinitions: [String] = []
+        var rhsDefinitionNames: [String] = []
+        var materializationFacts: [String] = []
+        for (arm, plan) in row.plans.enumerated() {
+            let prefix = name + "Arm\(arm + 1)"
+            guard plan.guards.count == 1,
+                  plan.writes.allSatisfy({ fields.contains($0.target) }),
+                  plan.failureAppendSites.allSatisfy({ $0 > 0 && $0 <= plan.captures.count })
+            else { throw invalid }
+            plans.append(prefix + "Plan == \(plan.tla)")
+            let captured = prefix + "Capture"
+            plans.append("\(captured)0 == NativeSequentialRule!NativeAssignmentStart")
+            for slot in plan.captures.indices {
+                let previous = "\(captured)\(slot)"
+                let next = "\(captured)\(slot + 1)"
+                let rhs = "\(next)Rhs"
+                let checkedRHS = nativeSequentialRhsProof(
+                    rhs, capture: plan.captures[slot], armPlan: prefix + "Plan",
+                    slot: slot + 1, previous: previous, ordinal: rhsFacts.count + 1
+                )
+                rhsDefinitions += checkedRHS.definitions
+                rhsDefinitionNames += checkedRHS.names
+                rhsProofs.append(checkedRHS.proof)
+                rhsFacts.append(checkedRHS.conclusion)
+                plans.append("""
+                \(next) ==
+                    NativeSequentialRule!NativeAssignmentStep(NativeSequentialBefore,
+                        NativeSequentialRule!NativeAssignmentRhsPlan(\(prefix)Plan.captures[\(slot + 1)]), \(slot + 1), \(previous))
+                """)
+            }
+            let final = "\(captured)\(plan.captures.count)"
+            guard plan.failureAppendSites.count == plan.conditionalFailureCalls.count else { throw invalid }
+            let calls = try zip(plan.failureAppendSites, plan.conditionalFailureCalls).map { slot, call -> String in
+                guard call.location == .arm(arm), call.action == index,
+                      call.before.count == slot - 1 else { throw invalid }
+                let before = actionTuple(call.before.enumerated().map { prior, binding in
+                    "[slot |-> \(prior + 1), binding |-> \(binding.binding), target |-> \(binding.target)]"
+                })
+                return "slot = \(slot) -> [action |-> \(call.action), branch |-> \(arm), "
+                    + "site |-> \(call.site), target |-> \(call.target), before |-> \(before)]"
+            }
+            let sites = TLAValue.set(Set(plan.failureAppendSites.map(TLAValue.int)))
+            let dispatch = calls.isEmpty ? "slot" : "CASE " + calls.joined(separator: " [] ")
+            let appendCalls = "[slot \\in \(sites) |-> \(dispatch)]"
+            let emits = plan.disabled ? "FALSE" : #"""
+            IF \#(prefix)Reached THEN
+                IF \#(final).failure = <<>> THEN
+                    NativeSequentialRule!NativePendingMergesEmit(NativeSequentialFields, NativeSequentialBefore, NativeSequentialAfter,
+                        Len(\#(prefix)Plan.writes), \#(prefix)Writes)
+                ELSE FALSE
+            ELSE FALSE
+            """#
+            plans.append(#"""
+            \#(prefix)Reached == \#(counter.formalName) = \#(prefix)Plan.guards[1]
+            \#(prefix)Writes == NativeSequentialRule!NativeCopyWrites(\#(prefix)Plan, NativeSequentialBefore, \#(final).completed)
+            \#(prefix)Emits ==
+            \#(emits.split(separator: "\n").map { "    " + $0 }.joined(separator: "\n"))
+            \#(prefix)AppendCalls == \#(appendCalls)
+            \#(prefix)RecordedFailure(recording) ==
+                LET reached == \#(final)
+                    calls == \#(prefix)AppendCalls
+                IN IF recording /\ \#(prefix)Reached THEN
+                       IF reached.failure # <<>> THEN
+                           IF reached.failure.site \in DOMAIN calls THEN
+                               LET call == calls[reached.failure.site]
+                               IN <<[action |-> call.action, branch |-> call.branch,
+                                     site |-> call.site, target |-> call.target, payload |-> reached.failure.payload,
+                                     before |-> [i \in DOMAIN call.before |->
+                                         [binding |-> call.before[i].binding, target |-> call.before[i].target,
+                                          value |-> reached.completed[call.before[i].slot]]]]>>
+                           ELSE <<>>
+                       ELSE <<>>
+                   ELSE <<>>
+            \#(prefix)Failure ==
+                LET recorded == \#(prefix)RecordedFailure(TRUE)
+                IN IF recorded = <<>> THEN <<>>
+                   ELSE <<[label |-> \#(TLAValue.string(row.label)), pc |-> \#(counter.formalName),
+                           site |-> \#(final).failure.site, payload |-> recorded[1].payload,
+                           completed |-> [i \in DOMAIN recorded[1].before |-> recorded[1].before[i].value]]>>
+            """#)
+            let fact = "<2>frame\(arm + 1)"
+            actionSteps.append(#"""
+                \#(fact). NativeSequentialRule!NativePendingMergesEmit(NativeSequentialFields, NativeSequentialBefore,
+                    NativeSequentialAfter, Len(\#(prefix)Plan.writes), \#(prefix)Writes)
+                    <=> NativeSequentialRule!NativePendingWriteConstraints(NativeSequentialFields, NativeSequentialBefore,
+                        NativeSequentialAfter, Len(\#(prefix)Plan.writes), \#(prefix)Writes)
+                <3>count. Len(\#(prefix)Plan.writes) \in Nat
+                    BY ONLY SMT DEF \#(prefix)Plan
+                <3>targets. \A slot \in 1..Len(\#(prefix)Plan.writes) :
+                    \#(prefix)Writes[slot][1] \in NativeSequentialFields
+                    BY ONLY SMT DEF NativeSequentialFields, \#(prefix)Plan, \#(prefix)Writes,
+                        NativeSequentialRule!NativeCopyWrites
+                <3>. QED BY ONLY <3>count, <3>targets,
+                    NativeSequentialRule!PendingMergeFoldMaterializesExactlyTheCompatibleWrites, SMT
+            """#)
+            materializationFacts.append(fact)
+            steps.append(prefix + "Emits")
+            failures.append(prefix + "Failure")
+        }
+        let event: String
+        let errors: String
+        if let visit = row.visit {
+            guard steps.count == 2, failures.count == 2 else { throw invalid }
+            let guardText = try comparison(visit.predicate)
+            event = "IF \(name)Arm1Reached THEN (IF \(guardText) THEN \(steps[0]) ELSE \(steps[1])) ELSE FALSE"
+            errors = "IF \(name)Arm1Reached THEN (IF \(guardText) THEN \(failures[0]) ELSE \(failures[1])) ELSE <<>>"
+        } else {
+            event = try checked(steps)
+            errors = try checked(failures)
+        }
+        actionDefinitions += plans + rhsDefinitions
+        actionDefinitions.append("\(name) == \(event)")
+        actionDefinitions.append("\(name)Failures == \(errors)")
+        nativeActions.append(name)
+        failureActions.append(name + "Failures")
+        let fact = "<1>action\(index + 1)"
+        actionFacts.append(fact)
+        let planDefinitions = plans.flatMap { block in
+            block.split(separator: "\n").compactMap { line -> Substring? in
+                guard line.hasPrefix(name), line.contains(" ==") else { return nil }
+                return line.prefix { $0 != "(" && $0 != " " }
+            }
+        }.joined(separator: ", ")
+        actionSteps.insert(#"""
+            \#(fact). \#(name) <=> \#(row.formalLabel)
+            """#, at: actionSteps.count - materializationFacts.count)
+        let rhsExpansion = (rhsDefinitionNames + [
+            "NativeSequentialRule!GeneratedNode", "NativeSequentialRule!GeneratedCombine",
+            "NativeSequentialRule!GeneratedAdd", "NativeSequentialRule!GeneratedAddDefined",
+            "NativeSequentialRule!Success", "NativeSequentialRule!GeneratedOverflow",
+            "NativeSequentialRule!PhysicalRhsReadIndices", "NativeSequentialRule!PhysicalRhsBindings",
+            "NativeSequentialRule!CopyReferenceValue", "NativeSequentialRule!NativeAssignmentRhsPlan"
+        ]).joined(separator: ", ")
+        let failureFact = "<1>failure\(index + 1)"
+        failureFacts.append(failureFact)
+        let authoredFailure = "AuthoredSequentialActionFailure\(index + 1)"
+        let authoredBranches = row.plans.indices.map { "\(authoredFailure)Branch\($0 + 1)" }.joined(separator: ", ")
+        failureSteps.append(#"""
+            \#(failureFact). \#(name)Failures = AuthoredSequentialVisitorFailure(\#(index + 1))
+                BY ONLY AuthoredSequentialTypedEntry, NativeSequentialDecodedRhsOutcomes, NativeSequentialRule!CheckedAdditionRule, SMT
+                    DEF AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts, AuthoredSequentialVisitorFailure,
+                        \#(authoredFailure), \#(authoredBranches), \#(name)Failures, \#(planDefinitions), NativeSequentialBefore,
+                        NativeSequentialRule!NativeAssignmentStart, NativeSequentialRule!NativeAssignmentStep,
+                        \#(rhsExpansion)
+            """#)
+        actionSteps.append(#"""
+                <2>. QED BY ONLY AuthoredSequentialTypedEntry, NativeSequentialDecodedRhsOutcomes, \#(materializationFacts.joined(separator: ", ")), SMT
+                    DEF \#(name), \#(row.formalLabel), \#(planDefinitions), AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts,
+                        NativeSequentialBefore, NativeSequentialAfter, NativeSequentialFields,
+                        NativeSequentialRule!NativeAssignmentStart, NativeSequentialRule!NativeAssignmentStep,
+                        \#(rhsExpansion),
+                        NativeSequentialRule!NativePendingWriteConstraints, NativeSequentialRule!PendingWriteKeys,
+                        NativeSequentialRule!NativeCopyWrites, NativeSequentialRule!NativeCopyValue, NativeSequentialRule!CopyReferenceValue
+            """#)
+    }
+    let actual = actionTuple(rows.map(\.formalLabel))
+    let rhsTheorem: String
+    if rhsFacts.isEmpty {
+        rhsTheorem = "LOCAL THEOREM NativeSequentialDecodedRhsOutcomes == TRUE\nPROOF OBVIOUS"
+    } else {
+        rhsTheorem = #"""
+        LOCAL THEOREM NativeSequentialDecodedRhsOutcomes ==
+        \#(rhsFacts.map { "    /\\ " + $0 }.joined(separator: "\n"))
+        PROOF
+        \#(rhsProofs.joined(separator: "\n"))
+        <1>. QED BY ONLY \#(rhsFacts.indices.map { "<1>rhs\($0 + 1)" }.joined(separator: ", ")), PTL
+
+        """#
+    }
+    let theorem = #"""
+    \#(rhsTheorem)
+    THEOREM NativeSequentialDispatchUsesEmittedLabeledSteps ==
+        AuthoredSequentialTypedEntry =>
+            (\A label : NativeSequentialLabeledStep(label) <=> TLASequentialLabeledStep(label))
+    PROOF
+    <1>. SUFFICES ASSUME AuthoredSequentialTypedEntry
+                  PROVE \A label : NativeSequentialLabeledStep(label) <=> TLASequentialLabeledStep(label) BY PTL
+    \#(actionSteps.joined(separator: "\n"))
+    <1>routes. NativeSequentialDispatch!NativeDispatchBindsTheActionCatalog(NativeSequentialRoutes, NativeSequentialFormalLabels)
+        BY ONLY SMT DEF NativeSequentialRoutes, NativeSequentialFormalLabels,
+            NativeSequentialDispatch!NativeDispatchBindsTheActionCatalog
+    <1>domains. /\ DOMAIN NativeSequentialAuthoredLabels = DOMAIN NativeSequentialFormalLabels
+                /\ DOMAIN NativeSequentialActions = DOMAIN TLASequentialActions
+        BY ONLY IsaM("simp") DEF NativeSequentialAuthoredLabels, NativeSequentialFormalLabels, NativeSequentialActions, TLASequentialActions
+    <1>slots. \A slot \in DOMAIN NativeSequentialFormalLabels :
+                  NativeSequentialActions[slot] <=> TLASequentialActions[slot]
+        BY ONLY \#(actionFacts.joined(separator: ", ")), IsaM("simp"), SMT
+            DEF NativeSequentialFormalLabels, NativeSequentialActions, TLASequentialActions
+    <1>. QED BY ONLY <1>routes, <1>domains, <1>slots,
+        NativeSequentialDispatch!CertifiedNativeDispatchUsesTheLabeledCatalog, SMT
+        DEF NativeSequentialLabeledStep, TLASequentialLabeledStep
+
+    THEOREM NativeSequentialDispatchUsesAuthoredFailures ==
+        AuthoredSequentialTypedEntry =>
+            (\A label : NativeSequentialLabeledFailures(label) = AuthoredSequentialFirstFailure(label))
+    PROOF
+    <1>. SUFFICES ASSUME AuthoredSequentialTypedEntry
+                  PROVE \A label : NativeSequentialLabeledFailures(label) = AuthoredSequentialFirstFailure(label) BY PTL
+    \#(failureSteps.joined(separator: "\n"))
+    <1>. QED BY ONLY \#(failureFacts.joined(separator: ", ")), IsaM("simp"), SMT
+        DEF NativeSequentialLabeledFailures, NativeSequentialRoutes, NativeSequentialAuthoredLabels,
+            NativeSequentialFailures, AuthoredSequentialLabels, AuthoredSequentialFirstFailure, AuthoredSequentialVisitorFailure
+    """#
+    let failureCases = rows.indices.map { index in
+        let visitor = "NativeSequentialRoutes[\(index + 1)].visitor"
+        return "label = NativeSequentialAuthoredLabels[\(visitor)] -> NativeSequentialFailures[\(visitor)]"
+    }.joined(separator: " [] ")
+    let definitions = #"""
+    LOCAL NativeSequentialFields == \#(keys)
+    LOCAL NativeSequentialBefore == \#(snapshot(""))
+    LOCAL NativeSequentialAfter == \#(snapshot("'"))
+    LOCAL NativeSequentialRule == INSTANCE OrderedAssignmentOutputRules WITH Keys <- \#(integerFields),
+        SwiftIntMin <- \#(TLAValue.int(Int.min)), SwiftIntMax <- \#(TLAValue.int(Int.max)),
+        Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>
+    LOCAL NativeSequentialDispatch == INSTANCE ActionOutcomeInterface
+        WITH UpdateValues <- {}, FailureValues <- {}, NoFailure <- <<>>
+    \#(actionDefinitions.joined(separator: "\n"))
+    LOCAL NativeSequentialRoutes == \#(routes)
+    LOCAL NativeSequentialFormalLabels == \#(formalLabels)
+    LOCAL NativeSequentialAuthoredLabels == \#(authoredLabels)
+    LOCAL NativeSequentialActions == \#(actionTuple(nativeActions))
+    LOCAL TLASequentialActions == \#(actual)
+    LOCAL NativeSequentialFailures == \#(actionTuple(failureActions))
+    NativeSequentialLabeledStep(label) ==
+        NativeSequentialDispatch!NativeDispatchLabeled(NativeSequentialRoutes, NativeSequentialActions,
+            NativeSequentialFormalLabels, NativeSequentialAuthoredLabels, label)
+    TLASequentialLabeledStep(label) ==
+        NativeSequentialDispatch!CatalogLabeledBranches(TLASequentialActions, NativeSequentialAuthoredLabels, label)
+    NativeSequentialLabeledFailures(label) ==
+        CASE \#(failureCases) [] OTHER -> <<>>
+    """#
+    return .init(definitions: definitions, theorem: theorem)
+}
+
+/// Instantiate the existing physical history recurrence on the decoded capture's finite node range.
+private func nativeSequentialRhsProof(
+    _ name: String, capture: ActionCapture, armPlan: String, slot: Int, previous: String, ordinal: Int
+) -> (definitions: [String], names: [String], proof: String, conclusion: String) {
+    let rule = "NativeSequentialRule!"
+    let before = "NativeSequentialBefore"
+    let completed = "\(previous).completed"
+    let count = capture.columns.kinds.count
+    let plan = "\(name)Plan"
+    let witness = "\(name)Witness"
+    let history = "\(rule)PhysicalAssignmentRhsHistory"
+    let nodes = (0...count).map { "\(name)Node\($0)" }
+    func finiteHistory(through end: Int) -> String {
+        let cases = (0..<end).map { "i = \($0) -> \(nodes[$0])" }
+        return "[i \\in 0..\(end) |-> CASE \((cases + ["OTHER -> \(nodes[end])"]).joined(separator: " [] "))]"
+    }
+    var definitions = [
+        "\(plan) == \(rule)NativeAssignmentRhsPlan(\(armPlan).captures[\(slot)])",
+        "\(nodes[0]) == \(rule)Success(0)",
+    ]
+    for index in 1...count {
+        definitions.append("""
+        \(nodes[index]) == \(rule)GeneratedNode(\(index), \(plan).kinds, \(plan).literals,
+            \(rule)PhysicalRhsReadIndices(\(plan)), \(plan).left, \(plan).right,
+            \(rule)PhysicalRhsBindings(\(plan), \(before), \(completed), \(finiteHistory(through: index - 1))
+        """)
+    }
+    definitions.append("\(witness) == \(finiteHistory(through: count))")
+    let names = [plan] + nodes + [witness]
+    let recurrence = ["PhysicalAssignmentRhsHistory", "GeneratedExpressionHistory", "GeneratedNode",
+                      "PhysicalRhsReadIndices", "PhysicalRhsBindings"].map { rule + $0 }
+    let check = (names + [armPlan, rule + "NativeAssignmentRhsPlan"] + recurrence).joined(separator: ", ")
+    let conclusion = "\(rule)PhysicalAssignmentRhs(\(plan), \(before), \(completed)) = \(nodes[count])"
+    let proof = #"""
+    <1>rhs\#(ordinal). \#(conclusion)
+        <2>shape. /\ \#(plan).count \in Nat \ {0}
+                  /\ 1..\#(plan).count = \#(TLAValue.set(Set((1...count).map(TLAValue.int))))
+                  /\ \A index \in 1..\#(plan).count : \#(plan).kinds[index] \in {"literal", "read", "add"}
+                  /\ \A index \in 1..\#(plan).count : \#(plan).kinds[index] = "add" =>
+                       /\ \#(plan).left[index] \in 1..(index - 1)
+                       /\ \#(plan).right[index] \in 1..(index - 1)
+            BY ONLY SMT DEF \#(plan), \#(armPlan), \#(rule)NativeAssignmentRhsPlan
+        <2>witness. \#(history)(\#(plan), \#(before), \#(completed), \#(witness))
+            BY ONLY <2>shape, SMT DEF \#(check)
+        <2>result. \#(rule)PhysicalAssignmentRhs(\#(plan), \#(before), \#(completed)) = \#(witness)[\#(plan).count]
+            BY ONLY <2>shape, <2>witness, \#(rule)PhysicalAssignmentRhsAgreesWithWitness, SMT
+        <2>. QED BY ONLY <2>result, SMT DEF \#(witness), \#(plan), \#(armPlan), \#(rule)NativeAssignmentRhsPlan
+    """#
+    return (definitions, [plan] + nodes, proof, conclusion)
+}
+
 func conditionalArmOperands(_ captures: [OrderedRHSPhysicalAction.Plan], writeOrder: [String],
                             writes: [String: TLAValue], failureAppendSites: [Int]) throws -> TLAValue {
     let plans = captures.map { plan in
@@ -983,7 +1326,8 @@ func nativeConditionalActionPlans(_ source: String, program: CompiledProgram, pr
         sharedPrefix: try arm(shared), ifTrue: try arm(row.plans[0]), ifFalse: try arm(row.plans[1]))
 }
 
-private func decodeScalarActions(_ source: String, program: CompiledProgram, predicate: [String]?) throws
+private func decodeScalarActions(_ source: String, program: CompiledProgram, predicate: [String]?,
+                                 controlledFork: Bool = false) throws
     -> [(label: String, formalLabel: String, handle: String, visitor: Int, fields: [String],
          visit: NativeConditionalVisit?, shared: ActionInstructions?, plans: [ActionInstructions])] {
 
@@ -1150,7 +1494,8 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
     let rows = try compiledActions.enumerated().map { index, action in
         let visitor = try checked(functions.filter { $0.name.text == "_visitUpdates\(index)" })
         let decoded = try decodeScalarActionVisitor(visitor, index: index, fields: fields, control: control,
-            locations: locations.map { ($0.caseName, $0.label) }, checking: checking, predicate: predicate, program: program)
+            locations: locations.map { ($0.caseName, $0.label) }, checking: checking, predicate: predicate,
+            program: program, controlledFork: controlledFork)
         let successor = try checked(functions.filter { $0.name.text == "_visitSuccessors\(index)" })
         try verifyGeneratedSuccessorOutput(DeclSyntax(successor), actionID: index, parameters: "", arguments: "",
             configurationParameters: "", configurationArguments: "")
@@ -1224,7 +1569,7 @@ struct NativeConditionalFailureCall {
 
 private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int,
     fields: [ActionField], control: ActionField?, locations: [(caseName: String, label: String)],
-    checking: String, predicate: [String]?, program: CompiledProgram) throws
+    checking: String, predicate: [String]?, program: CompiledProgram, controlledFork: Bool) throws
     -> (visit: NativeConditionalVisit?, shared: ActionInstructions?, plans: [ActionInstructions]) {
     let parts = visitor.body?.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }.filter {
         $0.name.text.hasPrefix("_actionPart")
@@ -1256,7 +1601,9 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
     }
     let byName = Dictionary(uniqueKeysWithValues: zip(names, parts))
     let action = program.layout.actions[index].id
-    let regions = predicate == nil ? [] : program[action].body.orderedAlternativeFailureRegions
+    let counter = program.layout.variables.first { $0.declaration.origin == .programCounter }?.id
+    let regions = controlledFork ? program[action].body.orderedAlternativeFailureRegions(afterControlGuardOf: counter)
+        : (predicate == nil ? [] : program[action].body.orderedAlternativeFailureRegions)
     var visited: Set<String> = []
     let stateReads: [(String, ActionReference)] = fields.map {
         ($0.before, .init(kind: "state", value: .string($0.name), type: $0.type))
@@ -1277,6 +1624,10 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let formal = scope.map { "_ \($0.local): \($0.value.type), " }.joined()
+        let signature = "func \(name)(\(formal)_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws"
+        if controlledFork, sameWords(syntaxWords(part), "\(signature) { return }") {
+            return (["return"], false, nil)
+        }
         let tokens = syntaxWords(body)
         let prefix = words("{ do {")
         let handler = "} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {"
@@ -1284,7 +1635,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
         let lexical = scope.map(\.local)
         let recording: String
         let conditionalFailure: NativeConditionalFailureCall?
-        if predicate != nil,
+        if predicate != nil || controlledFork,
            let actionPart = body.statements.first?.item.as(DoStmtSyntax.self),
            let catchBody = actionPart.catchClauses.first?.body.statements, catchBody.count == 2,
            let observer = catchBody.first {
@@ -1310,7 +1661,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             }
             conditionalFailure = decoded
             recording = observer.description + "\n"
-        } else if predicate == nil {
+        } else if predicate == nil && !controlledFork {
             conditionalFailure = nil
             let linear = nativeOrderedIntAssignmentFailureSource(actionOrdinal: index, preceding: lexical)
             let observed = words("\(handler)\n\(linear)\n\(append)")
@@ -1324,7 +1675,6 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let core = Array(tokens.dropFirst(prefix.count).dropLast(suffix.count))
-        let signature = "func \(name)(\(formal)_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws"
         guard sameWords(syntaxWords(part), """
             \(signature) {
                 do { \(core.joined(separator: " ")) }
@@ -1353,30 +1703,42 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                 && scope.allSatisfy({ $0.value.type == nativeIntTypeTokens.joined() })) else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
-            if untilSelector, let predicate,
+            if untilSelector,
                let body = byName[name]?.body?.statements.first?.item.as(DoStmtSyntax.self)?.body.statements,
                body.count == 1, let item = body.first?.item,
                let call = item.as(TryExprSyntax.self) ?? item.as(ExpressionStmtSyntax.self)?.expression.as(TryExprSyntax.self),
                let selection = nativeConditionalVisit(Syntax(call)) {
                 let names = scope.map(\.local)
                 let arguments = names + ["updates", "emit"]
-                guard !recordsFailure, pending.isEmpty, instructions.writes.isEmpty, instructions.guards.isEmpty,
+                guard !recordsFailure, pending.isEmpty, instructions.writes.isEmpty,
+                      instructions.guards.count == entryGuards,
                       region.map({ $0.sharedBindingCount == names.count }) ?? true,
                       capturesFollowGuard, names.count == instructions.captures.count, syntaxWords(call) == core,
-                      selection.predicate == predicate, selection.ifTrue.arguments == arguments,
-                      selection.ifFalse.arguments == arguments else {
+                      predicate.map({ selection.predicate == $0 }) ?? controlledFork,
+                      !controlledFork || names.isEmpty,
+                      selection.ifTrue.arguments == arguments, selection.ifFalse.arguments == arguments else {
                     throw InitialFailureEvidenceError.unsupportedGeneratedOutput
                 }
                 fork = (selection, scope)
                 break parts
             }
             let argument = scope.map { "\($0.local), " }.joined()
+            if controlledFork, core == ["return"] {
+                guard pending.isEmpty, instructions.writes.isEmpty, instructions.guards.count == entryGuards
+                else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+                instructions.disabled = true
+                break parts
+            }
             if sameWords(core, "try emit(updates)") { continue }
             if let control {
                 for location in locations where sameWords(core, """
                     guard (\(control.before) == \(control.type).\(location.caseName)) else { return }
                     try emit(updates)
                     """) {
+                    if controlledFork {
+                        guard instructions.guards.isEmpty, instructions.captures.isEmpty, instructions.writes.isEmpty
+                        else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+                    }
                     instructions.guards.append(TLAValue.string(location.label).description)
                     continue parts
                 }
@@ -1408,7 +1770,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                     && scope.enumerated().allSatisfy { offset, binding in
                         binding.value.kind == "capture" && binding.value.operand == String(offset + 1)
                     }
-                if recordsFailure || predicate != nil {
+                if recordsFailure || predicate != nil || controlledFork {
                     let intType = nativeIntTypeTokens.joined()
                     let reads = (stateReads + boundReads).filter { $0.1.type == intType }
                     let references = Dictionary(uniqueKeysWithValues: reads.enumerated().map { (words($0.element.0), String($0.offset)) })
@@ -1476,8 +1838,8 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         // A selected conditional arm has already passed the checked branch decision.
-        guard (predicate == nil && instructions.failureAppendSites.isEmpty)
-                || (capturesFollowGuard && instructions.guards.count == entryGuards) else {
+        let checkedOrder = capturesFollowGuard && instructions.guards.count == entryGuards
+        guard checkedOrder || (!controlledFork && predicate == nil && instructions.failureAppendSites.isEmpty) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         return instructions
@@ -1486,19 +1848,19 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
     let visit: NativeConditionalVisit?
     let sharedPrefix: ActionInstructions?
     let plans: [ActionInstructions]
-    if predicate != nil {
-        let shared = try walk("_actionPart0", untilSelector: true, region: regions.first)
-        guard let fork else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+    let initial = try walk("_actionPart0", untilSelector: predicate != nil || controlledFork, region: regions.first)
+    if let fork {
         visit = fork.visit
-        sharedPrefix = shared
-        plans = try [walk("_actionPart\(fork.visit.ifTrue.id)", scope: fork.scope, startingWith: shared,
+        sharedPrefix = initial
+        plans = try [walk("_actionPart\(fork.visit.ifTrue.id)", scope: fork.scope, startingWith: initial,
                           region: regions.first { $0.armOrdinal == 0 }),
-                     walk("_actionPart\(fork.visit.ifFalse.id)", scope: fork.scope, startingWith: shared,
+                     walk("_actionPart\(fork.visit.ifFalse.id)", scope: fork.scope, startingWith: initial,
                           region: regions.first { $0.armOrdinal == 1 })]
     } else {
+        guard predicate == nil else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         visit = nil
         sharedPrefix = nil
-        plans = try [walk("_actionPart0")]
+        plans = [initial]
     }
     guard visited.count == parts.count else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
     return (visit, sharedPrefix, plans)

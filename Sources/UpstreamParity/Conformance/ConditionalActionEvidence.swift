@@ -729,12 +729,26 @@ package enum ConditionalActionEvidence {
                 BY ONLY SMT DEF ConditionalSelectedArm, ConditionalArmFor, ConditionalSourceComparison,
                     ConditionalBefore, ConditionalLayoutIntKeys, Arithmetic!CopyReferenceValue
         """#
+        let readReceiptProof = descriptors.contains { !$0.scheduledReads.isEmpty } ? #"""
+        THEOREM ConditionalReceiptSuppliesPhysicalRoutes ==
+            \A receipt : Arithmetic!ReturnedRootAssignmentReceiptInput(receipt) =>
+                Arithmetic!PhysicalAssignmentReadsMatchRoutes(receipt.rows, receipt.index, receipt.physical)
+        PROOF
+        <1>. TAKE receipt
+        <1>. SUFFICES ASSUME Arithmetic!ReturnedRootAssignmentReceiptInput(receipt)
+                      PROVE Arithmetic!PhysicalAssignmentReadsMatchRoutes(receipt.rows, receipt.index, receipt.physical)
+            OBVIOUS
+        <1>output. Arithmetic!ReturnedRootAssignmentReceiptOutput(receipt)
+            BY ONLY (Arithmetic!ReturnedRootAssignmentReceiptInput(receipt)),
+                Arithmetic!ReturnedRootAssignmentReceiptRecordSuppliesScheduledReadRoutes, SMT
+        <1>. QED BY ONLY <1>output, SMT DEF Arithmetic!ReturnedRootAssignmentReceiptOutput
+        """# + "\n\n" : ""
         return #"""
         ---- MODULE \#(name) ----
         EXTENDS \#(model), TLAPS, Sequences, \#(sourceModules)
         LOCAL INSTANCE SequenceTheorems
 
-        ConditionalLayoutIntKeys == \#(TLAValue.set(input.integerKeys))
+        \#(readReceiptProof)ConditionalLayoutIntKeys == \#(TLAValue.set(input.integerKeys))
         LOCAL ConditionalIntegerFieldNames == \#(integerFieldNames)
         ConditionalIntValues == \#(TLAValue.int(Int.min))..\#(TLAValue.int(Int.max))
         ConditionalTypedState == \#(types.joined(separator: " /\\ "))
@@ -1219,11 +1233,11 @@ package enum ConditionalActionEvidence {
                         Arithmetic!ExtractedNodePlan, \#(source)Nodes
             """#
         }.joined(separator: "\n        ")
-        let routedReads = sources.indices.map { arm -> (prefixes: [String], proof: String) in
+        let routedReads = sources.indices.map { arm -> (prefixes: [String], receipt: String, proof: String) in
             let source = sources[arm]
             let table = tables[arm]
             let scheduled = arms[arm].scheduledReads
-            guard !scheduled.isEmpty else { return ([], emptyArm(arm)) }
+            guard !scheduled.isEmpty else { return ([], "", emptyArm(arm)) }
             let definitionNames = TLAValue.tuple(scheduled.map { .string($0.definitionName) })
             let definitionBinders = TLAValue.tuple(scheduled.map { .int($0.definitionBinder.ordinal) })
             let definitionTargets = TLAValue.tuple(scheduled.map { .int($0.definitionTarget.ordinal) })
@@ -1244,107 +1258,206 @@ package enum ConditionalActionEvidence {
             let readColumn = TLAValue.tuple(scheduled.map { row in
                 .tuple(row.origins.map { row.byOrigin[$0 - 1] })
             })
-            return (prefixes, #"""
+            let receiptName = "ConditionalReturnedReceipt\(arm + 1)"
+            let mapsColumn = "ConditionalReturnedMaps\(arm + 1)"
+            let namesColumn = "ConditionalReturnedDefinitionNames\(arm + 1)"
+            let bindersColumn = "ConditionalReturnedDefinitionBinders\(arm + 1)"
+            let loweredNamesColumn = "ConditionalReturnedLoweredNames\(arm + 1)"
+            let loweredIDsColumn = "ConditionalReturnedLoweredIDs\(arm + 1)"
+            let scheduledColumn = "ConditionalReturnedScheduled\(arm + 1)"
+            let receipt = #"""
+            LOCAL \#(mapsColumn) == \#(tuple(names))
+            LOCAL \#(namesColumn) == \#(definitionNames)
+            LOCAL \#(bindersColumn) == \#(definitionBinders)
+            LOCAL \#(loweredNamesColumn) == \#(loweredNames)
+            LOCAL \#(loweredIDsColumn) == \#(loweredReadIDs)
+            LOCAL \#(scheduledColumn) == \#(scheduledByOrigin)
+            LOCAL \#(receiptName)(rows, index, plan) ==
+                [rows |-> rows, index |-> index, physical |-> plan,
+                 maps |-> \#(mapsColumn), definitionNames |-> \#(namesColumn),
+                 definitionBinders |-> \#(bindersColumn), loweredNames |-> \#(loweredNamesColumn)[index],
+                 loweredIDs |-> \#(loweredIDsColumn)[index], scheduled |-> \#(scheduledColumn)[index]]
+            """#
+            return (prefixes, receipt, #"""
             <3>arm\#(arm + 1). CASE arm = \#(arm + 1)
-                <4>range. Len(rows) = \#(names.count) /\ index \in 1..\#(names.count)
-                    BY ONLY <3>arm\#(arm + 1), <1>integerRows, <2>shape, (arm \in ConditionalArms),
-                        (index \in DOMAIN rows), SMT DEF rows
-                <4>targets. \A position \in 1..Len(rows) :
-                    rows[position].target = ConditionalIntegerFieldNames[\#(targetColumn)[position]]
-                    <5>source. \A position \in 1..Len(rows) : rows[position].target = \#(source)Targets[position]
-                        BY ONLY <3>arm\#(arm + 1), <2>shape, \#(source)RowsProjectEmittedColumns, SMT
-                            DEF rows, ConditionalIntegerRows
-                    <5>compiled. \A position \in 1..Len(rows) :
-                        /\ \#(targetColumn)[position] = ConditionalSourceRows[arm].targets[position].field
-                        /\ ConditionalIntegerFieldNames[\#(targetColumn)[position]] = \#(source)Targets[position]
-                        BY ONLY <3>arm\#(arm + 1), <4>range, SMT
-                            DEF \#(targetColumn), ConditionalIntegerFieldNames, ConditionalSourceRows, \#(source)Targets
-                    <5>. QED BY ONLY <5>source, <5>compiled, SMT
-                <4>. DEFINE maps == \#(tuple(names))
-                <4>transitions. /\ maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
-                                /\ \A position \in 1..prefixCount :
-                                    maps[position + 1] = Arithmetic!CopyReplace(ConditionalIntKeys, maps[position],
-                                        ConditionalIntegerFieldNames[\#(targetColumn)[position]], <<"capture", position>>)
-                    BY ONLY <4>range, IsaM("simp"), SMT DEF maps, prefixCount, \#(names.joined(separator: ", "))
-                <4>. DEFINE scheduled == \#(scheduledByOrigin)
-                            origins == \#(origins)
-                            readColumn == \#(readColumn)
-                            definitionNames == \#(definitionNames)
-                            definitionBinders == \#(definitionBinders)
-                            loweredNames == \#(loweredNames)
-                            loweredReadIDs == \#(loweredReadIDs)
-                            kinds == \#(source)SourceOccurrenceKinds[index]
-                            readKeys == \#(source)SourceOccurrenceReadKeys[index]
-                            resolved == [origin \in DOMAIN kinds |->
-                                LET id == loweredReadIDs[index][origin]
-                                IN IF kinds[origin] # "read" THEN <<>>
-                                   ELSE IF id[1] = "state" THEN <<"state", ConditionalIntegerFieldNames[id[2]]>>
-                                   ELSE <<"capture", 1 + id[2] - definitionBinders[1]>>]
-                <4>certificate. Arithmetic!AssignmentRhsCertificate(rows[index])
-                    BY ONLY <1>integerRows, (arm \in ConditionalArms), (index \in DOMAIN rows), SMT
-                        DEF rows, Arithmetic!SupportedAssignmentList
-                <4>source. /\ rows[index].view.kinds = \#(source)SourceOccurrenceKinds[index]
-                           /\ rows[index].view.reads = \#(source)SourceOccurrenceReadKeys[index]
-                           /\ rows[index].emitted.origins = \#(source)SourceOccurrenceOrigins[index]
-                           /\ Arithmetic!CompilerOccurrenceTree(rows[index].view, rows[index].emitted.count)
-                    BY ONLY <3>arm\#(arm + 1), (index \in DOMAIN rows),
-                        \#(source)RowsProjectSourceOccurrences, SMT DEF rows, ConditionalIntegerRows
-                <4>returnedReads. \A origin \in DOMAIN kinds :
-                    LET id == loweredReadIDs[index][origin]
-                        name == loweredNames[index][origin]
-                        slot == 1 + id[2] - definitionBinders[1]
-                    IN IF kinds[origin] # "read" THEN scheduled[index][origin] = <<>>
-                       ELSE \/ /\ id[1] = "state" /\ id[2] \in DOMAIN ConditionalIntegerFieldNames
-                               /\ name = ConditionalIntegerFieldNames[id[2]] /\ name = readKeys[origin]
-                               /\ scheduled[index][origin] = <<"state", name>>
-                            \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
-                               /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
-                               /\ scheduled[index][origin] = <<"capture", slot>>
-                    BY ONLY <4>range, SMT DEF kinds, scheduled, definitionNames, definitionBinders,
-                        loweredNames, loweredReadIDs, readKeys, \#(source)SourceOccurrenceKinds, \#(source)SourceOccurrenceReadKeys,
-                        ConditionalIntegerFieldNames
-                <4>readProjection. \A origin \in DOMAIN kinds : resolved[origin] = scheduled[index][origin]
-                    BY ONLY <4>returnedReads, SMT DEF resolved
-                <4>acceptedReads. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
-                    scheduled[index][origin] = maps[index][readKeys[origin]]
-                    BY ONLY <4>range, SMT DEF scheduled, kinds, readKeys, maps,
-                        \#(source)SourceOccurrenceKinds, \#(source)SourceOccurrenceReadKeys,
-                        ConditionalIntKeys, Arithmetic!CopyEntryRoutes, Arithmetic!CopyReplace,
-                        ConditionalIntegerFieldNames, \#(targetColumn), \#(names.joined(separator: ", "))
-                <4>lexicalScope. /\ \A a, b \in 1..(index - 1) : definitionNames[a] = definitionNames[b] => a = b
-                                  /\ \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
-                                         \A p \in 1..(index - 1) : definitionNames[p] # readKeys[origin]
-                    <5>fresh. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
-                        \A p \in 1..(index - 1) : definitionNames[p] # readKeys[origin]
-                        BY ONLY <4>range, SMT DEF definitionNames, kinds, readKeys, \#(source)SourceOccurrenceKinds,
-                            \#(source)SourceOccurrenceReadKeys
-                    <5>distinct. \A a, b \in 1..(index - 1) : definitionNames[a] = definitionNames[b] => a = b
-                        BY ONLY <4>range, SMT DEF definitionNames
-                    <5>. QED BY ONLY <5>fresh, <5>distinct
-                <4>physicalReads. plan.reads = \#(physicalPlans)[index].reads
-                    BY ONLY <3>arm\#(arm + 1), <4>range, IsaM("simp"), SMT
-                        DEF plan, raw, ConditionalIntegerTable, \#(table)
-                <4>readColumn. \#(physicalPlans)[index].reads = readColumn[index]
-                    BY ONLY <4>range, SMT DEF readColumn, \#(physicalPlanDefinitions)
-                <4>originOrder. origins[index] = \#(source)SourceOccurrenceOrigins[index]
-                    BY ONLY <4>range, SMT DEF origins, \#(source)SourceOccurrenceOrigins
-                <4>count. rows[index].emitted.count = \#(source)NodeCounts[index]
-                    BY ONLY <3>arm\#(arm + 1), (index \in DOMAIN rows),
-                        \#(source)RowsProjectEmittedColumns, SMT DEF rows, ConditionalIntegerRows
-                <4>projected. \A node \in 1..\#(source)NodeCounts[index] :
-                    /\ origins[index][node] \in DOMAIN kinds
-                    /\ readColumn[index][node] = scheduled[index][origins[index][node]]
-                    BY ONLY <4>range, SMT DEF readColumn, scheduled, origins, kinds,
-                        \#(source)SourceOccurrenceKinds, \#(source)NodeCounts
-                <4>physicalOrder. \A node \in 1..rows[index].emitted.count :
-                    plan.reads[node] = resolved[rows[index].emitted.origins[node]]
-                    BY ONLY <4>physicalReads, <4>readColumn, <4>originOrder, <4>source, <4>count, <4>projected,
-                        <4>readProjection, SMT
-                <4>. QED BY ONLY (index \in DOMAIN rows), <2>operands, <4>range, <4>certificate,
-                    <4>targets, <4>transitions, <4>source, <4>acceptedReads, <4>returnedReads,
-                    <4>readProjection, <4>lexicalScope, <4>physicalOrder,
-                    Arithmetic!ReturnedRootAssignmentReceiptSuppliesScheduledReadRoutes, SMT
-                        DEF prefixCount, kinds, readKeys
+                <4>. DEFINE compilerReceipt == \#(receiptName)(rows, index, plan)
+                <4>geometry. /\ compilerReceipt.rows = rows /\ compilerReceipt.index = index
+                             /\ compilerReceipt.physical = plan
+                    BY ONLY SMT DEF compilerReceipt, \#(receiptName)
+                <4>input. Arithmetic!ReturnedRootAssignmentReceiptInput(compilerReceipt)
+                    <5>range. Len(rows) = \#(names.count) /\ index \in 1..\#(names.count)
+                        BY ONLY <3>arm\#(arm + 1), <1>integerRows, <2>shape, (arm \in ConditionalArms),
+                            (index \in DOMAIN rows), SMT DEF rows
+                    <5>targets. \A position \in 1..Len(rows) :
+                        rows[position].target = ConditionalIntegerFieldNames[\#(targetColumn)[position]]
+                        <6>source. \A position \in 1..Len(rows) : rows[position].target = \#(source)Targets[position]
+                            BY ONLY <3>arm\#(arm + 1), <2>shape, \#(source)RowsProjectEmittedColumns, SMT
+                                DEF rows, ConditionalIntegerRows
+                        <6>compiled. \A position \in 1..Len(rows) :
+                            /\ \#(targetColumn)[position] = ConditionalSourceRows[arm].targets[position].field
+                            /\ ConditionalIntegerFieldNames[\#(targetColumn)[position]] = \#(source)Targets[position]
+                            BY ONLY <3>arm\#(arm + 1), <5>range, SMT
+                                DEF \#(targetColumn), ConditionalIntegerFieldNames, ConditionalSourceRows, \#(source)Targets
+                        <6>. QED BY ONLY <6>source, <6>compiled, SMT
+                    <5>. DEFINE maps == \#(mapsColumn)
+                    <5>transitions. /\ maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
+                                    /\ \A position \in 1..prefixCount :
+                                        maps[position + 1] = Arithmetic!CopyReplace(ConditionalIntKeys, maps[position],
+                                            ConditionalIntegerFieldNames[\#(targetColumn)[position]], <<"capture", position>>)
+                        BY ONLY <5>range, IsaM("simp"), SMT DEF maps, \#(mapsColumn), prefixCount, \#(names.joined(separator: ", "))
+                    <5>. DEFINE scheduled == \#(scheduledColumn)
+                                origins == \#(origins)
+                                readColumn == \#(readColumn)
+                                definitionNames == \#(namesColumn)
+                                definitionBinders == \#(bindersColumn)
+                                loweredNames == \#(loweredNamesColumn)
+                                loweredReadIDs == \#(loweredIDsColumn)
+                                kinds == \#(source)SourceOccurrenceKinds[index]
+                                readKeys == \#(source)SourceOccurrenceReadKeys[index]
+                                resolved == [origin \in DOMAIN kinds |->
+                                    LET id == loweredReadIDs[index][origin]
+                                    IN IF kinds[origin] # "read" THEN <<>>
+                                       ELSE IF id[1] = "state" THEN <<"state", ConditionalIntegerFieldNames[id[2]]>>
+                                       ELSE <<"capture", 1 + id[2] - definitionBinders[1]>>]
+                    <5>certificate. Arithmetic!AssignmentRhsCertificate(rows[index])
+                        BY ONLY <1>integerRows, (arm \in ConditionalArms), (index \in DOMAIN rows), SMT
+                            DEF rows, Arithmetic!SupportedAssignmentList
+                    <5>source. /\ rows[index].view.kinds = \#(source)SourceOccurrenceKinds[index]
+                               /\ rows[index].view.reads = \#(source)SourceOccurrenceReadKeys[index]
+                               /\ rows[index].emitted.origins = \#(source)SourceOccurrenceOrigins[index]
+                               /\ Arithmetic!CompilerOccurrenceTree(rows[index].view, rows[index].emitted.count)
+                        BY ONLY <3>arm\#(arm + 1), (index \in DOMAIN rows),
+                            \#(source)RowsProjectSourceOccurrences, SMT DEF rows, ConditionalIntegerRows
+                    <5>returnedReads. \A origin \in DOMAIN kinds :
+                        LET id == loweredReadIDs[index][origin]
+                            name == loweredNames[index][origin]
+                            slot == 1 + id[2] - definitionBinders[1]
+                        IN IF kinds[origin] # "read" THEN scheduled[index][origin] = <<>>
+                           ELSE \/ /\ id[1] = "state" /\ id[2] \in DOMAIN ConditionalIntegerFieldNames
+                                   /\ name = ConditionalIntegerFieldNames[id[2]] /\ name = readKeys[origin]
+                                   /\ scheduled[index][origin] = <<"state", name>>
+                                \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
+                                   /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
+                                   /\ scheduled[index][origin] = <<"capture", slot>>
+                        BY ONLY <5>range, SMT DEF kinds, scheduled, \#(scheduledColumn), definitionNames, \#(namesColumn), definitionBinders, \#(bindersColumn),
+                            loweredNames, \#(loweredNamesColumn), loweredReadIDs, \#(loweredIDsColumn), readKeys, \#(source)SourceOccurrenceKinds, \#(source)SourceOccurrenceReadKeys,
+                            ConditionalIntegerFieldNames
+                    <5>readProjection. \A origin \in DOMAIN kinds : resolved[origin] = scheduled[index][origin]
+                        BY ONLY <5>returnedReads, SMT DEF resolved
+                    <5>acceptedReads. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
+                        scheduled[index][origin] = maps[index][readKeys[origin]]
+                        BY ONLY <5>range, SMT DEF scheduled, \#(scheduledColumn), kinds, readKeys, maps, \#(mapsColumn),
+                            \#(source)SourceOccurrenceKinds, \#(source)SourceOccurrenceReadKeys,
+                            ConditionalIntKeys, Arithmetic!CopyEntryRoutes, Arithmetic!CopyReplace,
+                            ConditionalIntegerFieldNames, \#(targetColumn), \#(names.joined(separator: ", "))
+                    <5>lexicalScope. /\ \A a, b \in 1..(index - 1) : definitionNames[a] = definitionNames[b] => a = b
+                                      /\ \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
+                                             \A p \in 1..(index - 1) : definitionNames[p] # readKeys[origin]
+                        <6>fresh. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
+                            \A p \in 1..(index - 1) : definitionNames[p] # readKeys[origin]
+                            BY ONLY <5>range, SMT DEF definitionNames, \#(namesColumn), kinds, readKeys, \#(source)SourceOccurrenceKinds,
+                                \#(source)SourceOccurrenceReadKeys
+                        <6>distinct. \A a, b \in 1..(index - 1) : definitionNames[a] = definitionNames[b] => a = b
+                            BY ONLY <5>range, SMT DEF definitionNames, \#(namesColumn)
+                        <6>. QED BY ONLY <6>fresh, <6>distinct
+                    <5>physicalReads. plan.reads = \#(physicalPlans)[index].reads
+                        BY ONLY <3>arm\#(arm + 1), <5>range, IsaM("simp"), SMT
+                            DEF plan, raw, ConditionalIntegerTable, \#(table)
+                    <5>readColumn. \#(physicalPlans)[index].reads = readColumn[index]
+                        BY ONLY <5>range, SMT DEF readColumn, \#(physicalPlanDefinitions)
+                    <5>originOrder. origins[index] = \#(source)SourceOccurrenceOrigins[index]
+                        BY ONLY <5>range, SMT DEF origins, \#(source)SourceOccurrenceOrigins
+                    <5>count. rows[index].emitted.count = \#(source)NodeCounts[index]
+                        BY ONLY <3>arm\#(arm + 1), (index \in DOMAIN rows),
+                            \#(source)RowsProjectEmittedColumns, SMT DEF rows, ConditionalIntegerRows
+                    <5>projected. \A node \in 1..\#(source)NodeCounts[index] :
+                        /\ origins[index][node] \in DOMAIN kinds
+                        /\ readColumn[index][node] = scheduled[index][origins[index][node]]
+                        BY ONLY <5>range, SMT DEF readColumn, scheduled, \#(scheduledColumn), origins, kinds,
+                            \#(source)SourceOccurrenceKinds, \#(source)NodeCounts
+                    <5>physicalOrder. \A node \in 1..rows[index].emitted.count :
+                        plan.reads[node] = resolved[rows[index].emitted.origins[node]]
+                        BY ONLY <5>physicalReads, <5>readColumn, <5>originOrder, <5>source, <5>count, <5>projected,
+                            <5>readProjection, SMT
+                    <5>. DEFINE selectedNames == loweredNames[index]
+                                selectedIDs == loweredReadIDs[index]
+                                selectedRoutes == scheduled[index]
+                    <5>routeInput.
+                        /\ Len(rows) \in Nat /\ index \in 1..Len(rows)
+                        /\ maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
+                        /\ \A position \in 1..(Len(rows) - 1) :
+                            maps[position + 1] = Arithmetic!CopyReplace(ConditionalIntKeys, maps[position],
+                                rows[position].target, <<"capture", position>>)
+                        BY ONLY <2>shape, <5>range, <5>targets, <5>transitions, SMT DEF prefixCount
+                    <5>lookupInput. \A origin \in DOMAIN rows[index].view.kinds : rows[index].view.kinds[origin] = "read" =>
+                        selectedRoutes[origin] = maps[index][rows[index].view.reads[origin]]
+                        BY ONLY <5>acceptedReads, <5>source, SMT DEF kinds, readKeys, selectedRoutes
+                    <5>scopeInput. \A origin \in DOMAIN rows[index].view.kinds : rows[index].view.kinds[origin] = "read" =>
+                        LET key == rows[index].view.reads[origin]
+                            name == selectedNames[origin]
+                            id == selectedIDs[origin]
+                            slot == 1 + id[2] - definitionBinders[1]
+                        IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
+                           /\ (\/ /\ id[1] = "state" /\ name = key /\ selectedRoutes[origin] = <<"state", key>>
+                               \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
+                                  /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
+                                  /\ selectedRoutes[origin] = <<"capture", slot>>)
+                        BY ONLY <5>returnedReads, <5>lexicalScope, <5>source, SMT DEF kinds, readKeys, selectedNames, selectedIDs, selectedRoutes
+                    <5>physicalInput. \A node \in 1..rows[index].emitted.count : rows[index].emitted.nodes[node].kind = "read" =>
+                        plan.reads[node] = selectedRoutes[rows[index].emitted.origins[node]]
+                        BY ONLY <5>physicalOrder, <5>readProjection, <5>projected, <5>originOrder, <5>source, <5>count,
+                            SMT DEF selectedRoutes
+                    <5>tableFields. /\ compilerReceipt.maps = maps
+                                     /\ compilerReceipt.definitionNames = definitionNames
+                                     /\ compilerReceipt.definitionBinders = definitionBinders
+                        BY ONLY SMT DEF compilerReceipt, \#(receiptName), maps, definitionNames, definitionBinders
+                    <5>rowFields. /\ compilerReceipt.loweredNames = selectedNames /\ compilerReceipt.loweredIDs = selectedIDs
+                                   /\ compilerReceipt.scheduled = selectedRoutes
+                        BY ONLY SMT DEF compilerReceipt, \#(receiptName),
+                            selectedNames, selectedIDs, selectedRoutes, loweredNames, loweredReadIDs, scheduled
+                    <5>geometryInput.
+                        /\ Len(compilerReceipt.rows) \in Nat
+                        /\ compilerReceipt.index \in 1..Len(compilerReceipt.rows)
+                        /\ compilerReceipt.index \in DOMAIN compilerReceipt.rows
+                        /\ Arithmetic!AssignmentRhsCertificate(compilerReceipt.rows[compilerReceipt.index])
+                        /\ Arithmetic!CompilerOccurrenceTree(compilerReceipt.rows[compilerReceipt.index].view, compilerReceipt.rows[compilerReceipt.index].emitted.count)
+                        /\ Arithmetic!PhysicalAssignmentOperandsMatch(compilerReceipt.rows[compilerReceipt.index], compilerReceipt.physical)
+                        BY ONLY (index \in DOMAIN rows), <2>operands, <5>certificate, <5>source, <5>routeInput, <4>geometry, SMT
+                    <5>routesInput.
+                        /\ compilerReceipt.maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
+                        /\ \A position \in 1..(Len(compilerReceipt.rows) - 1) :
+                                compilerReceipt.maps[position + 1] =
+                                    Arithmetic!CopyReplace(ConditionalIntKeys, compilerReceipt.maps[position], compilerReceipt.rows[position].target, <<"capture", position>>)
+                        BY ONLY <5>routeInput, <4>geometry, <5>tableFields, SMT
+                    <5>freshNamesInput.
+                        \A a, b \in 1..(compilerReceipt.index - 1) : compilerReceipt.definitionNames[a] = compilerReceipt.definitionNames[b] => a = b
+                        BY ONLY <5>lexicalScope, <4>geometry, <5>tableFields, SMT
+                    <5>lookupFieldInput.
+                        \A origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds : compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
+                                compilerReceipt.scheduled[origin] = compilerReceipt.maps[compilerReceipt.index][compilerReceipt.rows[compilerReceipt.index].view.reads[origin]]
+                        BY ONLY <5>lookupInput, <4>geometry, <5>tableFields, <5>rowFields, SMT
+                    <5>scopeFieldInput.
+                        \A origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds : compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
+                                LET key == compilerReceipt.rows[compilerReceipt.index].view.reads[origin]
+                                    name == compilerReceipt.loweredNames[origin]
+                                    id == compilerReceipt.loweredIDs[origin]
+                                    slot == 1 + id[2] - compilerReceipt.definitionBinders[1]
+                                IN /\ \A p \in 1..(compilerReceipt.index - 1) : compilerReceipt.definitionNames[p] # key
+                                   /\ (\/ /\ id[1] = "state" /\ name = key /\ compilerReceipt.scheduled[origin] = <<"state", key>>
+                                       \/ /\ id[1] = "binding" /\ slot \in 1..(compilerReceipt.index - 1)
+                                          /\ id[2] = compilerReceipt.definitionBinders[slot] /\ name = compilerReceipt.definitionNames[slot]
+                                          /\ compilerReceipt.scheduled[origin] = <<"capture", slot>>)
+                        BY ONLY <5>scopeInput, <4>geometry, <5>tableFields, <5>rowFields, SMT
+                    <5>physicalFieldInput.
+                        \A node \in 1..compilerReceipt.rows[compilerReceipt.index].emitted.count : compilerReceipt.rows[compilerReceipt.index].emitted.nodes[node].kind = "read" =>
+                                compilerReceipt.physical.reads[node] = compilerReceipt.scheduled[compilerReceipt.rows[compilerReceipt.index].emitted.origins[node]]
+                        BY ONLY <5>physicalInput, <4>geometry, <5>rowFields, SMT
+                    <5>. QED BY ONLY <5>geometryInput, <5>routesInput, <5>freshNamesInput,
+                        <5>lookupFieldInput, <5>scopeFieldInput, <5>physicalFieldInput, PTL
+                        DEF Arithmetic!ReturnedRootAssignmentReceiptInput
+                <4>physical. Arithmetic!PhysicalAssignmentReadsMatchRoutes(compilerReceipt.rows, compilerReceipt.index, compilerReceipt.physical)
+                    BY ONLY <4>input, ConditionalReceiptSuppliesPhysicalRoutes, SMT
+                <4>. QED BY ONLY <4>physical, <4>geometry, SMT
             """#)
         }
         let ranges = arms.map { "1..\($0.integerCaptures.count)" }
@@ -1636,8 +1749,14 @@ package enum ConditionalActionEvidence {
                                  ELSE TRUE)
                         <6>. TAKE node \in 1..actualPlan.count
                         <6>other. CASE actualPlan.kinds[node] # "add"
-                            BY ONLY <6>other, <4>range, (node \in 1..actualPlan.count), SMT
-                                DEF actualPlan, actualGuards, \#(values), \#(planDefinitions)
+                            <7>coordinate. /\ node \in 1..\#(source)NodeCounts[index]
+                                           /\ \#(source)NodeKinds[index][node] # "add"
+                                BY ONLY <6>other, (node \in 1..actualPlan.count), <2>operands, <4>project, <4>sourceColumns, SMT
+                                    DEF expected, Arithmetic!PhysicalAssignmentOperandsMatch
+                            <7>guardValue. actualGuards[node] = TRUE
+                                BY ONLY <4>range, <7>coordinate, SMT DEF actualGuards, \#(values),
+                                    \#(source)NodeCounts, \#(source)NodeKinds
+                            <7>. QED BY ONLY <6>other, <7>guardValue, SMT
             \#(addCase)
                         <6>. QED BY ONLY <6>other, <6>add
                     <5>. QED BY ONLY <5>nodes DEF Arithmetic!RenderedRhsGuards
@@ -1662,6 +1781,7 @@ package enum ConditionalActionEvidence {
         let rowDefinitions = #"""
         \#(actual.joined(separator: "\n"))
         \#(routedReads.flatMap(\.prefixes).joined(separator: "\n"))
+        \#(routedReads.map(\.receipt).filter { !$0.isEmpty }.joined(separator: "\n"))
         ConditionalIntegerRows(arm) ==
             IF arm = 1 THEN \#(sources[0])Rows ELSE \#(sources[1])Rows
         ConditionalIntegerTable(arm) ==
@@ -2869,7 +2989,7 @@ package enum ConditionalActionEvidence {
             BY ONLY DEF Spec, vars
         \#(invariantProof)<1>behavior. \#(behaviorStatement)
             BY ONLY \#(initFact)\#(typeFacts)<1>spec, <1>always, PTL DEF ConditionalConfiguredBehavior
-        <1>. QED BY ONLY \#(selection), \#(initFact)\#(typeFacts)<1>checked, <1>behavior, PTL
+        <1>. QED BY ONLY \#(selection), \#(initFact)\#(typeFacts)<1>checked, <1>behavior, Zenon
 
         ====
         """#

@@ -15,6 +15,7 @@ enum AuthoredCopySyntax {
         fileprivate let declaration: TokenSyntax
         fileprivate let registration: TokenSyntax
         fileprivate let hasExplicitCapture: Bool
+        let hasPlainBehavior: Bool
     }
 
     private struct Label: Hashable {
@@ -76,7 +77,61 @@ enum AuthoredCopySyntax {
             body: body.statements,
             sourceStart: specBody.positionAfterSkippingLeadingTrivia.utf8Offset,
             declaration: selected.declaration, registration: selected.registration,
-            hasExplicitCapture: specBody.signature?.capture != nil || body.signature?.capture != nil)
+            hasExplicitCapture: specBody.signature?.capture != nil || body.signature?.capture != nil,
+            hasPlainBehavior: hasPlainBehavior(members, specBody: specBody, call: selected.call, body: body))
+    }
+
+    private static func hasPlainBehavior(_ members: MemberBlockItemListSyntax, specBody: ClosureExprSyntax,
+                                         call: FunctionCallExprSyntax, body: ClosureExprSyntax) -> Bool {
+        func plainParameters(_ closure: ClosureExprSyntax, allowImplicit: Bool) -> Bool {
+            guard let signature = closure.signature else { return allowImplicit }
+            guard signature.attributes.isEmpty, signature.capture == nil,
+                  signature.effectSpecifiers == nil, signature.returnClause == nil,
+                  case .simpleInput(let parameters) = signature.parameterClause else { return false }
+            return parameters.count == 1 && parameters.first?.name.text != "_"
+        }
+        func unmodified(_ declaration: VariableDeclSyntax) -> Bool {
+            declaration.attributes.isEmpty && declaration.modifiers.isEmpty
+        }
+
+        // The two enclosing items are the binding and registration already matched by select.
+        // Extra items could register fairness or select another behavior.
+        guard specBody.statements.count == 2,
+              let binding = specBody.statements.first?.item.as(VariableDeclSyntax.self), unmodified(binding),
+              plainParameters(specBody, allowImplicit: true), plainParameters(body, allowImplicit: false),
+              call.additionalTrailingClosures.isEmpty,
+              body.statements.allSatisfy({ item in
+                  guard let declaration = item.item.as(VariableDeclSyntax.self) else { return true }
+                  return unmodified(declaration)
+              }),
+              let spec = members.compactMap({ $0.decl.as(VariableDeclSyntax.self) }).first(where: { declaration in
+                  declaration.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec"
+              }),
+              spec.attributes.isEmpty,
+              spec.modifiers.allSatisfy({ ["static", "package", "internal", "public", "fileprivate", "private"]
+                  .contains($0.name.text) }),
+              let accessors = spec.bindings.first?.accessorBlock?.accessors else { return false }
+        if let getters = accessors.as(AccessorDeclListSyntax.self),
+           let getter = getters.first, !getter.attributes.isEmpty || getter.modifier != nil {
+            return false
+        }
+        var labels: Set<String> = []
+        for argument in call.arguments {
+            guard let label = argument.label?.text, labels.insert(label).inserted else { return false }
+            switch label {
+            case "label":
+                guard argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue != nil else { return false }
+            case "fairness":
+                guard let access = argument.expression.as(MemberAccessExprSyntax.self),
+                      access.declName.baseName.text == "none", access.declName.argumentNames == nil,
+                      access.base == nil || ["SequentialAlgorithmFairness", "SwiftTLA.SequentialAlgorithmFairness"]
+                          .contains(access.base?.trimmedDescription ?? "") else { return false }
+            case "scoped":
+                guard call.trailingClosure == nil, argument.expression.is(ClosureExprSyntax.self) else { return false }
+            default: return false
+            }
+        }
+        return call.trailingClosure != nil || labels.contains("scoped")
     }
 
     static func proofInputs(_ selection: Selection, comparingParsedRows: Bool = false,

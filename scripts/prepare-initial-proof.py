@@ -1012,16 +1012,36 @@ def main():
             loop_source = "Tests/SwiftTLATests/SequentialLoopControlFixtures.swift"
             loop_module = "SwiftTLASequentialControlFinishingLoop"
             loop_parent = loop_module + "ConfiguredProof"
+            loop_members = "FinishingLoopNativeMembers.swift"
             loop_names = {Path(loop_source).name, "FinishingLoop.tla", "FinishingLoop.cfg",
-                          f"{loop_module}.tla", f"{loop_parent}.tla"}
+                          f"{loop_module}.tla", f"{loop_parent}.tla", loop_members}
             if not loop_names.issubset(attached):
-                raise ValueError("missing FinishingLoop source, emitted output, or configured proof")
+                raise ValueError("missing FinishingLoop source, native member attachment, emitted output, or configured proof")
             loop = {name: attached.pop(name) for name in loop_names}
             if (any(path.is_symlink() or not path.is_file() for path in loop.values())
                     or digest(loop[Path(loop_source).name]) != inputs[loop_source]
                     or loop[f"{loop_parent}.tla"].read_text().splitlines()[1:2] !=
                         [f"EXTENDS {loop_module}, CallerInputPageBlock1"]):
                 raise ValueError("FinishingLoop attachments do not bind the fixture and control proof")
+            loop_plugin_sha = digest(plugin)
+            loop_expansion, loop_origin = capture_model_expansion(loop_source, "finishing-loop",
+                owner="FinishingLoop", compiler_module="SwiftTLATests")["members"]
+            loop_fixture_lines = loop[Path(loop_source).name].read_text().splitlines()
+            loop_starts = [line for line, text in enumerate(loop_fixture_lines, 1) if text == "struct FinishingLoop {"]
+            if len(loop_starts) != 1:
+                raise ValueError("expected one FinishingLoop declaration in its fixture")
+            loop_end = next((line for line in range(loop_starts[0] + 1, len(loop_fixture_lines) + 1)
+                             if loop_fixture_lines[line - 1] == "}"), None)
+            if (loop_end is None or loop_origin != f"// original-source-range: {root / loop_source}:{loop_end}:1-{loop_end}:1"
+                    or digest(plugin) != loop_plugin_sha or digest(root / loop_source) != inputs[loop_source]):
+                raise ValueError("FinishingLoop compiler plug-in, fixture, or member origin differs")
+            retained_loop = packet / "native-finishing-loop-source.swift"
+            retained_loop.write_bytes(loop_expansion)
+            with (output / "finishing-loop-compare-members.log").open("wb") as log:
+                subprocess.run([str(binary), "native", "verify-member-tokens",
+                                "--compiled-members", str(retained_loop),
+                                "--attached-members", str(loop[loop_members])],
+                               env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
             procedure_models = {
                 "ProcedureFrame": ("Tests/SwiftTLATests/ProcedureLoweringTests.swift",
                                    "ProcedureLoweringTests/callReturnRestoresFrame"),
@@ -1131,6 +1151,11 @@ def main():
             receipt["sequentialLoopControl"] = {
                 "sourceSHA": head, "authoredSource": loop_source, "configuration": "FinishingLoop.cfg",
                 "test": "SequentialLoopControlTests/preservesCompletion", "configuredProof": f"{loop_parent}.tla",
+                "nativeMembers": loop_members, "nativeMembersSHA256": proof_files[loop_members],
+                "compiledMembersSHA256": digest(retained_loop), "matchingSourceAccurateTokens": True,
+                "sourceOrigin": loop_origin, "compilerModule": "SwiftTLATests",
+                "macroPluginSHA256": loop_plugin_sha,
+                "runtimeInputsSHA256": {name: inputs[name] for name in (native_operations, checking_context)},
                 "files": {name: proof_files[name] for name in sorted(loop)},
             }
         if stack_files:
