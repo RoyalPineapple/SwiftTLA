@@ -491,12 +491,35 @@ PROOF
                          \A child \in 0..(index - 1) : agrees(child)
                  PROVE agrees(index)
         BY SMT
-    <2>children. plan.kinds[index] = "add" =>
-        /\ agrees(plan.left[index])
-        /\ agrees(plan.right[index])
+    <2>. DEFINE atNode(history) ==
+            GeneratedNode(index, plan.kinds, plan.literals, PhysicalRhsReadIndices(plan),
+                plan.left, plan.right, PhysicalRhsBindings(plan, before, completed), history)
+    <2>evaluate. ASSUME NEW h, PhysicalAssignmentRhsHistory(plan, before, completed, h)
+                  PROVE h[index] = atNode(h)
+        BY ONLY PhysicalAssignmentRhsHistory(plan, before, completed, h),
+            (index \in 1..plan.count), SMT
+            DEF atNode, PhysicalAssignmentRhsHistory, GeneratedExpressionHistory
+    <2>selectedNode. selected[index] = atNode(selected)
+        BY ONLY <1>chosen, <2>evaluate, Zenon
+    <2>witnessNode. witness[index] = atNode(witness)
+        BY ONLY PhysicalAssignmentRhsHistory(plan, before, completed, witness),
+            (index \in 1..plan.count), SMT
+            DEF atNode, PhysicalAssignmentRhsHistory, GeneratedExpressionHistory
+    <2>kind. plan.kinds[index] \in {"literal", "read", "add"}
         BY SMT
-    <2>. QED BY <1>chosen, <2>children, SMT
-        DEF agrees, PhysicalAssignmentRhsHistory, GeneratedExpressionHistory, GeneratedNode
+    <2>literal. CASE plan.kinds[index] = "literal"
+        BY ONLY <2>literal, <2>selectedNode, <2>witnessNode, SMT
+            DEF agrees, atNode, GeneratedNode
+    <2>read. CASE plan.kinds[index] = "read"
+        BY ONLY <2>read, <2>selectedNode, <2>witnessNode, SMT
+            DEF agrees, atNode, GeneratedNode
+    <2>add. CASE plan.kinds[index] = "add"
+        <3>children. /\ agrees(plan.left[index])
+                     /\ agrees(plan.right[index])
+            BY <2>add, SMT
+        <3>. QED BY ONLY <2>add, <2>selectedNode, <2>witnessNode, <3>children, SMT
+            DEF agrees, atNode, GeneratedNode
+    <2>. QED BY ONLY <2>kind, <2>literal, <2>read, <2>add, SMT
 <1>all. \A index \in 0..plan.count : agrees(index)
     BY <1>base, <1>step, FiniteIndexedPrefixProperty
 <1>. QED BY <1>all, SMT DEF agrees, selected, PhysicalAssignmentRhs
