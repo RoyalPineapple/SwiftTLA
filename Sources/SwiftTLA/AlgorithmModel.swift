@@ -151,7 +151,10 @@ package struct AlgorithmModel: Sendable {
                 let controlledLoop = processes.isEmpty && procedures.isEmpty
                     && step.loopCondition != nil && step.loopCondition != .value(.bool(true))
                     && step.loopCondition != .value(.bool(false))
-                let statements = scheduleAtomicStatements(step.statements, binding: binding, recordAssignment: record,
+                let recordScheduled = record.map { record in
+                    { (name: String, assignment: ScheduledAtomicAssignment) in record(name, assignment.target) }
+                }
+                let statements = scheduleAtomicStatements(step.statements, binding: binding, recordAssignment: recordScheduled,
                     retainingDisabledTargets: controlledLoop) {
                     displacedTargets[$0] = $1
                 }
@@ -860,23 +863,41 @@ private func scheduleDirectScalarCopies(
     return (body, .init(reads: reads, writes: writes))
 }
 
+package struct ScheduledAtomicAssignment: Sendable {
+    let target: String
+    let incomingBindings: [String: StateExpr]
+    let predecessor: String?
+}
+
 func scheduleAtomicStatements(
     _ statements: [AlgorithmStatementModel], binding: () -> String,
-    recordAssignment: ((String, String) -> Void)? = nil, retainingDisabledTargets: Bool = false,
+    recordAssignment: ((String, ScheduledAtomicAssignment) -> Void)? = nil, retainingDisabledTargets: Bool = false,
     displace: (String, String) -> Void
 ) -> [AlgorithmStatementModel] {
     // Snapshot each write where it occurs, then publish one assignment per
     // root at the end of the atomic branch. PlusCal labels require that form.
+    struct Replacements {
+        var bindings: [String: StateExpr] = [:]
+        var predecessor: String?
+
+        func recording(_ target: String, as name: String) -> Self {
+            var result = self
+            result.bindings[target] = .variable(name)
+            result.predecessor = name
+            return result
+        }
+    }
+
     func schedule(
         _ values: [AlgorithmStatementModel],
         assignments: [AlgorithmAssignmentModel] = [],
-        replacements: [String: StateExpr] = [:]
+        replacements: Replacements = .init()
     ) -> [AlgorithmStatementModel] {
         let finalWrites = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
         guard let statement = values.first else { return finalWrites }
         let suffix = Array(values.dropFirst())
         func expression(_ value: StateExpr) -> StateExpr {
-            StateExpr.substituteVariables(replacements, in: value)
+            StateExpr.substituteVariables(replacements.bindings, in: value)
         }
         func continued(_ body: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
             schedule(body + suffix, assignments: assignments, replacements: replacements)
@@ -885,16 +906,15 @@ func scheduleAtomicStatements(
         case .set(let target, let value):
             let name = binding()
             let updated = expression(target.assigning(value))
-            recordAssignment?(name, target.root)
-            if case .variable(let capture)? = replacements[target.root] {
+            recordAssignment?(name, .init(target: target.root, incomingBindings: replacements.bindings,
+                predecessor: replacements.predecessor))
+            if case .variable(let capture)? = replacements.bindings[target.root] {
                 displace(capture, target.root)
             }
             let pending = assignments.filter { $0.target.root != target.root }
                 + [.init(target: .root(target.root), value: .variable(name))]
-            var next = replacements
-            next[target.root] = .variable(name)
             return [.letBinding(variable: name, value: updated,
-                schedule(suffix, assignments: pending, replacements: next))]
+                schedule(suffix, assignments: pending, replacements: replacements.recording(target.root, as: name)))]
         case .when(.value(.bool(false))) where retainingDisabledTargets:
             // The guard drops the pending writes, but checked captures before it can still fail.
             for assignment in assignments {

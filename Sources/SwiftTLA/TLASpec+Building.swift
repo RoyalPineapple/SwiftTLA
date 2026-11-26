@@ -117,7 +117,8 @@ extension TLASpec {
 
 extension TLASpec {
   func loweredSourceModel(retainingScalarCopyRoutes: Bool = false,
-                          retainingSequentialAssignmentTargets: Bool = false) throws -> TLASpec {
+                          retainingSequentialAssignmentTargets: Bool = false,
+                          recordAtomicAssignment: ((String, String, ScheduledAtomicAssignment) -> Void)? = nil) throws -> TLASpec {
     if let diagnostic = diagnostics.first { throw diagnostic }
     guard sourceAlgorithms.count <= 1 else {
       throw CompilationDiagnostic(
@@ -145,7 +146,10 @@ extension TLASpec {
     var sequentialAssignmentTargets = sequentialAssignmentTargets
 
     for step in sourceAtomicSteps {
-      let lowered = try AlgorithmLowerer.lowerAtomicStep(step)
+      let record = recordAtomicAssignment.map { record in
+        { (name: String, assignment: ScheduledAtomicAssignment) in record(step.model.label.name, name, assignment) }
+      }
+      let lowered = try AlgorithmLowerer.lowerAtomicStep(step, recordScheduledAssignment: record)
       try StraightLineAssignmentCheck.verify(step, lowered: lowered.action,
         stateRoots: Set(variables.map(\.name)))
       actions.append(.init(name: step.model.label.name, body: lowered.action, bindings: step.bindings,

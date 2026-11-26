@@ -23,7 +23,8 @@ enum AlgorithmLowerer {
     }
     private static let processBinding = CompilerBindingSymbol.process
 
-    static func lowerAtomicStep(_ step: AtomicStep) throws
+    static func lowerAtomicStep(_ step: AtomicStep,
+                                recordScheduledAssignment: ((String, ScheduledAtomicAssignment) -> Void)? = nil) throws
         -> (action: ActionExpr, assertions: [StateExpr], displacedAssignmentTargets: [String: String]) {
         try step.requireIndependentStep()
         var usedBindings = step.model.statements.algorithmScopeNames
@@ -36,7 +37,8 @@ enum AlgorithmLowerer {
             }
         }
         var displacedTargets: [String: String] = [:]
-        let scheduled = scheduleAtomicStatements(step.model.statements, binding: binding) {
+        let scheduled = scheduleAtomicStatements(step.model.statements, binding: binding,
+            recordAssignment: recordScheduledAssignment) {
             displacedTargets[$0] = $1
         }
         let lowered = lower(scheduled, processLocalRoots: nil, procedures: [], owner: nil, nextLabel: nil, control: nil)

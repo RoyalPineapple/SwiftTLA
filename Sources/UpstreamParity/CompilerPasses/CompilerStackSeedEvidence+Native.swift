@@ -27,7 +27,7 @@ private func matches(_ actual: [String], _ expected: String) -> Bool {
     actual == words(Parser.parse(source: expected))
 }
 
-func verifyTraversalSeedAppendRuntime(_ operations: String) throws {
+func decodeTraversalSeedPrefixFloor(_ operations: String) throws -> Int {
     let failure = CompilationDiagnostic(
         code: .unsupportedGeneratedValueShape, stage: .validation,
         path: "native.traversal.operations.sequenceAppend",
@@ -51,6 +51,33 @@ func verifyTraversalSeedAppendRuntime(_ operations: String) throws {
                   return result
               }
               """) else { throw failure }
+
+    let prefixHelpers = owner.memberBlock.members.compactMap { $0.decl.as(FunctionDeclSyntax.self) }
+        .filter { $0.name.text == "sequencePrefix" }
+    guard prefixHelpers.count == 1, let prefix = prefixHelpers.first,
+          let returned = prefix.body?.statements.last?.item.as(ReturnStmtSyntax.self),
+          let array = returned.expression?.as(FunctionCallExprSyntax.self),
+          let slice = array.arguments.first?.expression.as(FunctionCallExprSyntax.self),
+          let maximum = slice.arguments.first?.expression.as(FunctionCallExprSyntax.self),
+          let floor = maximum.arguments.first?.expression.as(IntegerLiteralExprSyntax.self),
+          let lowerBound = Int(floor.literal.text), lowerBound == 0,
+          matches(words(prefix), """
+              public static func sequencePrefix<Element: Sendable>(_ sequence: [Element], length: Int) throws -> [Element] {
+                  guard length <= sequence.count else {
+                      throw NativeMachineEvaluationError.indexOutOfBounds(index: length, count: sequence.count)
+                  }
+                  return Array(sequence.prefix(Swift.max(\(lowerBound), length)))
+              }
+              """) else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.traversal.operations.sequencePrefix",
+            expected: "the reviewed length guard and zero-clamped leading Array prefix",
+            actual: "a different or missing stack prefix implementation",
+            nextSafeAction: "Review the sequencePrefix proof interpretation against the runtime implementation."
+        )
+    }
+    return lowerBound
 }
 
 /// Bind the compiler seed's checked stack operations and ordered tuple operands to the actual native visitor.

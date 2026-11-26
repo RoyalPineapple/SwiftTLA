@@ -46,9 +46,12 @@ LOCAL NativeTraversalPushes(stack, left, right) ==
                         [] row.source = "rightChild" -> right
         IN <<origin, row.expanded>>]
 
+LOCAL NativeTraversalPrefixLength(stack) ==
+    LET requested == NativeTraversalCount(stack) - NativeStackExpansion.prefixDrop
+    IN IF requested < NativeStackPrefixFloor THEN NativeStackPrefixFloor ELSE requested
+
 NativeTraversalExpandedPending(stack, left, right) ==
-    LET previous == ArrayPrefix!SourceSequencePrefix(stack,
-                       NativeTraversalCount(stack) - NativeStackExpansion.prefixDrop)
+    LET previous == ArrayPrefix!SourceSequencePrefix(stack, NativeTraversalPrefixLength(stack))
         pushes == NativeTraversalPushes(stack, left, right)
     IN NativeAppend(NativeAppend(NativeAppend(previous, pushes[1]), pushes[2]), pushes[3])
 
@@ -117,10 +120,12 @@ PROOF
     <2>bounds. /\ NativeTraversalCount(stack) - 1 \in Int
                /\ NativeTraversalCount(stack) - 1 <= Len(stack)
         BY ONLY <1>count, SMT
+    <2>runtimeLength. NativeTraversalPrefixLength(stack) = Len(stack) - 1
+        BY ONLY <1>count, <2>nonempty, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
+            DEF NativeTraversalPrefixLength, NativeStackPrefixFloor
     <2>prefix.
-        ArrayPrefix!SourceSequencePrefix(stack, NativeTraversalCount(stack) - NativeStackExpansion.prefixDrop) =
-            SubSeq(stack, 1, Len(stack) - 1)
-        BY ONLY (stack \in Seq(SeedFrames)), <1>count, <2>bounds, NativeStackOperationsUseTheCheckedGuardAndIndex,
+        ArrayPrefix!SourceSequencePrefix(stack, NativeTraversalPrefixLength(stack)) = SubSeq(stack, 1, Len(stack) - 1)
+        BY ONLY (stack \in Seq(SeedFrames)), <1>count, <2>bounds, <2>runtimeLength,
             ArrayPrefix!SequencePrefixValuePreserved, SMT
     <2>pushes.
         LET pushes == NativeTraversalPushes(stack, left, right)
