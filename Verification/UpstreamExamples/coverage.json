@@ -8484,7 +8484,7 @@
       "path": "specifications/NanoBlockchain",
       "name": "Nano Blockchain Protocol",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "The incomplete raw NanoBlockchainModel and its genesis-only test were removed; neither represented an MCNano configuration or earned parity credit. The former fixture had only genesis/send alternatives, a private-key genesis account, fabricated NoBlock record, and incomplete actions. The pinned family still requires open/receive/change blocks, every processing action, hashFunction and deterministic HashOf/CalculateHashImpl, recursive ownership/balance helpers, cryptographic safety, VIEW, and model-owned configurations. Implement the original model and all three hash-domain configurations; value-shape tests alone cannot establish upstream coverage.",
+      "gap": "Small and Medium use one typed Swift model with the published VIEW and five block variants. Large, hosted evidence and disposition of the unselected balance operators remain open.",
       "sourceAudit": {
         "swiftSourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
         "implementation": "Sources/UpstreamParity/Examples/NanoBlockchain.swift",
@@ -8503,14 +8503,18 @@
           "path": "specifications/NanoBlockchain/MCNano.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NanoBlockchain.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/NanoBlockchain/Nano.tla",
           "role": "algorithm dependency",
           "reason": "MCNano instantiates Nano as N. It supplies core block types, creation/processing transitions, recursive ledger helpers, and selected type/cryptographic invariants. Module-instance NoHash/NoBlock overrides are required by all three configurations.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NanoBlockchain.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -8533,10 +8537,16 @@
           "configurationSHA256": "94be8f566f926f3e7b64228afee39d6c654c55e9cc30fe2f56ce243b7f34330c",
           "requiredHashDomain": ["h1", "h2", "h3", "h4"],
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/NanoBlockchain.swift",
+              "scenario": "Medium",
+              "caseID": "nano-medium"
+            }
+          ],
           "evidence": []
         },
         {
@@ -8545,10 +8555,16 @@
           "configurationSHA256": "b8ebca7e99b81409fa4831e4ec7304a613324f4dd969ff279002a9c2c2532198",
           "requiredHashDomain": ["h1", "h2", "h3"],
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/NanoBlockchain.swift",
+              "scenario": "Small",
+              "caseID": "nano-small"
+            }
+          ],
           "evidence": []
         }
       ],

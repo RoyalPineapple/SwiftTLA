@@ -3864,6 +3864,60 @@
       "moduleSHA256": "6d14d6cfda26b8ff37b367e49302800f4b0fc368960a1597a64eab6cbb0b0657",
       "cfgSHA256": "81ec679d1d535f1498d88803a63eb4624bd406f19af3828d18286d6900a6e127",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "nano-small",
+      "sourceModel": "nano-blockchain",
+      "scenario": "Small",
+      "module": "nano-blockchain/MCNano.tla",
+      "configuration": "nano-blockchain/MCNanoSmall.cfg",
+      "imports": [
+        "nano-blockchain/Nano.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCNano",
+          "importedModule": "Nano"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/NanoBlockchain/MCNano.tla",
+        "sha256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48",
+      "cfgSHA256": "b8ebca7e99b81409fa4831e4ec7304a613324f4dd969ff279002a9c2c2532198",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "nano-medium",
+      "sourceModel": "nano-blockchain",
+      "scenario": "Medium",
+      "module": "nano-blockchain/MCNano.tla",
+      "configuration": "nano-blockchain/MCNanoMedium.cfg",
+      "imports": [
+        "nano-blockchain/Nano.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCNano",
+          "importedModule": "Nano"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/NanoBlockchain/MCNano.tla",
+        "sha256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48",
+      "cfgSHA256": "94be8f566f926f3e7b64228afee39d6c654c55e9cc30fe2f56ce243b7f34330c",
+      "timeoutSeconds": 1800
     }
   ]
 }

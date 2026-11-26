@@ -7,6 +7,19 @@ import SwiftSyntax
 
 @Suite("Checked view kind mismatch")
 struct CheckedViewKindMismatchTests {
+    @Test("A checked record may carry variants distinguished by their field names")
+    func checkedRecordVariants() {
+        let debit = FormalValueShape.record([.init(name: "amount", shape: .integer)])
+        let credit = FormalValueShape.record([.init(name: "account", shape: .string)])
+        let payload = FormalValueShape.union(debit, credit)
+        let envelope = FormalValueShape.record([.init(name: "block", shape: payload)])
+        #expect(envelope.isSupported)
+        #expect(envelope.accepts(CompiledValue(formal: .record(["block": .record(["amount": .int(1)])]))))
+        #expect(envelope.accepts(CompiledValue(formal: .record(["block": .record(["account": .string("a")])]))))
+        #expect(!envelope.accepts(CompiledValue(formal: .record(["block": .record(["previous": .int(1)])]))))
+        #expect(!FormalValueShape.union(debit, .sequence(.integer)).isSupported)
+    }
+
     @Test("Nested collection views reject disjoint member kinds without partial predicates")
     func nestedCollectionViewsRemainTotal() throws {
         let set = try FormalValueShape.set(.sequence(.integer))

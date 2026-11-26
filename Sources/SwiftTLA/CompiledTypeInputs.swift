@@ -191,6 +191,27 @@ package struct CompiledTypeContext: Sendable {
         return false
     }
 
+    /// A checked view of a declared union member retains that member's Swift representation.
+    package func declaredView(_ shape: FormalValueShape, in source: CompiledValueType) throws -> CompiledValueType? {
+        func matches(_ type: CompiledValueType, _ view: FormalValueShape) throws -> Bool {
+            if case .record(let fields) = view, let declared = type.recordFields {
+                guard fields.count == declared.count else { return false }
+                return try fields.allSatisfy { field in
+                    guard let member = declared.first(where: { $0.name == field.name }) else { return false }
+                    return try matches(member.type, field.shape)
+                }
+            }
+            if case .oneOf(let left, let right) = type, case .union(let first, let second) = view {
+                return try matches(left, first) && matches(right, second)
+            }
+            return try resolve(view) == type
+        }
+        if try matches(source, shape) { return source }
+        guard let alternatives = source.unionAlternatives else { return nil }
+        let members = try alternatives.compactMap { try declaredView(shape, in: $0) }
+        return members.count == 1 ? members[0] : nil
+    }
+
     /// Resolve structural type information using this program's nominal domains.
     package func resolve(_ shape: FormalValueShape) throws -> CompiledValueType {
         switch shape {

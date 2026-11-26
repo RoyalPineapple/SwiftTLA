@@ -1472,7 +1472,7 @@ struct NativeSwiftEmitter {
                 let resultType = try swiftType(node.resultType)
                 let domain = "\(resultType)([\(try fields.map { try literal(.string($0.name), as: .string) }.joined(separator: ", "))])"
                 return "(try { () throws -> \(resultType) in _ = \(try emit(0)); return \(domain) }())"
-            case .oneOf:
+            case .oneOf, .union:
                 let resultType = try swiftType(node.resultType)
                 let cases = try recordDomainCases(childType(0), resultType: resultType, pattern: { $0 })
                 return "(try { () throws -> \(resultType) in switch \(try emit(0)) { \(cases.joined(separator: "\n")) } }())"
