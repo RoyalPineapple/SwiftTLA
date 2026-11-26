@@ -79,6 +79,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "disruptor-mpmc", scenarios: { try DisruptorMPMCModel.validationScenarios() }),
     .init(id: "ap-german-control", scenarios: { try APGermanControlModel.validationScenarios() }),
     .init(id: "ap-german-mutex", scenarios: { try GermanCMPWithMutexModel.validationScenarios() }),
+    .init(id: "flash-with-mutex", scenarios: { try FlashWithMutexModel.validationScenarios() }),
     .init(id: "ap-german-data", scenarios: { try APGermanDataModel.validationScenarios() }),
     .init(id: "ap-span-tree", scenarios: { try APSpanTreeModel.validationScenarios() }),
     .init(id: "mc-alternating-bit", scenarios: { try AlternatingBitModel.validationScenarios() }),

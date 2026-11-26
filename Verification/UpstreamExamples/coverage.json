@@ -6535,23 +6535,27 @@
     {
       "path": "specifications/FlashProtocol",
       "name": "FLASH Cache-Coherence Protocol",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "partial",
+      "gap": "APFlashWithMutex has a local TLC comparison. The two-domain symmetry configuration, FairSpec liveness configuration, and hosted checks remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/FlashProtocol/APFlashWithMutex.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/FlashWithMutex.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/FlashProtocol/FlashWithMutex.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "helper dependency",
+          "reason": "Defines the protocol rules and safety properties instantiated by APFlashWithMutex.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/FlashWithMutex.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/FlashProtocol/FlashWithMutexCMP.tla",
@@ -6580,10 +6584,16 @@
           "module": "specifications/FlashProtocol/APFlashWithMutex.tla",
           "configuration": "specifications/FlashProtocol/APFlashWithMutex.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/FlashWithMutex.swift",
+              "scenario": "APFlashWithMutex",
+              "caseID": "ap-flash-mutex"
+            }
+          ],
           "evidence": []
         },
         {

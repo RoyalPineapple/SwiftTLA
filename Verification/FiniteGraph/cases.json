@@ -3783,6 +3783,33 @@
       "moduleSHA256": "e1500033dd4411fb24382a9e8cb41e5384d2fc77cd731704b69d94c7d1638975",
       "cfgSHA256": "90fb52e8c94535219094efde3e852faa78920ebe3f6870828020790ee860646f",
       "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-flash-mutex",
+      "sourceModel": "flash-with-mutex",
+      "scenario": "APFlashWithMutex",
+      "module": "flash-protocol/APFlashWithMutex.tla",
+      "configuration": "flash-protocol/APFlashWithMutex.cfg",
+      "imports": [
+        "flash-protocol/FlashWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APFlashWithMutex",
+          "importedModule": "FlashWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/FlashProtocol/APFlashWithMutex.tla",
+        "sha256": "d90063f6a9aef1cf51f9b1bb451460487b2d38e7e82d68a0d4eaf48cfc83106a"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "d90063f6a9aef1cf51f9b1bb451460487b2d38e7e82d68a0d4eaf48cfc83106a",
+      "cfgSHA256": "24068575cb139969f2f2ae88f8160d44bf280fbf02647032d933a84828be0b40",
+      "timeoutSeconds": 300
     }
   ]
 }
