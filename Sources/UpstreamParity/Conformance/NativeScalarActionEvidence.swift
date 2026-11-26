@@ -755,11 +755,15 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
     var failureFacts: [String] = []
     var nativeActions: [String] = []
     var failureActions: [String] = []
+    var rhsProofs: [String] = []
+    var rhsFacts: [String] = []
     for (index, row) in rows.enumerated() {
         let name = "NativeSequentialVisitor\(index + 1)"
         var plans: [String] = []
         var steps: [String] = []
         var failures: [String] = []
+        var rhsDefinitions: [String] = []
+        var rhsDefinitionNames: [String] = []
         var materializationFacts: [String] = []
         for (arm, plan) in row.plans.enumerated() {
             let prefix = name + "Arm\(arm + 1)"
@@ -773,6 +777,15 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
             for slot in plan.captures.indices {
                 let previous = "\(captured)\(slot)"
                 let next = "\(captured)\(slot + 1)"
+                let rhs = "\(next)Rhs"
+                let checkedRHS = nativeSequentialRhsProof(
+                    rhs, capture: plan.captures[slot], armPlan: prefix + "Plan",
+                    slot: slot + 1, previous: previous, ordinal: rhsFacts.count + 1
+                )
+                rhsDefinitions += checkedRHS.definitions
+                rhsDefinitionNames += checkedRHS.names
+                rhsProofs.append(checkedRHS.proof)
+                rhsFacts.append(checkedRHS.conclusion)
                 plans.append("""
                 \(next) ==
                     NativeSequentialRule!NativeAssignmentStep(NativeSequentialBefore,
@@ -854,7 +867,7 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
             event = try checked(steps)
             errors = try checked(failures)
         }
-        actionDefinitions += plans
+        actionDefinitions += plans + rhsDefinitions
         actionDefinitions.append("\(name) == \(event)")
         actionDefinitions.append("\(name)Failures == \(errors)")
         nativeActions.append(name)
@@ -870,30 +883,51 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
         actionSteps.insert(#"""
             \#(fact). \#(name) <=> \#(row.formalLabel)
             """#, at: actionSteps.count - materializationFacts.count)
+        let rhsExpansion = (rhsDefinitionNames + [
+            "NativeSequentialRule!GeneratedNode", "NativeSequentialRule!GeneratedCombine",
+            "NativeSequentialRule!GeneratedAdd", "NativeSequentialRule!GeneratedAddDefined",
+            "NativeSequentialRule!Success", "NativeSequentialRule!GeneratedOverflow",
+            "NativeSequentialRule!PhysicalRhsReadIndices", "NativeSequentialRule!PhysicalRhsBindings",
+            "NativeSequentialRule!CopyReferenceValue", "NativeSequentialRule!NativeAssignmentRhsPlan"
+        ]).joined(separator: ", ")
         let failureFact = "<1>failure\(index + 1)"
         failureFacts.append(failureFact)
         let authoredFailure = "AuthoredSequentialActionFailure\(index + 1)"
         let authoredBranches = row.plans.indices.map { "\(authoredFailure)Branch\($0 + 1)" }.joined(separator: ", ")
         failureSteps.append(#"""
             \#(failureFact). \#(name)Failures = AuthoredSequentialVisitorFailure(\#(index + 1))
-                BY ONLY AuthoredSequentialTypedEntry, NativeSequentialRule!CheckedAdditionRule, SMT
+                BY ONLY AuthoredSequentialTypedEntry, NativeSequentialDecodedRhsOutcomes, NativeSequentialRule!CheckedAdditionRule, SMT
                     DEF AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts, AuthoredSequentialVisitorFailure,
                         \#(authoredFailure), \#(authoredBranches), \#(name)Failures, \#(planDefinitions), NativeSequentialBefore,
                         NativeSequentialRule!NativeAssignmentStart, NativeSequentialRule!NativeAssignmentStep,
-                        NativeSequentialRule!NativeAssignmentRhsPlan, NativeSequentialRule!PhysicalAssignmentRhs
+                        \#(rhsExpansion)
             """#)
         actionSteps.append(#"""
-                <2>. QED BY ONLY AuthoredSequentialTypedEntry, \#(materializationFacts.joined(separator: ", ")), SMT
+                <2>. QED BY ONLY AuthoredSequentialTypedEntry, NativeSequentialDecodedRhsOutcomes, \#(materializationFacts.joined(separator: ", ")), SMT
                     DEF \#(name), \#(row.formalLabel), \#(planDefinitions), AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts,
                         NativeSequentialBefore, NativeSequentialAfter, NativeSequentialFields,
                         NativeSequentialRule!NativeAssignmentStart, NativeSequentialRule!NativeAssignmentStep,
-                        NativeSequentialRule!NativeAssignmentRhsPlan, NativeSequentialRule!PhysicalAssignmentRhs,
+                        \#(rhsExpansion),
                         NativeSequentialRule!NativePendingWriteConstraints, NativeSequentialRule!PendingWriteKeys,
                         NativeSequentialRule!NativeCopyWrites, NativeSequentialRule!NativeCopyValue, NativeSequentialRule!CopyReferenceValue
             """#)
     }
     let actual = actionTuple(rows.map(\.formalLabel))
+    let rhsTheorem: String
+    if rhsFacts.isEmpty {
+        rhsTheorem = "LOCAL THEOREM NativeSequentialDecodedRhsOutcomes == TRUE\nPROOF OBVIOUS"
+    } else {
+        rhsTheorem = #"""
+        LOCAL THEOREM NativeSequentialDecodedRhsOutcomes ==
+        \#(rhsFacts.map { "    /\\ " + $0 }.joined(separator: "\n"))
+        PROOF
+        \#(rhsProofs.joined(separator: "\n"))
+        <1>. QED BY ONLY \#(rhsFacts.indices.map { "<1>rhs\($0 + 1)" }.joined(separator: ", ")), PTL
+
+        """#
+    }
     let theorem = #"""
+    \#(rhsTheorem)
     THEOREM NativeSequentialDispatchUsesEmittedLabeledSteps ==
         AuthoredSequentialTypedEntry =>
             (\A label : NativeSequentialLabeledStep(label) <=> TLASequentialLabeledStep(label))
@@ -955,6 +989,57 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
         CASE \#(failureCases) [] OTHER -> <<>>
     """#
     return .init(definitions: definitions, theorem: theorem)
+}
+
+/// Instantiate the existing physical history recurrence on the decoded capture's finite node range.
+private func nativeSequentialRhsProof(
+    _ name: String, capture: ActionCapture, armPlan: String, slot: Int, previous: String, ordinal: Int
+) -> (definitions: [String], names: [String], proof: String, conclusion: String) {
+    let rule = "NativeSequentialRule!"
+    let before = "NativeSequentialBefore"
+    let completed = "\(previous).completed"
+    let count = capture.columns.kinds.count
+    let plan = "\(name)Plan"
+    let witness = "\(name)Witness"
+    let history = "\(rule)PhysicalAssignmentRhsHistory"
+    let nodes = (0...count).map { "\(name)Node\($0)" }
+    func finiteHistory(through end: Int) -> String {
+        let cases = (0..<end).map { "i = \($0) -> \(nodes[$0])" }
+        return "[i \\in 0..\(end) |-> CASE \((cases + ["OTHER -> \(nodes[end])"]).joined(separator: " [] "))]"
+    }
+    var definitions = [
+        "\(plan) == \(rule)NativeAssignmentRhsPlan(\(armPlan).captures[\(slot)])",
+        "\(nodes[0]) == \(rule)Success(0)",
+    ]
+    for index in 1...count {
+        definitions.append("""
+        \(nodes[index]) == \(rule)GeneratedNode(\(index), \(plan).kinds, \(plan).literals,
+            \(rule)PhysicalRhsReadIndices(\(plan)), \(plan).left, \(plan).right,
+            \(rule)PhysicalRhsBindings(\(plan), \(before), \(completed), \(finiteHistory(through: index - 1))
+        """)
+    }
+    definitions.append("\(witness) == \(finiteHistory(through: count))")
+    let names = [plan] + nodes + [witness]
+    let recurrence = ["PhysicalAssignmentRhsHistory", "GeneratedExpressionHistory", "GeneratedNode",
+                      "PhysicalRhsReadIndices", "PhysicalRhsBindings"].map { rule + $0 }
+    let check = (names + [armPlan, rule + "NativeAssignmentRhsPlan"] + recurrence).joined(separator: ", ")
+    let conclusion = "\(rule)PhysicalAssignmentRhs(\(plan), \(before), \(completed)) = \(nodes[count])"
+    let proof = #"""
+    <1>rhs\#(ordinal). \#(conclusion)
+        <2>shape. /\ \#(plan).count \in Nat \ {0}
+                  /\ 1..\#(plan).count = \#(TLAValue.set(Set((1...count).map(TLAValue.int))))
+                  /\ \A index \in 1..\#(plan).count : \#(plan).kinds[index] \in {"literal", "read", "add"}
+                  /\ \A index \in 1..\#(plan).count : \#(plan).kinds[index] = "add" =>
+                       /\ \#(plan).left[index] \in 1..(index - 1)
+                       /\ \#(plan).right[index] \in 1..(index - 1)
+            BY ONLY SMT DEF \#(plan), \#(armPlan), \#(rule)NativeAssignmentRhsPlan
+        <2>witness. \#(history)(\#(plan), \#(before), \#(completed), \#(witness))
+            BY ONLY <2>shape, SMT DEF \#(check)
+        <2>result. \#(rule)PhysicalAssignmentRhs(\#(plan), \#(before), \#(completed)) = \#(witness)[\#(plan).count]
+            BY ONLY <2>shape, <2>witness, \#(rule)PhysicalAssignmentRhsAgreesWithWitness, SMT
+        <2>. QED BY ONLY <2>result, SMT DEF \#(witness), \#(plan), \#(armPlan), \#(rule)NativeAssignmentRhsPlan
+    """#
+    return (definitions, [plan] + nodes, proof, conclusion)
 }
 
 func conditionalArmOperands(_ captures: [OrderedRHSPhysicalAction.Plan], writeOrder: [String],

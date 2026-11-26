@@ -468,6 +468,39 @@ PhysicalAssignmentRhs(plan, before, completed) ==
     LET visited == CHOOSE history : PhysicalAssignmentRhsHistory(plan, before, completed, history)
     IN visited[plan.count]
 
+THEOREM PhysicalAssignmentRhsAgreesWithWitness ==
+    ASSUME NEW plan, NEW before, NEW completed, NEW witness,
+           plan.count \in Nat \ {0},
+           \A index \in 1..plan.count : plan.kinds[index] = "add" =>
+               /\ plan.left[index] \in 1..(index - 1)
+               /\ plan.right[index] \in 1..(index - 1),
+           \A index \in 1..plan.count : plan.kinds[index] \in {"literal", "read", "add"},
+           PhysicalAssignmentRhsHistory(plan, before, completed, witness)
+    PROVE PhysicalAssignmentRhs(plan, before, completed) = witness[plan.count]
+PROOF
+<1>. DEFINE selected == CHOOSE h : PhysicalAssignmentRhsHistory(plan, before, completed, h)
+            agrees(index) == selected[index] = witness[index]
+<1>chosen. PhysicalAssignmentRhsHistory(plan, before, completed, selected)
+    BY ONLY PhysicalAssignmentRhsHistory(plan, before, completed, witness), SMT DEF selected
+<1>base. agrees(0)
+    BY ONLY <1>chosen, PhysicalAssignmentRhsHistory(plan, before, completed, witness), SMT
+        DEF agrees, PhysicalAssignmentRhsHistory, GeneratedExpressionHistory
+<1>step. \A index \in 1..plan.count :
+             ((\A child \in 0..(index - 1) : agrees(child)) => agrees(index))
+    <2>. SUFFICES ASSUME NEW index \in 1..plan.count,
+                         \A child \in 0..(index - 1) : agrees(child)
+                 PROVE agrees(index)
+        BY SMT
+    <2>children. plan.kinds[index] = "add" =>
+        /\ agrees(plan.left[index])
+        /\ agrees(plan.right[index])
+        BY SMT
+    <2>. QED BY <1>chosen, <2>children, SMT
+        DEF agrees, PhysicalAssignmentRhsHistory, GeneratedExpressionHistory, GeneratedNode
+<1>all. \A index \in 0..plan.count : agrees(index)
+    BY <1>base, <1>step, FiniteIndexedPrefixProperty
+<1>. QED BY <1>all, SMT DEF agrees, selected, PhysicalAssignmentRhs
+
 THEOREM AssignmentPrefixMaterializationIsTyped ==
     ASSUME NEW rows, SupportedAssignmentList(rows), NEW before \in AssignmentBindings,
            NEW completed \in Seq(AssignmentIntValues), Len(completed) <= Len(rows)

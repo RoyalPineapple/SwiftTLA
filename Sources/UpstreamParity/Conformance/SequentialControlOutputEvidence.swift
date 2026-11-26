@@ -17,14 +17,34 @@ package enum SequentialControlOutputEvidence {
         let authored = try AuthoredCopySyntax.controlFrontend(source)
         let (compilation, evidence) = try spec.compileRetainingSequentialControl()
         let actual = rendered.tlaBundle.root
-        let checked = try compilation.render()
+        let entryTypes = SequentialControlEvidence.successfulEntryTypes(in: compilation.layout)
+        let program = try native.map { _ in
+            let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
+            guard entryTypes != nil else { throw invalid }
+            let types = try CompiledTypeInputs(compilation: compilation,
+                types: CompiledTypeContext(enums: .init(), formalNames: [:])) { spelling in
+                    guard ["Int", "Swift.Int"].contains(spelling) else { throw invalid }
+                    return .int
+                }
+            return try CompiledProgram(inputs: types)
+        }
         guard case .compiled(let identity, _, _) = rendered.tlaBundle.provenance,
               identity == compilation.identity, rendered.tlaBundle.imports.isEmpty,
-              checked.tlaBundle.imports.isEmpty, checked.actions == rendered.actions,
-              actual.name == checked.tlaBundle.root.name,
-              actual.tla.utf8.elementsEqual(checked.tlaBundle.root.tla.utf8),
-              let cfg = actual.cfg, let compiledCFG = checked.tlaBundle.root.cfg,
-              cfg.utf8.elementsEqual(compiledCFG.utf8) else { return nil }
+              let cfg = actual.cfg else { return nil }
+        if let program {
+            let checked = try program.renderModule()
+            guard checked.imports.isEmpty, checked.renderedActions == rendered.actions,
+                  actual.name == checked.moduleName, actual.tla.utf8.elementsEqual(checked.renderedModuleSource.utf8),
+                  try cfg.utf8.elementsEqual(checked.configuration.render(usesSymmetryReduction: false).utf8)
+            else { return nil }
+        } else {
+            let checked = try compilation.render()
+            guard checked.tlaBundle.imports.isEmpty, checked.actions == rendered.actions,
+                  actual.name == checked.tlaBundle.root.name,
+                  actual.tla.utf8.elementsEqual(checked.tlaBundle.root.tla.utf8),
+                  let compiledCFG = checked.tlaBundle.root.cfg, cfg.utf8.elementsEqual(compiledCFG.utf8)
+            else { return nil }
+        }
 
         let invariants = rendered.intrinsicInvariantNames
         let prefix = "__SwiftTLAEvaluationOK"
@@ -36,27 +56,47 @@ package enum SequentialControlOutputEvidence {
         guard cfg.utf8.elementsEqual((directives.joined(separator: "\n") + "\n").utf8) else { return nil }
 
         let controlModule = "SwiftTLASequentialControl" + actual.name
-        let entryTypes = SequentialControlEvidence.successfulEntryTypes(in: compilation.layout)
         let nativeProof = try native.map { input in
             let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
-            guard entryTypes != nil,
-                  let members = String(data: input.members, encoding: .utf8),
+            guard let program, let members = String(data: input.members, encoding: .utf8),
                   let operations = String(data: input.operations, encoding: .utf8),
                   let checking = String(data: input.checking, encoding: .utf8) else { throw invalid }
             try verifyConditionalHistoryHelpers(operations: operations, checking: checking)
-            let types = try CompiledTypeInputs(compilation: compilation,
-                types: CompiledTypeContext(enums: .init(), formalNames: [:])) { spelling in
-                    guard ["Int", "Swift.Int"].contains(spelling) else { throw invalid }
-                    return .int
-                }
-            return try sequentialNativeProof(members, program: CompiledProgram(inputs: types))
+            return try sequentialNativeProof(members, program: program)
         }
         guard let control = try evidence?.proofSource(for: rendered, layout: compilation.layout,
             physicalAuthored: authored.machine, proofModule: controlModule, includeNative: false,
             declared: authored.declared, entryTypes: entryTypes) else { return nil }
+        let tlaFailureHistory = try program.flatMap {
+            try authoredFailureHistory(in: actual.tla, program: $0, authored: authored.machine)
+        }
         let configuredModule = controlModule + "ConfiguredProof"
-        let bytes = TLAValue.tuple(cfg.utf8.map { .int(Int($0)) })
-        let pages = (1...((cfg.utf8.count + 15) / 16)).map { "CallerInputPage\($0)" }.joined(separator: " ")
+        let cfgBytes = Array(cfg.utf8)
+        let cfgPages = stride(from: 0, to: cfgBytes.count, by: 16).enumerated().map { index, offset in
+            let end = min(offset + 16, cfgBytes.count)
+            let page = "SequentialCFGPage\(index + 1)"
+            let fact = "page\(index + 1)"
+            let bytes = TLAValue.tuple(cfgBytes[offset..<end].map { .int(Int($0)) })
+            let start = offset + 1
+            let block = "CallerInputPageBlock\(index / 64 + 1)"
+            let statement = #"""
+                <2>\#(fact). CASE i \in \#(start)..\#(end)
+                    <3>actual. CallerInputByte[i - 1] = \#(page)[i - \#(offset)]
+                        BY ONLY <2>\#(fact), \#(block)AtFileOffsets, SMT DEF \#(page)
+                    <3>expected. SequentialNormalCFGByte(i) = \#(page)[i - \#(offset)]
+                        BY ONLY <2>\#(fact), SMT DEF SequentialNormalCFGByte
+                    <3>. QED BY ONLY <3>actual, <3>expected
+            """#
+            return (request: "CallerInputPage\(index + 1)", definition: "LOCAL \(page) == \(bytes)",
+                    selector: #"i \in \#(start)..\#(end) -> \#(page)[i - \#(offset)]"#,
+                    proof: statement, fact: "<2>\(fact)")
+        }
+        let pageModules = (1...((cfgPages.count + 63) / 64)).map { "CallerInputPageBlock\($0)" }.joined(separator: ", ")
+        let pages = cfgPages.map(\.request).joined(separator: " ")
+        let cfgPageDefinitions = cfgPages.map(\.definition).joined(separator: "\n")
+        let cfgSelectors = cfgPages.map(\.selector).joined(separator: " [] ")
+        let cfgPageProofs = cfgPages.map(\.proof).joined(separator: "\n")
+        let cfgPageFacts = cfgPages.map(\.fact).joined(separator: ", ")
         let authoredInitialFrame: String? = authored.literalInitials.flatMap { bindings in
             let fields = compilation.layout.variables.filter { $0.declaration.origin == .source }
             guard fields.count == bindings.count else { return nil }
@@ -171,18 +211,25 @@ package enum SequentialControlOutputEvidence {
             """#
         } ?? ""
         let failureFact = check == nil ? "" : ", <1>configuredFailures"
+        let historyConclusion = tlaFailureHistory == nil ? "" : #"""
+        /\ (AuthoredSequentialTypedEntry => TLASequentialFailureHistoriesMatch)
+        """#
+        let historyFact = tlaFailureHistory == nil ? "" : ", TLASequentialHistoryUsesAuthoredFailures"
         let configured = #"""
         ---- MODULE \#(configuredModule) ----
-        EXTENDS \#(controlModule), CallerInputPageBlock1
+        EXTENDS \#(controlModule), \#(pageModules)
 
         \* \#(pages)
         SequentialActualCFG == [i \in 1..CallerInputSize |-> CallerInputByte[i - 1]]
-        SequentialNormalCFG == \#(bytes)
+        \#(cfgPageDefinitions)
+        LOCAL SequentialNormalCFGByte(i) == CASE \#(cfgSelectors) [] OTHER -> 0
+        SequentialNormalCFG == [i \in 1..\#(cfgBytes.count) |-> SequentialNormalCFGByte(i)]
         SequentialSelectedEvaluationChecks == \#(selection)
         \#(initialDefinition)
         \#(behaviorDefinition)
         \#(nativeProof?.definitions ?? "")
         \#(nativeProof?.theorem ?? "")
+        \#(tlaFailureHistory ?? "")
 
         THEOREM NormalConfigurationUsesOnlyAuthoredSequentialControl ==
             /\ SequentialActualCFG = SequentialNormalCFG
@@ -192,6 +239,7 @@ package enum SequentialControlOutputEvidence {
             \#(typedConclusions)
             /\ SequentialSelectedEvaluationChecks = \#(selection)
             \#(failureConclusion)
+            \#(historyConclusion)
             \#(behaviorConclusion)
             \#(nativeConclusion)
             /\ (~AuthoredSequentialGuard => ~ENABLED Next)
@@ -199,18 +247,20 @@ package enum SequentialControlOutputEvidence {
             /\ PhysicalAuthoredSequentialTrace = LoweredSequentialSemantics
             /\ DeclaredSequentialConstructorsMatch(LoweredSequentialSemantics)
         PROOF
-        <1>domain. DOMAIN SequentialActualCFG = DOMAIN SequentialNormalCFG
-            BY ONLY SMT DEF SequentialActualCFG, SequentialNormalCFG, CallerInputSize
-        <1>bytes. \A i \in DOMAIN SequentialNormalCFG : SequentialActualCFG[i] = SequentialNormalCFG[i]
-            BY ONLY CallerInputPageBlock1AtFileOffsets, SMT DEF SequentialActualCFG, SequentialNormalCFG, CallerInputSize
+        <1>length. CallerInputSize = \#(cfgBytes.count)
+            BY ONLY SMT DEF CallerInputSize
+        <1>bytes. \A i \in 1..\#(cfgBytes.count) : CallerInputByte[i - 1] = SequentialNormalCFGByte(i)
+            <2>. TAKE i \in 1..\#(cfgBytes.count)
+        \#(cfgPageProofs)
+            <2>. QED BY ONLY (i \in 1..\#(cfgBytes.count)), \#(cfgPageFacts), SMT
         <1>configuration. SequentialActualCFG = SequentialNormalCFG
-            BY ONLY <1>domain, <1>bytes, SMT DEF SequentialActualCFG, SequentialNormalCFG
+            BY ONLY <1>length, <1>bytes, SMT DEF SequentialActualCFG, SequentialNormalCFG
         \#(initialStep)
         \#(typedSteps)
         \#(behaviorSteps)
         \#(failureSteps)
         <1>. QED BY ONLY <1>configuration, ActualSpecUsesOnlyAuthoredSequentialControl,
-            ActualLoweredRoutesUseTheDeclaredSequentialConstructors\#(initialFact)\#(typedFacts)\#(nativeFact)\#(failureFact)\#(behaviorFact)
+            ActualLoweredRoutesUseTheDeclaredSequentialConstructors\#(initialFact)\#(typedFacts)\#(nativeFact)\#(failureFact)\#(historyFact)\#(behaviorFact)
             DEF SequentialSelectedEvaluationChecks
 
         ====
@@ -218,5 +268,89 @@ package enum SequentialControlOutputEvidence {
         """#
         return .init(controlModule: controlModule, control: Data(control.utf8),
                      configuredModule: configuredModule, configured: Data(configured.utf8))
+    }
+    private static func authoredFailureHistory(in tla: String, program: CompiledProgram,
+                                               authored: SequentialControlEvidence.Machine) throws -> String? {
+        let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
+        guard let counter = program.layout.variables.first(where: { $0.declaration.origin == .programCounter }) else {
+            throw invalid
+        }
+        let state = "<<\(program.layout.variables.map(\.formalName).joined(separator: ", "))>>"
+        var definitions: [String] = []
+        var equalities: [String] = []
+        var proofs: [String] = []
+        var facts: [String] = []
+        for action in program.behavior.actions {
+            let index = action.id.ordinal
+            let base = "__SwiftTLAActionFailureHistory\(index)"
+            let names = tla.split(separator: "\n").compactMap { line -> String? in
+                guard let separator = line.range(of: " == ") else { return nil }
+                let name = line[..<separator.lowerBound]
+                guard name.hasPrefix(base), name.dropFirst(base.count).allSatisfy({ $0 == "_" }) else { return nil }
+                return String(name)
+            }
+            let regions = action.body.orderedAlternativeFailureRegions(afterControlGuardOf: counter.id)
+            guard names.count == (regions.isEmpty ? 0 : 1) else { throw invalid }
+            guard let history = names.first else { continue }
+            guard authored.actions.indices.contains(index),
+                  authored.actions[index].label.utf8.elementsEqual(program.layout.actions[index].declaration.name.utf8),
+                  authored.actions[index].branches.count == regions.count else { throw invalid }
+            var failureDefinitions: [String] = []
+            var histories: [String] = []
+            for (branch, pair) in zip(authored.actions[index].branches, regions).enumerated() {
+                let (source, region) = pair
+                let targets = source.observations.compactMap { item -> String? in
+                    guard case .write(let target, _) = item else { return nil }
+                    return target
+                }
+                let boundTargets = region.bindings.map { program.layout.variables[$0.target.ordinal].declaration.name }
+                guard region.armOrdinal == branch, region.sharedBindingCount == 0,
+                      targets.elementsEqual(boundTargets, by: { $0.utf8.elementsEqual($1.utf8) }) else { throw invalid }
+                guard !targets.isEmpty else { continue }
+                let sourceFailure = "AuthoredSequentialActionFailure\(index + 1)Branch\(branch + 1)"
+                let result = "TLASequentialAuthoredHistory\(index + 1)Arm\(branch + 1)"
+                let slots = "<<\(region.bindings.map {
+                    "[binding |-> \($0.binder.ordinal), target |-> \($0.target.ordinal)]"
+                }.joined(separator: ", "))>>"
+                definitions.append(#"""
+                LOCAL \#(result) ==
+                    LET history == \#(sourceFailure)
+                        slots == \#(slots)
+                    IN IF history = <<>> THEN <<>>
+                       ELSE LET failure == history[1]
+                                site == slots[failure.site]
+                            IN <<[source |-> \#(state), action |-> \#(index), branch |-> \#(branch),
+                                  site |-> site.binding, target |-> site.target, payload |-> failure.payload,
+                                  before |-> [i \in DOMAIN failure.completed |->
+                                      [binding |-> slots[i].binding, target |-> slots[i].target,
+                                       value |-> failure.completed[i]]]]>>
+                """#)
+                failureDefinitions += [sourceFailure, result]
+                histories.append(result)
+            }
+            guard !histories.isEmpty else { throw invalid }
+            let equality = "\(history) = \(histories.joined(separator: " \\o "))"
+            let fact = "<1>action\(index + 1)"
+            let defs = ([history, "AuthoredSequentialTypedEntry", "AuthoredSequentialMachineInts"]
+                        + failureDefinitions).joined(separator: ", ")
+            equalities.append("/\\ (\(equality))")
+            proofs.append("""
+            \(fact). \(equality)
+                BY ONLY AuthoredSequentialTypedEntry, SMT DEF \(defs)
+            """)
+            facts.append(fact)
+        }
+        guard !facts.isEmpty else { return nil }
+        return #"""
+        \#(definitions.joined(separator: "\n"))
+        TLASequentialFailureHistoriesMatch == \#(equalities.joined(separator: "\n    "))
+
+        THEOREM TLASequentialHistoryUsesAuthoredFailures ==
+            AuthoredSequentialTypedEntry => TLASequentialFailureHistoriesMatch
+        PROOF
+        <1>. SUFFICES ASSUME AuthoredSequentialTypedEntry PROVE TLASequentialFailureHistoriesMatch BY PTL
+        \#(proofs.joined(separator: "\n"))
+        <1>. QED BY ONLY \#(facts.joined(separator: ", ")), PTL DEF TLASequentialFailureHistoriesMatch
+        """#
     }
 }

@@ -211,11 +211,18 @@ struct SequentialLoopControlTests {
                 #expect(try runtime.successors(for: advance, from: one).isEmpty)
             }
 
-            let rendered = try compilation.render()
-            #expect(rendered.intrinsicInvariantNames.isEmpty == !captureFirst)
-
             var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
             let program = emitter.program
+            let module = try program.renderModule()
+            let configuration = module.configuration
+            let rendered = try RenderedSpecification(_generatedModule: module.moduleName, source: module.renderedModuleSource,
+                compilationIdentity: program.identity.value, declarations: configuration.declarations,
+                _generatedConstants: module.constantValues, checkDeadlock: configuration.checkDeadlock,
+                _generatedIntegerBitWidth: Int.bitWidth, _generatedIntrinsicInvariants: configuration.intrinsicInvariants,
+                invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
+                properties: configuration.properties, refinements: configuration.refinements, symmetry: configuration.symmetry,
+                actions: module.renderedActions)
+            #expect(rendered.intrinsicInvariantNames.isEmpty == !captureFirst)
             let counter = try #require(program.layout.variables.first { $0.declaration.origin == .programCounter })
             let regions = program[program.layout.actions[0].id].body.orderedAlternativeFailureRegions(afterControlGuardOf: counter.id)
             if captureFirst {
