@@ -562,7 +562,7 @@ public struct RenderedSpecification: Sendable {
             declarations: declarations, checkDeadlock: configuration.checkDeadlock,
             intrinsicInvariants: configuration.intrinsicInvariants,
             invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
-            properties: configuration.properties, refinements: configuration.refinements,
+            properties: configuration.properties, refinements: configuration.refinements, initialAndNextRefinements: configuration.initialAndNextRefinements,
             symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view,
             postconditionOperators: configuration.postconditionOperators, postcondition: configuration.postcondition)
         func configured(_ bundle: TLAModuleBundle) throws -> TLAModuleBundle {
@@ -789,6 +789,8 @@ public struct RenderedSpecification: Sendable {
             intrinsicInvariants: configuration.intrinsicInvariants,
             invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
             properties: configuration.properties, refinements: configuration.refinements + [name],
+            initialAndNextRefinements: behavior == .initialAndNext
+                ? configuration.initialAndNextRefinements.union([name]) : configuration.initialAndNextRefinements,
             symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view,
             postconditionOperators: configuration.postconditionOperators,
             postcondition: configuration.postcondition)

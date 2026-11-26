@@ -3859,6 +3859,70 @@
       "timeoutSeconds": 300
     },
     {
+      "id": "german-control",
+      "sourceModel": "ap-german-control",
+      "scenario": "MCGermanControl",
+      "module": "german-protocol/MCGermanControl.tla",
+      "configuration": "german-protocol/MCGermanControl.cfg",
+      "imports": [
+        "german-protocol/GermanControl.tla",
+        "german-protocol/GermanCMPWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCGermanControl",
+          "importedModule": "GermanControl"
+        },
+        {
+          "importingModule": "MCGermanControl",
+          "importedModule": "GermanCMPWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/MCGermanControl.tla",
+        "sha256": "754db90c80cae36bc3bb8f1e0b47024eaf2857a435da5bfd99703f65325a279b"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "754db90c80cae36bc3bb8f1e0b47024eaf2857a435da5bfd99703f65325a279b",
+      "cfgSHA256": "228d86e39a15fdcb76980a8fc9f6dbcc261049e14e3ce5ca2efff716549963dd",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "german-data",
+      "sourceModel": "ap-german-data",
+      "scenario": "MCGermanData",
+      "module": "german-protocol/MCGermanData.tla",
+      "configuration": "german-protocol/MCGermanData.cfg",
+      "imports": [
+        "german-protocol/GermanData.tla",
+        "german-protocol/GermanControl.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCGermanData",
+          "importedModule": "GermanData"
+        },
+        {
+          "importingModule": "GermanData",
+          "importedModule": "GermanControl"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/MCGermanData.tla",
+        "sha256": "53974773eece7a194407cb100d37c4592915e380b0b539aa2655495a1201a2ee"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "53974773eece7a194407cb100d37c4592915e380b0b539aa2655495a1201a2ee",
+      "cfgSHA256": "f02c40cb783e7a2b26ba796d5ecce39f33acc907d8ce7efc1e829c9976df1ca9",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "german-mutex",
       "sourceModel": "ap-german-mutex",
       "scenario": "MCGermanCMPWithMutex",

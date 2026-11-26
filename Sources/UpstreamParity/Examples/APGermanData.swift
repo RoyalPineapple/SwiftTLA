@@ -6,13 +6,40 @@ import SwiftTLAMacros
 
 @TLAModel
 package struct APGermanDataModel: Sendable {
+    package enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case n1, n2, noNode, other
+        case ap1 = "n1_OF_NODE", ap2 = "n2_OF_NODE"
+        case apNoNode = "noNode_OF_NODE", apOther = "other_OF_NODE"
+        package static let finiteValues = allCases
+        package static var defaultValue: Self { .n1 }
+        package var tlaValue: TLAValue {
+            switch self {
+            case .n1, .n2, .noNode, .other: .constant(rawValue)
+            case .ap1, .ap2, .apNoNode, .apOther: .string(rawValue)
+            }
+        }
+    }
+
+    package enum Payload: String, CaseIterable, FiniteTLAValueDomain {
+        case d1, d2, noData
+        case ap1 = "d1_OF_DATA", ap2 = "d2_OF_DATA", apNoData = "noData_OF_DATA"
+        package static let finiteValues = allCases
+        package static var defaultValue: Self { .noData }
+        package var tlaValue: TLAValue {
+            switch self {
+            case .d1, .d2, .noData: .constant(rawValue)
+            case .ap1, .ap2, .apNoData: .string(rawValue)
+            }
+        }
+    }
+
     package struct Line: Sendable, Hashable {
         package let state: String
-        package let data: String
+        package let data: Payload
     }
     package struct Message: Sendable, Hashable {
         package let cmd: String
-        package let data: String
+        package let data: Payload
     }
 
     private enum Step: String, CaseIterable {
@@ -22,22 +49,22 @@ package struct APGermanDataModel: Sendable {
     }
 
     package static var spec: TLASpec {
-        #spec("APGermanData") { scope in
-            let nodes = scope.parameter(as: Set<String>.self, in: Subsets(of: Set<String>(["n1_OF_NODE", "n2_OF_NODE"])))
-            let noNode = scope.parameter(as: String.self, in: Set<String>(["noNode_OF_NODE"]))
+        #spec("GermanData") { scope in
+            let nodes = scope.parameter(as: Set<Node>.self, in: Set<Set<Node>>([Set<Node>([Node.n1, Node.n2]), Set<Node>([Node.ap1, Node.ap2])]))
+            let noNode = scope.parameter(as: Node.self, in: Set<Node>([Node.noNode, Node.apNoNode]))
             Assume(!nodes.contains(noNode))
-            let data = scope.parameter(as: Set<String>.self, in: Subsets(of: Set<String>(["d1_OF_DATA", "d2_OF_DATA"])))
-            let noData = scope.parameter(as: String.self, in: Set<String>(["noData_OF_DATA"]))
+            let data = scope.parameter(as: Set<Payload>.self, in: Set<Set<Payload>>([Set<Payload>([Payload.d1, Payload.d2]), Set<Payload>([Payload.ap1, Payload.ap2])]))
+            let noData = scope.parameter(as: Payload.self, in: Set<Payload>([Payload.noData, Payload.apNoData]))
             Assume(!data.contains(noData))
             let payloads = data.inserting(noData)
             let requests = Set<String>(["ReqS", "ReqE"])
             let grants = Set<String>(["GntS", "GntE"])
-            let cache = scope.sharedVar(initial: Dictionary<String, Line>.mapping(over: nodes) { _ in Line.expression(state: "I", data: noData) })
-            let chan1 = scope.sharedVar(initial: Dictionary<String, Message>.mapping(over: nodes) { _ in Message.expression(cmd: "Empty", data: noData) })
-            let chan2 = scope.sharedVar(initial: Dictionary<String, Message>.mapping(over: nodes) { _ in Message.expression(cmd: "Empty", data: noData) })
-            let chan3 = scope.sharedVar(initial: Dictionary<String, Message>.mapping(over: nodes) { _ in Message.expression(cmd: "Empty", data: noData) })
-            let invSet = scope.sharedVar(initial: Set<String>())
-            let shrSet = scope.sharedVar(initial: Set<String>())
+            let cache = scope.sharedVar(initial: Dictionary<Node, Line>.mapping(over: nodes) { _ in Line.expression(state: "I", data: noData) })
+            let chan1 = scope.sharedVar(initial: Dictionary<Node, Message>.mapping(over: nodes) { _ in Message.expression(cmd: "Empty", data: noData) })
+            let chan2 = scope.sharedVar(initial: Dictionary<Node, Message>.mapping(over: nodes) { _ in Message.expression(cmd: "Empty", data: noData) })
+            let chan3 = scope.sharedVar(initial: Dictionary<Node, Message>.mapping(over: nodes) { _ in Message.expression(cmd: "Empty", data: noData) })
+            let invSet = scope.sharedVar(initial: Set<Node>())
+            let shrSet = scope.sharedVar(initial: Set<Node>())
             let exGntd = scope.sharedVar(initial: false)
             let curCmd = scope.sharedVar(initial: "Empty")
             let curPtr = scope.sharedVar(initial: noNode)
@@ -107,7 +134,8 @@ package struct APGermanDataModel: Sendable {
                 chan2[i].data.set(noData)
             }
 
-            Invariant("TypeOK") {
+            let TypeOK = Invariant()
+            TypeOK {
                 cache.keys == nodes && nodes.allSatisfy { i in
                     Set<String>(["I", "S", "E"]).contains(cache[i].state) && payloads.contains(cache[i].data)
                 }
@@ -126,26 +154,32 @@ package struct APGermanDataModel: Sendable {
                 nodes.contains(curPtr) || curPtr == noNode
                 data.contains(memData) && data.contains(auxData)
             }
-            Invariant("Coherence") {
+            let Coherence = Invariant()
+            Coherence {
                 nodes.allSatisfy { i in nodes.allSatisfy { j in
                     i == j || ((cache[i].state != "E" || cache[j].state == "I") &&
                             (cache[i].state != "S" || cache[j].state == "I" || cache[j].state == "S"))
                 } }
             }
-            Invariant("DataProp") {
+            let DataProp = Invariant()
+            DataProp {
                 exGntd || memData == auxData
                 nodes.allSatisfy { i in cache[i].state == "I" || cache[i].data == auxData }
             }
-            Invariant("TransactionConsistency") { (curCmd == "Empty") == (curPtr == noNode) }
-            Invariant("DirectoryAccurate") {
+            let TransactionConsistency = Invariant()
+            TransactionConsistency { (curCmd == "Empty") == (curPtr == noNode) }
+            let DirectoryAccurate = Invariant()
+            DirectoryAccurate {
                 nodes.allSatisfy { i in (cache[i].state != "S" && cache[i].state != "E") || shrSet.contains(i) }
             }
-            Invariant("ExclusiveIsolation") {
+            let ExclusiveIsolation = Invariant()
+            ExclusiveIsolation {
                 nodes.allSatisfy { i in cache[i].state != "E" || (exGntd && nodes.allSatisfy { j in
                     i == j || (cache[j].state == "I" && !grants.contains(chan2[j].cmd) && chan3[j].cmd != "InvAck")
                 }) }
             }
-            Invariant("WritebackCarriesLatest") {
+            let WritebackCarriesLatest = Invariant()
+            WritebackCarriesLatest {
                 nodes.allSatisfy { i in
                     chan3[i].cmd != "InvAck" || curCmd == "Empty" || !exGntd ||
                         (chan3[i].data == auxData && nodes.allSatisfy { j in
@@ -153,12 +187,35 @@ package struct APGermanDataModel: Sendable {
                         })
                 }
             }
-            Validation("Upstream") {
-                Bind(data, to: Set<String>(["d1_OF_DATA", "d2_OF_DATA"]))
-                Bind(noData, to: "noData_OF_DATA")
-                Bind(nodes, to: Set<String>(["n1_OF_NODE", "n2_OF_NODE"]))
-                Bind(noNode, to: "noNode_OF_NODE")
+            let abstract = Instance(of: APGermanControlModel.self) {
+                Bind(\.nodes, projecting: nodes)
+                Bind(\.noNode, projecting: noNode)
+                Bind(\.other, projecting: Node.other)
             }
+            Refinement("Refinement", instance: abstract, behavior: .initialAndNext) {
+                Map(\.cache, projecting: Dictionary<Node, String>.mapping(over: nodes) { i in cache[i].state })
+                Map(\.chan1, projecting: Dictionary<Node, String>.mapping(over: nodes) { i in chan1[i].cmd })
+                Map(\.chan2, projecting: Dictionary<Node, String>.mapping(over: nodes) { i in chan2[i].cmd })
+                Map(\.chan3, projecting: Dictionary<Node, String>.mapping(over: nodes) { i in chan3[i].cmd })
+                Map(\.invSet, projecting: invSet)
+                Map(\.shrSet, projecting: shrSet)
+                Map(\.exGntd, from: exGntd)
+                Map(\.curCmd, projecting: curCmd)
+                Map(\.curPtr, projecting: curPtr)
+            }
+            let symmetry = Symmetry(independently: nodes, data)
+            Validation("Upstream") {
+                Bind(nodes, to: Set<Node>([Node.ap1, Node.ap2]))
+                Bind(noNode, to: Node.apNoNode)
+                Bind(data, to: Set<Payload>([Payload.ap1, Payload.ap2]))
+                Bind(noData, to: Payload.apNoData)
+            }.checking(only: [TypeOK, Coherence, DataProp, TransactionConsistency, DirectoryAccurate, ExclusiveIsolation, WritebackCarriesLatest])
+            Validation("MCGermanData") {
+                Bind(nodes, to: Set<Node>([Node.n1, Node.n2]))
+                Bind(noNode, to: Node.noNode)
+                Bind(data, to: Set<Payload>([Payload.d1, Payload.d2]))
+                Bind(noData, to: Payload.noData)
+            }.usingSymmetry(symmetry)
         }
     }
 }

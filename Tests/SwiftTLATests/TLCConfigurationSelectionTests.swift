@@ -106,6 +106,18 @@ struct TLCConfigurationSelectionTests {
         }
     }
 
+    @Test("symmetry can select a step refinement while a specification refinement stays unreduced")
+    func selectsOnlyStepRefinementsWithSymmetry() throws {
+        let configuration = TLCConfiguration(declarations: [], checkDeadlock: true,
+            invariants: [], properties: [], refinements: ["Steps", "FairBehavior"],
+            initialAndNextRefinements: ["Steps"], symmetry: ["Nodes"])
+        let steps = try configuration.selecting(["Steps"], checkDeadlock: true).selectingSymmetry("Nodes")
+        let output = try steps.render(usesSymmetryReduction: true)
+        #expect(output.contains("PROPERTY Steps\n"))
+        #expect(output.contains("SYMMETRY Nodes\n"))
+        #expect(throws: CompilationDiagnostic.self) { try configuration.selectingSymmetry("Nodes") }
+    }
+
     @Test("independent property passes retain their selected behavior and configuration declarations")
     func retainsBehaviorAcrossPasses() throws {
         let configuration = TLCConfiguration(behavior: .initialAndNext,

@@ -87,10 +87,16 @@ extension NativeSwiftEmitter {
 
     mutating func generatedRefinementParameters(_ refinement: CompiledGeneratedModelRefinement) throws -> String {
         try refinement.parameters.map { binding in
-            let value = try expression(binding.value.expression, state: "")
-            let argument = binding.projected ? "try SwiftTLA._NativeMachineOperations.checkedProjection(\(value))" : value
-            return "\(binding.fieldName): \(argument)"
+            try generatedRefinementArgument(binding, state: "")
         }.joined(separator: ", ")
+    }
+
+    private mutating func generatedRefinementArgument(_ binding: CompiledGeneratedModelBinding, state: String) throws -> String {
+        let expression = binding.value.expression
+        let value = try self.expression(expression, state: state)
+        guard binding.projected else { return "\(binding.fieldName): \(value)" }
+        let source = expression.resultType == .modelValue ? try formalValue(value, type: .modelValue) : value
+        return "\(binding.fieldName): try SwiftTLA._NativeMachineOperations.checkedProjection(\(source))"
     }
 
     func supportsNativeRefinement(_ refinement: CompiledRefinementProgram) -> Bool {
@@ -155,8 +161,7 @@ extension NativeSwiftEmitter {
                 let target = refinement.targetModelType
                 let parameters = try generatedRefinementParameters(refinement)
                 let state = try refinement.state.map { binding in
-                    let value = try expression(binding.value.expression)
-                    return "\(binding.fieldName): \(binding.projected ? "try SwiftTLA._NativeMachineOperations.checkedProjection(\(value))" : value)"
+                    try generatedRefinementArgument(binding, state: "state.")
                 }.joined(separator: ", ")
                 let property = propertyCases[refinement.id]!
                 checks.append("""

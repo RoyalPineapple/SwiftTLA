@@ -6691,7 +6691,7 @@
       "path": "specifications/GermanProtocol",
       "name": "German Cache-Coherence Protocol",
       "audit": "partially audited",
-      "gap": "All three published AP configurations matched their pinned upstream graphs, selected invariants and deadlock checks in local TLC runs. MCGermanCMPWithMutex matched the raw labeled graph and the configured node-symmetry orbits locally. The Control and Data refinements and final-revision hosted checks remain open.",
+      "gap": "All three published AP configurations matched their pinned upstream graphs, selected invariants and deadlock checks in local TLC runs. MCGermanCMPWithMutex matched the raw labeled graph and the configured node-symmetry orbits locally. MCGermanControl and MCGermanData matched the cached upstream labeled orbit graphs with PROPERTY and SYMMETRY selected. Both refinements passed on the complete Swift graphs. Hosted checks remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -6761,15 +6761,19 @@
           "path": "specifications/GermanProtocol/MCGermanControl.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APGermanControl.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/GermanProtocol/MCGermanData.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APGermanData.swift"
+          ],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -6841,20 +6845,32 @@
           "module": "specifications/GermanProtocol/MCGermanControl.tla",
           "configuration": "specifications/GermanProtocol/MCGermanControl.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/APGermanControl.swift",
+              "scenario": "MCGermanControl",
+              "caseID": "german-control"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/GermanProtocol/MCGermanData.tla",
           "configuration": "specifications/GermanProtocol/MCGermanData.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/APGermanData.swift",
+              "scenario": "MCGermanData",
+              "caseID": "german-data"
+            }
+          ],
           "evidence": []
         }
       ],

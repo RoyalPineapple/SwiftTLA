@@ -1166,7 +1166,7 @@ package enum StraightLineRenderedActionCheck {
         expected += expectedInvariants.map { "INVARIANT \($0)" }
             + expectedProperties.map { "PROPERTY \($0)" }
         if !configuration.assumptionsOnly {
-            if usesSymmetryReduction && configuration.properties.isEmpty && configuration.refinements.isEmpty {
+            if usesSymmetryReduction && configuration.supportsSymmetryChecks {
                 expected += configuration.symmetry.map { "SYMMETRY \($0)" }
             }
             if let view = configuration.view { expected.append("VIEW \(view)") }

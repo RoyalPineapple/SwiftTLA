@@ -32,6 +32,7 @@ package struct TLCConfiguration: Equatable, Sendable {
     package let reachabilityProperties: [String]
     package let properties: [String]
     package let refinements: [String]
+    let initialAndNextRefinements: Set<String>
     package let symmetry: [String]
     package let viewOperators: [String]
     package let view: String?
@@ -41,7 +42,7 @@ package struct TLCConfiguration: Equatable, Sendable {
     package init(behavior: ModelBehavior = .specification, specificationName: String = "Spec",
         assumptionsOnly: Bool = false,
         declarations: [String], checkDeadlock: Bool, intrinsicInvariants: [String] = [], invariants: [String],
-        reachabilityProperties: [String] = [], properties: [String], refinements: [String] = [], symmetry: [String],
+        reachabilityProperties: [String] = [], properties: [String], refinements: [String] = [], initialAndNextRefinements: Set<String> = [], symmetry: [String],
         viewOperators: [String] = [], view: String? = nil,
         postconditionOperators: [String] = [], postcondition: String? = nil) {
         self.behavior = behavior
@@ -53,6 +54,7 @@ package struct TLCConfiguration: Equatable, Sendable {
         self.invariants = invariants
         self.reachabilityProperties = reachabilityProperties
         self.properties = properties
+        self.initialAndNextRefinements = initialAndNextRefinements.intersection(refinements)
         self.refinements = refinements
         self.symmetry = symmetry
         self.viewOperators = viewOperators
@@ -86,7 +88,7 @@ package struct TLCConfiguration: Equatable, Sendable {
             invariants: invariants.filter(checks.contains),
             reachabilityProperties: reachabilityProperties.filter(checks.contains),
             properties: properties.filter(checks.contains),
-            refinements: refinements.filter(checks.contains),
+            refinements: refinements.filter(checks.contains), initialAndNextRefinements: initialAndNextRefinements,
             symmetry: symmetry, viewOperators: viewOperators, view: view,
             postconditionOperators: postconditionOperators, postcondition: postcondition)
     }
@@ -103,7 +105,7 @@ package struct TLCConfiguration: Equatable, Sendable {
         return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
             declarations: declarations, checkDeadlock: checkDeadlock, intrinsicInvariants: intrinsicInvariants,
             invariants: invariants, reachabilityProperties: reachabilityProperties,
-            properties: properties, refinements: refinements,
+            properties: properties, refinements: refinements, initialAndNextRefinements: initialAndNextRefinements,
             symmetry: name.map { [$0] } ?? [], viewOperators: viewOperators, view: view,
             postconditionOperators: postconditionOperators, postcondition: postcondition)
     }
@@ -117,7 +119,7 @@ package struct TLCConfiguration: Equatable, Sendable {
         return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
             declarations: declarations, checkDeadlock: checkDeadlock, intrinsicInvariants: intrinsicInvariants,
             invariants: invariants, reachabilityProperties: reachabilityProperties,
-            properties: properties, refinements: refinements, symmetry: symmetry,
+            properties: properties, refinements: refinements, initialAndNextRefinements: initialAndNextRefinements, symmetry: symmetry,
             viewOperators: viewOperators, view: name,
             postconditionOperators: postconditionOperators, postcondition: postcondition)
     }
@@ -131,7 +133,7 @@ package struct TLCConfiguration: Equatable, Sendable {
         return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
             declarations: declarations, checkDeadlock: checkDeadlock, intrinsicInvariants: intrinsicInvariants,
             invariants: invariants, reachabilityProperties: reachabilityProperties,
-            properties: properties, refinements: refinements, symmetry: symmetry,
+            properties: properties, refinements: refinements, initialAndNextRefinements: initialAndNextRefinements, symmetry: symmetry,
             viewOperators: viewOperators, view: view,
             postconditionOperators: postconditionOperators, postcondition: name)
     }
@@ -152,8 +154,12 @@ package struct TLCConfiguration: Equatable, Sendable {
         return true
     }
 
+    var supportsSymmetryChecks: Bool {
+        properties.isEmpty && initialAndNextRefinements.isSuperset(of: refinements)
+    }
+
     private func validateSymmetryChecks() throws {
-        guard properties.isEmpty && refinements.isEmpty else {
+        guard supportsSymmetryChecks else {
             throw CompilationDiagnostic(code: .unsupportedSymmetryReduction, stage: .rendering,
                 path: "symmetryReduction", expected: "safety-only selected checks",
                 actual: "temporal or refinement properties selected",
@@ -167,7 +173,7 @@ package struct TLCConfiguration: Equatable, Sendable {
             declarations: declarations, checkDeadlock: checkDeadlock,
             intrinsicInvariants: intrinsicInvariants + [name], invariants: invariants,
             reachabilityProperties: reachabilityProperties, properties: properties,
-            refinements: refinements, symmetry: symmetry, viewOperators: viewOperators, view: view,
+            refinements: refinements, initialAndNextRefinements: initialAndNextRefinements, symmetry: symmetry, viewOperators: viewOperators, view: view,
             postconditionOperators: postconditionOperators, postcondition: postcondition)
     }
 
@@ -186,7 +192,7 @@ package struct TLCConfiguration: Equatable, Sendable {
         let checks = (intrinsicInvariants + invariants + reachabilityProperties).map { "INVARIANT \($0)" }
             + (properties + refinements).map { "PROPERTY \($0)" }
         // TLC cannot soundly check liveness on a symmetry-reduced graph.
-        let reduction = usesSymmetryReduction && properties.isEmpty && refinements.isEmpty ? symmetry.map { "SYMMETRY \($0)" } : []
+        let reduction = usesSymmetryReduction && supportsSymmetryChecks ? symmetry.map { "SYMMETRY \($0)" } : []
         var lines = header
         lines.append(contentsOf: declarations)
         lines.append(contentsOf: checks)
