@@ -73,6 +73,7 @@ package struct SequentialControlEvidence: Sendable {
     }
 
     package let authored: Machine
+    package let compilerAuthoredSteps: [AlgorithmStepModel]
     package let scheduled: Machine
     package let lowered: Machine
 
@@ -98,7 +99,7 @@ package struct SequentialControlEvidence: Sendable {
             guard branches.count == paths.count else { return nil }
             loweredActions.append(.init(label: action.name, branches: branches))
         }
-        return .init(authored: authored, scheduled: scheduled,
+        return .init(authored: authored, compilerAuthoredSteps: algorithm.sequentialSteps, scheduled: scheduled,
                      lowered: .init(initial: initial, actions: loweredActions))
     }
 

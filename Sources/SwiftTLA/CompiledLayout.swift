@@ -157,6 +157,10 @@ public struct ControlLocationReference: Hashable, Sendable {
     let owner: ControlOwner?
     let sourceName: String
 
+    package var declarationIdentity: (owner: ControlOwner?, sourceName: String) {
+        (owner, sourceName)
+    }
+
     package static let done = Self(CompilerControlSymbol.done.rawValue)
 
     package init(_ sourceName: String) {

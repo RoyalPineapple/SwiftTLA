@@ -31,7 +31,7 @@ private let plusCalReservedWords: Set<String> = [
     "return", "skip", "then", "variable", "variables", "when", "while", "with"
 ]
 
-func isTLADeclarationName(_ name: String) -> Bool {
+package func isTLADeclarationName(_ name: String) -> Bool {
     isFormalIdentifier(name) && tlaReservedWords.contains(name) == false
 }
 

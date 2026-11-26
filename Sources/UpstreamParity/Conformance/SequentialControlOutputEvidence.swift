@@ -10,7 +10,8 @@ package enum SequentialControlOutputEvidence {
     }
 
     package static func proof(authoredSource: Data, modelName: String, spec: TLASpec,
-                              rendered: RenderedSpecification) throws -> Proofs? {
+                              rendered: RenderedSpecification,
+                              native: (members: Data, operations: Data, checking: Data)? = nil) throws -> Proofs? {
         guard !authoredSource.contains(0), let text = String(data: authoredSource, encoding: .utf8) else { return nil }
         let source = try AuthoredCopySyntax.select(source: text, modelName: modelName)
         let authored = try AuthoredCopySyntax.controlFrontend(source)
@@ -35,9 +36,24 @@ package enum SequentialControlOutputEvidence {
         guard cfg.utf8.elementsEqual((directives.joined(separator: "\n") + "\n").utf8) else { return nil }
 
         let controlModule = "SwiftTLASequentialControl" + actual.name
+        let entryTypes = SequentialControlEvidence.successfulEntryTypes(in: compilation.layout)
+        let nativeProof = try native.map { input in
+            let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
+            guard entryTypes != nil,
+                  let members = String(data: input.members, encoding: .utf8),
+                  let operations = String(data: input.operations, encoding: .utf8),
+                  let checking = String(data: input.checking, encoding: .utf8) else { throw invalid }
+            try verifyConditionalHistoryHelpers(operations: operations, checking: checking)
+            let types = try CompiledTypeInputs(compilation: compilation,
+                types: CompiledTypeContext(enums: .init(), formalNames: [:])) { spelling in
+                    guard ["Int", "Swift.Int"].contains(spelling) else { throw invalid }
+                    return .int
+                }
+            return try sequentialNativeProof(members, program: CompiledProgram(inputs: types))
+        }
         guard let control = try evidence?.proofSource(for: rendered, layout: compilation.layout,
             physicalAuthored: authored.machine, proofModule: controlModule, includeNative: false,
-            declared: authored.declared) else { return nil }
+            declared: authored.declared, entryTypes: entryTypes) else { return nil }
         let configuredModule = controlModule + "ConfiguredProof"
         let bytes = TLAValue.tuple(cfg.utf8.map { .int(Int($0)) })
         let pages = (1...((cfg.utf8.count + 15) / 16)).map { "CallerInputPage\($0)" }.joined(separator: " ")
@@ -62,6 +78,48 @@ package enum SequentialControlOutputEvidence {
             """
         } ?? ""
         let initialFact = authoredInitialFrame.map { _ in ", <1>initial" } ?? ""
+        let typedInitProof = authoredInitialFrame.map { _ in #"""
+        <1>typedInit. Init => AuthoredSequentialTypedEntry
+            <2>bindings. Init => AuthoredSequentialInitialBindings
+                BY ONLY SMT DEF Init, AuthoredSequentialInitialBindings
+            <2>types. AuthoredSequentialInitialBindings => AuthoredSequentialTypedEntry
+                BY ONLY SMT DEF AuthoredSequentialInitialBindings, AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts
+            <2>. QED BY ONLY <2>bindings, <2>types, PTL
+        """# } ?? #"""
+        <1>typedInit. Init => AuthoredSequentialTypedEntry
+            BY ONLY SMT DEF Init, AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts
+        """#
+        let typedConclusions = entryTypes == nil ? "" : #"""
+        /\ (Spec => []AuthoredSequentialTypedEntry)
+            /\ (Spec => [][AuthoredSequentialSuccessfulStep]_vars)
+        """#
+        let typedFacts = entryTypes == nil ? "" : ", <1>alwaysTyped, <1>successfulSpec"
+        let typedSteps = entryTypes == nil ? "" : #"""
+        \#(typedInitProof)
+        <1>typedNext. AuthoredSequentialTypedEntry /\ Next => AuthoredSequentialTypedEntry'
+            BY ONLY AuthoredSequentialSuccessIsExactlyTheEmittedStep, AuthoredSequentialSuccessPreservesTypedEntry, PTL
+        <1>typedStutter. AuthoredSequentialTypedEntry /\ UNCHANGED vars => AuthoredSequentialTypedEntry'
+            BY ONLY SMT DEF vars, AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts
+        <1>induction. AuthoredSequentialTypedEntry /\ [Next]_vars => AuthoredSequentialTypedEntry'
+            BY ONLY <1>typedNext, <1>typedStutter, PTL
+        <1>alwaysTyped. Spec => []AuthoredSequentialTypedEntry
+            <2>initial. Spec => AuthoredSequentialTypedEntry
+                BY ONLY <1>typedInit, PTL DEF Spec
+            <2>next. Spec => [][Next]_vars
+                BY ONLY PTL DEF Spec, vars
+            <2>invariant. AuthoredSequentialTypedEntry /\ [][Next]_vars => []AuthoredSequentialTypedEntry
+                BY ONLY <1>induction, PTL
+            <2>. QED BY ONLY <2>initial, <2>next, <2>invariant, PTL
+        <1>step. AuthoredSequentialTypedEntry /\ [Next]_vars => [AuthoredSequentialSuccessfulStep]_vars
+            BY ONLY AuthoredSequentialSuccessIsExactlyTheEmittedStep, PTL
+        <1>successfulSpec. Spec => [][AuthoredSequentialSuccessfulStep]_vars
+            BY ONLY <1>alwaysTyped, <1>step, PTL DEF Spec, vars
+        """#
+        let nativeConclusion = nativeProof == nil ? "" : #"""
+        /\ (AuthoredSequentialTypedEntry =>
+                \A label : NativeSequentialLabeledStep(label) <=> TLASequentialLabeledStep(label))
+        """#
+        let nativeFact = nativeProof == nil ? "" : ", NativeSequentialDispatchUsesEmittedLabeledSteps"
         let configured = #"""
         ---- MODULE \#(configuredModule) ----
         EXTENDS \#(controlModule), CallerInputPageBlock1
@@ -70,12 +128,16 @@ package enum SequentialControlOutputEvidence {
         SequentialActualCFG == [i \in 1..CallerInputSize |-> CallerInputByte[i - 1]]
         SequentialNormalCFG == \#(bytes)
         \#(initialDefinition)
+        \#(nativeProof?.definitions ?? "")
+        \#(nativeProof?.theorem ?? "")
 
         THEOREM NormalConfigurationUsesOnlyAuthoredSequentialControl ==
             /\ SequentialActualCFG = SequentialNormalCFG
             /\ (Spec => AuthoredSequentialInitialControl)
             \#(initialConclusion)
             /\ (Spec => [][AuthoredSequentialStep]_vars)
+            \#(typedConclusions)
+            \#(nativeConclusion)
             /\ (~AuthoredSequentialGuard => ~ENABLED Next)
             /\ (AuthoredSequentialWriteFreeGuard => ENABLED Next)
             /\ PhysicalAuthoredSequentialTrace = LoweredSequentialSemantics
@@ -88,8 +150,9 @@ package enum SequentialControlOutputEvidence {
         <1>configuration. SequentialActualCFG = SequentialNormalCFG
             BY ONLY <1>domain, <1>bytes, SMT DEF SequentialActualCFG, SequentialNormalCFG
         \#(initialStep)
+        \#(typedSteps)
         <1>. QED BY ONLY <1>configuration, ActualSpecUsesOnlyAuthoredSequentialControl,
-            ActualLoweredRoutesUseTheDeclaredSequentialConstructors\#(initialFact)
+            ActualLoweredRoutesUseTheDeclaredSequentialConstructors\#(initialFact)\#(typedFacts)\#(nativeFact)
 
         ====
 

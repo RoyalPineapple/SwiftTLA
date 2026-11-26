@@ -1,8 +1,28 @@
+import SwiftTLA
+
 extension SequentialControlEvidence {
+    static func successfulEntryTypes(in layout: CompiledLayout) -> [String]? {
+        var types: [String] = []
+        for field in layout.variables where field.declaration.origin == .source {
+            let domain: String
+            switch (field.resolvedValueType, field.generatedSwiftType) {
+            case (.int?, _), (nil, "Int"?), (nil, "Swift.Int"?):
+                domain = "AuthoredSequentialMachineInts"
+            case (.bool?, _), (nil, "Bool"?), (nil, "Swift.Bool"?):
+                domain = "BOOLEAN"
+            default: return nil
+            }
+            types.append("\(field.formalName) \\in \(domain)")
+        }
+        return types
+    }
+
     /// The exporter receives the already retained backend inputs, including action metadata used by the real renderer.
-    package func proofSource(for rendered: RenderedSpecification, layout: CompiledLayout,
+    func proofSource(for rendered: RenderedSpecification, layout: CompiledLayout,
                              physicalAuthored: Machine, proofModule: String = "SwiftTLASequentialControlProof",
-                             includeNative: Bool = true, declared: DeclaredSyntax? = nil) throws -> String? {
+                             includeNative: Bool = true, declared: DeclaredSyntax? = nil,
+                             entryTypes: [String]? = nil) throws -> String? {
+        let proveSuccessfulRoutes = entryTypes != nil
         let module = rendered.tlaBundle.root.name
         let actions = rendered.actions
         let counters = layout.variables.filter { $0.declaration.origin == .programCounter }
@@ -17,7 +37,7 @@ extension SequentialControlEvidence {
               let loweredTrace = lowered.canonicalTraces(sourceWrites: false) else { return nil }
 
         func location(_ value: ControlLocationReference) -> TLAValue {
-            .tuple([.string(value.owner?.canonicalEncoding ?? ""), .string(value.sourceName)])
+            .tuple([.string(value.declarationIdentity.owner?.canonicalEncoding ?? ""), .string(value.declarationIdentity.sourceName)])
         }
         func control(_ value: Control) -> TLAValue {
             switch value {
@@ -64,8 +84,9 @@ extension SequentialControlEvidence {
               let loweredRoutes = table(lowered, includeWrites: false) else { return nil }
 
         func formal(_ reference: ControlLocationReference) throws -> String? {
+            let identity = reference.declarationIdentity
             let matches = layout.controlLocations.filter {
-                $0.owner == reference.owner && $0.sourceName.utf8.elementsEqual(reference.sourceName.utf8)
+                $0.owner == identity.owner && $0.sourceName.utf8.elementsEqual(identity.sourceName.utf8)
             }
             guard matches.count == 1, let match = matches.first else { return nil }
             return try CompiledValue.controlLocation(match.id).rendered(using: layout).description
@@ -112,14 +133,48 @@ extension SequentialControlEvidence {
             }
         }
 
+        func whenDefined(_ checks: [String], then value: String) -> String {
+            checks.reversed().reduce(value) { "(IF \($1) THEN \($0) ELSE FALSE)" }
+        }
+        func defined(_ expression: StateExpr) throws -> [String] {
+            switch expression {
+            case .add(let left, let right), .subtract(let left, let right):
+                guard let value = try scalarTerm(expression) else {
+                    throw CompiledValueType.diagnostic("sequentialControl", "expected a scalar arithmetic term")
+                }
+                return try defined(left) + defined(right) + ["\(value) \\in AuthoredSequentialMachineInts"]
+            case .and(let left, let right), .or(let left, let right):
+                let lhs = try defined(left)
+                let rhs = try defined(right)
+                guard !rhs.isEmpty else { return lhs }
+                guard let condition = try scalarTerm(left) else {
+                    throw CompiledValueType.diagnostic("sequentialControl", "expected a scalar Boolean term")
+                }
+                let test: String
+                if case .and = expression { test = condition } else { test = "(~\(condition))" }
+                return lhs + ["(IF \(test) THEN \(whenDefined(rhs, then: "TRUE")) ELSE TRUE)"]
+            case .equal(let left, let right), .notEqual(let left, let right),
+                 .lessThan(let left, let right), .lessOrEqual(let left, let right),
+                 .greaterThan(let left, let right), .greaterOrEqual(let left, let right):
+                return try defined(left) + defined(right)
+            case .not(let operand): return try defined(operand)
+            default: return []
+            }
+        }
+
+        let sourceFields = layout.variables.filter { $0.declaration.origin == .source }
         guard let sourceEntry = try formal(physicalTrace.initial),
               actions.count == physicalTrace.actions.count,
               zip(actions, physicalTrace.actions).allSatisfy({
                   $0.0.sourceName.utf8.elementsEqual($0.1.label.utf8)
               }) else { return nil }
 
-        let unchangedState = layout.variables.filter { $0.declaration.origin == .source }.map(\.formalName)
+        let unchangedState = sourceFields.map(\.formalName)
         var routeStatements: [String] = []
+        var successfulSteps: [String] = []
+        var successfulRouteStatements: [String] = []
+        var successProofSteps: [String] = []
+        var successProofFacts: [String] = []
         var writeFreeStatements: [String] = []
         var writeFreeGuards: [String] = []
         var writeFreeSteps: [String] = []
@@ -129,6 +184,7 @@ extension SequentialControlEvidence {
         var nativeWrites: [String] = []
         for (action, declared) in zip(actions, physicalTrace.actions) {
             var routes: [String] = []
+            var successfulRoutes: [String] = []
             var writeFreeRoutes: [String] = []
             var entries: Set<String> = []
             var writes: Set<String> = []
@@ -168,6 +224,24 @@ extension SequentialControlEvidence {
                 }
                 let completeRoute = "(\(frame.joined(separator: " /\\ ")))"
                 routes.append(completeRoute)
+                if proveSuccessfulRoutes {
+                    var reachedChecks = ["\(counter) = \(initial)"]
+                    for observation in branch.observations.dropFirst() {
+                        switch observation {
+                        case .guardValue(let expression):
+                            guard let condition = try scalarTerm(expression) else { return nil }
+                            reachedChecks += try defined(expression)
+                            reachedChecks.append(condition)
+                        case .capture(_, let expression):
+                            guard try scalarTerm(expression) != nil else { return nil }
+                            reachedChecks += try defined(expression)
+                        case .write, .endCapture:
+                            break
+                        }
+                    }
+                    let updates = frame.dropFirst().joined(separator: " /\\ ")
+                    successfulRoutes.append("(\(whenDefined(reachedChecks, then: updates)))")
+                }
                 if branch.observations.allSatisfy({
                     guard case .guardValue = $0 else { return false }
                     return true
@@ -179,6 +253,20 @@ extension SequentialControlEvidence {
             let effect = routes.isEmpty ? "FALSE" : routes.joined(separator: " \\/ ")
             routeStatements.append("/\\ (\(action.renderedName) => (\(effect)))")
             allowedSteps.append("(\(effect))")
+            if proveSuccessfulRoutes {
+                let success = successfulRoutes.isEmpty ? "FALSE" : successfulRoutes.joined(separator: " \\/ ")
+                let slot = successfulSteps.count + 1
+                let step = "AuthoredSequentialSuccessfulAction\(slot)"
+                successfulSteps.append("LOCAL \(step) == \(success)")
+                successfulRouteStatements.append("/\\ (\(action.renderedName) <=> \(step))")
+                successProofSteps.append(#"""
+                <1>complete\#(slot). \#(step) => \#(action.renderedName)
+                    BY ONLY AuthoredSequentialTypedEntry, SMT DEF AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts, \#(step), \#(action.renderedName)
+                <1>sound\#(slot). \#(action.renderedName) => \#(step)
+                    BY ONLY AuthoredSequentialTypedEntry, SMT DEF AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts, \#(step), \#(action.renderedName)
+                """#)
+                successProofFacts += ["<1>complete\(slot)", "<1>sound\(slot)"]
+            }
             if !writeFreeRoutes.isEmpty {
                 let writeFree = writeFreeRoutes.joined(separator: " \\/ ")
                 writeFreeSteps.append("(\(writeFree))")
@@ -226,15 +314,45 @@ extension SequentialControlEvidence {
         let nativeImport = includeNative ? ", SwiftTLANativeActions" : ""
         let declaredProof: String
         if let declared {
-            guard let proof = declared.proof(loweredTrace: loweredTrace) else { return nil }
+            guard let proof = declared.proof(loweredTrace: loweredTrace, compilerAuthoredSteps: compilerAuthoredSteps)
+            else { return nil }
             declaredProof = proof
         } else {
             declaredProof = ""
         }
         let declaredImport = declared == nil ? "" : ", Naturals"
+        let successImport = proveSuccessfulRoutes ? ", Integers" : ""
+        let successProof = proveSuccessfulRoutes ? #"""
+
+        AuthoredSequentialMachineInts == \#(TLAValue.int(Int.min))..\#(TLAValue.int(Int.max))
+        AuthoredSequentialTypedEntry == \#(entryTypes.flatMap { $0.isEmpty ? nil : $0.joined(separator: " /\\ ") } ?? "TRUE")
+        \#(successfulSteps.joined(separator: "\n"))
+        AuthoredSequentialSuccessfulStep == \#(successfulSteps.indices.map { "AuthoredSequentialSuccessfulAction\($0 + 1)" }.joined(separator: " \\/ "))
+
+        THEOREM ActualTLAUsesTheDefinedAuthoredRoutes ==
+            ASSUME AuthoredSequentialTypedEntry
+            PROVE
+                \#(successfulRouteStatements.joined(separator: "\n        "))
+        PROOF
+        \#(successProofSteps.joined(separator: "\n"))
+        <1>. QED BY ONLY \#(successProofFacts.joined(separator: ", ")), PTL
+
+        THEOREM AuthoredSequentialSuccessIsExactlyTheEmittedStep ==
+            AuthoredSequentialTypedEntry => (Next <=> AuthoredSequentialSuccessfulStep)
+        PROOF
+        <1>. SUFFICES ASSUME AuthoredSequentialTypedEntry
+                      PROVE Next <=> AuthoredSequentialSuccessfulStep BY PTL
+        <1>. QED BY ONLY AuthoredSequentialTypedEntry, ActualTLAUsesTheDefinedAuthoredRoutes,
+            ActualRenderedSequentialActionInventory, PTL DEF AuthoredSequentialSuccessfulStep
+
+        THEOREM AuthoredSequentialSuccessPreservesTypedEntry ==
+            AuthoredSequentialTypedEntry /\ AuthoredSequentialSuccessfulStep => AuthoredSequentialTypedEntry'
+            BY ONLY SMT DEF AuthoredSequentialTypedEntry, AuthoredSequentialMachineInts,
+                AuthoredSequentialSuccessfulStep, \#(successfulSteps.indices.map { "AuthoredSequentialSuccessfulAction\($0 + 1)" }.joined(separator: ", "))
+        """# : ""
         return #"""
         ---- MODULE \#(proofModule) ----
-        EXTENDS \#(module), TLAPS\#(nativeImport)\#(declaredImport)
+        EXTENDS \#(module), TLAPS\#(nativeImport)\#(declaredImport)\#(successImport)
 
         PhysicalAuthoredSequentialTrace == \#(physicalTerms)
         CompilerAuthoredSequentialTrace == \#(compilerTerms)
@@ -342,7 +460,7 @@ extension SequentialControlEvidence {
         <1>. QED BY ONLY <1>initial, <1>always, <1>binding,
             ActualSequentialStepUsesAuthoredRoutes, PTL DEF Spec, vars
 
-        \#(native)\#(declaredProof)
+        \#(native)\#(declaredProof)\#(successProof)
 
         ====
 
@@ -352,7 +470,7 @@ extension SequentialControlEvidence {
 
 extension StateExpr {
     // Read and literal tags agree with CopyReferenceValue in OrderedScalarCopyRule.tla.
-    package var scalarEvidenceTerm: TLAValue? {
+    var scalarEvidenceTerm: TLAValue? {
         func binary(_ operation: String, _ lhs: StateExpr, _ rhs: StateExpr) -> TLAValue? {
             guard let left = lhs.scalarEvidenceTerm, let right = rhs.scalarEvidenceTerm else { return nil }
             return .tuple([.string(operation), left, right])
@@ -364,8 +482,8 @@ extension StateExpr {
         case .value(.bool(let value)): return .tuple([.string("literal"), .bool(value)])
         case .programCounter: return .tuple([.string("programCounter")])
         case .controlLocation(let location):
-            return .tuple([.string("controlLocation"), .string(location.owner?.canonicalEncoding ?? ""),
-                           .string(location.sourceName)])
+            return .tuple([.string("controlLocation"), .string(location.declarationIdentity.owner?.canonicalEncoding ?? ""),
+                           .string(location.declarationIdentity.sourceName)])
         case .equal(let lhs, let rhs): return binary("equal", lhs, rhs)
         case .notEqual(let lhs, let rhs): return binary("notEqual", lhs, rhs)
         case .lessThan(let lhs, let rhs): return binary("lessThan", lhs, rhs)
@@ -385,16 +503,35 @@ extension StateExpr {
 }
 
 extension SequentialControlEvidence {
-    package struct DeclaredSyntax {
-        package let algorithm: String
-        package let steps: [AlgorithmStepModel]
+    struct DeclaredSyntax {
+        let algorithm: String
+        let steps: [AlgorithmStepModel]
 
-        package init(algorithm: String, steps: [AlgorithmStepModel]) {
+        init(algorithm: String, steps: [AlgorithmStepModel]) {
             self.algorithm = algorithm
             self.steps = steps
         }
 
-        fileprivate func proof(loweredTrace: Machine) -> String? {
+        fileprivate func proof(loweredTrace: Machine, compilerAuthoredSteps: [AlgorithmStepModel]) -> String? {
+            func writeSites(_ statements: [AlgorithmStatementModel]) -> [TLAValue] {
+                statements.flatMap { statement -> [TLAValue] in
+                    func arms(_ first: [AlgorithmStatementModel], _ second: [AlgorithmStatementModel]) -> [TLAValue] {
+                        [.tuple([.tuple(writeSites(first)), .tuple(writeSites(second))])]
+                    }
+                    switch statement {
+                    case .set(let target, _): return [.string(target.root)]
+                    case .parallel(let assignments): return assignments.map { .string($0.target.root) }
+                    case .ifElse(_, let yes, let no), .either(let yes, let no): return arms(yes, no)
+                    case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
+                        return writeSites(body)
+                    default: return []
+                    }
+                }
+            }
+            func orderedWriteSites(_ steps: [AlgorithmStepModel]) -> TLAValue {
+                .tuple(steps.map { .tuple([.string($0.label.name), .tuple(writeSites($0.statements))]) })
+            }
+
             func statementKinds(_ statements: [AlgorithmStatementModel]) -> [TLAValue] {
                 statements.flatMap { statement -> [TLAValue] in
                     return switch statement {
@@ -411,6 +548,10 @@ extension SequentialControlEvidence {
                     }
                 }
             }
+
+            let physicalWriteSites = orderedWriteSites(steps)
+            let compilerWriteSites = orderedWriteSites(compilerAuthoredSteps)
+            guard physicalWriteSites == compilerWriteSites else { return nil }
 
             var rows: [TLAValue] = []
             for step in steps {
@@ -501,6 +642,8 @@ extension SequentialControlEvidence {
             return #"""
 
 
+        PhysicalAuthoredSequentialWriteSites == \#(physicalWriteSites)
+        CompilerAuthoredSequentialWriteSites == \#(compilerWriteSites)
         DeclaredSequentialConstructors == \#(TLAValue.tuple(rows))
         LOCAL DeclaredCount == \#(rows.count)
         LOCAL DeclaredOwner == \#(TLAValue.string(owner))
@@ -552,6 +695,7 @@ extension SequentialControlEvidence {
             /\ DOMAIN trace[2] = 1..(DeclaredCount + 1)
             /\ trace[2][DeclaredCount + 1] = DeclaredTerminalRow
             /\ DeclaredRowsMatch(trace)
+            /\ PhysicalAuthoredSequentialWriteSites = CompilerAuthoredSequentialWriteSites
 
         THEOREM ActualLoweredRoutesUseTheDeclaredSequentialConstructors ==
             DeclaredSequentialConstructorsMatch(LoweredSequentialSemantics)
@@ -569,7 +713,9 @@ extension SequentialControlEvidence {
                 BY ONLY SMT DEF DeclaredCount
             \#(rowProofs)
             <2>. QED BY ONLY <2>slots, \#(rowFacts), SMT DEF DeclaredRowsMatch
-        <1>. QED BY ONLY <1>layout, <1>branches DEF DeclaredSequentialConstructorsMatch
+        <1>writeSites. PhysicalAuthoredSequentialWriteSites = CompilerAuthoredSequentialWriteSites
+            BY ONLY IsaM("simp") DEF PhysicalAuthoredSequentialWriteSites, CompilerAuthoredSequentialWriteSites
+        <1>. QED BY ONLY <1>layout, <1>branches, <1>writeSites DEF DeclaredSequentialConstructorsMatch
         """#
         }
     }
