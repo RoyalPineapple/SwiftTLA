@@ -180,7 +180,7 @@ private enum ExpressionCheckTask {
     case tupleProjectionLiteral(CompiledExpression)
     case tupleProjectionContext(index: Int, expected: CompiledValueType)
     case finishTupleAccess(index: Int, expected: CompiledValueType)
-    case finishAssertView(CompiledValueType, expected: CompiledValueType)
+    case finishAssertView(FormalValueShape, expected: CompiledValueType)
     case updateKey(expected: CompiledValueType)
     case updateValue(expected: CompiledValueType)
     case finishUpdate(expected: CompiledValueType)
@@ -1276,7 +1276,7 @@ package struct CompiledTypeChecker: Sendable {
         case .dictionary(let key, _): result = .set(key)
         case .array, .tuple: result = .set(.int)
         case .record, .nominalRecord: result = .set(.string)
-        case .oneOf where source.resultType.hasRecordDomain:
+        case _ where source.resultType.hasRecordDomain:
             result = .set(.string)
         case .unknown: result = .set(.unknown)
         default: throw CompiledValueType.diagnostic("domain", "unsupported domain shape")
@@ -1450,7 +1450,7 @@ package struct CompiledTypeChecker: Sendable {
                         let value = expression.children[0]
                         let hint: CompiledValueType = if case .tupleLiteral = value.operation { asserted } else { .unknown }
                         pending.append(contentsOf: [
-                            .finishAssertView(asserted, expected: expected),
+                            .finishAssertView(shape, expected: expected),
                             .discard, .retainOperand(0), .check(value, expected: hint)
                         ])
                     case .tupleLiteral:
@@ -2424,7 +2424,11 @@ package struct CompiledTypeChecker: Sendable {
                     let checked = try checkedType(result, expected: expected, operandContexts: operandContexts)
                     results.append(checked.type)
                     try finish(checked, in: &self)
-                case .finishAssertView(let asserted, let expected):
+                case .finishAssertView(let shape, let expected):
+                    guard let source = operandFrames.last?[0] else {
+                        throw CompiledValueType.diagnostic("view", "missing checked view operand")
+                    }
+                    let asserted = try inputs.types.declaredView(shape, in: source.resultType) ?? inputs.types.resolve(shape)
                     let checked = try checkedType(asserted, expected: expected)
                     results.append(checked.type)
                     try finish(checked, in: &self, refineOperands: false)

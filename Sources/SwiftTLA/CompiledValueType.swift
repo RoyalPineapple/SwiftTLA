@@ -39,8 +39,8 @@ package indirect enum CompiledValueType: Hashable, Sendable {
     }
 
     package var hasRecordDomain: Bool {
-        if case .oneOf(let first, let second) = self {
-            return first.hasRecordDomain && second.hasRecordDomain
+        if let alternatives = unionAlternatives {
+            return !alternatives.isEmpty && alternatives.allSatisfy(\.hasRecordDomain)
         }
         return recordFields != nil
     }

@@ -297,7 +297,7 @@ struct UpstreamParityTests {
     @Test("Reachable bounded source port checks its generated machine")
     func reachableBoundedPort() throws {
         let graph = try ReachabilityGraph(
-            initialMachines: ReachableModel.initialMachines(),
+            initialMachines: ReachableModel.initialMachines(configuration: .init(nodes: [.n1, .n2, .n3, .n4], start: .n1)),
             maximumStates: Example.reachable.maximumStateLimit
         )
         #expect(graph.transitions.count == Example.reachable.expectedDistinct)

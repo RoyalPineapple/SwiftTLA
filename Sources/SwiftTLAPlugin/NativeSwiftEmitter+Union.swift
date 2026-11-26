@@ -120,9 +120,12 @@ extension NativeSwiftEmitter {
             let keys = try fields.map { try literal(.string($0.name), as: .string) }
             return ["case \(pattern("_")): return \(resultType)([\(keys.joined(separator: ", "))])"]
         }
-        guard case .oneOf(let first, let second) = type else { throw unsupported("DOMAIN") }
-        return try recordDomainCases(first, resultType: resultType) { pattern(".first(\($0))") }
-            + recordDomainCases(second, resultType: resultType) { pattern(".second(\($0))") }
+        guard let alternatives = type.unionAlternatives else { throw unsupported("DOMAIN") }
+        return try alternatives.enumerated().flatMap { index, alternative in
+            try recordDomainCases(alternative, resultType: resultType) {
+                pattern(".\(self.unionCase(type, index: index))(\($0))")
+            }
+        }
     }
 
     func unionOrdering(_ type: CompiledValueType) throws -> String {

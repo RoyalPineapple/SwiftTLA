@@ -570,8 +570,10 @@ struct CompiledLowerer {
                 }
             }
             if selectedSymmetry != nil {
+                let stepRefinements = Set(spec.generatedRefinements.filter { $0.behavior == .initialAndNext }.map(\.name))
                 let unsupported = properties.filter {
-                    checks.contains($0.id) && ($0.declaration.kind == .temporalProperty || $0.declaration.kind == .refinement)
+                    checks.contains($0.id) && ($0.declaration.kind == .temporalProperty
+                        || ($0.declaration.kind == .refinement && !stepRefinements.contains($0.declaration.name)))
                 }.map(\.declaration.name)
                 guard unsupported.isEmpty else {
                     throw CompilationDiagnostic(code: .unsupportedSymmetryReduction, stage: .validation,

@@ -29,9 +29,14 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         case .union:
             let hasSupportedShapes = possibleShapes.allSatisfy(\.isSupported)
             let collectionShapes = Set(possibleShapes.filter { !$0.isScalar })
-            // TLA collection predicates can fail on the wrong kind of value.
-            // Until we can distinguish those kinds safely, allow only one.
-            return hasSupportedShapes && collectionShapes.count <= 1
+            if collectionShapes.count <= 1 { return hasSupportedShapes }
+            // Record variants share DOMAIN and can be distinguished before reading a field.
+            let keySets = collectionShapes.compactMap { shape -> Set<String>? in
+                guard case .record(let fields) = shape else { return nil }
+                return Set(fields.map(\.name))
+            }
+            return hasSupportedShapes && keySets.count == possibleShapes.count
+                && Set(keySets).count == keySets.count
         case .record(let fields):
             let hasUniqueNames = Set(fields.map(\.name)).count == fields.count
             let hasSupportedFields = fields.allSatisfy { $0.shape.isSupported }

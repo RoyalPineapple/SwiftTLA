@@ -1440,8 +1440,8 @@ package enum ConditionalActionEvidence {
                                 Arithmetic!RecordedWriterSuppliesTheProjectedRead, SMT DEF maps, \#(mapsColumn), writes
                         <6>. QED BY ONLY <6>physical, <6>interpreted, SMT
                     <5>lexicalScope. /\ \A a, b \in 1..(index - 1) : definitionNames[a] = definitionNames[b] => a = b
-                                      /\ \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
-                                             \A p \in 1..(index - 1) : definitionNames[p] # readKeys[origin]
+                                     /\ \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
+                                            \A p \in 1..(index - 1) : definitionNames[p] # readKeys[origin]
                         <6>fresh. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
                             \A p \in 1..(index - 1) : definitionNames[p] # readKeys[origin]
                             BY ONLY <5>range, SMT DEF definitionNames, \#(namesColumn), kinds, readKeys, \#(source)SourceOccurrenceKinds,
