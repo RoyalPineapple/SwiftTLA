@@ -10,6 +10,71 @@ import SwiftTLAMacros
 
 @Suite("Generated atomic update proof input")
 struct GeneratedAtomicUpdateProofTests {
+    @Test("Generated captures keep the compiled identity of each declaration")
+    func generatedCaptureBindingIdentity() throws {
+        let spec = TLASpec(name: "CaptureIdentity", variables: [.init(name: "result", initial: .int(0))],
+            actions: [.init(name: "choose", body: .ifElse(.lessThan(.variable("result"), .int(1)),
+                .define("first", .int(3), .define("second", .int(7),
+                    .define("read", .variable("first"), .assign(.named("result"), .variable("read"))))),
+                .unchanged(.named("result"))))], invariants: [])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: spec.compile()))
+        let action = try #require(program.behavior.actions.first)
+        guard case .ifElse(_, let selected, _) = action.body,
+              case .define(let first, _, let secondDefinition) = selected,
+              case .define(let second, _, let readDefinition) = secondDefinition,
+              case .define(let read, let value, _) = readDefinition else {
+            Issue.record("Expected three compiled definitions in the selected arm")
+            return
+        }
+        try #require(value.operation == .boundValue(first))
+        try #require(action.body.orderedAlternativeFailureRegions.isEmpty)
+
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "CaptureIdentity", program: program))
+        let members = try emitter.machineMembers()
+        let parts = try emitter.actionFunctions(action)
+        let name = "_visitUpdates\(action.id.ordinal)"
+        let originalVisitor = try #require(member(named: name, in: members))
+        func verify(_ declaration: DeclSyntax) throws {
+            try verifyGeneratedActionWriteOutput(declaration, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions,
+                requireScalarLeaves: true)
+        }
+        try verify(originalVisitor)
+
+        let firstName = emitter.binder(first), secondName = emitter.binder(second), readName = emitter.binder(read)
+        let original = members.map(\.description).joined(separator: "\n")
+        let operand = "let \(readName) = \(firstName)"
+        let renamedOperand = "let \(readName) = \(secondName)"
+        let temporaryName = "__capturePermutationPlaceholder"
+        try #require(original.components(separatedBy: operand).count == 2 && !original.contains(temporaryName))
+        let changed = original.replacingOccurrences(of: firstName, with: temporaryName)
+            .replacingOccurrences(of: secondName, with: firstName)
+            .replacingOccurrences(of: temporaryName, with: secondName)
+            .replacingOccurrences(of: renamedOperand, with: operand)
+        try #require(changed != original && changed.contains(operand))
+
+        let condition = try #require(parts.conditions.first)
+        let predicate = Parser.parse(source: condition.value).tokens(viewMode: .sourceAccurate)
+            .filter { $0.tokenKind != .endOfFile }.map(\.text)
+        let accepted = try nativeConditionalActionPlans(original, program: program, predicate: predicate).ifTrue.capturePlans
+        let redirected = try nativeConditionalActionPlans(changed, program: program, predicate: predicate).ifTrue.capturePlans
+        try #require(accepted.count == 3 && redirected.count == 3)
+        #expect(accepted[0].literals == [.int(3)] && redirected[1].literals == [.int(7)])
+        #expect(accepted[2].reads == [.tuple([.string("capture"), .int(1)])])
+        #expect(redirected[2].reads == [.tuple([.string("capture"), .int(2)])])
+
+        let changedVisitor = try #require(member(named: name, in: Parser.parse(source: changed)
+            .statements.compactMap { $0.item.as(DeclSyntax.self) }))
+        do {
+            try verify(changedVisitor)
+            Issue.record("Capture declarations exchanged compiled identities despite consistent forwarding")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.expected == "the declaration for compiled binder \(first.ordinal)")
+            #expect(diagnostic.actual == secondName)
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+    }
+
     @Test("A shared conditional write feeds the selector and can fail before selection")
     func sharedConditionalWriteSelectsOrStops() throws {
         let owner = packageRoot().appendingPathComponent(

@@ -3413,6 +3413,10 @@ func verifyGeneratedActionWriteOutput(
                 "a captured value before its child call", "missing or malformed binding")
         }
         let name = tokens[1]
+        guard let sourceName = program.binderNames[binding], name == "_\(sourceName)_\(binding.ordinal)" else {
+            throw invalid("native.action.binding.\(id)",
+                "the declaration for compiled binder \(binding.ordinal)", name)
+        }
         guard let parent = parameters[id], let childParameters = parameters[child],
               parent.suffix(2) == ["updates", "emit"] else {
             throw invalid("native.action.binding.\(id)",
