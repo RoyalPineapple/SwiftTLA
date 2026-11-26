@@ -235,7 +235,7 @@ package struct AlgorithmModel: Sendable {
             .init(
                 root: value.root,
                 initialization: initialization(value.initialization),
-                displayLabel: value.displayLabel,
+                tlaName: value.tlaName, displayLabel: value.displayLabel,
                 swiftTypeName: value.swiftTypeName,
                 resolvedValueType: value.resolvedValueType
             )
@@ -688,6 +688,7 @@ package enum AlgorithmFairness: Sendable {
 package struct AlgorithmStateModel: Sendable {
     package let root: String
     package let initialization: VariableInitialization
+    package let tlaName: String?
     package let displayLabel: String?
     package let swiftTypeName: String?
     package let resolvedValueType: CompiledValueType?
@@ -696,13 +697,14 @@ package struct AlgorithmStateModel: Sendable {
     package init(
         root: String,
         initialization: VariableInitialization,
-        displayLabel: String? = nil,
+        tlaName: String? = nil, displayLabel: String? = nil,
         swiftTypeName: String? = nil,
         resolvedValueType: CompiledValueType? = nil,
         exposed: Bool = false
     ) {
         self.root = root
         self.initialization = initialization.normalized
+        self.tlaName = tlaName
         self.displayLabel = displayLabel
         self.swiftTypeName = swiftTypeName
         self.resolvedValueType = resolvedValueType

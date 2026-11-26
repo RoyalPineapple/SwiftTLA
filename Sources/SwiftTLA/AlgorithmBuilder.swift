@@ -436,17 +436,17 @@ public struct AtomicStep: SpecComponent {
 }
 
 private extension SharedVariable {
-    var algorithmElement: AlgorithmElement {
+    func algorithmElement(tlaName: String?) -> AlgorithmElement {
         AlgorithmElement(model: .shared(.init(
             root: name,
             initialization: initialization,
-            displayLabel: displayLabel,
+            tlaName: tlaName, displayLabel: displayLabel,
             swiftTypeName: swiftSurfaceTypeName(for: Value.self)
         )))
     }
 
-    var specificationDeclaration: VarDecl {
-        VarDecl(name, initialization: initialization, displayLabel: displayLabel,
+    func specificationDeclaration(tlaName: String?) -> VarDecl {
+        VarDecl(name, initialization: initialization, tlaName: tlaName, displayLabel: displayLabel,
             generatedSwiftType: swiftSurfaceTypeName(for: Value.self))
     }
 }
@@ -473,28 +473,28 @@ public final class SpecificationScope {
     }
 
     public func parameter<Value: TLAValueType, Domain: FormalSetValue>(
-        as: Value.Type, in domain: some TypedExpression<Domain>, label: String? = nil, _name: String = "",
+        tlaName: String? = nil, as: Value.Type, in domain: some TypedExpression<Domain>, label: String? = nil, _name: String = "",
         _sourceOffset: Int? = nil, _sourceLength: Int = 0
     ) -> ModelParameter<Value> where Domain.Element == Value {
-        declareParameter(_name, label: label, domain: domain.stateExpr,
+        declareParameter(_name, tlaName: tlaName, label: label, domain: domain.stateExpr,
             sourceOffset: _sourceOffset, sourceLength: _sourceLength)
     }
 
-    public func parameter(as: Int.Type, in domain: ClosedRange<Int>, label: String? = nil, _name: String = "",
+    public func parameter(tlaName: String? = nil, as: Int.Type, in domain: ClosedRange<Int>, label: String? = nil, _name: String = "",
         _sourceOffset: Int? = nil, _sourceLength: Int = 0) -> ModelParameter<Int> {
-        declareParameter(_name, label: label, domain: .integerRange(.int(domain.lowerBound), .int(domain.upperBound)),
+        declareParameter(_name, tlaName: tlaName, label: label, domain: .integerRange(.int(domain.lowerBound), .int(domain.upperBound)),
             sourceOffset: _sourceOffset, sourceLength: _sourceLength)
     }
 
-    public func parameter(as: Bool.Type, label: String? = nil, _name: String = "",
+    public func parameter(tlaName: String? = nil, as: Bool.Type, label: String? = nil, _name: String = "",
         _sourceOffset: Int? = nil, _sourceLength: Int = 0) -> ModelParameter<Bool> {
-        declareParameter(_name, label: label, domain: .setLiteral([.value(.bool(false)), .value(.bool(true))]),
+        declareParameter(_name, tlaName: tlaName, label: label, domain: .setLiteral([.value(.bool(false)), .value(.bool(true))]),
             sourceOffset: _sourceOffset, sourceLength: _sourceLength)
     }
 
-    private func declareParameter<Value: TLAValueType>(_ name: String, label: String?, domain: StateExpr,
+    private func declareParameter<Value: TLAValueType>(_ name: String, tlaName: String?, label: String?, domain: StateExpr,
         sourceOffset: Int?, sourceLength: Int) -> ModelParameter<Value> {
-        let reference = ParameterReference(name: name, displayLabel: label,
+        let reference = ParameterReference(name: name, tlaName: tlaName, displayLabel: label,
             sourceOffset: sourceOffset, sourceLength: sourceLength)
         parameters.append(.init(reference: reference, swiftType: swiftSurfaceTypeName(for: Value.self), domain: domain))
         return ModelParameter(reference: reference)
@@ -502,41 +502,44 @@ public final class SpecificationScope {
 
     public func sharedVar<Value: TLAValueType>(
         _name name: String = "",
+        tlaName: String? = nil,
         label: String? = nil,
         initial: Value
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial, displayLabel: label)
-        declarations.append(variable.specificationDeclaration)
+        declarations.append(variable.specificationDeclaration(tlaName: tlaName))
         return variable
     }
 
-    public func sharedVar(_name name: String = "", label: String? = nil, initiallyIn range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_name name: String = "", tlaName: String? = nil, label: String? = nil, initiallyIn range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
             initialization: .memberOf(.integerRange(.int(range.lowerBound), .int(range.upperBound))),
             displayLabel: label
         )
-        declarations.append(variable.specificationDeclaration)
+        declarations.append(variable.specificationDeclaration(tlaName: tlaName))
         return variable
     }
 
     public func sharedVar<Domain: FormalSetValue>(
         _name name: String = "",
+        tlaName: String? = nil,
         label: String? = nil,
         initiallyIn values: some TypedExpression<Domain>
     ) -> SharedVariable<Domain.Element> {
         let variable = SharedVariable(name: name, in: values, displayLabel: label)
-        declarations.append(variable.specificationDeclaration)
+        declarations.append(variable.specificationDeclaration(tlaName: tlaName))
         return variable
     }
 
     public func sharedVar<Value: TLAValueType>(
         _name name: String = "",
+        tlaName: String? = nil,
         label: String? = nil,
         initial: some TypedExpression<Value>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial, displayLabel: label)
-        declarations.append(variable.specificationDeclaration)
+        declarations.append(variable.specificationDeclaration(tlaName: tlaName))
         return variable
     }
 }
@@ -565,41 +568,44 @@ public final class AlgorithmScope {
 
     public func sharedVar<Value: TLAValueType>(
         _name name: String = "",
+        tlaName: String? = nil,
         label: String? = nil,
         initial: Value
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial, displayLabel: label)
-        declarations.append(variable.algorithmElement)
+        declarations.append(variable.algorithmElement(tlaName: tlaName))
         return variable
     }
 
-    public func sharedVar(_name name: String = "", label: String? = nil, initiallyIn range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_name name: String = "", tlaName: String? = nil, label: String? = nil, initiallyIn range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
             initialization: .memberOf(.integerRange(.int(range.lowerBound), .int(range.upperBound))),
             displayLabel: label
         )
-        declarations.append(variable.algorithmElement)
+        declarations.append(variable.algorithmElement(tlaName: tlaName))
         return variable
     }
 
     public func sharedVar<Domain: FormalSetValue>(
         _name name: String = "",
+        tlaName: String? = nil,
         label: String? = nil,
         initiallyIn values: some TypedExpression<Domain>
     ) -> SharedVariable<Domain.Element> {
         let variable = SharedVariable(name: name, in: values, displayLabel: label)
-        declarations.append(variable.algorithmElement)
+        declarations.append(variable.algorithmElement(tlaName: tlaName))
         return variable
     }
 
     public func sharedVar<Value: TLAValueType>(
         _name name: String = "",
+        tlaName: String? = nil,
         label: String? = nil,
         initial: some TypedExpression<Value>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial, displayLabel: label)
-        declarations.append(variable.algorithmElement)
+        declarations.append(variable.algorithmElement(tlaName: tlaName))
         return variable
     }
 }

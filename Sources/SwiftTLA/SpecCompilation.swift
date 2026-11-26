@@ -35,6 +35,13 @@ package func isTLADeclarationName(_ name: String) -> Bool {
     isFormalIdentifier(name) && tlaReservedWords.contains(name) == false
 }
 
+private func exactNameDiagnostic(_ declaration: String, _ request: String) -> CompilationDiagnostic {
+    CompilationDiagnostic(code: .invalidFormalDeclaration, stage: .binding,
+        path: "declarations.\(declaration).tlaName", expected: "an unreserved, unique TLA+ identifier",
+        actual: "Swift declaration '\(declaration)' requested '\(request)'",
+        nextSafeAction: "Choose an available TLA+ identifier or omit tlaName for automatic allocation.")
+}
+
 // Record fields allow keywords, unlike declarations; lexer restrictions still apply.
 func isTLARecordFieldName(_ name: String) -> Bool {
     guard isFormalIdentifier(name) else { return false }
@@ -1586,7 +1593,32 @@ public extension TLASpec {
         occupied.formUnion(propertyNames.values)
         var variableReservations = occupied
         if authoredAlgorithm != nil { variableReservations.insert("Terminating") }
+        let nameRequests = parameters.map { ($0.reference.name, $0.reference.tlaName) }
+            + variables.map { ($0.name, $0.tlaName) }
+        if nameRequests.contains(where: { $0.1 != nil }) {
+            let declarationsByName = Dictionary(grouping: nameRequests, by: { $0.1 ?? $0.0 })
+            let otherDeclarations = renderedDeclarationNames(includingVariables: false)
+            for (swiftName, request) in nameRequests {
+                guard let request else { continue }
+                guard isTLADeclarationName(request), tlaDeclarationStem(request) == request,
+                      !operatorReservations.contains(request),
+                      declarationsByName[request]?.count == 1, !otherDeclarations.contains(request) else {
+                    let owners = declarationsByName[request]?.map { $0.0 }.joined(separator: ", ") ?? swiftName
+                    throw exactNameDiagnostic(owners, request)
+                }
+            }
+        }
         layout.resolveVariableNames(reserving: variableReservations)
+        for (source, allocated) in zip(variables, layout.variables) {
+            if let request = source.tlaName, request != allocated.formalName {
+                throw exactNameDiagnostic(source.name, request)
+            }
+        }
+        for parameter in layout.parameters {
+            if let request = parameter.reference.tlaName, bindings.binders[parameter.binder] != request {
+                throw exactNameDiagnostic(parameter.reference.name, request)
+            }
+        }
         let parameterNames = parameterVariables.mapValues { layout.variables[$0.ordinal].formalName }
         let resolvedBindings = CompiledBindingTable(operatorNames: bindings.operatorNames,
             binders: bindings.binders.merging(parameterNames) { _, name in name },
@@ -2093,7 +2125,7 @@ private struct CanonicalSpecificationEncoder {
         }
         if !spec.parameters.isEmpty {
             let parameters = spec.parameters.map {
-                node("parameter", [$0.reference.name, $0.swiftType, canonicalExpression($0.domain)])
+                node("parameter", [$0.reference.name, $0.swiftType, canonicalExpression($0.domain)] + ($0.reference.tlaName.map { [$0] } ?? []))
             }
             list("parameters", parameters) { $0 }
         }
@@ -2258,7 +2290,7 @@ private struct CanonicalSpecificationEncoder {
             canonicalInitialization(variable.initialization),
             canonicalOptional(variable.generatedSwiftType),
             canonicalOptional(variable.resolvedValueType.map(nativeTypeKey))
-        ])
+        ] + (variable.tlaName.map { [$0] } ?? []))
     }
 
     private func canonicalInitialization(_ initialization: VariableInitialization) -> String {

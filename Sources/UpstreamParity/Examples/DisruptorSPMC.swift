@@ -34,76 +34,79 @@ package struct DisruptorSPMCModel: Sendable {
     package static var spec: TLASpec {
         #spec("MCDisruptor_SPMC") { scope in
             Extends(.integers, .sequences, .finiteSets)
-            let Writers = scope.parameter(as: Set<ThreadID>.self, in: Subsets(of: Set<ThreadID>([ThreadID.w])))
-            let Readers = scope.parameter(as: Set<ThreadID>.self, in: Subsets(of: Set<ThreadID>([ThreadID.r1, ThreadID.r2, ThreadID.r3])))
-            let Size = scope.parameter(as: Int.self, in: Int.all)
-            let MaxPublished = scope.parameter(as: Int.self, in: Int.all)
-            let NULL = scope.parameter(as: Empty.self, in: Set<Empty>([Empty.null]))
-            Assume(Writers.count == 1 && !Readers.isEmpty && Writers.intersection(Readers).isEmpty)
-            Assume(Size > 0 && MaxPublished > 0)
-            let threads = Writers.union(Readers)
-            let indices = IntRange(0, through: Size - 1)
+            let writers = scope.parameter(tlaName: "Writers", as: Set<ThreadID>.self, in: Subsets(of: Set<ThreadID>([ThreadID.w])))
+            let readers = scope.parameter(tlaName: "Readers", as: Set<ThreadID>.self, in: Subsets(of: Set<ThreadID>([ThreadID.r1, ThreadID.r2, ThreadID.r3])))
+            let bufferSize = scope.parameter(tlaName: "Size", as: Int.self, in: Int.all)
+            let maxPublished = scope.parameter(tlaName: "MaxPublished", as: Int.self, in: Int.all)
+            // NULL is the model value; NULL_1 is its parameter in the generated CFG.
+            let emptySlot = scope.parameter(tlaName: "NULL_1", as: Empty.self, in: Set<Empty>([Empty.null]))
+            Assume(writers.count == 1 && !readers.isEmpty && writers.intersection(readers).isEmpty)
+            Assume(bufferSize > 0 && maxPublished > 0)
+            let threads = writers.union(readers)
+            let indices = IntRange(0, through: bufferSize - 1)
             let emptyAccess = Dictionary<Int, Set<ThreadID>>.mapping(over: indices) { _ in Set<ThreadID>() }
-            let ringbuffer = scope.sharedVar(initial: Buffer.expression(
-                slots: Dictionary<Int, Slot>.mapping(over: indices) { _ in Slot.second(NULL) },
+            let ringBuffer = scope.sharedVar(tlaName: "ringbuffer", initial: Buffer.expression(
+                slots: Dictionary<Int, Slot>.mapping(over: indices) { _ in Slot.second(emptySlot) },
                 readers: emptyAccess, writers: emptyAccess))
             let published = scope.sharedVar(initial: -1)
-            let read = scope.sharedVar(initial: Dictionary<ThreadID, Int>.mapping(over: Readers) { _ in -1 })
-            let consumed = scope.sharedVar(initial: Dictionary<ThreadID, [Int]>.mapping(over: Readers) { _ in [Int]() })
+            let read = scope.sharedVar(initial: Dictionary<ThreadID, Int>.mapping(over: readers) { _ in -1 })
+            let consumed = scope.sharedVar(initial: Dictionary<ThreadID, [Int]>.mapping(over: readers) { _ in [Int]() })
             let pc = scope.sharedVar(initial: Dictionary<ThreadID, String>.mapping(over: threads) { _ in "Advance" })
 
-            Do(Step.beginWrite, over: Writers) { writer in
-                let next = published + 1
-                let index = next % Size
-                When(Readers.allSatisfy { r in read[r] >= next - Size })
+            Do(Step.beginWrite, over: writers) { writer in
+                let sequence = published + 1
+                let slotIndex = sequence % bufferSize
+                When(readers.allSatisfy { reader in read[reader] >= sequence - bufferSize })
                 When(pc[writer] == "Advance")
                 pc[writer].set("Access")
-                ringbuffer.writers[index].insert(writer)
-                ringbuffer.slots[index].set(Slot.first(next))
+                ringBuffer.writers[slotIndex].insert(writer)
+                ringBuffer.slots[slotIndex].set(Slot.first(sequence))
             }
-            Do(Step.endWrite, over: Writers) { writer in
-                let next = published + 1
+            Do(Step.endWrite, over: writers) { writer in
+                let sequence = published + 1
+                let slotIndex = sequence % bufferSize
                 When(pc[writer] == "Access")
                 pc[writer].set("Advance")
-                ringbuffer.writers[next % Size].remove(writer)
-                published.set(next)
+                ringBuffer.writers[slotIndex].remove(writer)
+                published.set(sequence)
             }
-            let beginRead = Do(Step.beginRead, over: Readers) { reader in
-                let next = read[reader] + 1
-                let index = next % Size
-                When(pc[reader] == "Advance" && published >= next)
+            let beginRead = Do(Step.beginRead, over: readers) { reader in
+                let sequence = read[reader] + 1
+                let slotIndex = sequence % bufferSize
+                When(pc[reader] == "Advance" && published >= sequence)
                 pc[reader].set("Access")
-                ringbuffer.readers[index].insert(reader)
-                consumed[reader].set(consumed[reader].appending(ringbuffer.slots[index].assuming(Int.self)))
+                ringBuffer.readers[slotIndex].insert(reader)
+                consumed[reader].set(consumed[reader].appending(ringBuffer.slots[slotIndex].assuming(Int.self)))
             }
-            let endRead = Do(Step.endRead, over: Readers) { reader in
-                let next = read[reader] + 1
+            let endRead = Do(Step.endRead, over: readers) { reader in
+                let sequence = read[reader] + 1
+                let slotIndex = sequence % bufferSize
                 When(pc[reader] == "Access")
                 pc[reader].set("Advance")
-                ringbuffer.readers[next % Size].remove(reader)
-                read[reader].set(next)
+                ringBuffer.readers[slotIndex].remove(reader)
+                read[reader].set(sequence)
             }
             WeakFairness(each: beginRead)
             WeakFairness(each: endRead)
-            Constraint(published < MaxPublished)
+            Constraint(published < maxPublished)
             Invariant("NoDataRaces") {
                 indices.allSatisfy { i in
-                    (ringbuffer.readers[i].isEmpty || ringbuffer.writers[i].isEmpty) && ringbuffer.writers[i].count <= 1
+                    (ringBuffer.readers[i].isEmpty || ringBuffer.writers[i].isEmpty) && ringBuffer.writers[i].count <= 1
                 }
             }
             Invariant("TypeOk") {
-                ringbuffer.slots.keys == indices && ringbuffer.readers.keys == indices && ringbuffer.writers.keys == indices
+                ringBuffer.slots.keys == indices && ringBuffer.readers.keys == indices && ringBuffer.writers.keys == indices
                 indices.allSatisfy { i in
-                    (ringbuffer.slots[i] == Slot.second(NULL) || Int.all.contains(ringbuffer.slots[i].assuming(Int.self))) &&
-                    ringbuffer.readers[i].isSubset(of: Readers) && ringbuffer.writers[i].isSubset(of: Writers)
+                    (ringBuffer.slots[i] == Slot.second(emptySlot) || Int.all.contains(ringBuffer.slots[i].assuming(Int.self))) &&
+                    ringBuffer.readers[i].isSubset(of: readers) && ringBuffer.writers[i].isSubset(of: writers)
                 }
-                Int.all.contains(published) && Functions(from: Readers, to: Int.all).contains(read)
+                Int.all.contains(published) && Functions(from: readers, to: Int.all).contains(read)
                 Functions(from: threads, to: Set<String>(["Advance", "Access"])).contains(pc)
-                consumed.keys == Readers && Readers.allSatisfy { r in
+                consumed.keys == readers && readers.allSatisfy { r in
                     IntRange(1, through: consumed[r].count).allSatisfy { i in consumed[r][i] >= 0 }
                 }
             }
-            let subjects = Readers.flatMapping { r in IntRange(0, through: MaxPublished - 1).mapping { i in
+            let subjects = readers.flatMapping { r in IntRange(0, through: maxPublished - 1).mapping { i in
                 ReadPosition.expression(reader: r, sequence: i)
             } }
             let Liveliness = Temporal()
@@ -112,11 +115,11 @@ package struct DisruptorSPMCModel: Sendable {
                     consumed[pair.reader][pair.sequence + 1] == pair.sequence))
             }
             Validation("Upstream") {
-                Bind(Writers, to: Set<ThreadID>([ThreadID.w]))
-                Bind(Readers, to: Set<ThreadID>([ThreadID.r1, ThreadID.r2, ThreadID.r3]))
-                Bind(Size, to: 4)
-                Bind(MaxPublished, to: 10)
-                Bind(NULL, to: Empty.null)
+                Bind(writers, to: Set<ThreadID>([ThreadID.w]))
+                Bind(readers, to: Set<ThreadID>([ThreadID.r1, ThreadID.r2, ThreadID.r3]))
+                Bind(bufferSize, to: 4)
+                Bind(maxPublished, to: 10)
+                Bind(emptySlot, to: Empty.null)
             }.checkingDeadlock(false)
         }
     }

@@ -8,15 +8,15 @@ import SwiftTLAMacros
 @TLAModel
 package struct GameOfLifeModel: Sendable {
     package typealias Position = Pair<Int, Int>
-    package enum Step: String, CaseIterable { case next = "Next" }
+    package enum Step: String, CaseIterable { case advanceGeneration = "Next" }
 
     package static var spec: TLASpec {
         #spec("GameOfLife") { scope in
-            let N = scope.parameter(as: Int.self, in: Int.all)
-            Assume(N >= 0)
+            let gridSize = scope.parameter(tlaName: "N", as: Int.self, in: Int.all)
+            Assume(gridSize >= 0)
 
-            let positions = IntRange(1, through: N).flatMapping { column in
-                IntRange(1, through: N).mapping { row in
+            let positions = IntRange(1, through: gridSize).flatMapping { column in
+                IntRange(1, through: gridSize).mapping { row in
                     Pair<Int, Int>.literal(column.expr, row.expr)
                 }
             }
@@ -24,10 +24,10 @@ package struct GameOfLifeModel: Sendable {
 
             let grid: SharedVariable<[Position: Bool]> = scope.sharedVar(initiallyIn: grids)
 
-            Do(Step.next) {
+            Do(Step.advanceGeneration) {
                 grid.set(
                     Dictionary<Position, Bool>.mapping(over: positions) { cell in
-                        positions.filter { neighbor in
+                        let liveNeighborCount = positions.filter { neighbor in
                             IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
                                 .contains(neighbor.expr.first())
                                 && IntRange(cell.expr.second() - 1, through: cell.expr.second() + 1)
@@ -35,16 +35,8 @@ package struct GameOfLifeModel: Sendable {
                                 && (neighbor.expr.first() != cell.expr.first()
                                     || neighbor.expr.second() != cell.expr.second())
                                 && grid[neighbor.expr]
-                        }.count == 3
-                            || (grid[cell.expr] && positions.filter { neighbor in
-                                IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
-                                    .contains(neighbor.expr.first())
-                                    && IntRange(cell.expr.second() - 1, through: cell.expr.second() + 1)
-                                        .contains(neighbor.expr.second())
-                                    && (neighbor.expr.first() != cell.expr.first()
-                                        || neighbor.expr.second() != cell.expr.second())
-                                    && grid[neighbor.expr]
-                            }.count == 2)
+                        }.count
+                        return liveNeighborCount == 3 || (grid[cell.expr] && liveNeighborCount == 2)
                     }
                 )
             }
@@ -52,7 +44,7 @@ package struct GameOfLifeModel: Sendable {
             Invariant("TypeOK") { grids.contains(grid) }
 
             Validation("GameOfLife") {
-                Bind(N, to: 4)
+                Bind(gridSize, to: 4)
             }
         }
     }

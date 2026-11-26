@@ -25,10 +25,10 @@ package struct BarriersModel: Sendable {
     package static var spec: TLASpec {
         #spec("Barriers") { scope in
             Extends(.integers, .finiteSets)
-            let N = scope.parameter(as: Int.self, in: Int.all)
-            Assume(N > 0)
-            let processes = IntRange(1, through: N)
-            let gate_2 = scope.sharedVar(initial: 0)
+            let processCount = scope.parameter(tlaName: "N", as: Int.self, in: Int.all)
+            Assume(processCount > 0)
+            let processes = IntRange(1, through: processCount)
+            let secondGatePermits = scope.sharedVar(tlaName: "gate_2", initial: 0)
             let TypeOK = Invariant()
             let LockInv = Invariant()
             let Inv = Invariant()
@@ -36,8 +36,8 @@ package struct BarriersModel: Sendable {
 
             Algorithm("barriers") { scope in
                 let lock = scope.sharedVar(initial: 1)
-                let gate_1 = scope.sharedVar(initial: 0)
-                let rdv = scope.sharedVar(initial: 0)
+                let firstGatePermits = scope.sharedVar(tlaName: "gate_1", initial: 0)
+                let arrivalCount = scope.sharedVar(tlaName: "rdv", initial: 0)
 
                 Each(processes) { process in
                     Do(Step.startBarrierRound) { Skip() }
@@ -45,38 +45,38 @@ package struct BarriersModel: Sendable {
                         When(lock == 1)
                         lock.set(0)
                     }
-                    Do(Step.countArrival) { rdv += 1 }
+                    Do(Step.countArrival) { arrivalCount += 1 }
                     Do(Step.checkForLastArrival) {
-                        If(rdv == N) { Goto(Step.openFirstGate) } else: { Goto(Step.unlockAfterArrival) }
+                        If(arrivalCount == processCount) { Goto(Step.openFirstGate) } else: { Goto(Step.unlockAfterArrival) }
                     }
-                    Do(Step.openFirstGate) { gate_1 += N }
+                    Do(Step.openFirstGate) { firstGatePermits += processCount }
                     Do(Step.unlockAfterArrival) { lock.set(1) }
                     Do(Step.passFirstGate) {
-                        When(gate_1 > 0)
-                        gate_1.set(gate_1 - 1)
+                        When(firstGatePermits > 0)
+                        firstGatePermits.set(firstGatePermits - 1)
                     }
                     Do(Step.lockForDeparture) {
                         When(lock == 1)
                         lock.set(0)
                     }
-                    Do(Step.countDeparture) { rdv.set(rdv - 1) }
+                    Do(Step.countDeparture) { arrivalCount.set(arrivalCount - 1) }
                     Do(Step.checkForLastDeparture) {
-                        If(rdv == 0) { Goto(Step.openSecondGate) } else: { Goto(Step.unlockAfterDeparture) }
+                        If(arrivalCount == 0) { Goto(Step.openSecondGate) } else: { Goto(Step.unlockAfterDeparture) }
                     }
-                    Do(Step.openSecondGate) { gate_2 += N }
+                    Do(Step.openSecondGate) { secondGatePermits += processCount }
                     Do(Step.unlockAfterDeparture) { lock.set(1) }
                     Do(Step.passSecondGate) {
-                        When(gate_2 > 0)
-                        gate_2.set(gate_2 - 1)
+                        When(secondGatePermits > 0)
+                        secondGatePermits.set(secondGatePermits - 1)
                         Goto(Step.startBarrierRound)
                     }
                 }
 
                 TypeOK {
                     (0...1).contains(lock)
-                    gate_1 >= 0
-                    gate_2 >= 0
-                    Int.all.contains(rdv)
+                    firstGatePermits >= 0
+                    secondGatePermits >= 0
+                    Int.all.contains(arrivalCount)
                     processes.allSatisfy { process in
                         process.isAt(anyOf:
                             Step.startBarrierRound, .lockForArrival, .countArrival,
@@ -87,7 +87,7 @@ package struct BarriersModel: Sendable {
                         )
                     }
                 }
-                let critical = processes.filter { process in
+                let lockHolders = processes.filter { process in
                     process.isAt(anyOf:
                         Step.countArrival, .checkForLastArrival, .openFirstGate,
                         .unlockAfterArrival, .countDeparture, .checkForLastDeparture,
@@ -95,8 +95,8 @@ package struct BarriersModel: Sendable {
                     )
                 }
                 LockInv {
-                    critical.count <= 1
-                    critical.isEmpty || lock == 0
+                    lockHolders.count <= 1
+                    lockHolders.isEmpty || lock == 0
                 }
                 let firstChamber = processes.filter { process in
                     process.isAt(anyOf:
@@ -122,56 +122,57 @@ package struct BarriersModel: Sendable {
                         .openSecondGate
                     )
                 }
+                let arrivedProcesses = processes.filter { process in
+                    process.isAt(anyOf:
+                        Step.checkForLastArrival, .openFirstGate, .unlockAfterArrival,
+                        .passFirstGate, .lockForDeparture, .countDeparture
+                    )
+                }
                 Inv {
-                    IntRange(0, through: N).contains(gate_1)
-                    IntRange(0, through: N).contains(gate_2)
-                    rdv == processes.filter { process in
-                        process.isAt(anyOf:
-                            Step.checkForLastArrival, .openFirstGate, .unlockAfterArrival,
-                            .passFirstGate, .lockForDeparture, .countDeparture
-                        )
-                    }.count
-                    gate_1 <= 0 || processes.contains { process in
+                    IntRange(0, through: processCount).contains(firstGatePermits)
+                    IntRange(0, through: processCount).contains(secondGatePermits)
+                    arrivalCount == arrivedProcesses.count
+                    firstGatePermits <= 0 || processes.contains { process in
                         process.isAt(anyOf: Step.unlockAfterArrival, .passFirstGate)
                     }
-                    gate_2 <= 0 || processes.contains { process in
+                    secondGatePermits <= 0 || processes.contains { process in
                         process.isAt(anyOf: Step.unlockAfterDeparture, .passSecondGate)
                     }
-                    gate_1 == 0 || gate_2 == 0
+                    firstGatePermits == 0 || secondGatePermits == 0
                     !enteringFirst || !enteringSecond
-                    gate_1 <= firstChamber.count
-                    !enteringFirst || gate_1 == 0
+                    firstGatePermits <= firstChamber.count
+                    !enteringFirst || firstGatePermits == 0
                     processes.allSatisfy { process in
                         !process.isAt(anyOf: Step.openFirstGate)
-                            || (rdv == N && processes.allSatisfy { other in
+                            || (arrivalCount == processCount && processes.allSatisfy { other in
                                 process == other || other.isAt(anyOf: Step.passFirstGate)
                             })
                     }
-                    gate_2 <= secondChamber.count
-                    !enteringSecond || gate_2 == 0
+                    secondGatePermits <= secondChamber.count
+                    !enteringSecond || secondGatePermits == 0
                     processes.allSatisfy { process in
                         !process.isAt(anyOf: Step.openSecondGate)
-                            || (rdv == 0 && processes.allSatisfy { other in
+                            || (arrivalCount == 0 && processes.allSatisfy { other in
                                 process == other || other.isAt(anyOf: Step.passSecondGate)
                             })
                     }
                 }
                 FlushInv {
-                    gate_1 <= 0 || gate_1 == firstChamber.count
-                    gate_2 <= 0 || gate_2 == secondChamber.count
+                    firstGatePermits <= 0 || firstGatePermits == firstChamber.count
+                    secondGatePermits <= 0 || secondGatePermits == secondChamber.count
                 }
             }
-            let abstract = Instance(of: BarrierModel.self) { Bind(\.N, to: N) }
+            let abstract = Instance(of: BarrierModel.self) { Bind(\.N, to: processCount) }
             let translatedPC = Dictionary<Int, String>.mapping(over: processes) { process in
                 If(process.isAt(anyOf:
                     Step.lockForArrival, .countArrival, .checkForLastArrival, .openFirstGate,
                     .unlockAfterArrival, .passFirstGate, .lockForDeparture, .countDeparture,
                     .checkForLastDeparture, .openSecondGate
                 ), then: "b1", else:
-                    If(process.isAt(anyOf: Step.startBarrierRound) || gate_2 > 0, then: "b0", else: "b1"))
+                    If(process.isAt(anyOf: Step.startBarrierRound) || secondGatePermits > 0, then: "b0", else: "b1"))
             }
             Refinement("BSpec", instance: abstract) { Map(\.pc, projecting: translatedPC) }
-            Validation("published") { Bind(N, to: 6) }
+            Validation("published") { Bind(processCount, to: 6) }
         }
     }
 }

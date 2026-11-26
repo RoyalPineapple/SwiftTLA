@@ -27,22 +27,22 @@ package struct SimpleAllocatorModel: Sendable {
     package static var spec: TLASpec {
         #spec("SimpleAllocator") { scope in
             Extends(.finiteSets)
-            let Clients = scope.parameter(as: Set<Client>.self, in: Set<Set<Client>>([Set([.c1, .c2, .c3])]))
-            let Resources = scope.parameter(as: Set<Resource>.self, in: Set<Set<Resource>>([Set([.r1, .r2])]))
-            let choices = Subsets(of: Resources)
-            let unsat = scope.sharedVar(initial: Dictionary<Client, Set<Resource>>.mapping(over: Clients) { _ in Set<Resource>() })
-            let alloc = scope.sharedVar(initial: Dictionary<Client, Set<Resource>>.mapping(over: Clients) { _ in Set<Resource>() })
-            Do(Step.request, over: Clients, choices) { client, requested in
+            let clients = scope.parameter(tlaName: "Clients", as: Set<Client>.self, in: Set<Set<Client>>([Set([.c1, .c2, .c3])]))
+            let resources = scope.parameter(tlaName: "Resources", as: Set<Resource>.self, in: Set<Set<Resource>>([Set([.r1, .r2])]))
+            let choices = Subsets(of: resources)
+            let unsat = scope.sharedVar(initial: Dictionary<Client, Set<Resource>>.mapping(over: clients) { _ in Set<Resource>() })
+            let alloc = scope.sharedVar(initial: Dictionary<Client, Set<Resource>>.mapping(over: clients) { _ in Set<Resource>() })
+            Do(Step.request, over: clients, choices) { client, requested in
                 When(unsat[client].isEmpty && alloc[client].isEmpty && !requested.isEmpty)
                 unsat[client].set(requested)
             }
-            let allocate = Do(Step.allocate, over: Clients, choices) { client, granted in
+            let allocate = Do(Step.allocate, over: clients, choices) { client, granted in
                 When(!granted.isEmpty && granted.isSubset(of: unsat[client]))
-                When(Clients.allSatisfy { other in alloc[other].intersection(granted).isEmpty })
+                When(clients.allSatisfy { other in alloc[other].intersection(granted).isEmpty })
                 alloc[client].set(alloc[client].union(granted))
                 unsat[client].set(unsat[client].subtracting(granted))
             }
-            let giveBack = Do(Step.giveBack, over: Clients, choices) { client, returned in
+            let giveBack = Do(Step.giveBack, over: clients, choices) { client, returned in
                 When(!returned.isEmpty && returned.isSubset(of: alloc[client]))
                 alloc[client].set(alloc[client].subtracting(returned))
             }
@@ -54,29 +54,29 @@ package struct SimpleAllocatorModel: Sendable {
             StrongFairness(eachOf: [allocate])
 
             Invariant("TypeInvariant") {
-                unsat.keys == Clients
-                alloc.keys == Clients
-                Clients.allSatisfy { client in
-                    unsat[client].isSubset(of: Resources) && alloc[client].isSubset(of: Resources)
+                unsat.keys == clients
+                alloc.keys == clients
+                clients.allSatisfy { client in
+                    unsat[client].isSubset(of: resources) && alloc[client].isSubset(of: resources)
                 }
             }
             Invariant("ResourceMutex") {
-                Clients.allSatisfy { first in
-                    Clients.allSatisfy { second in first == second || alloc[first].intersection(alloc[second]).isEmpty }
+                clients.allSatisfy { first in
+                    clients.allSatisfy { second in first == second || alloc[first].intersection(alloc[second]).isEmpty }
                 }
             }
             let ClientsWillReturn = Temporal()
-            ClientsWillReturn(forEach: Clients) { client in .leadsTo(unsat[client].isEmpty, alloc[client].isEmpty) }
+            ClientsWillReturn(forEach: clients) { client in .leadsTo(unsat[client].isEmpty, alloc[client].isEmpty) }
             let ClientsWillObtain = Temporal()
-            ClientsWillObtain(forEach: Clients) { client in .all([
+            ClientsWillObtain(forEach: clients) { client in .all([
                 .leadsTo(unsat[client].contains(Resource.r1), alloc[client].contains(Resource.r1)),
                 .leadsTo(unsat[client].contains(Resource.r2), alloc[client].contains(Resource.r2)),
             ]) }
             let InfOftenSatisfied = Temporal()
-            InfOftenSatisfied(forEach: Clients) { client in .alwaysEventually(unsat[client].isEmpty) }
+            InfOftenSatisfied(forEach: clients) { client in .alwaysEventually(unsat[client].isEmpty) }
             Validation("published", label: "SimpleAllocator") {
-                Bind(Clients, to: Set<Client>([.c1, .c2, .c3]))
-                Bind(Resources, to: Set<Resource>([.r1, .r2]))
+                Bind(clients, to: Set<Client>([.c1, .c2, .c3]))
+                Bind(resources, to: Set<Resource>([.r1, .r2]))
             }
         }
     }

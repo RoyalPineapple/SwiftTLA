@@ -1,5 +1,6 @@
 import Foundation
 import SwiftDiagnostics
+import SwiftTLA
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -175,6 +176,13 @@ private final class DSLRewriter: SyntaxRewriter {
             guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                   var call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { return binding }
             let member = call.calledExpression.as(MemberAccessExprSyntax.self)
+            if let member, ["sharedVar", "parameter"].contains(member.declName.baseName.sourceIdentifierName) {
+                do throws(SourceParseDiagnostic) { _ = try requestedTLAName(call, declaration: name) }
+                catch {
+                    context.diagnose(Diagnostic(node: Syntax(binding), message: SpecExpressionDiagnostic(actual: error.message)))
+                    return binding
+                }
+            }
             if let member, ["sharedVar", "localVar"].contains(member.declName.baseName.sourceIdentifierName) {
                 let labels = call.arguments.filter { $0.label?.text == "label" }
                 guard labels.isEmpty || (labels.count == 1

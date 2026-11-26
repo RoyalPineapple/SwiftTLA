@@ -26,48 +26,48 @@ package struct TransactionCommitModel: Sendable {
 
     private enum Step: String, CaseIterable {
         case prepare = "Prepare"
-        case decide = "Decide"
+        case commitOrAbort = "Decide"
     }
 
     package static var spec: TLASpec {
         #spec("TCommit") { scope in
-            let RM = scope.parameter(as: Set<Manager>.self, in: Set<Set<Manager>>([
+            let resourceManagers = scope.parameter(tlaName: "RM", as: Set<Manager>.self, in: Set<Set<Manager>>([
                 Set<Manager>([]), Set([.r1]), Set([.r2]), Set([.r3]),
                 Set([.r1, .r2]), Set([.r1, .r3]), Set([.r2, .r3]),
                 Set([.r1, .r2, .r3]), Set([.ap1, .ap2, .ap3])
             ]))
-            let rmState = scope.sharedVar(initial: Dictionary<Manager, Phase>.mapping(over: RM) { _ in Phase.working })
-            let canCommit = RM.allSatisfy { manager in
-                rmState[manager] == Phase.prepared || rmState[manager] == Phase.committed
+            let resourceManagerStates = scope.sharedVar(tlaName: "rmState", initial: Dictionary<Manager, Phase>.mapping(over: resourceManagers) { _ in Phase.working })
+            let canCommit = resourceManagers.allSatisfy { manager in
+                resourceManagerStates[manager] == Phase.prepared || resourceManagerStates[manager] == Phase.committed
             }
-            let noneCommitted = !RM.contains { manager in rmState[manager] == Phase.committed }
+            let noManagerHasCommitted = !resourceManagers.contains { manager in resourceManagerStates[manager] == Phase.committed }
 
-            Do(Step.prepare, over: RM) { manager in
-                When(rmState[manager] == Phase.working)
-                rmState[manager].set(Phase.prepared)
+            Do(Step.prepare, over: resourceManagers) { manager in
+                When(resourceManagerStates[manager] == Phase.working)
+                resourceManagerStates[manager].set(Phase.prepared)
             }
-            Do(Step.decide, over: RM) { manager in
+            Do(Step.commitOrAbort, over: resourceManagers) { manager in
                 Either {
-                    When(rmState[manager] == Phase.prepared && canCommit) {
-                        rmState[manager].set(Phase.committed)
+                    When(resourceManagerStates[manager] == Phase.prepared && canCommit) {
+                        resourceManagerStates[manager].set(Phase.committed)
                     }
-                    When((rmState[manager] == Phase.working || rmState[manager] == Phase.prepared) && noneCommitted) {
-                        rmState[manager].set(Phase.aborted)
+                    When((resourceManagerStates[manager] == Phase.working || resourceManagerStates[manager] == Phase.prepared) && noManagerHasCommitted) {
+                        resourceManagerStates[manager].set(Phase.aborted)
                     }
                 }
             }
 
             Invariant("TCTypeOK") {
-                Functions(from: RM, to: SetExpr<Phase>.literal(.working, .prepared, .committed, .aborted)).contains(rmState)
+                Functions(from: resourceManagers, to: SetExpr<Phase>.literal(.working, .prepared, .committed, .aborted)).contains(resourceManagerStates)
             }
             Invariant("TCConsistent") {
-                noneCommitted || !RM.contains { manager in rmState[manager] == Phase.aborted }
+                noManagerHasCommitted || !resourceManagers.contains { manager in resourceManagerStates[manager] == Phase.aborted }
             }
             Validation("threeManagers") {
-                Bind(RM, to: Set<Manager>([.r1, .r2, .r3]))
+                Bind(resourceManagers, to: Set<Manager>([.r1, .r2, .r3]))
             }.checkingDeadlock(false)
             Validation("APTCommit") {
-                Bind(RM, to: Set<Manager>([.ap1, .ap2, .ap3]))
+                Bind(resourceManagers, to: Set<Manager>([.ap1, .ap2, .ap3]))
             }.checkingDeadlock(false)
         }
     }

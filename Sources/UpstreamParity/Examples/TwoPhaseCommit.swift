@@ -35,69 +35,69 @@ package struct TwoPhaseCommitModel: Sendable {
     package typealias Message = OneOf<Prepared, Broadcast>
 
     private enum Step: String, CaseIterable {
-        case receivePrepared = "TMRcvPrepared"
-        case commit = "TMCommit"
-        case abort = "TMAbort"
-        case prepare = "RMPrepare"
-        case chooseToAbort = "RMChooseToAbort"
-        case receiveCommit = "RMRcvCommitMsg"
-        case receiveAbort = "RMRcvAbortMsg"
+        case recordPreparedManager = "TMRcvPrepared"
+        case broadcastCommit = "TMCommit"
+        case broadcastAbort = "TMAbort"
+        case prepareAndNotifyCoordinator = "RMPrepare"
+        case abortLocally = "RMChooseToAbort"
+        case applyCommitMessage = "RMRcvCommitMsg"
+        case applyAbortMessage = "RMRcvAbortMsg"
     }
 
     package static var spec: TLASpec {
         #spec("TwoPhase") { scope in
-            let RM = scope.parameter(as: Set<Manager>.self, in: Subsets(of: Manager.all.assuming(Set<Manager>.self)))
-            let rmState = scope.sharedVar(initial: Dictionary<Manager, Phase>.mapping(over: RM) { _ in Phase.working })
-            let tmState = scope.sharedVar(initial: Coordinator.undecided)
-            let tmPrepared = scope.sharedVar(initial: Set<Manager>())
-            let msgs = scope.sharedVar(initial: Set<Message>())
+            let resourceManagers = scope.parameter(tlaName: "RM", as: Set<Manager>.self, in: Subsets(of: Manager.all.assuming(Set<Manager>.self)))
+            let resourceManagerStates = scope.sharedVar(tlaName: "rmState", initial: Dictionary<Manager, Phase>.mapping(over: resourceManagers) { _ in Phase.working })
+            let coordinatorState = scope.sharedVar(tlaName: "tmState", initial: Coordinator.undecided)
+            let preparedManagers = scope.sharedVar(tlaName: "tmPrepared", initial: Set<Manager>())
+            let messages = scope.sharedVar(tlaName: "msgs", initial: Set<Message>())
 
-            let commit: Message = Message.second(Broadcast(type: "Commit"))
-            let abort: Message = Message.second(Broadcast(type: "Abort"))
+            let commitMessage: Message = Message.second(Broadcast(type: "Commit"))
+            let abortMessage: Message = Message.second(Broadcast(type: "Abort"))
 
-            Do(Step.receivePrepared, over: RM) { manager in
-                When(tmState == Coordinator.undecided)
-                When(msgs.contains(Message.first(Prepared.expression(type: "Prepared", rm: manager))))
-                tmPrepared.insert(manager)
+            Do(Step.recordPreparedManager, over: resourceManagers) { manager in
+                When(coordinatorState == Coordinator.undecided)
+                When(messages.contains(Message.first(Prepared.expression(type: "Prepared", rm: manager))))
+                preparedManagers.insert(manager)
             }
-            Do(Step.commit, when: tmState == Coordinator.undecided && tmPrepared == RM) {
-                tmState.set(Coordinator.committed)
-                msgs.insert(commit)
+            Do(Step.broadcastCommit, when: coordinatorState == Coordinator.undecided && preparedManagers == resourceManagers) {
+                coordinatorState.set(Coordinator.committed)
+                messages.insert(commitMessage)
             }
-            Do(Step.abort, when: tmState == Coordinator.undecided) {
-                tmState.set(Coordinator.aborted)
-                msgs.insert(abort)
+            Do(Step.broadcastAbort, when: coordinatorState == Coordinator.undecided) {
+                coordinatorState.set(Coordinator.aborted)
+                messages.insert(abortMessage)
             }
-            Do(Step.prepare, over: RM) { manager in
-                When(rmState[manager] == Phase.working)
-                rmState[manager].set(Phase.prepared)
-                msgs.insert(Message.first(Prepared.expression(type: "Prepared", rm: manager)))
+            Do(Step.prepareAndNotifyCoordinator, over: resourceManagers) { manager in
+                When(resourceManagerStates[manager] == Phase.working)
+                resourceManagerStates[manager].set(Phase.prepared)
+                messages.insert(Message.first(Prepared.expression(type: "Prepared", rm: manager)))
             }
-            Do(Step.chooseToAbort, over: RM) { manager in
-                When(rmState[manager] == Phase.working)
-                rmState[manager].set(Phase.aborted)
+            Do(Step.abortLocally, over: resourceManagers) { manager in
+                When(resourceManagerStates[manager] == Phase.working)
+                resourceManagerStates[manager].set(Phase.aborted)
             }
-            Do(Step.receiveCommit, over: RM) { manager in
-                When(msgs.contains(commit))
-                rmState[manager].set(Phase.committed)
+            Do(Step.applyCommitMessage, over: resourceManagers) { manager in
+                When(messages.contains(commitMessage))
+                resourceManagerStates[manager].set(Phase.committed)
             }
-            Do(Step.receiveAbort, over: RM) { manager in
-                When(msgs.contains(abort))
-                rmState[manager].set(Phase.aborted)
+            Do(Step.applyAbortMessage, over: resourceManagers) { manager in
+                When(messages.contains(abortMessage))
+                resourceManagerStates[manager].set(Phase.aborted)
             }
 
             Invariant("TPTypeOK") {
-                Functions(from: RM, to: SetExpr<Phase>.literal(.working, .prepared, .committed, .aborted)).contains(rmState)
-                SetExpr<Coordinator>.literal(.undecided, .committed, .aborted).contains(tmState)
-                tmPrepared.isSubset(of: RM)
-                msgs.allSatisfy { message in
-                    message == commit || message == abort || RM.contains { manager in
+                Functions(from: resourceManagers, to: SetExpr<Phase>.literal(.working, .prepared, .committed, .aborted)).contains(resourceManagerStates)
+                SetExpr<Coordinator>.literal(.undecided, .committed, .aborted).contains(coordinatorState)
+                preparedManagers.isSubset(of: resourceManagers)
+                messages.allSatisfy { message in
+                    message == commitMessage || message == abortMessage || resourceManagers.contains { manager in
                         message == Message.first(Prepared.expression(type: "Prepared", rm: manager))
                     }
                 }
             }
             Validation("threeManagers") {
-                Bind(RM, to: Set<Manager>([.r1, .r2, .r3]))
+                Bind(resourceManagers, to: Set<Manager>([.r1, .r2, .r3]))
             }
         }
     }

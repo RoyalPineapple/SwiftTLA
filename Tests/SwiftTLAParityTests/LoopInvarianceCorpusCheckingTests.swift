@@ -104,11 +104,11 @@ struct LoopInvarianceCorpusCheckingTests {
         #expect(initial.count == 6_430)
         let validInputs = initial.allSatisfy { machine in
             let state = machine.state
-            let sequence = state.seq
+            let sequence = state.sortedValues
             let validLength = (1...8).contains(sequence.count)
             let validElements = sequence.allSatisfy { (1...5).contains($0) }
             let sorted = sequence == sequence.sorted()
-            let validTarget = (1...5).contains(state.val)
+            let validTarget = (1...5).contains(state.searchValue)
             let fullSearchRange = state.low == 1 && state.high == sequence.count
             return validLength && validElements && sorted && validTarget && fullSearchRange && state.result == 0
         }

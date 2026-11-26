@@ -14,7 +14,7 @@ package struct SpanningModel: Sendable {
     }
 
     package typealias Parent = OneOf<Int, MissingParent>
-    private enum Step: String, CaseIterable { case next = "Next" }
+    private enum Step: String, CaseIterable { case takeSpanningTreeStep = "Next" }
 
     package static var spec: TLASpec {
         #spec("Spanning") { scope in
@@ -22,8 +22,8 @@ package struct SpanningModel: Sendable {
             let Proc = scope.parameter(as: Set<Int>.self, in: Subsets(of: Set<Int>([1, 2, 3])))
             let NoPrnt = scope.parameter(as: MissingParent.self, in: Set<MissingParent>([.none]))
             let root = scope.parameter(as: Int.self, in: Proc)
-            let pairs = Proc.flatMapping { (i: WithValue<Int>) in
-                Proc.mapping { (j: WithValue<Int>) in Pair<Int, Int>.literal(i, j) }
+            let pairs = Proc.flatMapping { (source: WithValue<Int>) in
+                Proc.mapping { (destination: WithValue<Int>) in Pair<Int, Int>.literal(source, destination) }
             }
             let nbrs = scope.parameter(as: Set<Pair<Int, Int>>.self, in: Subsets(of: pairs))
             Assume(nbrs.isSubset(of: pairs))
@@ -33,20 +33,21 @@ package struct SpanningModel: Sendable {
             let rpt = scope.sharedVar(initial: Dictionary<Int, Bool>.mapping(over: Proc) { _ in false })
             let msg = scope.sharedVar(initial: Set<Pair<Int, Int>>())
 
-            Do(Step.next) {
-                With(Proc, Proc) { i, j in
-                    If(i != root && prnt[i] == missing && msg.contains(Pair<Int, Int>.literal(j, i))) {
-                        prnt[i].set(Parent.first(j))
+            Do(Step.takeSpanningTreeStep) {
+                With(Proc, Proc) { node, candidateParent in
+                    let incomingMessage = Pair<Int, Int>.literal(candidateParent, node)
+                    If(node != root && prnt[node] == missing && msg.contains(incomingMessage)) {
+                        prnt[node].set(Parent.first(candidateParent))
                     } else: {
                         Either {
-                            When(i == root || prnt[i] != missing) {
-                                With(Proc) { k in
-                                    let link = Pair<Int, Int>.literal(i, k)
+                            When(node == root || prnt[node] != missing) {
+                                With(Proc) { destination in
+                                    let link = Pair<Int, Int>.literal(node, destination)
                                     When(nbrs.contains(link) && !msg.contains(link))
                                     msg.insert(link)
                                 }
                             }
-                            When(prnt[i] != missing && !rpt[i]) { rpt[i].set(true) }
+                            When(prnt[node] != missing && !rpt[node]) { rpt[node].set(true) }
                             When(true) { Skip() }
                         }
                     }
@@ -56,18 +57,18 @@ package struct SpanningModel: Sendable {
 
             let typeOK = Invariant("TypeOK")
             typeOK {
-                Proc.allSatisfy { i in
-                    prnt[i] == missing || Proc.contains { j in
-                        prnt[i] == Parent.first(j) && nbrs.contains(Pair<Int, Int>.literal(i, j))
+                Proc.allSatisfy { node in
+                    prnt[node] == missing || Proc.contains { parent in
+                        prnt[node] == Parent.first(parent) && nbrs.contains(Pair<Int, Int>.literal(node, parent))
                     }
                 }
                 Functions(from: Proc, to: Bool.all).contains(rpt)
                 msg.isSubset(of: pairs)
             }
             Invariant("SntMsg") {
-                Proc.allSatisfy { i in
-                    i == root || prnt[i] != missing
-                        || Proc.allSatisfy { j in !msg.contains(Pair<Int, Int>.literal(i, j)) }
+                Proc.allSatisfy { node in
+                    node == root || prnt[node] != missing
+                        || Proc.allSatisfy { destination in !msg.contains(Pair<Int, Int>.literal(node, destination)) }
                 }
             }
             Validation("broadcast") {

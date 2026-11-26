@@ -1056,7 +1056,12 @@ extension ParserSession {
             exposed = false
         }
         let displayLabel: String?
-        do {
+        let tlaName: String?
+        do throws(SourceParseDiagnostic) {
+            tlaName = try requestedTLAName(initializer, declaration: declaredName)
+            if kind == .local, let tlaName {
+                throw SourceParseDiagnostic(message: "Local '\(declaredName)' cannot request '\(tlaName)' because local storage is scope-qualified.", source: initializer)
+            }
             displayLabel = try declarationDisplayLabel(initializer, kind: "state")
         } catch {
             algorithmSourceDiagnostic = error
@@ -1126,7 +1131,7 @@ extension ParserSession {
         }
         let stateType = sourceTypeResolver.normalizedStateType(state.swiftTypeName, resolved: valueType)
         let resolvedState = AlgorithmStateModel(root: state.root, initialization: state.initialization,
-            displayLabel: state.displayLabel, swiftTypeName: stateType.spelling,
+            tlaName: tlaName, displayLabel: state.displayLabel, swiftTypeName: stateType.spelling,
             resolvedValueType: stateType.resolved, exposed: state.exposed)
         let component: AlgorithmComponentModel = kind == .shared ? .shared(resolvedState) : .local(resolvedState)
         return (component, valueType)

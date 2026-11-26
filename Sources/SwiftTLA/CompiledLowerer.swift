@@ -90,8 +90,8 @@ struct CompiledLowerer {
         self.checkingBodyBinderOrdinals = checkingBodyBinderOrdinals
         sequentialAssignmentTargets = spec.sequentialAssignmentTargets
         nextBinderOrdinal = layout.parameters.count
-        binderNames = Dictionary(uniqueKeysWithValues: layout.parameters.map { ($0.binder, $0.reference.name) })
-        knownBinderNames = Set(binderNames.values)
+        binderNames = Dictionary(uniqueKeysWithValues: layout.parameters.map { ($0.binder, $0.reference.tlaName ?? $0.reference.name) })
+        knownBinderNames = Set(layout.parameters.map { $0.reference.name })
         constants = spec.constants
         formalParameters = Set(spec.formalParameters.map(\.name))
         self.incomingModuleParameters = incomingModuleParameters

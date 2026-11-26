@@ -25,42 +25,42 @@ package struct ChangRobertsModel: Sendable {
     package static var spec: TLASpec {
         #spec("ChangRoberts") { model in
             Extends(.naturals, .sequences)
-            let N = model.parameter(as: Int.self, in: Int.all)
-            let Id = model.parameter(as: [Int].self, in: Sequences(of: Int.all))
-            let Node = IntRange(1, through: N)
-            Assume(N > 0 && Id.count == N
-                && Node.allSatisfy { node in Id[node] >= 0
-                    && Node.allSatisfy { other in node == other || Id[node] != Id[other] }
+            let nodeCount = model.parameter(tlaName: "N", as: Int.self, in: Int.all)
+            let nodeIDs = model.parameter(tlaName: "Id", as: [Int].self, in: Sequences(of: Int.all))
+            let nodes = IntRange(1, through: nodeCount)
+            Assume(nodeCount > 0 && nodeIDs.count == nodeCount
+                && nodes.allSatisfy { node in nodeIDs[node] >= 0
+                    && nodes.allSatisfy { other in node == other || nodeIDs[node] != nodeIDs[other] }
                 })
             let TypeOK = Invariant()
             let Correctness = Invariant()
             let Liveness = Temporal()
 
             Algorithm("ChangRoberts") { scope in
-                let msgs = scope.sharedVar(initial: Dictionary<Int, Set<Int>>.mapping(over: Node) { _ in Set<Int>() })
+                let messages = scope.sharedVar(tlaName: "msgs", initial: Dictionary<Int, Set<Int>>.mapping(over: nodes) { _ in Set<Int>() })
                 let initiator: SharedVariable<[Int: Bool]> = scope.sharedVar(initiallyIn:
-                    Functions(from: Node, to: Bool.all))
-                let state = scope.sharedVar(initial: Dictionary<Int, ProcessState>.mapping(over: Node) { node in
+                    Functions(from: nodes, to: Bool.all))
+                let state = scope.sharedVar(initial: Dictionary<Int, ProcessState>.mapping(over: nodes) { node in
                     If(initiator[node], then: ProcessState.candidate, else: ProcessState.lost)
                 })
 
-                Each(Node, fairness: .weak) { node in
-                    let successor = If(node == N, then: 1, else: node + 1)
+                Each(nodes, fairness: .weak) { node in
+                    let successor = If(node == nodeCount, then: 1, else: node + 1)
                     Do(Step.sendIDIfInitiator) {
                         If(initiator[node]) {
-                            msgs[successor].set(msgs[successor].inserting(Id[node]))
+                            messages[successor].set(messages[successor].inserting(nodeIDs[node]))
                         }
                     }
                     Loop(Step.processIncomingID) {
-                        With(msgs[node]) { candidate in
-                            msgs[node].set(msgs[node].removing(candidate))
-                            If(state[node] == ProcessState.lost || candidate < Id[node]) {
-                                msgs[successor].set(msgs[successor].inserting(candidate))
+                        With(messages[node]) { candidate in
+                            messages[node].set(messages[node].removing(candidate))
+                            If(state[node] == ProcessState.lost || candidate < nodeIDs[node]) {
+                                messages[successor].set(messages[successor].inserting(candidate))
                                 If(state[node] != ProcessState.lost) {
                                     state[node].set(ProcessState.lost)
                                 }
                             } else: {
-                                If(candidate == Id[node]) {
+                                If(candidate == nodeIDs[node]) {
                                     state[node].set(ProcessState.won)
                                 }
                             }
@@ -69,35 +69,35 @@ package struct ChangRobertsModel: Sendable {
                 }
 
                 TypeOK {
-                    msgs.keys == Node && initiator.keys == Node && state.keys == Node
-                    Node.allSatisfy { node in
+                    messages.keys == nodes && initiator.keys == nodes && state.keys == nodes
+                    nodes.allSatisfy { node in
                         Set<ProcessState>([.candidate, .lost, .won]).contains(state[node])
-                            && msgs[node].allSatisfy { message in
-                                Node.contains { owner in message == Id[owner] }
+                            && messages[node].allSatisfy { message in
+                                nodes.contains { owner in message == nodeIDs[owner] }
                             }
                     }
                 }
                 Correctness {
-                    Node.allSatisfy { node in
+                    nodes.allSatisfy { node in
                         state[node] != ProcessState.won || (initiator[node]
-                            && Node.allSatisfy { other in
+                            && nodes.allSatisfy { other in
                                 other == node || (state[other] == ProcessState.lost
-                                    && (!initiator[other] || Id[other] > Id[node]))
+                                    && (!initiator[other] || nodeIDs[other] > nodeIDs[node]))
                             })
                     }
                 }
-                let hasCandidate = Node.contains { node in state[node] == ProcessState.candidate }
-                let hasWinner = Node.contains { node in state[node] == ProcessState.won }
+                let hasCandidate = nodes.contains { node in state[node] == ProcessState.candidate }
+                let hasWinner = nodes.contains { node in state[node] == ProcessState.won }
                 Liveness(.conditional(hasCandidate, then: .eventually(hasWinner), else: .always(true)))
             }
 
             Validation("MCChangRoberts") {
-                Bind(N, to: 3)
-                Bind(Id, to: [1, 2, 3])
+                Bind(nodeCount, to: 3)
+                Bind(nodeIDs, to: [1, 2, 3])
             }.checkingDeadlock(false)
             Validation("APChangRoberts") {
-                Bind(N, to: 3)
-                Bind(Id, to: [3, 1, 2])
+                Bind(nodeCount, to: 3)
+                Bind(nodeIDs, to: [3, 1, 2])
             }.behavior(.initialAndNext).checking(only: [TypeOK, Correctness]).checkingDeadlock(false)
         }
     }

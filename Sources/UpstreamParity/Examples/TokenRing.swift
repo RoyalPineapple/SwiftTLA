@@ -14,40 +14,40 @@ package struct TokenRingModel: Sendable {
     package static var spec: TLASpec {
         #spec("TokenRing") { scope in
             Extends(.naturals, .finiteSets)
-            let N = scope.parameter(as: Int.self, in: Int.all)
-            let M = scope.parameter(as: Int.self, in: Int.all)
-            Assume(N > 0)
-            Assume(M > 0)
-            Assume(N <= M + 1)
+            let nodeCount = scope.parameter(tlaName: "N", as: Int.self, in: Int.all)
+            let counterModulus = scope.parameter(tlaName: "M", as: Int.self, in: Int.all)
+            Assume(nodeCount > 0)
+            Assume(counterModulus > 0)
+            Assume(nodeCount <= counterModulus + 1)
 
-            let nodes = 0..<N
-            let values = 0..<M
-            let c: SharedVariable<[Int: Int]> = scope.sharedVar(initiallyIn: Functions(from: nodes, to: values))
+            let nodes = 0..<nodeCount
+            let values = 0..<counterModulus
+            let counters: SharedVariable<[Int: Int]> = scope.sharedVar(tlaName: "c", initiallyIn: Functions(from: nodes, to: values))
 
-            let createToken = Do(Step.createToken, when: c[0] == c[N - 1]) {
-                c[0].set((c[N - 1] + 1) % M)
+            let createToken = Do(Step.createToken, when: counters[0] == counters[nodeCount - 1]) {
+                counters[0].set((counters[nodeCount - 1] + 1) % counterModulus)
             }
-            let passToken = Do(Step.passToken, over: 1..<N) { i in
-                When(c[i] != c[i - 1])
-                c[i].set(c[i - 1])
+            let passToken = Do(Step.passToken, over: 1..<nodeCount) { i in
+                When(counters[i] != counters[i - 1])
+                counters[i].set(counters[i - 1])
             }
             WeakFairness(anyOf: [createToken, passToken])
 
             let typeOK = Invariant("TypeOK")
-            typeOK { Functions(from: nodes, to: values).contains(c) }
+            typeOK { Functions(from: nodes, to: values).contains(counters) }
             let Stab = EventuallyAlways()
-            let uniqueToken = IntRange(0, through: N).contains { split in
-                (0..<split).allSatisfy { i in c[i] == c[0] }
-                    && (split..<N).allSatisfy { i in c[i] == (c[0] - 1) % M }
+            let uniqueToken = IntRange(0, through: nodeCount).contains { split in
+                (0..<split).allSatisfy { i in counters[i] == counters[0] }
+                    && (split..<nodeCount).allSatisfy { i in counters[i] == (counters[0] - 1) % counterModulus }
             }
             Stab(uniqueToken)
             Validation("sixNodes") {
-                Bind(N, to: 6)
-                Bind(M, to: 6)
+                Bind(nodeCount, to: 6)
+                Bind(counterModulus, to: 6)
             }.checkingDeadlock(false)
             Validation("APTokenRing") {
-                Bind(N, to: 6)
-                Bind(M, to: 6)
+                Bind(nodeCount, to: 6)
+                Bind(counterModulus, to: 6)
             }.checking(only: [typeOK])
         }
     }

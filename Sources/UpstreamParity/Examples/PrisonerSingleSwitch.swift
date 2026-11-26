@@ -19,67 +19,67 @@ package struct PrisonerSingleSwitchModel: Sendable {
     package static var spec: TLASpec {
         #spec("Prisoner") { scope in
             Extends(.finiteSets, .naturals)
-            let Prisoner = scope.parameter(as: Set<String>.self,
+            let prisoners = scope.parameter(tlaName: "Prisoner", as: Set<String>.self,
                 in: Set<Set<String>>([Set(["Alice"]), Set(["Alice", "Bob", "Eve"])]))
-            let Light_Unknown = scope.parameter(as: Bool.self)
-            let DesignatedCounter = Select(from: Prisoner) { _ in true }
-            let NormalPrisoner = Prisoner.removing(DesignatedCounter)
-            let SignalLimit = If(Light_Unknown, then: 2, else: 1)
-            let VictoryThreshold = If(Light_Unknown,
-                then: 2 * Prisoner.count - 1, else: Prisoner.count)
+            let initialLightIsUnknown = scope.parameter(tlaName: "Light_Unknown", as: Bool.self)
+            let designatedCounter = Select(from: prisoners) { _ in true }
+            let otherPrisoners = prisoners.removing(designatedCounter)
+            let signalLimit = If(initialLightIsUnknown, then: 2, else: 1)
+            let victoryThreshold = If(initialLightIsUnknown,
+                then: 2 * prisoners.count - 1, else: prisoners.count)
 
             let count = scope.sharedVar(initial: 1)
             let announced = scope.sharedVar(initial: false)
             let signalled = scope.sharedVar(initial:
-                Dictionary<String, Int>.mapping(over: NormalPrisoner) { _ in 0 })
-            let light = scope.sharedVar(initiallyIn: If(Light_Unknown,
+                Dictionary<String, Int>.mapping(over: otherPrisoners) { _ in 0 })
+            let light = scope.sharedVar(initiallyIn: If(initialLightIsUnknown,
                 then: SetExpr<Light>.literal(.off, .on),
                 else: SetExpr<Light>.literal(.off)))
-            let has_visited = scope.sharedVar(initial: Set<String>())
+            let visitedPrisoners = scope.sharedVar(tlaName: "has_visited", initial: Set<String>())
             let Terminating = Temporal()
 
-            let visitSwitchRoom = Do(Step.visitSwitchRoom, over: Prisoner) { prisoner in
-                If(prisoner == DesignatedCounter) {
+            let visitSwitchRoom = Do(Step.visitSwitchRoom, over: prisoners) { prisoner in
+                If(prisoner == designatedCounter) {
                     If(light == Light.on) {
                         light.set(Light.off)
                         count += 1
                     }
-                    announced.set(count >= VictoryThreshold)
+                    announced.set(count >= victoryThreshold)
                 } else: {
-                    If(light == Light.off && signalled[prisoner] < SignalLimit) {
+                    If(light == Light.off && signalled[prisoner] < signalLimit) {
                         light.set(Light.on)
                         signalled[prisoner] += 1
                     }
                 }
-                has_visited.insert(prisoner)
+                visitedPrisoners.insert(prisoner)
             }
             WeakFairness(each: visitSwitchRoom)
 
             Invariant("TypeOK") {
-                IntRange(1, through: VictoryThreshold + 1).contains(count)
+                IntRange(1, through: victoryThreshold + 1).contains(count)
                     && Bool.all.contains(announced)
-                    && Functions(from: NormalPrisoner, to: IntRange(0, through: 2)).contains(signalled)
+                    && Functions(from: otherPrisoners, to: IntRange(0, through: 2)).contains(signalled)
                     && SetExpr<Light>.literal(.off, .on).contains(light)
-                    && has_visited.isSubset(of: Prisoner)
+                    && visitedPrisoners.isSubset(of: prisoners)
             }
-            Invariant("VictoryOK") { !announced || has_visited == Prisoner }
+            Invariant("VictoryOK") { !announced || visitedPrisoners == prisoners }
             Terminating(.eventually(announced))
 
             Validation("prisonerValidation", label: "Prisoner") {
-                Bind(Prisoner, to: ["Alice", "Bob", "Eve"])
-                Bind(Light_Unknown, to: false)
+                Bind(prisoners, to: ["Alice", "Bob", "Eve"])
+                Bind(initialLightIsUnknown, to: false)
             }
             Validation("PrisonerLightUnknown") {
-                Bind(Prisoner, to: ["Alice", "Bob", "Eve"])
-                Bind(Light_Unknown, to: true)
+                Bind(prisoners, to: ["Alice", "Bob", "Eve"])
+                Bind(initialLightIsUnknown, to: true)
             }
             Validation("PrisonerSolo") {
-                Bind(Prisoner, to: ["Alice"])
-                Bind(Light_Unknown, to: false)
+                Bind(prisoners, to: ["Alice"])
+                Bind(initialLightIsUnknown, to: false)
             }
             Validation("PrisonerSoloLightUnknown") {
-                Bind(Prisoner, to: ["Alice"])
-                Bind(Light_Unknown, to: true)
+                Bind(prisoners, to: ["Alice"])
+                Bind(initialLightIsUnknown, to: true)
             }
         }
     }

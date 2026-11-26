@@ -252,7 +252,7 @@ package struct CompiledLayout: Hashable, Sendable {
                 ),
                 displayLabel: variable.displayLabel,
                 generatedSwiftType: variable.generatedSwiftType,
-                resolvedValueType: variable.resolvedValueType
+                resolvedValueType: variable.resolvedValueType, formalName: variable.tlaName
             )
         }
         let controlLocations = Self.controlLocations(
@@ -354,11 +354,11 @@ package struct CompiledLayout: Hashable, Sendable {
 
     mutating func resolveVariableNames(reserving names: Set<String>) {
         let reserved = names.union(["Init", "Next", "Spec"]).union(tlaPredefinedIdentifierNames)
-        var used = reserved.union(variables.map(\.declaration.name))
+        var used = reserved.union(variables.map(\.formalName))
         variables = variables.map { variable in
-            let stem = tlaDeclarationStem(variable.declaration.name)
+            let stem = tlaDeclarationStem(variable.formalName)
             var name = stem
-            if reserved.contains(name) || stem != variable.declaration.name {
+            if reserved.contains(name) || stem != variable.formalName {
                 var suffix = 2
                 while !used.insert(name).inserted {
                     name = "\(stem)__\(suffix)"

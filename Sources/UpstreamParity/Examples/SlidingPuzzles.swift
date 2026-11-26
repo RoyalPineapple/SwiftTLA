@@ -8,7 +8,7 @@ import SwiftTLAMacros
 package struct SlidingPuzzlesModel: Sendable {
     package typealias Position = Pair<Int, Int>
     package typealias Piece = Set<Position>
-    private enum Step: String, CaseIterable { case next = "Next" }
+    private enum Step: String, CaseIterable { case slidePieceOneCell = "Next" }
 
     package static var spec: TLASpec {
         #spec("SlidingPuzzles") { scope in
@@ -17,6 +17,12 @@ package struct SlidingPuzzlesModel: Sendable {
             }
             let directions = Set<Position>([Pair(first: 1, second: 0), Pair(first: 0, second: 1),
                                             Pair(first: -1, second: 0), Pair(first: 0, second: -1)])
+            // Starting board, top row first. Each letter is one piece; dots are empty.
+            // A B B C
+            // A B B C
+            // D E E F
+            // D G H F
+            // I . . J
             let board = scope.sharedVar(initial: Set<Piece>([
                 [Pair(first: 0, second: 0), Pair(first: 0, second: 1)],
                 [Pair(first: 1, second: 0), Pair(first: 2, second: 0), Pair(first: 1, second: 1), Pair(first: 2, second: 1)],
@@ -30,19 +36,21 @@ package struct SlidingPuzzlesModel: Sendable {
                 [Pair(first: 3, second: 4)]
             ]))
             let empty = positions.subtracting(board.flatMapping { piece in piece })
-            Do(Step.next) {
-                With(empty, directions) { space, direction in
-                    let neighbor = Pair<Int, Int>.literal(space.first() + direction.first(), space.second() + direction.second())
-                    When(positions.contains(neighbor) && !empty.contains(neighbor))
+            Do(Step.slidePieceOneCell) {
+                With(empty, directions) { emptySquare, offsetToPiece in
+                    let occupiedSquare = Pair<Int, Int>.literal(
+                        emptySquare.first() + offsetToPiece.first(), emptySquare.second() + offsetToPiece.second()
+                    )
+                    When(positions.contains(occupiedSquare) && !empty.contains(occupiedSquare))
                     let piece = Select(from: board) { candidate in
-                        candidate.contains(neighbor) && board.allSatisfy { other in !other.contains(neighbor) || other == candidate }
+                        candidate.contains(occupiedSquare) && board.allSatisfy { other in !other.contains(occupiedSquare) || other == candidate }
                     }
-                    let shifted = piece.mapping { point in
-                        Pair<Int, Int>.literal(point.first() - direction.first(), point.second() - direction.second())
+                    let movedPiece = piece.mapping { point in
+                        Pair<Int, Int>.literal(point.first() - offsetToPiece.first(), point.second() - offsetToPiece.second())
                     }
                     let others = board.removing(piece)
-                    When(shifted.isSubset(of: positions) && others.allSatisfy { other in shifted.intersection(other).isEmpty })
-                    board.set(others.inserting(shifted))
+                    When(movedPiece.isSubset(of: positions) && others.allSatisfy { other in movedPiece.intersection(other).isEmpty })
+                    board.set(others.inserting(movedPiece))
                 }
             }
             Invariant("TypeOK") { board.allSatisfy { piece in piece.isSubset(of: positions) } }
