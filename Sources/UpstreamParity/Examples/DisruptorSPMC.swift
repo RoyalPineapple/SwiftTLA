@@ -53,35 +53,37 @@ package struct DisruptorSPMCModel: Sendable {
             let pc = scope.sharedVar(initial: Dictionary<ThreadID, String>.mapping(over: threads) { _ in "Advance" })
 
             Do(Step.beginWrite, over: Writers) { writer in
-                let next = published + 1
-                let index = next % Size
-                When(Readers.allSatisfy { r in read[r] >= next - Size })
+                let sequence = published + 1
+                let slotIndex = sequence % Size
+                When(Readers.allSatisfy { reader in read[reader] >= sequence - Size })
                 When(pc[writer] == "Advance")
                 pc[writer].set("Access")
-                ringbuffer.writers[index].insert(writer)
-                ringbuffer.slots[index].set(Slot.first(next))
+                ringbuffer.writers[slotIndex].insert(writer)
+                ringbuffer.slots[slotIndex].set(Slot.first(sequence))
             }
             Do(Step.endWrite, over: Writers) { writer in
-                let next = published + 1
+                let sequence = published + 1
+                let slotIndex = sequence % Size
                 When(pc[writer] == "Access")
                 pc[writer].set("Advance")
-                ringbuffer.writers[next % Size].remove(writer)
-                published.set(next)
+                ringbuffer.writers[slotIndex].remove(writer)
+                published.set(sequence)
             }
             let beginRead = Do(Step.beginRead, over: Readers) { reader in
-                let next = read[reader] + 1
-                let index = next % Size
-                When(pc[reader] == "Advance" && published >= next)
+                let sequence = read[reader] + 1
+                let slotIndex = sequence % Size
+                When(pc[reader] == "Advance" && published >= sequence)
                 pc[reader].set("Access")
-                ringbuffer.readers[index].insert(reader)
-                consumed[reader].set(consumed[reader].appending(ringbuffer.slots[index].assuming(Int.self)))
+                ringbuffer.readers[slotIndex].insert(reader)
+                consumed[reader].set(consumed[reader].appending(ringbuffer.slots[slotIndex].assuming(Int.self)))
             }
             let endRead = Do(Step.endRead, over: Readers) { reader in
-                let next = read[reader] + 1
+                let sequence = read[reader] + 1
+                let slotIndex = sequence % Size
                 When(pc[reader] == "Access")
                 pc[reader].set("Advance")
-                ringbuffer.readers[next % Size].remove(reader)
-                read[reader].set(next)
+                ringbuffer.readers[slotIndex].remove(reader)
+                read[reader].set(sequence)
             }
             WeakFairness(each: beginRead)
             WeakFairness(each: endRead)

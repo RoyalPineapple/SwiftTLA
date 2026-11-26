@@ -54,38 +54,45 @@ package struct DisruptorMPMCModel: Sendable {
             let consumed = scope.sharedVar(initial: Dictionary<ThreadID, [Int]>.mapping(over: Readers) { _ in [Int]() })
             let pc = scope.sharedVar(initial: Dictionary<ThreadID, String>.mapping(over: threads) { _ in "Advance" })
 
+            // Each lap reuses the slot and reverses the bit that means published.
+            FormalDefinition("IsPublished", taking: Int.self) { sequence -> Expr<Bool> in
+                published[sequence % Size] == ((sequence / Size) % 2 == 0)
+            }
+
             Do(Step.beginWrite, over: Writers) { writer in
-                let next = next_sequence
-                let index = next % Size
-                When(Readers.allSatisfy { r in read[r] >= next - Size })
+                let sequence = next_sequence
+                let slotIndex = sequence % Size
+                When(Readers.allSatisfy { reader in read[reader] >= sequence - Size })
                 When(pc[writer] == "Advance")
-                claimed_sequence[writer].set(next)
+                claimed_sequence[writer].set(sequence)
                 pc[writer].set("Access")
-                ringbuffer.writers[index].insert(writer)
-                ringbuffer.slots[index].set(Slot.first(next))
-                next_sequence.set(next + 1)
+                ringbuffer.writers[slotIndex].insert(writer)
+                ringbuffer.slots[slotIndex].set(Slot.first(sequence))
+                next_sequence.set(sequence + 1)
             }
             Do(Step.endWrite, over: Writers) { writer in
-                let next = claimed_sequence[writer]
+                let sequence = claimed_sequence[writer]
+                let slotIndex = sequence % Size
                 When(pc[writer] == "Access")
                 pc[writer].set("Advance")
-                ringbuffer.writers[next % Size].remove(writer)
-                published[next % Size].set(!published[next % Size])
+                ringbuffer.writers[slotIndex].remove(writer)
+                published[slotIndex].set(!published[slotIndex])
             }
             let beginRead = Do(Step.beginRead, over: Readers) { reader in
-                let next = read[reader] + 1
-                let index = next % Size
-                When(pc[reader] == "Advance" && published[index] == ((next / Size) % 2 == 0))
+                let sequence = read[reader] + 1
+                let slotIndex = sequence % Size
+                When(pc[reader] == "Advance" && FormalCall(as: Bool.self, "IsPublished", sequence))
                 pc[reader].set("Access")
-                ringbuffer.readers[index].insert(reader)
-                consumed[reader].set(consumed[reader].appending(ringbuffer.slots[index].assuming(Int.self)))
+                ringbuffer.readers[slotIndex].insert(reader)
+                consumed[reader].set(consumed[reader].appending(ringbuffer.slots[slotIndex].assuming(Int.self)))
             }
             let endRead = Do(Step.endRead, over: Readers) { reader in
-                let next = read[reader] + 1
+                let sequence = read[reader] + 1
+                let slotIndex = sequence % Size
                 When(pc[reader] == "Access")
                 pc[reader].set("Advance")
-                ringbuffer.readers[next % Size].remove(reader)
-                read[reader].set(next)
+                ringbuffer.readers[slotIndex].remove(reader)
+                read[reader].set(sequence)
             }
             WeakFairness(each: beginRead)
             WeakFairness(each: endRead)
@@ -114,16 +121,19 @@ package struct DisruptorMPMCModel: Sendable {
             let subjects = Readers.flatMapping { r in IntRange(0, through: MaxPublished - 1).mapping { i in
                 ReadPosition.expression(reader: r, sequence: i)
             } }
-            let claimed = Writers.mapping { w in claimed_sequence[w] }
-            let minimum = Select(from: claimed) { n in Writers.allSatisfy { w in n <= claimed_sequence[w] } }
-            let available = Select(from: claimed.inserting(minimum - 1)) { n in
-                published[n % Size] != ((n / Size) % 2 == 0) || !Writers.contains { w in
-                    claimed_sequence[w] == n + 1 && published[claimed_sequence[w] % Size] == ((claimed_sequence[w] / Size) % 2 == 0)
+            let claimedSequences = Writers.mapping { writer in claimed_sequence[writer] }
+            let minimumClaim = Select(from: claimedSequences) { sequence in
+                Writers.allSatisfy { writer in sequence <= claimed_sequence[writer] }
+            }
+            let availableSequence = Select(from: claimedSequences.inserting(minimumClaim - 1)) { candidate in
+                !FormalCall(as: Bool.self, "IsPublished", candidate) || !Writers.contains { writer in
+                    claimed_sequence[writer] == candidate + 1
+                        && FormalCall(as: Bool.self, "IsPublished", claimed_sequence[writer])
                 }
             }
             let Liveliness = Temporal()
             Liveliness(forEach: subjects) { pair in
-                .eventuallyAlways(pair.sequence > available || (consumed[pair.reader].count >= pair.sequence + 1 &&
+                .eventuallyAlways(pair.sequence > availableSequence || (consumed[pair.reader].count >= pair.sequence + 1 &&
                     consumed[pair.reader][pair.sequence + 1] == pair.sequence))
             }
             Validation("Upstream") {
