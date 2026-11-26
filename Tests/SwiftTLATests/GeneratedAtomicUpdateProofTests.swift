@@ -56,8 +56,16 @@ struct GeneratedAtomicUpdateProofTests {
         let condition = try #require(parts.conditions.first)
         let predicate = Parser.parse(source: condition.value).tokens(viewMode: .sourceAccurate)
             .filter { $0.tokenKind != .endOfFile }.map(\.text)
-        let accepted = try nativeConditionalActionPlans(original, program: program, predicate: predicate).ifTrue.capturePlans
-        let redirected = try nativeConditionalActionPlans(changed, program: program, predicate: predicate).ifTrue.capturePlans
+        let originalArm = try nativeConditionalActionPlans(original, program: program, predicate: predicate).ifTrue
+        let changedArm = try nativeConditionalActionPlans(changed, program: program, predicate: predicate).ifTrue
+        guard case .record(let originalTrace) = try originalArm.integerTrace(count: 3),
+              case .record(let changedTrace) = try changedArm.integerTrace(count: 3) else {
+            Issue.record("Expected decoded native assignment histories")
+            return
+        }
+        #expect(originalTrace.value(named: "declarations") == .tuple([.int(first.ordinal), .int(second.ordinal), .int(read.ordinal)]))
+        #expect(changedTrace.value(named: "declarations") == .tuple([.int(second.ordinal), .int(first.ordinal), .int(read.ordinal)]))
+        let accepted = originalArm.capturePlans, redirected = changedArm.capturePlans
         try #require(accepted.count == 3 && redirected.count == 3)
         #expect(accepted[0].literals == [.int(3)] && redirected[1].literals == [.int(7)])
         #expect(accepted[2].reads == [.tuple([.string("capture"), .int(1)])])

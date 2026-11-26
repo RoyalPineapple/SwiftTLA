@@ -58,31 +58,37 @@ private extension ArithmeticCapturePlan {
 }
 
 private enum ActionCapture {
-    case reference(ActionReference)
-    case expression(ArithmeticCapturePlan)
+    case reference(ActionReference, local: String)
+    case expression(ArithmeticCapturePlan, local: String)
+
+    var declaredLocal: String {
+        switch self {
+        case .reference(_, let local), .expression(_, let local): local
+        }
+    }
 
     var tag: String {
         switch self {
-        case .reference(let reference): reference.kind
+        case .reference(let reference, _): reference.kind
         case .expression: "expression"
         }
     }
 
     var tla: String {
         switch self {
-        case .reference(let reference): reference.tla
-        case .expression(let plan): "<<\"expression\", \(plan.tla)>>"
+        case .reference(let reference, _): reference.tla
+        case .expression(let plan, _): "<<\"expression\", \(plan.tla)>>"
         }
     }
 
     var columns: ArithmeticCapturePlan {
         switch self {
-        case .reference(let reference):
+        case .reference(let reference, _):
             let literal = reference.kind == "literal"
             return ArithmeticCapturePlan(kinds: [.string(literal ? "literal" : "read")],
                 literals: [literal ? reference.value : .int(0)],
                 reads: [literal ? .tuple([]) : reference.wire], left: [.int(0)], right: [.int(0)])
-        case .expression(let plan):
+        case .expression(let plan, _):
             return plan
         }
     }
@@ -1212,7 +1218,8 @@ extension OrderedRHSPhysicalAction.Plan {
 }
 
 struct NativeConditionalArmOutput {
-    let capturePlans: [OrderedRHSPhysicalAction.Plan]
+    let captures: [(binder: BinderID?, plan: OrderedRHSPhysicalAction.Plan)]
+    var capturePlans: [OrderedRHSPhysicalAction.Plan] { captures.map { $0.plan } }
     let writeOrder: [String]
     let writes: [String: TLAValue]
     let failureAppendSites: [Int]
@@ -1225,6 +1232,10 @@ struct NativeConditionalArmOutput {
     func integerTrace(count: Int) throws -> TLAValue {
         let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
         let output = try materialization(after: count)
+        let declarations = try self.captures.prefix(count).map { capture in
+            guard let binder = capture.binder else { throw invalid }
+            return TLAValue.int(binder.ordinal)
+        }
         let captures = capturePlans.prefix(count)
         let sites = captures.enumerated().compactMap { index, plan in
             plan.kinds.contains(.string("add")) ? index + 1 : nil
@@ -1243,7 +1254,7 @@ struct NativeConditionalArmOutput {
             return (.int(site), .record(["action": .int(call.action), "branch": branch,
                 "site": .int(call.site), "target": .int(call.target), "before": .tuple(before)]))
         }
-        return .record(["captures": .tuple(captures.map { $0.integerRecord }),
+        return .record(["declarations": .tuple(declarations), "captures": .tuple(captures.map { $0.integerRecord }),
             "callbacks": .function(Dictionary(uniqueKeysWithValues: callbacks)),
             "suffix": output.suffix, "writes": output.writes])
     }
@@ -1443,6 +1454,9 @@ func nativeConditionalActionPlans(_ source: String, program: CompiledProgram, pr
               pair[0] == .string("state"), case .string(let name) = pair[1] else { return raw }
         return .tuple([.string("state"), .string(try sourceName(name))])
     }
+    let binderByLocal = Dictionary(uniqueKeysWithValues: program.binderNames.map { binder, name in
+        ("_\(name)_\(binder.ordinal)", binder)
+    })
     func arm(_ plan: ActionInstructions) throws -> NativeConditionalArmOutput {
         var writes: [String: TLAValue] = [:]
         var order: [String] = []
@@ -1453,12 +1467,13 @@ func nativeConditionalActionPlans(_ source: String, program: CompiledProgram, pr
             }
             order.append(target)
         }
-        let captures = try plan.captures.map { capture -> OrderedRHSPhysicalAction.Plan in
+        let captures = try plan.captures.map { capture in
             let columns = capture.columns
-            return .init(kinds: columns.kinds, literals: columns.literals, reads: try columns.reads.map(renamedRead),
-                left: columns.left, right: columns.right)
+            let decoded = OrderedRHSPhysicalAction.Plan(kinds: columns.kinds, literals: columns.literals,
+                reads: try columns.reads.map(renamedRead), left: columns.left, right: columns.right)
+            return (binderByLocal[capture.declaredLocal], decoded)
         }
-        return .init(capturePlans: captures, writeOrder: order, writes: writes,
+        return .init(captures: captures, writeOrder: order, writes: writes,
                      failureAppendSites: plan.failureAppendSites, failureCalls: plan.conditionalFailureCalls)
     }
     let first = visit.ifTrue.id, second = visit.ifFalse.id
@@ -1924,7 +1939,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                        try \(child)(\(argument)\(local), updates, emit)
                        """) {
                         guard recordsFailure else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-                        instructions.captures.append(.expression(try nativeArithmeticCapture(decoded.steps, reads: reads.map { $0.1 })))
+                        instructions.captures.append(.expression(try nativeArithmeticCapture(decoded.steps, reads: reads.map { $0.1 }), local: local))
                         // The verified catch appends the reached error; the continuation requires a completed capture.
                         let index = instructions.captures.count
                         instructions.failureAppendSites.append(index)
@@ -1952,7 +1967,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                 }
                 for (spelling, value) in reads where
                     sameWords(core, "let \(local) = \(spelling)\ntry \(child)(\(argument)\(local), updates, emit)") {
-                    instructions.captures.append(.reference(value))
+                    instructions.captures.append(.reference(value, local: local))
                     let reference = ActionReference(kind: "capture", value: .int(instructions.captures.count), type: value.type)
                     pending.append((child, scope + [(local, reference)]))
                     continue parts

@@ -1393,7 +1393,7 @@ package enum ConditionalActionEvidence {
                                     LET id == loweredReadIDs[index][origin]
                                     IN IF kinds[origin] # "read" THEN <<>>
                                        ELSE IF id[1] = "state" THEN <<"state", ConditionalIntegerFieldNames[id[2]]>>
-                                       ELSE <<"capture", Arithmetic!AssignmentBinderSlot(definitionBinders, id[2])>>]
+                                       ELSE <<"capture", Arithmetic!AssignmentBinderSlot(ConditionalNativeRows[\#(arm + 1)].declarations, id[2])>>]
                     <5>certificate. Arithmetic!AssignmentRhsCertificate(rows[index])
                         BY ONLY <1>integerRows, (arm \in ConditionalArms), (index \in DOMAIN rows), SMT
                             DEF rows, Arithmetic!SupportedAssignmentList
@@ -1425,8 +1425,10 @@ package enum ConditionalActionEvidence {
                             Arithmetic!AssignmentBinderSlot(definitionBinders, loweredReadIDs[index][origin][2]) =
                                 scheduled[index][origin][2]
                         BY ONLY <5>returnedReads, <5>distinctBinders, Arithmetic!UniqueAssignmentBinderResolvesToItsSlot, SMT
+                    <5>declarations. ConditionalNativeRows[\#(arm + 1)].declarations = definitionBinders
+                        BY ONLY IsaM("simp"), SMT DEF ConditionalNativeRows, definitionBinders, \#(bindersColumn)
                     <5>readProjection. \A origin \in DOMAIN kinds : resolved[origin] = scheduled[index][origin]
-                        BY ONLY <5>returnedReads, <5>bindingSlots, SMT DEF resolved
+                        BY ONLY <5>returnedReads, <5>bindingSlots, <5>declarations, SMT DEF resolved
                     <5>. DEFINE incoming(origin) == \#(returnedMapsColumn)[index][readKeys[origin]]
                                 writer(origin) == IF incoming(origin)[1] = "state" THEN 0 ELSE incoming(origin)[2]
                     <5>acceptedReads. \A origin \in DOMAIN kinds : kinds[origin] = "read" =>
