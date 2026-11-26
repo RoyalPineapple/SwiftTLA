@@ -151,7 +151,10 @@ package struct AlgorithmModel: Sendable {
                 let controlledLoop = processes.isEmpty && procedures.isEmpty
                     && step.loopCondition != nil && step.loopCondition != .value(.bool(true))
                     && step.loopCondition != .value(.bool(false))
-                let statements = scheduleAtomicStatements(step.statements, binding: binding, recordAssignment: record,
+                let recordScheduled = record.map { record in
+                    { (name: String, assignment: ScheduledAtomicAssignment) in record(name, assignment.target) }
+                }
+                let statements = scheduleAtomicStatements(step.statements, binding: binding, recordAssignment: recordScheduled,
                     retainingDisabledTargets: controlledLoop) {
                     displacedTargets[$0] = $1
                 }
@@ -860,9 +863,14 @@ private func scheduleDirectScalarCopies(
     return (body, .init(reads: reads, writes: writes))
 }
 
+package struct ScheduledAtomicAssignment: Sendable {
+    let target: String
+    let incomingBindings: [String: StateExpr]
+}
+
 func scheduleAtomicStatements(
     _ statements: [AlgorithmStatementModel], binding: () -> String,
-    recordAssignment: ((String, String) -> Void)? = nil, retainingDisabledTargets: Bool = false,
+    recordAssignment: ((String, ScheduledAtomicAssignment) -> Void)? = nil, retainingDisabledTargets: Bool = false,
     displace: (String, String) -> Void
 ) -> [AlgorithmStatementModel] {
     // Snapshot each write where it occurs, then publish one assignment per
@@ -885,7 +893,7 @@ func scheduleAtomicStatements(
         case .set(let target, let value):
             let name = binding()
             let updated = expression(target.assigning(value))
-            recordAssignment?(name, target.root)
+            recordAssignment?(name, .init(target: target.root, incomingBindings: replacements))
             if case .variable(let capture)? = replacements[target.root] {
                 displace(capture, target.root)
             }

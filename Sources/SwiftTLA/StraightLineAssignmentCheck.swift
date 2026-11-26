@@ -811,6 +811,7 @@ package enum StraightLineAssignmentCheck {
             package let name: String
             package let rhs: StateExpr
             package let target: String
+            package let incomingBindings: [String: StateExpr]
         }
 
         package struct Branch: Sendable {
@@ -865,7 +866,8 @@ package enum StraightLineAssignmentCheck {
     }
 
     package static func checkedAtomicBranchContinuations(
-        _ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>, retainingDefinitions: Bool
+        _ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>, retainingDefinitions: Bool,
+        scheduledAssignments: [String: ScheduledAtomicAssignment]? = nil
     ) throws -> AtomicBranchContinuationReceipt? {
         let statements = step.model.statements
         guard step.bindings.isEmpty, let fork = statements.firstIndex(where: {
@@ -943,7 +945,12 @@ package enum StraightLineAssignmentCheck {
                 result.sourcePlans.append(source)
                 let target = assignment.target.root
                 result.targets.append(target)
-                result.definitions?.append(.init(name: name, rhs: rhs, target: target))
+                if result.definitions != nil {
+                    guard let scheduled = scheduledAssignments?[name],
+                          scheduled.target.utf8.elementsEqual(target.utf8) else { throw failure }
+                    result.definitions?.append(.init(name: name, rhs: rhs, target: scheduled.target,
+                        incomingBindings: scheduled.incomingBindings))
+                }
                 let reference: TLAValue = .tuple([.string("capture"), .int(result.plans.count)])
                 result.authored[target] = reference
                 result.physical[name] = reference
