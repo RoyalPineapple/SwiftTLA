@@ -30,17 +30,17 @@ package struct VoucherTransferModel: Sendable {
     package typealias OtherMessage = OneOf<DestinationPrepared, Broadcast>
     package typealias Message = OneOf<SourcePrepared, OtherMessage>
     private enum Step: String, CaseIterable {
-        case providerRcvPrepared = "VTPRcvPrepared"
+        case providerRecordsPreparedPair = "VTPRcvPrepared"
         case providerTransfer = "VTPTransfer"
         case providerAbort = "VTPAbort"
         case sourcePrepare = "SHPrepare"
         case sourceChooseToAbort = "SHChooseToAbort"
-        case sourceRcvTransferMsg = "SHRcvTransferMsg"
-        case sourceRcvAbortMsg = "SHRcvAbortMsg"
+        case sourceReceivesTransfer = "SHRcvTransferMsg"
+        case sourceReceivesAbort = "SHRcvAbortMsg"
         case destinationPrepare = "DHPrepare"
         case destinationChooseToAbort = "DHChooseToAbort"
-        case destinationRcvTransferMsg = "DHRcvTransferMsg"
-        case destinationRcvAbortMsg = "DHRcvAbortMsg"
+        case destinationReceivesTransfer = "DHRcvTransferMsg"
+        case destinationReceivesAbort = "DHRcvAbortMsg"
     }
     package static var spec: TLASpec {
         #spec("VoucherTransfer") { scope in
@@ -58,9 +58,12 @@ package struct VoucherTransferModel: Sendable {
             let transferMessage: Message = Message.second(OtherMessage.second(Broadcast(type: "Transfer")))
             let abortMessage: Message = Message.second(OtherMessage.second(Broadcast(type: "Abort")))
 
-            Do(Step.providerRcvPrepared, over: participants, participants) { sh, dh in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+            let allVouchersAreValid = Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState)
+            let allLifecyclesAreWorking = Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState)
+
+            Do(Step.providerRecordsPreparedPair, over: participants, participants) { sh, dh in
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(vtpState == "init")
                 When(msgs.contains(Message.first(SourcePrepared.expression(type: "Prepared", vsh: sh))))
                 When(msgs.contains(Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: dh)))))
@@ -86,62 +89,62 @@ package struct VoucherTransferModel: Sendable {
             }
 
             Do(Step.sourcePrepare, over: SH) { sh in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(shState[sh] == "holding")
                 shState[sh].set("prepared")
                 msgs.insert(Message.first(SourcePrepared.expression(type: "Prepared", vsh: sh)))
             }
 
             Do(Step.sourceChooseToAbort, over: SH) { sh in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(shState[sh] == "holding")
                 shState[sh].set("aborted")
             }
 
-            Do(Step.sourceRcvTransferMsg, over: SH) { sh in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+            Do(Step.sourceReceivesTransfer, over: SH) { sh in
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(shState[sh] == "holding")
                 When(msgs.contains(transferMessage))
                 shState[sh].set("transferred")
             }
 
-            Do(Step.sourceRcvAbortMsg, over: SH) { sh in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+            Do(Step.sourceReceivesAbort, over: SH) { sh in
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(shState[sh] == "holding")
                 When(msgs.contains(abortMessage))
                 shState[sh].set("aborted")
             }
 
             Do(Step.destinationPrepare, over: DH) { dh in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(dhState[dh] == "waiting")
                 dhState[dh].set("prepared")
                 msgs.insert(Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: dh))))
             }
 
             Do(Step.destinationChooseToAbort, over: DH) { dh in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(dhState[dh] == "waiting")
                 dhState[dh].set("aborted")
             }
 
-            Do(Step.destinationRcvTransferMsg, over: DH) { dh in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+            Do(Step.destinationReceivesTransfer, over: DH) { dh in
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(dhState[dh] == "waiting")
                 When(msgs.contains(transferMessage))
                 dhState[dh].set("holding")
             }
 
-            Do(Step.destinationRcvAbortMsg, over: DH) { dh in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+            Do(Step.destinationReceivesAbort, over: DH) { dh in
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(dhState[dh] == "waiting")
                 When(msgs.contains(abortMessage))
                 dhState[dh].set("aborted")
@@ -156,8 +159,8 @@ package struct VoucherTransferModel: Sendable {
                 vtpTPrepared.isSubset(of: participants)
                 msgs.allSatisfy { message in
                     message == transferMessage || message == abortMessage
-                        || SH.contains { p in message == Message.first(SourcePrepared.expression(type: "Prepared", vsh: p)) }
-                        || DH.contains { p in message == Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: p))) }
+                        || SH.contains { sourceHolder in message == Message.first(SourcePrepared.expression(type: "Prepared", vsh: sourceHolder)) }
+                        || DH.contains { destinationHolder in message == Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: destinationHolder))) }
                 }
             }
             Invariant("VTPConsistent") {

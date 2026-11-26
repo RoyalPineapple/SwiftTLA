@@ -30,17 +30,17 @@ package struct VoucherRedeemModel: Sendable {
     package typealias OtherMessage = OneOf<CollectorPrepared, Broadcast>
     package typealias Message = OneOf<HolderPrepared, OtherMessage>
     private enum Step: String, CaseIterable {
-        case providerRcvPrepared = "VTPRcvPrepared"
+        case providerRecordsPreparedPair = "VTPRcvPrepared"
         case providerRedeem = "VTPRedeem"
         case providerAbort = "VTPAbort"
         case holderPrepare = "HPrepare"
         case holderChooseToAbort = "HChooseToAbort"
-        case holderRcvRedeemMsg = "HRcvRedeemMsg"
-        case holderRcvAbortMsg = "HRcvAbortMsg"
+        case holderReceivesRedeem = "HRcvRedeemMsg"
+        case holderReceivesAbort = "HRcvAbortMsg"
         case collectorPrepare = "CPrepare"
         case collectorChooseToAbort = "CChooseToAbort"
-        case collectorRcvRedeemMsg = "CRcvRedeemMsg"
-        case collectorRcvAbortMsg = "CRcvAbortMsg"
+        case collectorReceivesRedeem = "CRcvRedeemMsg"
+        case collectorReceivesAbort = "CRcvAbortMsg"
     }
     package static var spec: TLASpec {
         #spec("VoucherRedeem") { scope in
@@ -58,9 +58,12 @@ package struct VoucherRedeemModel: Sendable {
             let redeemMessage: Message = Message.second(OtherMessage.second(Broadcast(type: "Redeem")))
             let abortMessage: Message = Message.second(OtherMessage.second(Broadcast(type: "Abort")))
 
-            Do(Step.providerRcvPrepared, over: participants, participants) { h, c in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+            let allVouchersAreValid = Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState)
+            let allLifecyclesAreWorking = Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState)
+
+            Do(Step.providerRecordsPreparedPair, over: participants, participants) { h, c in
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(vtpState == "init")
                 When(msgs.contains(Message.first(HolderPrepared.expression(type: "Prepared", vh: h))))
                 When(msgs.contains(Message.second(OtherMessage.first(CollectorPrepared.expression(type: "Prepared", vc: c)))))
@@ -88,21 +91,21 @@ package struct VoucherRedeemModel: Sendable {
             }
 
             Do(Step.holderPrepare, over: H) { h in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(hState[h] == "holding")
                 hState[h].set("prepared")
                 msgs.insert(Message.first(HolderPrepared.expression(type: "Prepared", vh: h)))
             }
 
             Do(Step.holderChooseToAbort, over: H) { h in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(hState[h] == "holding")
                 hState[h].set("aborted")
             }
 
-            Do(Step.holderRcvRedeemMsg, over: H) { h in
+            Do(Step.holderReceivesRedeem, over: H) { h in
                 When(Functions(from: V, to: SetExpr<String>.literal("valid", "redeemed")).contains(vState))
                 When(Functions(from: V, to: SetExpr<String>.literal("working", "done")).contains(vlcState))
                 When(hState[h] == "holding")
@@ -110,30 +113,30 @@ package struct VoucherRedeemModel: Sendable {
                 hState[h].set("redeemed")
             }
 
-            Do(Step.holderRcvAbortMsg, over: H) { h in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+            Do(Step.holderReceivesAbort, over: H) { h in
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(hState[h] == "holding")
                 When(msgs.contains(abortMessage))
                 hState[h].set("aborted")
             }
 
             Do(Step.collectorPrepare, over: C) { c in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(cState[c] == "waiting")
                 cState[c].set("prepared")
                 msgs.insert(Message.second(OtherMessage.first(CollectorPrepared.expression(type: "Prepared", vc: c))))
             }
 
             Do(Step.collectorChooseToAbort, over: C) { c in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(cState[c] == "waiting")
                 cState[c].set("aborted")
             }
 
-            Do(Step.collectorRcvRedeemMsg, over: C) { c in
+            Do(Step.collectorReceivesRedeem, over: C) { c in
                 When(Functions(from: V, to: SetExpr<String>.literal("valid", "redeemed")).contains(vState))
                 When(Functions(from: V, to: SetExpr<String>.literal("working", "done")).contains(vlcState))
                 When(cState[c] == "waiting")
@@ -141,9 +144,9 @@ package struct VoucherRedeemModel: Sendable {
                 cState[c].set("redeemed")
             }
 
-            Do(Step.collectorRcvAbortMsg, over: C) { c in
-                When(Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState))
+            Do(Step.collectorReceivesAbort, over: C) { c in
+                When(allVouchersAreValid)
+                When(allLifecyclesAreWorking)
                 When(cState[c] == "waiting")
                 When(msgs.contains(abortMessage))
                 cState[c].set("aborted")
@@ -158,8 +161,8 @@ package struct VoucherRedeemModel: Sendable {
                 vtpRPrepared.isSubset(of: participants)
                 msgs.allSatisfy { message in
                     message == redeemMessage || message == abortMessage
-                        || H.contains { p in message == Message.first(HolderPrepared.expression(type: "Prepared", vh: p)) }
-                        || C.contains { p in message == Message.second(OtherMessage.first(CollectorPrepared.expression(type: "Prepared", vc: p))) }
+                        || H.contains { holder in message == Message.first(HolderPrepared.expression(type: "Prepared", vh: holder)) }
+                        || C.contains { collector in message == Message.second(OtherMessage.first(CollectorPrepared.expression(type: "Prepared", vc: collector))) }
                 }
             }
             Invariant("VTPConsistent") {
