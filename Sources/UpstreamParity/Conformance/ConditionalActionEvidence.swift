@@ -621,13 +621,50 @@ package enum ConditionalActionEvidence {
         let guards = probes.map(\.failed.name).joined(separator: ", ")
         let tableStep = conditionalTableStepProof(physical, descriptors: descriptors,
                                                  tables: tables, plans: planNames, actionName: actionName)
-        let noSuccessorFacts = probes.enumerated().map { index, probe in
-            #"""
-            <2>probe\#(index + 1). \#(probe.failed.name) => ~ENABLED Next
-                BY ONLY ExpandENABLED, SMT DEF Next, \#(actionName), \#(probe.failed.name)
-            """#
-        }.joined(separator: "\n    ")
-        let noSuccessorLabels = probes.indices.map { "<2>probe\($0 + 1)" }.joined(separator: ", ")
+        let emittedGuardRule = failureOutput.map { observation in
+            let blocked = probes.enumerated().map { index, probe in
+                #"""
+                <1>probe\#(index + 1). Next => ~\#(probe.failed.name)
+                    BY ONLY SMT DEF Next, \#(actionName), \#(probe.failed.name)
+                """#
+            }.joined(separator: "\n")
+            let blockedFacts = probes.indices.map { "<1>probe\($0 + 1)" }
+            let inactive = probes.map { "~" + $0.failed.name }.joined(separator: " /\\ ")
+            return #"""
+            LOCAL THEOREM ConditionalFailedCheckDisablesEmittedNext ==
+                ~ConditionalSelectedEvaluationCheck => ~ENABLED Next
+            PROOF
+            \#(blocked)
+            <1>checking. ConditionalSelectedEvaluationCheck <=> (\#(inactive))
+                BY ONLY SMT DEF ConditionalSelectedEvaluationCheck, \#(observation.evaluationCheck),
+                    \#(observation.aggregate), \#(guards)
+            <1>requires. Next => ConditionalSelectedEvaluationCheck
+                BY ONLY \#((blockedFacts + ["<1>checking", "PTL"]).joined(separator: ", "))
+            <1>nextBoolean. Next \in BOOLEAN
+                BY ONLY SMT DEF Next, \#(actionName)
+            <1>checkBoolean. ConditionalSelectedEvaluationCheck \in BOOLEAN
+                BY ONLY SMT DEF ConditionalSelectedEvaluationCheck, \#(observation.evaluationCheck)
+            <1>enabled. (ENABLED Next) => ENABLED ConditionalSelectedEvaluationCheck
+                BY ONLY <1>requires, <1>nextBoolean, <1>checkBoolean, ENABLEDaxioms
+            <1>state. (ENABLED ConditionalSelectedEvaluationCheck) => ConditionalSelectedEvaluationCheck
+                <2>trueBoolean. TRUE \in BOOLEAN BY ONLY SMT
+                <2>conjunctionBoolean. (ConditionalSelectedEvaluationCheck /\ TRUE) \in BOOLEAN
+                    BY ONLY <1>checkBoolean, SMT
+                <2>identity. ConditionalSelectedEvaluationCheck => (ConditionalSelectedEvaluationCheck /\ TRUE)
+                    BY ONLY PTL
+                <2>lift. (ENABLED ConditionalSelectedEvaluationCheck) =>
+                         ENABLED (ConditionalSelectedEvaluationCheck /\ TRUE)
+                    BY ONLY <1>checkBoolean, <2>conjunctionBoolean, <2>identity, ENABLEDaxioms
+                <2>factor. ASSUME ENABLED (ConditionalSelectedEvaluationCheck /\ TRUE)
+                           PROVE ConditionalSelectedEvaluationCheck
+                    <3>split. ConditionalSelectedEvaluationCheck /\ ENABLED TRUE
+                        BY ONLY <1>checkBoolean, <2>trueBoolean,
+                            (ENABLED (ConditionalSelectedEvaluationCheck /\ TRUE)), ENABLEDaxioms
+                    <3>. QED BY ONLY <3>split, PTL
+                <2>. QED BY ONLY <2>lift, <2>factor, PTL
+            <1>. QED BY ONLY <1>enabled, <1>state, PTL
+            """# + "\n\n"
+        } ?? ""
         let observationDefinitions = failureOutput.map { observation in #"""
         ActualConditionalHistory == \#(observation.history)
         ConditionalSelectedEvaluationCheck == \#(observation.evaluationCheck)
@@ -640,12 +677,10 @@ package enum ConditionalActionEvidence {
         <1>empty. ActualConditionalHistory = <<>> <=>
                 (\A p \in DOMAIN ConditionalProbePositions : ~ConditionalProbeGuards[p])
             BY ONLY <1>probeOne, <1>probeNone, SMT DEF ConditionalExportedProbe
-        <1>noSuccessor. ConditionalSourceHistory # <<>> => ~ENABLED Next
-            \#(noSuccessorFacts)
-            <2>. QED BY ONLY \#(noSuccessorLabels), <1>physicalHistory, <1>empty, <1>probeSlots, SMT
-                DEF ConditionalProbeGuards, \#(guards)
         <1>sourceCheck. ConditionalSelectedEvaluationCheck <=> ConditionalSourceHistory = <<>>
             BY ONLY <1>checking, <1>empty, <1>physicalHistory, SMT
+        <1>noSuccessor. ConditionalSourceHistory # <<>> => ~ENABLED Next
+            BY ONLY <1>sourceCheck, ConditionalFailedCheckDisablesEmittedNext, SMT
         """# + "\n" } ?? ""
         let observations = failureOutput != nil ? #"""
         ActualConditionalHistory = ConditionalSourceHistory
@@ -770,7 +805,7 @@ package enum ConditionalActionEvidence {
         \#(certified.definitions)
         \#(tableStep.definitions)
 
-        THEOREM ActualConditionalHistoryMatchesTheAuthoredArms ==
+        \#(emittedGuardRule)THEOREM ActualConditionalHistoryMatchesTheAuthoredArms ==
             ASSUME ConditionalTypedState
             PROVE \#(claim)
         PROOF
