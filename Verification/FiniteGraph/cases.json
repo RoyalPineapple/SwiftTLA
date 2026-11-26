@@ -3730,6 +3730,59 @@
       "moduleSHA256": "df0d6a46542a0b1aa7cdb5141923df2ea3770d241e4ca5afde0cb5c2234e76fd",
       "cfgSHA256": "d2f036ba8283a1251147761577de2f25d6c1a19aa6e40800628c658a50442a16",
       "timeoutSeconds": 60
+    },
+    {
+      "id": "slush-small",
+      "sourceModel": "slush",
+      "scenario": "SlushSmall",
+      "module": "slush/Slush.tla",
+      "configuration": "slush/SlushSmall.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SlushProtocol/Slush.tla",
+        "sha256": "95303e105352d257abfd17feb6363948f728364a0aa47b043e43fd4118e3b16f"
+      },
+      "exploration": {
+        "maximumStateLimit": 300000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "95303e105352d257abfd17feb6363948f728364a0aa47b043e43fd4118e3b16f",
+      "cfgSHA256": "61aff32a7e3d47874166d83bbdaf8216dc0f7b5692b6018696fbfb5b52104ba1",
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "hanoi-five",
+      "sourceModel": "tower-of-hanoi",
+      "scenario": "FiveDisks",
+      "comparisonMode": "exhaustive",
+      "module": "tower-of-hanoi/MC.tla",
+      "configuration": "tower-of-hanoi/MC.cfg",
+      "imports": [
+        "tower-of-hanoi/Hanoi.tla",
+        "tower-of-hanoi/Bits.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC",
+          "importedModule": "Hanoi"
+        },
+        {
+          "importingModule": "Hanoi",
+          "importedModule": "Bits"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/MC.tla",
+        "sha256": "e1500033dd4411fb24382a9e8cb41e5384d2fc77cd731704b69d94c7d1638975"
+      },
+      "exploration": {
+        "maximumStateLimit": 300,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e1500033dd4411fb24382a9e8cb41e5384d2fc77cd731704b69d94c7d1638975",
+      "cfgSHA256": "90fb52e8c94535219094efde3e852faa78920ebe3f6870828020790ee860646f",
+      "timeoutSeconds": 60
     }
   ]
 }

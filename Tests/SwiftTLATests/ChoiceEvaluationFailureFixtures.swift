@@ -501,3 +501,38 @@ struct UndefinedChoiceDomainModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct RecordCandidateFailuresModel: Sendable {
+    struct Reply: Hashable, Sendable {
+        let z: Int
+        let a: Int
+    }
+
+    struct StopMessage: Hashable, Sendable {
+        let m: Int
+    }
+
+    typealias Message = OneOf<StopMessage, Reply>
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("RecordCandidateFailures") { scope in
+            let messages = scope.sharedVar(initial: SetExpr<Message>.literal(
+                Message.first(StopMessage.expression(m: -99)),
+                Message.second(Reply.expression(z: -2, a: 1)),
+                Message.second(Reply.expression(z: 2, a: 0)),
+                Message.second(Reply.expression(z: 1, a: 0))))
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let value = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                With(messages) { message in
+                    let first = message.recordFields.contains("a")
+                        && message.assuming(Reply.self).a == 0 && message.assuming(Reply.self).z == 1
+                    value.set(If(first, then: 1 / divisor, else: 1 % modulus))
+                }
+            }
+        }
+    }
+}

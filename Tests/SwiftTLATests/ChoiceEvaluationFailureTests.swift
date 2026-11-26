@@ -187,6 +187,16 @@ struct ChoiceEvaluationFailureTests {
         #expect(tla.contains("(IF \(left)[1] = \(right)[1] THEN \(left)[2] <= \(right)[2] ELSE \(left)[1] <= \(right)[1])"))
     }
 
+    @Test("Record choices report the first failure in field-key and field-value order")
+    func recordCandidateFailureOrder() throws {
+        let machine = try RecordCandidateFailuresModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+        let output = try RecordCandidateFailuresModel.render()
+        #expect(output.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
+    }
+
     @Test("Unranked state-dependent string candidates cannot claim ordered TLA failure parity")
     func stateDependentStringCandidateFailureOrder() throws {
         let machine = try StateDependentStringCandidateFailuresModel.makeMachine()

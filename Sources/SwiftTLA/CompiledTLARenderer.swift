@@ -838,20 +838,38 @@ struct CompiledTLARenderer {
         case .int: return "\(member) <= \(other)"
         case .bool: return "(\(member) = FALSE \\/ \(other) = TRUE)"
         case .tuple(let fields):
-            // CompiledValue compares tuple members lexicographically.
-            var suffix = "TRUE"
-            for (offset, field) in fields.enumerated().reversed() {
-                let left = "\(member)[\(offset + 1)]"
-                let right = "\(other)[\(offset + 1)]"
-                guard let order = try canonicalLeastPredicate(field, left, right) else { return nil }
-                suffix = suffix == "TRUE" ? order : "(IF \(left) = \(right) THEN \(suffix) ELSE \(order))"
-            }
-            return suffix
+            return try lexicographicLeast(fields.enumerated().map { ("[\($0.offset + 1)]", $0.element) }, member, other)
+        case .record(let fields), .nominalRecord(_, let fields):
+            let keys = fields.sorted { FormalStringIdentity.less($0.name, $1.name) }
+            return try lexicographicLeast(keys.map { ("[\(TLAValue.string($0.name))]", $0.type) }, member, other)
+        case .oneOf(let a, let b):
+            // Distinct first keys order unlike records before any field value can break the tie.
+            guard let aKey = a.recordFields?.map(\.name).min(by: FormalStringIdentity.less),
+                  let bKey = b.recordFields?.map(\.name).min(by: FormalStringIdentity.less),
+                  !FormalStringIdentity.equal(aKey, bKey) else { return nil }
+            let (early, late, key) = FormalStringIdentity.less(aKey, bKey) ? (a, b, aKey) : (b, a, bKey)
+            guard let earlyOrder = try canonicalLeastPredicate(early, member, other),
+                  let lateOrder = try canonicalLeastPredicate(late, member, other) else { return nil }
+            let leftIsEarly = "\(TLAValue.string(key)) \\in DOMAIN \(member)"
+            let rightIsEarly = "\(TLAValue.string(key)) \\in DOMAIN \(other)"
+            return "(IF \(leftIsEarly) THEN (IF \(rightIsEarly) THEN \(earlyOrder) ELSE TRUE) "
+                + "ELSE (IF \(rightIsEarly) THEN FALSE ELSE \(lateOrder)))"
         default:
             guard let members = choiceMembers(type), !members.isEmpty,
                   members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
             return try rankedLeastPredicate(members.sorted(), member, other)
         }
+    }
+
+    private func lexicographicLeast(_ fields: [(String, CompiledValueType)], _ member: String, _ other: String) throws -> String? {
+        var suffix = "TRUE"
+        for (access, type) in fields.reversed() {
+            let left = member + access
+            let right = other + access
+            guard let order = try canonicalLeastPredicate(type, left, right) else { return nil }
+            suffix = suffix == "TRUE" ? order : "(IF \(left) = \(right) THEN \(suffix) ELSE \(order))"
+        }
+        return suffix
     }
 
     private func rankedLeastPredicate(_ members: [CompiledValue], _ member: String, _ other: String) throws -> String {
@@ -902,7 +920,7 @@ struct CompiledTLARenderer {
             throw CompilationDiagnostic(code: .unsupportedCanonicalCandidateOrder, stage: .rendering,
                 path: "actions.with[\(binder.ordinal)].domain",
                 expected: "a canonical order for every candidate in the domain",
-                actual: "the state-dependent candidate set has no renderable total order",
+                actual: "the state-dependent domain for \(bound) has type \(domain.resultType.swiftType) and no renderable total order",
                 nextSafeAction: "Use an Int, Bool, finite enum, or finite parameter domain for a fallible With body.")
         }
         let least = "(CHOOSE \(first) \\in \(failed): \\A \(earlier) \\in \(failed): \(ordered))"
@@ -997,6 +1015,9 @@ struct CompiledTLARenderer {
             switch value.operation {
             case .convert:
                 guard value.children.count == 1 else { return nil }
+                return try collect(value.children[0])
+            case .domain:
+                guard value.children.count == 1, value.children[0].resultType.hasRecordDomain else { return nil }
                 return try collect(value.children[0])
             case .recordAccess, .tupleAccess:
                 guard value.children.count == 1 else { return nil }

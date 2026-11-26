@@ -9327,16 +9327,18 @@
     {
       "path": "specifications/SlushProtocol",
       "name": "The Slush Protocol",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Small compared locally on the complete labeled graph; Medium shares the implementation. Large remains open.",
+      "gap": "Small matched native Swift, generated TLA and published TLC on 274678 states and 1238926 labeled edges with TypeInvariant and deadlock satisfied. Medium and Large lack a complete local comparison. Hosted validation remains open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/SlushProtocol/Slush.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "reason": "The two process families and the fixed client preserve all published atomic labels.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Slush.swift"
+          ],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -9364,10 +9366,16 @@
           "module": "specifications/SlushProtocol/Slush.tla",
           "configuration": "specifications/SlushProtocol/SlushSmall.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Slush.swift",
+              "scenario": "SlushSmall",
+              "caseID": "slush-small"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -11306,8 +11314,8 @@
     {
       "path": "specifications/tower_of_hanoi",
       "name": "The Tower of Hanoi Puzzle",
-      "audit": "pinned modules and both published configurations inspected; implementation and hosted parity pending",
-      "gap": "The Toolbox MC root binds D=5/N=3 and checks the deliberately violated NotSolved invariant through Spec. Hanoi_anim binds D=3/N=3, uses INIT/NEXT, checks the same invariant, and selects an SVG-producing ALIAS. Both use the numeric bitmask tower state and the Bits bitwise-AND operator; the upstream Bits.java TLC override is a pinned tool dependency to resolve for hosted execution, not a reason to change the model. Preserve the exact bitmask transition semantics in typed #spec, using existing arithmetic and recursion if sufficient rather than presuming a new compiler operator. Preserve selected alias output separately from graph identity, and compare each decisive verdict and witness on both hosted paths. HanoiSeq is an unconfigured sequence-state variant, not an alias of the configured bitmask model. No configuration or module is credited yet.",
+      "audit": "The five-disk Swift machine was compared locally with the published Toolbox model.",
+      "gap": "The Toolbox case selects NotSolved and reaches a 31-move counterexample. The separate three-disk configuration selects an SVG alias; display parity is open. HanoiSeq is a separate, unconfigured model. Hosted validation is pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -11328,8 +11336,10 @@
           "path": "specifications/tower_of_hanoi/Hanoi.tla",
           "role": "algorithm dependency",
           "reason": "Both configured roots use this numeric bitmask-tower state machine and its NotSolved invariant; its Toolbox copy has the same pinned Git blob.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TowerOfHanoi.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/Bits.tla",
@@ -11342,15 +11352,19 @@
           "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/Hanoi.tla",
           "role": "algorithm dependency copy",
           "reason": "Byte-identical pinned Git blob of the top-level Hanoi.tla, extended by the Toolbox MC root.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TowerOfHanoi.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/MC.tla",
           "role": "configured root",
           "reason": "The published Toolbox model binds D=5/N=3, selects Spec, and checks the deliberately violated NotSolved invariant.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TowerOfHanoi.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/tower_of_hanoi/HanoiSeq.tla",
@@ -11365,10 +11379,16 @@
           "module": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/MC.tla",
           "configuration": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/MC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TowerOfHanoi.swift",
+              "scenario": "FiveDisks",
+              "caseID": "hanoi-five"
+            }
+          ],
           "evidence": []
         },
         {
