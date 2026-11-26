@@ -1778,6 +1778,14 @@ package enum ConditionalActionEvidence {
                 start == \#(firstBodyBinder) + (IF arm = 1 THEN 0 ELSE Len(ConditionalSourceRows[1].targets))
             IN [i \in DOMAIN writes |-> [binding |-> start + (i - 1), field |-> writes[i].field]]
         """#
+        let selectedHistoryBody = #"""
+                LET terminal == history[Len(rows)]
+                IN /\ Arithmetic!AssignmentListHistory(FALSE, ConditionalBefore, rows, history)
+                   /\ Arithmetic!AssignmentListHistory(TRUE, ConditionalBefore, rows, history)
+        \#(selectedObservation)           /\ ConditionalNativeHistory(TRUE) = ConditionalOrderedFailure(arm, terminal)
+                   /\ (ConditionalPhysicalStep <=> ConditionalOrderedStep(arm, terminal))
+                   /\ (ConditionalNativeStep <=> ConditionalOrderedStep(arm, terminal))
+        """#
         let rowDefinitions = #"""
         \#(actual.joined(separator: "\n"))
         \#(routedReads.flatMap(\.prefixes).joined(separator: "\n"))
@@ -1987,12 +1995,7 @@ package enum ConditionalActionEvidence {
         \#(historyGate)    LET arm == ConditionalSelectedArm
                 rows == ConditionalIntegerRows(arm)
             IN \E history :
-                LET terminal == history[Len(rows)]
-                IN /\ Arithmetic!AssignmentListHistory(FALSE, ConditionalBefore, rows, history)
-                   /\ Arithmetic!AssignmentListHistory(TRUE, ConditionalBefore, rows, history)
-        \#(selectedObservation)           /\ ConditionalNativeHistory(TRUE) = ConditionalOrderedFailure(arm, terminal)
-                   /\ (ConditionalPhysicalStep <=> ConditionalOrderedStep(arm, terminal))
-                   /\ (ConditionalNativeStep <=> ConditionalOrderedStep(arm, terminal))
+        \#(selectedHistoryBody)
         """#
         let rowSteps = #"""
         <1>integerKeys. /\ ConditionalIntKeys = ConditionalLayoutIntKeys
@@ -2623,11 +2626,25 @@ package enum ConditionalActionEvidence {
             <2>length. last = IF arm = 1 THEN \#(arms[0].integerCaptures.count) ELSE \#(arms[1].integerCaptures.count)
                 BY ONLY <1>selector, <1>integerRows, SMT DEF arm, last, rows
             <2>pass. CASE Arithmetic!RenderedAssignmentsPass(raw, last)
-                BY ONLY \#(prefixPassed)<2>pass, <2>reached, <2>length, <1>tableStep, <1>selector, <1>shape, <1>finalRoutes, SMT
-                    DEF ConditionalTableStep, ConditionalSourceStep, ConditionalOrderedStep, ConditionalIntegerTerminal,
-                        ConditionalSourceSuccessor,
-                        arm, rows, raw, last, terminal, Arithmetic!RenderedAssignmentHistoryAt, Arithmetic!HistoryPrefix,
-                        ConditionalIntegerTable, \#(evaluatedTables)
+                <3>captured. /\ terminal.failure = <<>>
+                             /\ terminal.completed = Arithmetic!HistoryPrefix(raw.roots, last)
+                    BY ONLY <2>pass, <2>reached, SMT
+                        DEF terminal, ConditionalIntegerTerminal, arm, last, rows, Arithmetic!RenderedAssignmentHistoryAt
+                <3>rootFrame. /\ DOMAIN raw.roots = 1..last
+                               /\ raw.roots = [i \in DOMAIN raw.roots |-> raw.roots[i]]
+                    <4>first. CASE arm = 1
+                        BY ONLY <4>first, <2>length, SMT DEF raw, ConditionalIntegerTable, \#(tables[0]), \#(tables[0])Values
+                    <4>second. CASE arm = 2
+                        BY ONLY <4>second, <2>length, SMT DEF raw, ConditionalIntegerTable, \#(tables[1]), \#(tables[1])Values
+                    <4>. QED BY ONLY <4>first, <4>second, <1>selector, <1>shape, SMT DEF arm
+                <3>complete. terminal.completed = raw.roots
+                    BY ONLY <3>captured, <3>rootFrame, SMT DEF Arithmetic!HistoryPrefix
+                <3>successor. Arithmetic!CopyMaterializedState(ConditionalStateKeys, ConditionalStateBefore,
+                    raw.roots \o ConditionalSourceRows[arm].suffix, ConditionalPhysicalRoutes(arm)) =
+                        ConditionalSourceSuccessor(arm, terminal)
+                    BY ONLY <3>complete, <1>selector, <1>finalRoutes, SMT DEF arm, ConditionalSourceSuccessor
+                <3>. QED BY ONLY \#(prefixPassed)<2>pass, <2>length, <3>captured, <3>successor, <1>tableStep, SMT
+                    DEF ConditionalTableStep, ConditionalSourceStep, ConditionalOrderedStep, arm, raw
             <2>fail. CASE ~Arithmetic!RenderedAssignmentsPass(raw, last)
                 <3>position. PICK row \in 1..last : \E node \in 1..raw.plans[row].count :
                                       Arithmetic!RenderedAssignmentFailsAt(raw, last, row, node)
@@ -2643,14 +2660,18 @@ package enum ConditionalActionEvidence {
         <1>certified. ConditionalObservationUsesOrderedRows
             <2>. DEFINE arm == ConditionalSelectedArm
                         rows == ConditionalIntegerRows(arm)
-            <2>. WITNESS ConditionalIntegerRun(arm)
+            <2>exists. \E history :
+        \#(selectedHistoryBody)
+                <3>. WITNESS ConditionalIntegerRun(arm)
         """# + "\n"
         let certification = failureOutput != nil ? #"""
-            <2>. QED BY ONLY \#(prefixPassed)<1>selector, <1>integerRuns, <1>physicalHistory, <1>nativeHistory, <1>step, <1>nativeSuccess, SMT
-                DEF ConditionalObservationUsesOrderedRows, ConditionalIntegerTerminal, ConditionalSourceHistory, ConditionalSourceStep, arm, rows
+                <3>. QED BY ONLY \#(prefixPassed)<1>selector, <1>integerRuns, <1>physicalHistory, <1>nativeHistory, <1>step, <1>nativeSuccess, SMT
+                    DEF ConditionalIntegerTerminal, ConditionalSourceHistory, ConditionalSourceStep, arm, rows
+            <2>. QED BY ONLY <2>exists, \#(prefixPassed)SMT DEF ConditionalObservationUsesOrderedRows, arm, rows
         """# : #"""
-            <2>. QED BY ONLY \#(prefixPassed)<1>selector, <1>integerRuns, <1>total, <1>nativeHistory, <1>step, <1>nativeSuccess, SMT
-                DEF ConditionalObservationUsesOrderedRows, ConditionalIntegerTerminal, ConditionalSourceStep, arm, rows
+                <3>. QED BY ONLY \#(prefixPassed)<1>selector, <1>integerRuns, <1>total, <1>nativeHistory, <1>step, <1>nativeSuccess, SMT
+                    DEF ConditionalIntegerTerminal, ConditionalSourceStep, arm, rows
+            <2>. QED BY ONLY <2>exists, \#(prefixPassed)SMT DEF ConditionalObservationUsesOrderedRows, arm, rows
         """#
         let definitions = rowDefinitions + prefixDefinitions + probeDefinitions + routeDefinitions
         if input.shared != nil {

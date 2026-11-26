@@ -192,6 +192,9 @@ package enum SequentialControlOutputEvidence {
         /\ (AuthoredSequentialTypedEntry => TLASequentialFailureHistoriesMatch)
         """#
         let historyFact = tlaFailureHistory == nil ? "" : ", TLASequentialHistoryUsesAuthoredFailures"
+        let nativeHistoryConclusion = nativeProof?.hasFullFailures == true
+            ? #"/\ (AuthoredSequentialTypedEntry => NativeSequentialFullFailureHistoriesMatch)"# : ""
+        let nativeHistoryFact = nativeProof?.hasFullFailures == true ? ", NativeSequentialRecorderUsesAuthoredHistories" : ""
         let configured = #"""
         ---- MODULE \#(configuredModule) ----
         EXTENDS \#(controlModule), \#(configuration.blocks)
@@ -202,8 +205,8 @@ package enum SequentialControlOutputEvidence {
         \#(initialDefinition)
         \#(behaviorDefinition)
         \#(nativeProof?.definitions ?? "")
-        \#(nativeProof?.theorem ?? "")
         \#(tlaFailureHistory ?? "")
+        \#(nativeProof?.theorem ?? "")
 
         THEOREM NormalConfigurationUsesOnlyAuthoredSequentialControl ==
             /\ SequentialActualCFG = SequentialNormalCFG
@@ -214,6 +217,7 @@ package enum SequentialControlOutputEvidence {
             /\ SequentialSelectedEvaluationChecks = \#(selection)
             \#(failureConclusion)
             \#(historyConclusion)
+            \#(nativeHistoryConclusion)
             \#(behaviorConclusion)
             \#(nativeConclusion)
             /\ (~AuthoredSequentialGuard => ~ENABLED Next)
@@ -228,7 +232,7 @@ package enum SequentialControlOutputEvidence {
         \#(behaviorSteps)
         \#(failureSteps)
         <1>. QED BY ONLY <1>configuration, ActualSpecUsesOnlyAuthoredSequentialControl,
-            ActualLoweredRoutesUseTheDeclaredSequentialConstructors\#(initialFact)\#(typedFacts)\#(nativeFact)\#(failureFact)\#(historyFact)\#(behaviorFact)
+            ActualLoweredRoutesUseTheDeclaredSequentialConstructors\#(initialFact)\#(typedFacts)\#(nativeFact)\#(failureFact)\#(historyFact)\#(nativeHistoryFact)\#(behaviorFact)
             DEF SequentialSelectedEvaluationChecks
 
         ====
