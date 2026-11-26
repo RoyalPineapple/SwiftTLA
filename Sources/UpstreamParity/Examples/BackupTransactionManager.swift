@@ -20,10 +20,15 @@ package struct BackupTransactionManagerModel: Sendable {
         case commit, abort, hidden
     }
     private enum Step: String, CaseIterable {
-        case participate = "RS"
-        case primary = "TS", commit = "TC", abort = "TA"
-        case afterCommit = "F1", afterAbort = "F2"
-        case backup = "BTS", backupCommit = "BTC", backupAbort = "BTA"
+        case prepareDecideOrFail = "RS"
+        case choosePrimaryDecision = "TS"
+        case recordPrimaryCommit = "TC"
+        case recordPrimaryAbort = "TA"
+        case finishAfterCommit = "F1"
+        case finishAfterAbort = "F2"
+        case recoverHiddenDecision = "BTS"
+        case recordBackupCommit = "BTC"
+        case recordBackupAbort = "BTA"
     }
 
     package static var spec: TLASpec {
@@ -31,8 +36,8 @@ package struct BackupTransactionManagerModel: Sendable {
             let RM = scope.parameter(as: Set<Manager>.self, in: Subsets(of: Manager.all.assuming(Set<Manager>.self)))
             let RMMAYFAIL = scope.parameter(as: Bool.self)
             let TMMAYFAIL = scope.parameter(as: Bool.self)
-            let TypeOK = Invariant()
-            let Consistency = Invariant()
+            let typeOK = Invariant("TypeOK")
+            let consistency = Invariant("Consistency")
             let Termination = Temporal()
             Algorithm("protocolSteps") { scope in
                 let rmState = scope.sharedVar(initial: Dictionary<Manager, Phase>.mapping(over: RM) { _ in Phase.working })
@@ -44,7 +49,7 @@ package struct BackupTransactionManagerModel: Sendable {
                 } && !anyCommitted
 
                 Each(RM, fairness: .weak) { manager in
-                    While(Step.participate, rmState[manager] == Phase.working || rmState[manager] == Phase.prepared) {
+                    While(Step.prepareDecideOrFail, rmState[manager] == Phase.working || rmState[manager] == Phase.prepared) {
                         Either {
                             When(rmState[manager] == Phase.working) { rmState[manager].set(Phase.prepared) }
                             When(tmState == Decision.commit) { rmState[manager].set(Phase.committed) }
@@ -61,45 +66,50 @@ package struct BackupTransactionManagerModel: Sendable {
                 }
 
                 Process(id: 0, fairness: .weak) {
-                    Do(Step.primary) {
+                    Do(Step.choosePrimaryDecision) {
                         Either {
-                            When(canCommit) { Goto(Step.commit) }
-                            When(canAbort) { Goto(Step.abort) }
+                            When(canCommit) { Goto(Step.recordPrimaryCommit) }
+                            When(canAbort) { Goto(Step.recordPrimaryAbort) }
                         }
                     }
-                    Do(Step.commit) { tmState.set(Decision.commit) }
-                    Do(Step.afterCommit) {
+                    Do(Step.recordPrimaryCommit) { tmState.set(Decision.commit) }
+                    Do(Step.finishAfterCommit) {
                         If(TMMAYFAIL) { tmState.set(Decision.hidden) }
                         Stop()
                     }
-                    Do(Step.abort) { tmState.set(Decision.abort) }
-                    Do(Step.afterAbort) { If(TMMAYFAIL) { tmState.set(Decision.hidden) } }
+                    Do(Step.recordPrimaryAbort) { tmState.set(Decision.abort) }
+                    Do(Step.finishAfterAbort) {
+                        If(TMMAYFAIL) { tmState.set(Decision.hidden) }
+                    }
                 }
 
                 Process(id: 10, fairness: .weak) {
-                    Do(Step.backup) {
+                    Do(Step.recoverHiddenDecision) {
                         When(tmState == Decision.hidden)
                         Either {
-                            When(canCommit) { Goto(Step.backupCommit) }
-                            When(canAbort) { Goto(Step.backupAbort) }
+                            When(canCommit) { Goto(Step.recordBackupCommit) }
+                            When(canAbort) { Goto(Step.recordBackupAbort) }
                         }
                     }
-                    Do(Step.backupCommit) { tmState.set(Decision.commit); Stop() }
-                    Do(Step.backupAbort) { tmState.set(Decision.abort) }
+                    Do(Step.recordBackupCommit) {
+                        tmState.set(Decision.commit)
+                        Stop()
+                    }
+                    Do(Step.recordBackupAbort) { tmState.set(Decision.abort) }
                 }
 
-                TypeOK {
+                typeOK {
                     Functions(from: RM, to: SetExpr<Phase>.literal(.working, .prepared, .committed, .aborted, .failed)).contains(rmState)
                     SetExpr<Decision>.literal(.undecided, .commit, .abort, .hidden).contains(tmState)
                 }
-                Consistency { !anyCommitted || !RM.contains { manager in rmState[manager] == Phase.aborted } }
+                consistency { !anyCommitted || !RM.contains { manager in rmState[manager] == Phase.aborted } }
                 Termination(.eventually(RM.allSatisfy { manager in Finished(manager) } && Finished(0) && Finished(10)))
             }
             Validation("threeManagers") {
                 Bind(RM, to: Set<Manager>([.rm1, .rm2, .rm3]))
                 Bind(RMMAYFAIL, to: true)
                 Bind(TMMAYFAIL, to: true)
-            }.checking(only: [TypeOK, Consistency])
+            }.checking(only: [typeOK, consistency])
         }
     }
 }

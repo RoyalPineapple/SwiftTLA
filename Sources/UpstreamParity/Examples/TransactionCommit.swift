@@ -26,7 +26,7 @@ package struct TransactionCommitModel: Sendable {
 
     private enum Step: String, CaseIterable {
         case prepare = "Prepare"
-        case decide = "Decide"
+        case commitOrAbort = "Decide"
     }
 
     package static var spec: TLASpec {
@@ -40,18 +40,18 @@ package struct TransactionCommitModel: Sendable {
             let canCommit = RM.allSatisfy { manager in
                 rmState[manager] == Phase.prepared || rmState[manager] == Phase.committed
             }
-            let noneCommitted = !RM.contains { manager in rmState[manager] == Phase.committed }
+            let noManagerHasCommitted = !RM.contains { manager in rmState[manager] == Phase.committed }
 
             Do(Step.prepare, over: RM) { manager in
                 When(rmState[manager] == Phase.working)
                 rmState[manager].set(Phase.prepared)
             }
-            Do(Step.decide, over: RM) { manager in
+            Do(Step.commitOrAbort, over: RM) { manager in
                 Either {
                     When(rmState[manager] == Phase.prepared && canCommit) {
                         rmState[manager].set(Phase.committed)
                     }
-                    When((rmState[manager] == Phase.working || rmState[manager] == Phase.prepared) && noneCommitted) {
+                    When((rmState[manager] == Phase.working || rmState[manager] == Phase.prepared) && noManagerHasCommitted) {
                         rmState[manager].set(Phase.aborted)
                     }
                 }
@@ -61,7 +61,7 @@ package struct TransactionCommitModel: Sendable {
                 Functions(from: RM, to: SetExpr<Phase>.literal(.working, .prepared, .committed, .aborted)).contains(rmState)
             }
             Invariant("TCConsistent") {
-                noneCommitted || !RM.contains { manager in rmState[manager] == Phase.aborted }
+                noManagerHasCommitted || !RM.contains { manager in rmState[manager] == Phase.aborted }
             }
             Validation("threeManagers") {
                 Bind(RM, to: Set<Manager>([.r1, .r2, .r3]))

@@ -55,8 +55,17 @@ package struct AtomicCommitProtocolModel: Sendable {
     }
 
     private enum Step: String, CaseIterable {
-        case request, getVote, detectFault, makeDecision, coordBroadcast, coordDie
-        case sendVote, abortOnVote, abortOnTimeoutRequest, decide, parDie
+        case requestVote = "request"
+        case recordVote = "getVote"
+        case abortOnMissingVoteFromFailedParticipant = "detectFault"
+        case decideFromVotes = "makeDecision"
+        case sendDecisionToParticipant = "coordBroadcast"
+        case failCoordinator = "coordDie"
+        case sendVote = "sendVote"
+        case abortAfterNoVote = "abortOnVote"
+        case abortIfCoordinatorFailedBeforeRequest = "abortOnTimeoutRequest"
+        case applyCoordinatorDecision = "decide"
+        case failParticipant = "parDie"
     }
 
     package static var spec: TLASpec {
@@ -86,20 +95,20 @@ package struct AtomicCommitProtocolModel: Sendable {
             let collecting = coordinator.alive && coordinator.decision == undecided
             let allRequested = participants.allSatisfy { member in coordinator.request[member] }
 
-            let request = Do(Step.request, over: participants) { member in
+            let requestVote = Do(Step.requestVote, over: participants) { member in
                 When(coordinator.alive && !coordinator.request[member])
                 coordinator.request[member].set(true)
             }
-            let getVote = Do(Step.getVote, over: participants) { member in
+            let recordVote = Do(Step.recordVote, over: participants) { member in
                 When(collecting && allRequested && coordinator.vote[member] == waiting && participant[member].voteSent)
                 coordinator.vote[member].set(participant[member].vote)
             }
-            let detectFault = Do(Step.detectFault, over: participants) { member in
+            let abortOnMissingVoteFromFailedParticipant = Do(Step.abortOnMissingVoteFromFailedParticipant, over: participants) { member in
                 When(collecting && allRequested && coordinator.vote[member] == waiting)
                 When(!participant[member].alive && !participant[member].voteSent)
                 coordinator.decision.set(abort)
             }
-            let makeDecision = Do(Step.makeDecision, when: collecting) {
+            let decideFromVotes = Do(Step.decideFromVotes, when: collecting) {
                 When(participants.allSatisfy { member in coordinator.vote[member] != waiting })
                 If(participants.allSatisfy { member in coordinator.vote[member] == yes }) {
                     coordinator.decision.set(commit)
@@ -107,12 +116,12 @@ package struct AtomicCommitProtocolModel: Sendable {
                     coordinator.decision.set(abort)
                 }
             }
-            let coordBroadcast = Do(Step.coordBroadcast, over: participants) { member in
+            let sendDecisionToParticipant = Do(Step.sendDecisionToParticipant, over: participants) { member in
                 When(coordinator.alive && coordinator.decision != undecided)
                 When(coordinator.broadcast[member] == notsent)
                 coordinator.broadcast[member].set(coordinator.decision)
             }
-            Do(Step.coordDie, when: coordinator.alive) {
+            Do(Step.failCoordinator, when: coordinator.alive) {
                 coordinator.alive.set(false)
                 coordinator.faulty.set(true)
             }
@@ -121,29 +130,29 @@ package struct AtomicCommitProtocolModel: Sendable {
                 When(participant[member].alive && coordinator.request[member])
                 participant[member].voteSent.set(true)
             }
-            let abortOnVote = Do(Step.abortOnVote, over: participants) { member in
+            let abortAfterNoVote = Do(Step.abortAfterNoVote, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == undecided)
                 When(participant[member].voteSent && participant[member].vote == no)
                 participant[member].decision.set(abort)
             }
-            let abortOnTimeoutRequest = Do(Step.abortOnTimeoutRequest, over: participants) { member in
+            let abortIfCoordinatorFailedBeforeRequest = Do(Step.abortIfCoordinatorFailedBeforeRequest, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == undecided)
                 When(!coordinator.alive && !coordinator.request[member])
                 participant[member].decision.set(abort)
             }
-            let decide = Do(Step.decide, over: participants) { member in
+            let applyCoordinatorDecision = Do(Step.applyCoordinatorDecision, over: participants) { member in
                 When(participant[member].alive && participant[member].decision == undecided)
                 When(coordinator.broadcast[member] != notsent)
                 participant[member].decision.set(coordinator.broadcast[member])
             }
-            Do(Step.parDie, over: participants) { member in
+            Do(Step.failParticipant, over: participants) { member in
                 When(participant[member].alive)
                 participant[member].alive.set(false)
                 participant[member].faulty.set(true)
             }
 
-            WeakFairness(eachOf: [sendVote, abortOnVote, abortOnTimeoutRequest, decide])
-            WeakFairness(anyOf: [makeDecision, request, getVote, detectFault, coordBroadcast])
+            WeakFairness(eachOf: [sendVote, abortAfterNoVote, abortIfCoordinatorFailedBeforeRequest, applyCoordinatorDecision])
+            WeakFairness(anyOf: [decideFromVotes, requestVote, recordVote, abortOnMissingVoteFromFailedParticipant, sendDecisionToParticipant])
 
             let typeInvariant = Invariant("TypeInv")
             typeInvariant {

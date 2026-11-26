@@ -35,13 +35,13 @@ package struct TwoPhaseCommitModel: Sendable {
     package typealias Message = OneOf<Prepared, Broadcast>
 
     private enum Step: String, CaseIterable {
-        case receivePrepared = "TMRcvPrepared"
-        case commit = "TMCommit"
-        case abort = "TMAbort"
-        case prepare = "RMPrepare"
-        case chooseToAbort = "RMChooseToAbort"
-        case receiveCommit = "RMRcvCommitMsg"
-        case receiveAbort = "RMRcvAbortMsg"
+        case recordPreparedManager = "TMRcvPrepared"
+        case broadcastCommit = "TMCommit"
+        case broadcastAbort = "TMAbort"
+        case prepareAndNotifyCoordinator = "RMPrepare"
+        case abortLocally = "RMChooseToAbort"
+        case applyCommitMessage = "RMRcvCommitMsg"
+        case applyAbortMessage = "RMRcvAbortMsg"
     }
 
     package static var spec: TLASpec {
@@ -52,37 +52,37 @@ package struct TwoPhaseCommitModel: Sendable {
             let tmPrepared = scope.sharedVar(initial: Set<Manager>())
             let msgs = scope.sharedVar(initial: Set<Message>())
 
-            let commit: Message = Message.second(Broadcast(type: "Commit"))
-            let abort: Message = Message.second(Broadcast(type: "Abort"))
+            let commitMessage: Message = Message.second(Broadcast(type: "Commit"))
+            let abortMessage: Message = Message.second(Broadcast(type: "Abort"))
 
-            Do(Step.receivePrepared, over: RM) { manager in
+            Do(Step.recordPreparedManager, over: RM) { manager in
                 When(tmState == Coordinator.undecided)
                 When(msgs.contains(Message.first(Prepared.expression(type: "Prepared", rm: manager))))
                 tmPrepared.insert(manager)
             }
-            Do(Step.commit, when: tmState == Coordinator.undecided && tmPrepared == RM) {
+            Do(Step.broadcastCommit, when: tmState == Coordinator.undecided && tmPrepared == RM) {
                 tmState.set(Coordinator.committed)
-                msgs.insert(commit)
+                msgs.insert(commitMessage)
             }
-            Do(Step.abort, when: tmState == Coordinator.undecided) {
+            Do(Step.broadcastAbort, when: tmState == Coordinator.undecided) {
                 tmState.set(Coordinator.aborted)
-                msgs.insert(abort)
+                msgs.insert(abortMessage)
             }
-            Do(Step.prepare, over: RM) { manager in
+            Do(Step.prepareAndNotifyCoordinator, over: RM) { manager in
                 When(rmState[manager] == Phase.working)
                 rmState[manager].set(Phase.prepared)
                 msgs.insert(Message.first(Prepared.expression(type: "Prepared", rm: manager)))
             }
-            Do(Step.chooseToAbort, over: RM) { manager in
+            Do(Step.abortLocally, over: RM) { manager in
                 When(rmState[manager] == Phase.working)
                 rmState[manager].set(Phase.aborted)
             }
-            Do(Step.receiveCommit, over: RM) { manager in
-                When(msgs.contains(commit))
+            Do(Step.applyCommitMessage, over: RM) { manager in
+                When(msgs.contains(commitMessage))
                 rmState[manager].set(Phase.committed)
             }
-            Do(Step.receiveAbort, over: RM) { manager in
-                When(msgs.contains(abort))
+            Do(Step.applyAbortMessage, over: RM) { manager in
+                When(msgs.contains(abortMessage))
                 rmState[manager].set(Phase.aborted)
             }
 
@@ -91,7 +91,7 @@ package struct TwoPhaseCommitModel: Sendable {
                 SetExpr<Coordinator>.literal(.undecided, .committed, .aborted).contains(tmState)
                 tmPrepared.isSubset(of: RM)
                 msgs.allSatisfy { message in
-                    message == commit || message == abort || RM.contains { manager in
+                    message == commitMessage || message == abortMessage || RM.contains { manager in
                         message == Message.first(Prepared.expression(type: "Prepared", rm: manager))
                     }
                 }
