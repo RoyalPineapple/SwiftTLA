@@ -212,7 +212,16 @@ cat > "$tmp/bin/swift" <<'STUB'
 #!/bin/bash
 case "$1" in
     --version) echo fixture; exit ;;
-    test) echo product-test-ran; exit ;;
+    test)
+        for ((arg=1; arg <= $#; arg++)); do
+            case "${!arg}" in
+                --filter) next=$((arg + 1)); filter="${!next}" ;;
+                -j) next=$((arg + 1)); jobs="${!next}" ;;
+            esac
+        done
+        echo "product-test-ran filter=$filter jobs=$jobs"
+        exit
+        ;;
 esac
 while [[ "$1" != --scratch-path ]]; do shift; done
 cache="$2"
@@ -243,6 +252,14 @@ run_validation proof-prepare "$tmp/evidence" "$tmp/checked.tla"
 [[ "$status" -eq 64 && "$output" == *"waiting for compiler products"* ]]
 rm "$repo/hold"
 wait "$product_pid"
+for jobs in 1 4; do
+    if [[ "$jobs" == 1 ]]; then run_validation swiftpm-test Probe
+    else run_validation swiftpm-test Probe "$jobs"
+    fi
+    [[ "$status" -eq 0 && "$output" == *"product-test-ran filter=Probe jobs=$jobs"* ]]
+done
+run_validation swiftpm-test Probe 8
+[[ "$status" -eq 64 && "$output" != *product-test-ran* ]]
 mkdir -p "$repo/scripts"
 cat > "$repo/scripts/prepare-initial-proof.py" <<'PYTHON'
 from pathlib import Path
@@ -298,7 +315,7 @@ if not paired:
         raise SystemExit(0)
     raise SystemExit(f"unexpected single-worker invocation: {args[1:]}")
 
-if args[1:] != [slot, slot] or slot not in {"1", "2"}:
+if args[1:] != [slot, slot] or slot not in {"1", "2", "3"}:
     raise SystemExit(f"unexpected stub selection: {args[1:]}")
 if "TLAPM_SMT_SOLVER" in os.environ:
     raise SystemExit("paired worker inherited the caller solver override")
@@ -337,13 +354,18 @@ wait_for_file() {
 }
 
 start_proof_pair() {
-    local first_status="$1" second_status="$2"
+    local first_status="$1" second_status="$2" third_status="${3:-}"
     printf '%s\n' "$first_status" > "$packet/1.status"
     printf '%s\n' "$second_status" > "$packet/2.status"
     (
         cd "$repo"
+        set -- proof-step "$packet" 1 1 --also 2 2
+        if [[ -n "$third_status" ]]; then
+            printf '%s\n' "$third_status" > "$packet/3.status"
+            set -- "$@" --also 3 3
+        fi
         exec env TMPDIR="$tmp" TLAPM_SMT_SOLVER=fixture-invalid-solver \
-            SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS=1 "$runner" proof-step "$packet" 1 1 --also 2 2
+            SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS=1 "$runner" "$@"
     ) > "$pair_log" 2>&1 &
     pair_pid=$!
     wait_for_file "$packet/1.ready"
@@ -409,14 +431,34 @@ start_proof_pair 0 0
 touch "$packet/1.release" "$packet/2.release"
 finish_proof_pair 0
 
+packet="$tmp/proof-rolling"
+pair_log="$packet/wrapper.log"
+mkdir "$packet"
+start_proof_pair 7 0 0
+[[ ! -e "$packet/3.ready" ]]
+touch "$packet/1.release"
+wait_for_file "$packet/3.ready"
+IFS=$'\t' read -r third_pid third_group third_cwd third_temp third_cache third_scratch < "$packet/3.ready"
+[[ "$third_group" == "$second_group" && "$third_cwd" -ef "$repo" && "$third_scratch" == "$first_scratch" ]]
+kill -0 "$second_pid" "$third_pid"
+[[ "$third_temp" != "$first_temp" && "$third_temp" != "$second_temp" && "$(<"$third_temp/result")" == 3 ]]
+[[ "$third_cache" != "$first_cache" && "$third_cache" != "$second_cache" && "$(<"$third_cache/fingerprint")" == 3 ]]
+touch "$packet/3.release"
+wait_for_file "$packet/3.finished"
+[[ ! -f "$packet/2.finished" ]]
+touch "$packet/2.release"
+finish_proof_pair 1
+[[ "$(<"$pair_log")" == *"proof-step selection 1: exit 7"* && "$(<"$pair_log")" == *"proof-step selection 3: exit 0"* ]]
+
 packet="$tmp/proof-terminated"
 pair_log="$packet/wrapper.log"
 mkdir "$packet"
 touch "$packet/terminate"
-start_proof_pair 0 0
+start_proof_pair 0 0 0
 kill -TERM "$pair_pid"
 finish_proof_pair 130
 wait_for_file "$packet/child.terminated"
+[[ ! -e "$packet/3.ready" ]]
 [[ ! -e "$first_scratch" ]] || {
     echo "proof pair left temporary directories after TERM" >&2
     exit 1

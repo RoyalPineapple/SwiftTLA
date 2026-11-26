@@ -13,12 +13,19 @@ structured-value, runtime, and generated-machine work:
 ```
 
 The filter matches suite and test identifiers the way `swift test --filter`
-does. SwiftPM still builds every test target before running the selected
+does. Pass a final `4` to use four compiler jobs on a large build, for example
+`./scripts/local-validation.sh swiftpm-test "FormalOperatorTests" 4`. The default
+is one compiler job. Both settings use the same cache lock and memory watchdog.
+SwiftPM still builds every test target before running the selected
 suites. The wrapper keeps SwiftPM's incremental build cache in the worktree’s Git
 directory and records a source-content key. Product builds and tests share
 that cache lock. Other worktrees and proof jobs can run concurrently within
 the host capacity and memory guards. Per-run scratch files stay outside the
 working tree.
+
+For independent proof selections on the same retained packet, list each additional
+range after `--also` in one `proof-step` command. Two workers take ranges in order
+as they become free. Run a parent after its required child proofs pass.
 
 During the corpus migration, build the validation CLI once per batch:
 

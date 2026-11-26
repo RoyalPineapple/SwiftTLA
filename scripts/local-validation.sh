@@ -13,10 +13,10 @@ usage() {
     cat >&2 <<'EOF'
 usage: scripts/local-validation.sh static
        scripts/local-validation.sh port-build [1|4]
-       scripts/local-validation.sh swiftpm-test <test-filter>
+       scripts/local-validation.sh swiftpm-test <test-filter> [1|4]
        scripts/local-validation.sh xcode-test <test-identifier>
        scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]]
-       append --also <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]] for a second independent selection from that packet
+       append --also <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]] for each additional independent selection from that packet (two workers)
        scripts/local-validation.sh proof-tools
        scripts/local-validation.sh proof-prepare <output-directory> <checked-proof> [ordered-copy-actions]
        scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion
@@ -47,17 +47,22 @@ validate_proof_selection() {
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "macOS is required"
 
-paired=false
+parallel_proof=false
 mode="${1:-}"
 case "$mode" in
     port-build)
         [[ $# -le 2 && "${2-1}" =~ ^(1|4)$ ]] || usage
-        port_jobs="${2-1}"
+        build_jobs="${2-1}"
         ;;
     static|proof-tools)
         [[ $# -eq 1 ]] || usage
         ;;
-    swiftpm-test|xcode-test)
+    swiftpm-test)
+        [[ ( $# -eq 2 || $# -eq 3 ) && -n "${2:-}" && "$2" != -* && "${3-1}" =~ ^(1|4)$ ]] || usage
+        selector="$2"
+        build_jobs="${3-1}"
+        ;;
+    xcode-test)
         [[ $# -eq 2 && -n "${2:-}" && "${2:-}" != -* ]] || usage
         selector="$2"
         ;;
@@ -65,21 +70,21 @@ case "$mode" in
         packet="${2:-}"
         [[ -n "$packet" ]] || usage
         shift 2
-        first_selection=()
-        while [[ $# -gt 0 && "$1" != --also ]]; do
-            first_selection+=("$1")
+        proof_arguments=("$packet")
+        while :; do
+            selection=()
+            while [[ $# -gt 0 && "$1" != --also ]]; do
+                selection+=("$1")
+                shift
+            done
+            [[ ${#selection[@]} -ge 2 ]] || usage
+            validate_proof_selection "${selection[@]}"
+            proof_arguments+=("${selection[@]}")
+            [[ $# -gt 0 ]] || break
             shift
+            proof_arguments+=(--also)
+            parallel_proof=true
         done
-        [[ ${#first_selection[@]} -ge 2 ]] || usage
-        validate_proof_selection "${first_selection[@]}"
-        proof_arguments=("$packet" "${first_selection[@]}")
-        if [[ $# -gt 0 ]]; then
-            shift
-            validate_proof_selection "$@"
-            for argument in "$@"; do [[ "$argument" != --also ]] || usage; done
-            second_proof_arguments=("$packet" "$@")
-            paired=true
-        fi
         ;;
     proof-prepare)
         [[ $# -eq 3 || ( $# -eq 4 && "${4:-}" == ordered-copy-actions ) ]] || usage
@@ -128,8 +133,8 @@ terminate_group() {
     kill -TERM "-$command_group" 2>/dev/null || true
 }
 
-drain_proof_pair() {
-    [[ "$paired" == true && -n "$command_group" ]] || return 0
+drain_proof_workers() {
+    [[ "$parallel_proof" == true && -n "$command_group" ]] || return 0
     local i
     for i in {1..20}; do
         kill -0 -- "-$command_group" 2>/dev/null || return 0
@@ -144,7 +149,7 @@ drain_proof_pair() {
 
 cleanup() {
     terminate_group
-    drain_proof_pair
+    drain_proof_workers
     if [[ -n "$watchdog_pid" ]]; then
         kill "$watchdog_pid" 2>/dev/null || true
         wait "$watchdog_pid" 2>/dev/null || true
@@ -221,7 +226,7 @@ fi
 printf '%s\n' "$$" > "$lock_file"
 
 tree_rss_mib() {
-    ps -axo pid=,ppid=,rss=,pgid= | awk -v root="$1" -v paired="$paired" '
+    ps -axo pid=,ppid=,rss=,pgid= | awk -v root="$1" -v paired="$parallel_proof" '
         { parent[$1] = $2; rss[$1] = $3; if (paired == "true" && $4 == root) present[$1] = 1 }
         END {
             present[root] = 1
@@ -287,7 +292,7 @@ watchdog() {
         [[ "$rss_mib" -le "$max_rss_mib" ]] || reason="process-tree-rss"
         [[ "$reclaimable_mib" -ge "$min_available_mib" ]] || reason="reclaimable-memory"
         if [[ -n "$reason" ]]; then
-            if [[ "$paired" == true ]]; then touch "$scratch_dir/pair-guard-trip"; fi
+            if [[ "$parallel_proof" == true ]]; then touch "$scratch_dir/proof-workers-guard-trip"; fi
             terminate_group
             printf '%s\n' \
                 'guard_trip=local-validation' \
@@ -412,23 +417,50 @@ run_guarded() {
             bash scripts/bootstrap-pinned-proof.sh &
             ;;
         proof-step)
-            if [[ "$paired" == true ]]; then
-                mkdir -p "$scratch_dir/first/cache" "$scratch_dir/second/cache"
-                (
-                    # Both workers stay in the one process group monitored and stopped by the watchdog.
-                    set +m
-                    unset TLAPM_SMT_SOLVER
-                    TMPDIR="$scratch_dir/first" TLAPM_CACHE_DIR="$scratch_dir/first/cache" python3 scripts/check-initial-proof-step.py --paired-worker "${proof_arguments[@]}" &
-                    first_pid=$!
-                    TMPDIR="$scratch_dir/second" TLAPM_CACHE_DIR="$scratch_dir/second/cache" python3 scripts/check-initial-proof-step.py --paired-worker "${second_proof_arguments[@]}" &
-                    second_pid=$!
-                    first_status=0
-                    second_status=0
-                    wait "$first_pid" || first_status=$?
-                    wait "$second_pid" || second_status=$?
-                    printf 'proof-step pair: first exit %d, second exit %d\n' "$first_status" "$second_status"
-                    (( first_status == 0 && second_status == 0 ))
-                ) &
+            if [[ "$parallel_proof" == true ]]; then
+                # The scheduler and both workers share the watchdog's process group and repository lock.
+                python3 - "$scratch_dir" "${proof_arguments[@]}" <<'PYTHON' &
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+scratch, packet, *arguments = sys.argv[1:]
+selections = [[]]
+for argument in arguments:
+    if argument == "--also":
+        selections.append([])
+    else:
+        selections[-1].append(argument)
+
+env = os.environ.copy()
+env.pop("TLAPM_SMT_SOLVER", None)
+
+def run_selection(number, selection):
+    temp = Path(scratch) / f"proof-{number}"
+    cache = temp / "cache"
+    cache.mkdir(parents=True)
+    worker_env = dict(env, TMPDIR=str(temp), TLAPM_CACHE_DIR=str(cache))
+    return subprocess.run(
+        [sys.executable, "scripts/check-initial-proof-step.py", "--paired-worker", packet, *selection],
+        env=worker_env, stdin=subprocess.DEVNULL,
+    ).returncode
+
+results = [0] * len(selections)
+with ThreadPoolExecutor(max_workers=2) as workers:
+    pending = {workers.submit(run_selection, index + 1, selection): index
+               for index, selection in enumerate(selections)}
+    for done in as_completed(pending):
+        index = pending[done]
+        results[index] = done.result()
+        if len(results) > 2:
+            print(f"proof-step selection {index + 1}: exit {results[index]}", flush=True)
+
+if len(results) == 2:
+    print(f"proof-step pair: first exit {results[0]}, second exit {results[1]}", flush=True)
+sys.exit(int(any(results)))
+PYTHON
             else
                 python3 scripts/check-initial-proof-step.py "${proof_arguments[@]}" &
             fi
@@ -438,7 +470,7 @@ run_guarded() {
             ;;
         port-build)
             (
-                options=(-Xswiftc -warnings-as-errors --disable-automatic-resolution -j "$port_jobs" --scratch-path "$build_dir")
+                options=(-Xswiftc -warnings-as-errors --disable-automatic-resolution -j "$build_jobs" --scratch-path "$build_dir")
                 swift build "${options[@]}" --product tlc-validate >&2 || exit $?
                 bin_dir="$(swift build "${options[@]}" --show-bin-path)" || exit $?
                 [[ -x "$bin_dir/tlc-validate" ]] || fail "built tlc-validate missing from $bin_dir"
@@ -446,7 +478,7 @@ run_guarded() {
             ) &
             ;;
         swiftpm-test)
-            swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j 1 --scratch-path "$build_dir" &
+            swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j "$build_jobs" --scratch-path "$build_dir" &
             ;;
         xcode-test)
             package_scheme="$(basename "$package_dir")-Package"
@@ -466,11 +498,11 @@ run_guarded() {
     watchdog_pid=$!
     wait "$command_pid" || status=$?
     terminate_group
-    drain_proof_pair
+    drain_proof_workers
     command_group=""
     wait "$watchdog_pid" 2>/dev/null || true
     watchdog_pid=""
-    if [[ -f "$scratch_dir/pair-guard-trip" ]]; then return 1; fi
+    if [[ -f "$scratch_dir/proof-workers-guard-trip" ]]; then return 1; fi
     return "$status"
 }
 
