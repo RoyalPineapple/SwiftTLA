@@ -7884,8 +7884,8 @@
     {
       "path": "specifications/MisraReachability",
       "name": "Misra Reachability Algorithm",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "MCReachable checked locally against the published configuration",
+      "gap": "MCReachable locally matched the complete upstream graph, all five invariants, Termination and deadlock. Other published configurations and hosted evidence remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -7920,8 +7920,10 @@
           "path": "specifications/MisraReachability/MCReachable.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Reachable.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/MisraReachability/ParReach.tla",
@@ -7939,9 +7941,11 @@
         },
         {
           "path": "specifications/MisraReachability/Reachability.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "algorithm dependency",
+          "reason": "Supplies the path and reachability operators used by the published invariants.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Reachable.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -7960,9 +7964,11 @@
         },
         {
           "path": "specifications/MisraReachability/Reachable.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "algorithm dependency",
+          "reason": "Supplies the work-list actions, weak fairness and termination property.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Reachable.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8018,10 +8024,16 @@
           "module": "specifications/MisraReachability/MCReachable.tla",
           "configuration": "specifications/MisraReachability/MCReachable.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Reachable.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-reachable"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -9398,10 +9410,16 @@
           "module": "specifications/SlushProtocol/Slush.tla",
           "configuration": "specifications/SlushProtocol/SlushMedium.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Slush.swift",
+              "scenario": "SlushMedium",
+              "caseID": "slush-medium"
+            }
+          ],
           "evidence": []
         },
         {

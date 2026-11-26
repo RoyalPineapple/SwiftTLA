@@ -199,6 +199,17 @@ package struct SlushModel: Sendable {
                 Bind(SampleSetSize, to: 2)
                 Bind(PickFlipThreshold, to: 2)
             }
+            Validation("SlushMedium") {
+                Bind(Node, to: Set<ID>([.n1, .n2, .n3]))
+                Bind(SlushLoopProcess, to: Set<ID>([.l1, .l2, .l3]))
+                Bind(SlushQueryProcess, to: Set<ID>([.q1, .q2, .q3]))
+                Bind(HostMapping, to: Set<Set<ID>>([[.n1, .l1, .q1], [.n2, .l2, .q2], [.n3, .l3, .q3]]))
+                Bind(NoColor, to: Color.none)
+                Bind(NoMessage, to: MissingMessage.none)
+                Bind(SlushIterationCount, to: 4)
+                Bind(SampleSetSize, to: 1)
+                Bind(PickFlipThreshold, to: 1)
+            }
         }
     }
 }

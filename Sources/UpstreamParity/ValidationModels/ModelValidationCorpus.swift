@@ -73,6 +73,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "span-tree", scenarios: { try PublishedSpanTreeModel.validationScenarios() }),
     .init(id: "span-tree-four", scenarios: { try AllFourNodeSpanTreesModel.validationScenarios() }),
     .init(id: "sliding-puzzles", scenarios: { try SlidingPuzzlesModel.validationScenarios() }),
+    .init(id: "misra-reachable", scenarios: { try ReachableModel.validationScenarios() }),
     .init(id: "nano-blockchain", scenarios: { try NanoBlockchainModel.validationScenarios() }),
     .init(id: "slush", scenarios: { try SlushModel.validationScenarios() }),
     .init(id: "tower-of-hanoi", scenarios: { try TowerOfHanoiModel.validationScenarios() }),

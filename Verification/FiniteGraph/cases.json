@@ -3752,6 +3752,26 @@
       "timeoutSeconds": 300
     },
     {
+      "id": "slush-medium",
+      "sourceModel": "slush",
+      "scenario": "SlushMedium",
+      "module": "slush/Slush.tla",
+      "configuration": "slush/SlushMedium.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SlushProtocol/Slush.tla",
+        "sha256": "95303e105352d257abfd17feb6363948f728364a0aa47b043e43fd4118e3b16f"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "95303e105352d257abfd17feb6363948f728364a0aa47b043e43fd4118e3b16f",
+      "cfgSHA256": "a1d8e84f641f39bbed55bdf2f1574329bca8cc1c915668a119ca0feb302b3688",
+      "timeoutSeconds": 1800
+    },
+    {
       "id": "hanoi-five",
       "sourceModel": "tower-of-hanoi",
       "scenario": "FiveDisks",
@@ -3917,6 +3937,38 @@
       },
       "moduleSHA256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48",
       "cfgSHA256": "94be8f566f926f3e7b64228afee39d6c654c55e9cc30fe2f56ce243b7f34330c",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "mc-reachable",
+      "sourceModel": "misra-reachable",
+      "scenario": "Upstream",
+      "module": "misra-reachability/MCReachable.tla",
+      "configuration": "misra-reachability/MCReachable.cfg",
+      "imports": [
+        "misra-reachability/Reachable.tla",
+        "misra-reachability/Reachability.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCReachable",
+          "importedModule": "Reachable"
+        },
+        {
+          "importingModule": "Reachable",
+          "importedModule": "Reachability"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MisraReachability/MCReachable.tla",
+        "sha256": "51b25788a688f63bf28788530e0b7884d635ae1feb69b4def405b126af80a7b1"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "51b25788a688f63bf28788530e0b7884d635ae1feb69b4def405b126af80a7b1",
+      "cfgSHA256": "0801b570810e2902b41e8ebcf564d713dc075d6d158805d2e8f09fef0d8fb9ae",
       "timeoutSeconds": 1800
     }
   ]
