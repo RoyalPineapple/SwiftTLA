@@ -2972,9 +2972,32 @@ package enum ConditionalActionEvidence {
                     ConditionalSend!DecodedSendUsesTheFirstErrorOrCommitsExactlyOneCallback
                     DEF ConditionalPublicSend, queue, outcome, prior, binding
             <2>source. outcome = ConditionalSourcePublicSend
-                BY ONLY \#(armFacts)ConditionalSend!PublicSendOutcomeUsesTheEmptyAndSingletonQueues, SMT
-                    DEF outcome, queue, prior, next, arm, terminal, ConditionalSnapshot,
-                        ConditionalCertifiedVisitorOutput, ConditionalSourcePublicSend
+                <3>succeeded. CASE terminal.failure = <<>>
+                    <4>queue. /\ queue.callbacks = <<next>>
+                              /\ queue.reasons = <<>>
+                        BY ONLY \#(armFacts)<3>succeeded, SMT
+                            DEF queue, next, arm, terminal, ConditionalCertifiedVisitorOutput
+                    <4>outcome. outcome = [kind |-> "success", current |-> next,
+                        value |-> [action |-> ConditionalSendHandle, before |-> prior[2], after |-> next[2]]]
+                        BY ONLY <4>queue, ConditionalSend!PublicSendOutcomeUsesTheEmptyAndSingletonQueues, SMT DEF outcome
+                    <4>authored. ConditionalSourcePublicSend = [kind |-> "success", current |-> next,
+                        value |-> [action |-> ConditionalSendHandle, before |-> prior[2], after |-> next[2]]]
+                        BY ONLY \#(armFacts)<3>succeeded, SMT
+                            DEF ConditionalSourcePublicSend, prior, next, arm, terminal, ConditionalSnapshot
+                    <4>. QED BY ONLY <4>outcome, <4>authored, SMT
+                <3>failed. CASE terminal.failure # <<>>
+                    <4>queue. queue.reasons = <<terminal.failure.payload>>
+                        BY ONLY \#(armFacts)<3>failed, SMT
+                            DEF queue, arm, terminal, ConditionalCertifiedVisitorOutput
+                    <4>outcome. outcome = [kind |-> "evaluationFailure", current |-> prior,
+                        value |-> terminal.failure.payload]
+                        BY ONLY <4>queue, ConditionalSend!PublicSendOutcomeUsesTheEmptyAndSingletonQueues, SMT DEF outcome
+                    <4>authored. ConditionalSourcePublicSend = [kind |-> "evaluationFailure", current |-> prior,
+                        value |-> terminal.failure.payload]
+                        BY ONLY \#(armFacts)<3>failed, SMT
+                            DEF ConditionalSourcePublicSend, prior, arm, terminal
+                    <4>. QED BY ONLY <4>outcome, <4>authored, SMT
+                <3>. QED BY ONLY <3>succeeded, <3>failed, SMT
             <2>. QED BY ONLY <2>send, <2>source
         <1>returnedLabel. ConditionalPublicSendNamesTheAuthoredAction
             <2>handle. ConditionalPublicSend.kind = "success" =>
