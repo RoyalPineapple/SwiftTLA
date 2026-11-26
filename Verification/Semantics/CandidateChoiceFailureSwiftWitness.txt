@@ -21,7 +21,7 @@ do {
 do {
         let ___atomic_1_1 = (try SwiftTLA._NativeMachineOperations.choose(Set<Int>([1]).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
             return lhs < rhs
-        })) { ___binder_SpecParser_3040_0_2 in (___binder_SpecParser_3040_0_2 == ___atomic_0_0) })
+        })) { ___binder_SpecParser_3049_0_2 in (___binder_SpecParser_3049_0_2 == ___atomic_0_0) })
         try _actionPart2(___atomic_0_0, ___atomic_1_1, updates, emit)
     } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
