@@ -1,3 +1,6 @@
+// Reads and writes of a register are placed in a serial order between issue and completion.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AdvancedExamples/InnerSerial.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

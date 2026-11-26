@@ -1,3 +1,6 @@
+// Processes arrive at a barrier and are released together.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/barriers/Barrier.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

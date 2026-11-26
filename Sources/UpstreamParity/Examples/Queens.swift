@@ -1,3 +1,6 @@
+// The direct TLA+ model searches for placements of queens that do not attack one another.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/N-Queens/Queens.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

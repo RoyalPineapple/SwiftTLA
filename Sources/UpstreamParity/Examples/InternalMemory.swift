@@ -1,3 +1,6 @@
+// The memory handles a request, performs the operation, and returns a response.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/CachingMemory/InternalMemory.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

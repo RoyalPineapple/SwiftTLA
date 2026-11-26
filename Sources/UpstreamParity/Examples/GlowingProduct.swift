@@ -1,3 +1,6 @@
+// The PCR product model tracks different strand lengths through each reaction.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/product.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

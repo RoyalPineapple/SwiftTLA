@@ -1,3 +1,7 @@
+// Binary search narrows an interval in a sorted sequence until it finds the target or exhausts
+// the interval.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/LoopInvariance/BinarySearch.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

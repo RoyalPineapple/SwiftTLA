@@ -1,3 +1,6 @@
+// The model evaluates the stone-weighing puzzle with the configured weights.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Stones/Stones.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

@@ -1,3 +1,6 @@
+// A boat transports people across a river while each bank must remain safe.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

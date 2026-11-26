@@ -1,3 +1,6 @@
+// Two water jugs can be filled, emptied, or poured into each other to measure a target quantity.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DieHard/DieHard.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

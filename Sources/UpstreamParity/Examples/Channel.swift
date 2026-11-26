@@ -1,3 +1,6 @@
+// Sending and receiving data use a handshake to keep successive transfers distinct.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Composing/Channel.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

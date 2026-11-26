@@ -1,3 +1,7 @@
+// The model chooses a graph on four nodes, then updates parent pointers and distances toward the
+// root.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/SpanTreeTest.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

@@ -1,3 +1,6 @@
+// The module checks identities about finite sets by evaluating assumptions.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/SimpleMath/SimpleMath.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

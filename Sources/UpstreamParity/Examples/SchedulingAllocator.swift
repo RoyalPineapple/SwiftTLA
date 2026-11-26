@@ -1,3 +1,6 @@
+// A scheduler grants requests for resources and tracks which resources each client holds.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/allocator/SchedulingAllocator.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

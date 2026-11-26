@@ -1,3 +1,7 @@
+// A token travels around a ring to detect when computation has ended despite messages between
+// nodes.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/EWD840.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

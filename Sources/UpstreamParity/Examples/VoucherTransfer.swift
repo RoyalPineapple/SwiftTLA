@@ -1,3 +1,6 @@
+// The transfer protocol moves a voucher between holders through prepare and completion steps.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherTransfer.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

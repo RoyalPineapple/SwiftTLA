@@ -1,3 +1,7 @@
+// Ring processes forward candidate identifiers until a process recognizes its own and becomes
+// leader.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/chang_roberts/ChangRoberts.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

@@ -1,3 +1,6 @@
+// The algorithm finds the lexicographically least rotation of a circular sequence.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/LeastCircularSubstring/LeastCircularSubstring.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

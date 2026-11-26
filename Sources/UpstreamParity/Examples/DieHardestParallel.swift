@@ -1,3 +1,6 @@
+// These configurations compare parallel jug moves with the variant that freezes moves.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DieHard/DieHardest.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

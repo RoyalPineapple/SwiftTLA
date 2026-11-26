@@ -1,3 +1,6 @@
+// A cat moves between boxes while an observer searches for it.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Moving_Cat_Puzzle/Cat.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

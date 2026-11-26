@@ -1,3 +1,7 @@
+// Nodes update their parent and distance toward a root in the Apalache version of the spanning-
+// tree exercise.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/APSpanTree.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

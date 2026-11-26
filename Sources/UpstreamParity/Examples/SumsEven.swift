@@ -1,3 +1,7 @@
+// The configured check doubles each natural number in a finite range and checks that the result
+// is even.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/sums_even/sums_even.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

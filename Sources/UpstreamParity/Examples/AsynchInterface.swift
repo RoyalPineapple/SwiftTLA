@@ -1,3 +1,6 @@
+// A request and its acknowledgment alternate across an asynchronous interface.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

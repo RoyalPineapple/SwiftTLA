@@ -1,3 +1,6 @@
+// A backup transaction manager can take over the decision in a two-phase commit protocol.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/2PCwithBTM.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

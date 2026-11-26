@@ -1,3 +1,7 @@
+// Extra lock-acquisition steps expose intermediate states used to relate the lock to Peterson’s
+// algorithm.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/LockHS.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

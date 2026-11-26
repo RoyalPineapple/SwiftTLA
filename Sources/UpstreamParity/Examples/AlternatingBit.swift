@@ -1,3 +1,7 @@
+// A sender resends data until it receives an acknowledgment with the matching bit over a lossy
+// channel.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/TLC/AlternatingBit.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

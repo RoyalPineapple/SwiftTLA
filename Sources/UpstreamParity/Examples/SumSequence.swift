@@ -1,3 +1,7 @@
+// A loop accumulates the sum of a sequence and relates the partial sum to the elements already
+// visited.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/LoopInvariance/SumSequence.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

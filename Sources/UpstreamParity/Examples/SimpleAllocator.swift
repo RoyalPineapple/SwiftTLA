@@ -1,3 +1,6 @@
+// Clients request resources, receive an allocation, and give resources back.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/allocator/SimpleAllocator.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

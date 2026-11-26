@@ -1,3 +1,6 @@
+// Resource managers can prepare, commit, or abort a transaction under a shared decision rule.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/TCommit.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

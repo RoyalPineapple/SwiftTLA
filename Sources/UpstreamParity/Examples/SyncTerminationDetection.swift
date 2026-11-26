@@ -1,3 +1,6 @@
+// Processes wake and terminate while a synchronous detector checks for completion.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/SyncTerminationDetection.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

@@ -1,3 +1,7 @@
+// Processes broadcast messages along graph edges to build a spanning tree in the Apalache
+// variant.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/spanning/APspanning.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

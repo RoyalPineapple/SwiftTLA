@@ -1,3 +1,6 @@
+// Paxos processes exchange prepares, promises, proposals, and acceptances to agree on a value.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/Paxos.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

@@ -6,7 +6,9 @@ configuration. It is not a place to invent a friendlier algorithm.
 
 ## Choose the authoring form from the upstream source
 
-1. Read the upstream `.tla` and `.cfg` first.
+1. Read the upstream `.tla` and `.cfg` first. Start each port with a brief description
+   of the published model and a link to its source at the revision in the corpus inventory.
+   Keep the examples directory for faithful ports.
 2. If the source contains a PlusCal algorithm, port it with the scoped DSL:
    `#spec`, `Algorithm`, `Each`, and labeled `Do` blocks. Preserve the shared
    variables, process family, atomic labels, fairness, and formal properties.

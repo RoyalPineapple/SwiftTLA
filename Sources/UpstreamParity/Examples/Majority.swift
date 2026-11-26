@@ -1,3 +1,6 @@
+// Boyer–Moore majority voting scans a sequence while updating a candidate and a count.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Majority/Majority.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

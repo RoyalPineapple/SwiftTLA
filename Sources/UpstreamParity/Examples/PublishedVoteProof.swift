@@ -1,3 +1,6 @@
+// Acceptors raise their ballot or cast a safe vote. A quorum of matching votes chooses a value.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byzpaxos/VoteProof.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

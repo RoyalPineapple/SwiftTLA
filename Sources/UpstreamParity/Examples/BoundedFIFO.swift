@@ -1,3 +1,6 @@
+// A bounded queue connects input and output channels and forwards values in arrival order.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/FIFO/InnerFIFOInstanced.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

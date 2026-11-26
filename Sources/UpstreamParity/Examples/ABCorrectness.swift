@@ -1,3 +1,6 @@
+// A sender and receiver alternate a bit to distinguish a new message from a retransmission.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/TLC/ABCorrectness.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

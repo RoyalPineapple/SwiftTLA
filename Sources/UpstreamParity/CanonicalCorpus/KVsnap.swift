@@ -1,3 +1,6 @@
+// Transactions read and update a key-value store using snapshots.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/KeyValueStore/KVsnap.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

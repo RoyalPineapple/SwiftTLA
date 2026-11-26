@@ -1,3 +1,6 @@
+// Two processes acquire and release a lock that grants exclusive access to a critical section.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/Lock.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

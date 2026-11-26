@@ -1,3 +1,6 @@
+// Processes flood a graph and collect replies along parent links to build an echo tree.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/echo/Echo.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

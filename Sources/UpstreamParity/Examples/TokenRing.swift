@@ -1,3 +1,6 @@
+// Node zero creates a new token value and the other nodes copy their predecessor’s value.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd426/TokenRing.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 

@@ -1,3 +1,6 @@
+// Creatures meet in pairs, change color, and count their meetings.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Chameneos/Chameneos.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
