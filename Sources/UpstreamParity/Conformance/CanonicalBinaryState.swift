@@ -240,7 +240,7 @@ enum CanonicalBinaryState {
             }
             try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
         case .record(let record):
-            try encodeRecord(record.fields.map { ($0.name, $0.value) }, to: &output,
+            try encodeOrderedRecord(record.fields.map { ($0.name, $0.value) }, to: &output,
                              lengthPatches: &lengthPatches)
         case .function(let mapping):
             if mapping.isEmpty {
@@ -266,7 +266,8 @@ enum CanonicalBinaryState {
                         return (name, value)
                     }
                     if fields.count == mapping.count {
-                        try encodeRecord(fields, to: &output, lengthPatches: &lengthPatches)
+                        let ordered = fields.sorted { $0.0.utf8.lexicographicallyPrecedes($1.0.utf8) }
+                        try encodeOrderedRecord(ordered, to: &output, lengthPatches: &lengthPatches)
                         return
                     }
                 default:
@@ -288,16 +289,15 @@ enum CanonicalBinaryState {
         }
     }
 
-    private static func encodeRecord(
-        _ fields: [(String, TLAValue)], to output: inout Data,
+    private static func encodeOrderedRecord(
+        _ ordered: [(String, TLAValue)], to output: inout Data,
         lengthPatches: inout [LengthPatch]
     ) throws {
-        if fields.isEmpty {
+        if ordered.isEmpty {
             try encode(.tuple([]), to: &output, lengthPatches: &lengthPatches)
             return
         }
         let lengthOffset = beginValue(tag: 7, to: &output)
-        let ordered = fields.sorted { $0.0.utf8.lexicographicallyPrecedes($1.0.utf8) }
         try appendCount(ordered.count, to: &output)
         for (name, value) in ordered {
             try appendString(name, to: &output)
