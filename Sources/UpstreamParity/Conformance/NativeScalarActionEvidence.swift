@@ -848,9 +848,14 @@ func sequentialNativeProof(_ source: String, program: CompiledProgram) throws ->
                     NativeSequentialAfter, Len(\#(prefix)Plan.writes), \#(prefix)Writes)
                     <=> NativeSequentialRule!NativePendingWriteConstraints(NativeSequentialFields, NativeSequentialBefore,
                         NativeSequentialAfter, Len(\#(prefix)Plan.writes), \#(prefix)Writes)
-                    BY ONLY NativeSequentialRule!PendingMergeFoldMaterializesExactlyTheCompatibleWrites,
-                        IsaM("simp"), SMT DEF NativeSequentialFields, \#(prefix)Plan, \#(prefix)Writes,
-                            NativeSequentialRule!NativeCopyWrites
+                <3>count. Len(\#(prefix)Plan.writes) \in Nat
+                    BY ONLY SMT DEF \#(prefix)Plan
+                <3>targets. \A slot \in 1..Len(\#(prefix)Plan.writes) :
+                    \#(prefix)Writes[slot][1] \in NativeSequentialFields
+                    BY ONLY SMT DEF NativeSequentialFields, \#(prefix)Plan, \#(prefix)Writes,
+                        NativeSequentialRule!NativeCopyWrites
+                <3>. QED BY ONLY <3>count, <3>targets,
+                    NativeSequentialRule!PendingMergeFoldMaterializesExactlyTheCompatibleWrites, SMT
             """#)
             materializationFacts.append(fact)
             steps.append(prefix + "Emits")
