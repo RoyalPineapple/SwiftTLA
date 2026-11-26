@@ -23,78 +23,82 @@ package struct InternalMemoryModel: Sendable {
     }
     package typealias Request = OneOf<Read, Write>
     package typealias Message = OneOf<Request, Atom>
-    private enum Step: String, CaseIterable { case request = "Req", perform = "Do", respond = "Rsp" }
+    private enum Step: String, CaseIterable {
+        case acceptRequest = "Req"
+        case serviceRequest = "Do"
+        case sendReply = "Rsp"
+    }
 
     package static var spec: TLASpec {
         #spec("MCInternalMemory") { scope in
-            let Proc = scope.parameter(as: Set<Atom>.self, in: Subsets(of: Set<Atom>([Atom.p1, Atom.p2])))
-            let Adr = scope.parameter(as: Set<Atom>.self, in: Subsets(of: Set<Atom>([Atom.a1, Atom.a2, Atom.a3])))
-            let Val = scope.parameter(as: Set<Atom>.self, in: Subsets(of: Set<Atom>([Atom.v1, Atom.v2])))
-            let NoVal = scope.parameter(as: Atom.self, in: Set<Atom>([Atom.noVal]))
-            let reads = Adr.mapping { a in Request.first(Read.expression(op: "Rd", adr: a)) }
-            let writes = Adr.flatMapping { a in Val.mapping { v in Request.second(Write.expression(op: "Wr", adr: a, val: v)) } }
+            let processes = scope.parameter(tlaName: "Proc", as: Set<Atom>.self, in: Subsets(of: Set<Atom>([Atom.p1, Atom.p2])))
+            let addresses = scope.parameter(tlaName: "Adr", as: Set<Atom>.self, in: Subsets(of: Set<Atom>([Atom.a1, Atom.a2, Atom.a3])))
+            let values = scope.parameter(tlaName: "Val", as: Set<Atom>.self, in: Subsets(of: Set<Atom>([Atom.v1, Atom.v2])))
+            let noValue = scope.parameter(tlaName: "NoVal_1", as: Atom.self, in: Set<Atom>([Atom.noVal]))
+            let reads = addresses.mapping { a in Request.first(Read.expression(op: "Rd", adr: a)) }
+            let writes = addresses.flatMapping { a in values.mapping { v in Request.second(Write.expression(op: "Wr", adr: a, val: v)) } }
             let writeMessages = writes.mapping { r in Message.first(r) }
             let requestMessages = reads.union(writes).mapping { r in Message.first(r) }
-            let replyValues = Val.inserting(NoVal).mapping { v in Message.second(v) }
-            let mem = scope.sharedVar(initiallyIn: Functions(from: Adr, to: Val))
-            let ctl = scope.sharedVar(initial: Dictionary<Atom, String>.mapping(over: Proc) { _ in "rdy" })
-            let buf = scope.sharedVar(initial: Dictionary<Atom, Message>.mapping(over: Proc) { _ in Message.second(NoVal) })
-            let firstProcess = Select(from: Proc) { _ in true }
-            let memInt = scope.sharedVar(initial: Pair<Atom, Message>.literal(firstProcess, Message.second(NoVal)))
+            let replyValues = values.inserting(noValue).mapping { v in Message.second(v) }
+            let memory = scope.sharedVar(tlaName: "mem", initiallyIn: Functions(from: addresses, to: values))
+            let requestPhase = scope.sharedVar(tlaName: "ctl", initial: Dictionary<Atom, String>.mapping(over: processes) { _ in "rdy" })
+            let messageBuffer = scope.sharedVar(tlaName: "buf", initial: Dictionary<Atom, Message>.mapping(over: processes) { _ in Message.second(noValue) })
+            let firstProcess = Select(from: processes) { _ in true }
+            let memoryInterface = scope.sharedVar(tlaName: "memInt", initial: Pair<Atom, Message>.literal(firstProcess, Message.second(noValue)))
 
-            Do(Step.request, over: Proc) { p in
-                When(ctl[p] == "rdy")
+            Do(Step.acceptRequest, over: processes) { p in
+                When(requestPhase[p] == "rdy")
                 With(requestMessages) { request in
-                    memInt.set(Pair<Atom, Message>.literal(p, request))
-                    buf[p].set(request)
-                    ctl[p].set("busy")
+                    memoryInterface.set(Pair<Atom, Message>.literal(p, request))
+                    messageBuffer[p].set(request)
+                    requestPhase[p].set("busy")
                 }
             }
-            let perform = Do(Step.perform, over: Proc) { p in
-                When(ctl[p] == "busy")
-                let isWrite = writeMessages.contains(buf[p])
-                let reply = If(isWrite, then: Message.second(NoVal),
-                    else: Message.second(mem[buf[p].assuming(Read.self).adr]))
-                mem.set(If(isWrite,
-                    then: mem.updating(buf[p].assuming(Write.self).adr, to: buf[p].assuming(Write.self).val),
-                    else: mem))
-                buf[p].set(reply)
-                ctl[p].set("done")
+            let serviceRequest = Do(Step.serviceRequest, over: processes) { p in
+                When(requestPhase[p] == "busy")
+                let isWrite = writeMessages.contains(messageBuffer[p])
+                let reply = If(isWrite, then: Message.second(noValue),
+                    else: Message.second(memory[messageBuffer[p].assuming(Read.self).adr]))
+                memory.set(If(isWrite,
+                    then: memory.updating(messageBuffer[p].assuming(Write.self).adr, to: messageBuffer[p].assuming(Write.self).val),
+                    else: memory))
+                messageBuffer[p].set(reply)
+                requestPhase[p].set("done")
             }
-            let respond = Do(Step.respond, over: Proc) { p in
-                When(ctl[p] == "done")
-                memInt.set(Pair<Atom, Message>.literal(p, buf[p]))
-                ctl[p].set("rdy")
+            let sendReply = Do(Step.sendReply, over: processes) { p in
+                When(requestPhase[p] == "done")
+                memoryInterface.set(Pair<Atom, Message>.literal(p, messageBuffer[p]))
+                requestPhase[p].set("rdy")
             }
-            WeakFairness(eachOf: [perform, respond])
-            let TypeInvariant = Invariant()
-            TypeInvariant {
-                mem.keys == Adr && Adr.allSatisfy { a in Val.contains(mem[a]) }
-                    && ctl.keys == Proc && buf.keys == Proc
-                    && Proc.allSatisfy { p in Set<String>(["rdy","busy","done"]).contains(ctl[p])
-                        && requestMessages.union(replyValues).contains(buf[p])
+            WeakFairness(eachOf: [serviceRequest, sendReply])
+            let typeInvariant = Invariant("TypeInvariant")
+            typeInvariant {
+                memory.keys == addresses && addresses.allSatisfy { a in values.contains(memory[a]) }
+                    && requestPhase.keys == processes && messageBuffer.keys == processes
+                    && processes.allSatisfy { p in Set<String>(["rdy","busy","done"]).contains(requestPhase[p])
+                        && requestMessages.union(replyValues).contains(messageBuffer[p])
                     }
             }
             let LivenessProperty = Temporal()
-            LivenessProperty(forEach: Proc) { p in .leadsTo(ctl[p] == "busy", ctl[p] == "rdy") }
+            LivenessProperty(forEach: processes) { p in .leadsTo(requestPhase[p] == "busy", requestPhase[p] == "rdy") }
             let Liveness = Temporal()
-            Liveness(forEach: Proc) { p in .all([
-                .leadsTo(ctl[p] == "busy", ctl[p] != "busy"),
-                .leadsTo(ctl[p] == "done", ctl[p] != "done")
+            Liveness(forEach: processes) { p in .all([
+                .leadsTo(requestPhase[p] == "busy", requestPhase[p] != "busy"),
+                .leadsTo(requestPhase[p] == "done", requestPhase[p] != "done")
             ]) }
             // ISpec has no fairness clauses. LISpec adds one grouped obligation per processor.
-            let ISpec = FairnessProfile(excluding: [Step.perform, Step.respond])
+            let ISpec = FairnessProfile(excluding: [Step.serviceRequest, Step.sendReply])
             Validation("Upstream") {
-                Bind(Proc, to: Set<Atom>([Atom.p1, Atom.p2]))
-                Bind(Adr, to: Set<Atom>([Atom.a1, Atom.a2, Atom.a3]))
-                Bind(Val, to: Set<Atom>([Atom.v1, Atom.v2]))
-                Bind(NoVal, to: Atom.noVal)
-            }.usingFairness(ISpec).checking(only: [TypeInvariant])
+                Bind(processes, to: Set<Atom>([Atom.p1, Atom.p2]))
+                Bind(addresses, to: Set<Atom>([Atom.a1, Atom.a2, Atom.a3]))
+                Bind(values, to: Set<Atom>([Atom.v1, Atom.v2]))
+                Bind(noValue, to: Atom.noVal)
+            }.usingFairness(ISpec).checking(only: [typeInvariant])
             Validation("Live") {
-                Bind(Proc, to: Set<Atom>([Atom.p1, Atom.p2]))
-                Bind(Adr, to: Set<Atom>([Atom.a1, Atom.a2, Atom.a3]))
-                Bind(Val, to: Set<Atom>([Atom.v1, Atom.v2]))
-                Bind(NoVal, to: Atom.noVal)
+                Bind(processes, to: Set<Atom>([Atom.p1, Atom.p2]))
+                Bind(addresses, to: Set<Atom>([Atom.a1, Atom.a2, Atom.a3]))
+                Bind(values, to: Set<Atom>([Atom.v1, Atom.v2]))
+                Bind(noValue, to: Atom.noVal)
             }.checking(only: [LivenessProperty, Liveness])
         }
     }

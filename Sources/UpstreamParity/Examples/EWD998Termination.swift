@@ -1,5 +1,4 @@
-// Ring processes send and receive messages while a detector checks whether distributed work has
-// finished.
+// Nodes can send messages to any node. Termination requires every node to be inactive with no messages pending.
 // https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/AsyncTerminationDetection.tla
 
 import SwiftTLA
@@ -9,7 +8,7 @@ import SwiftTLAMacros
 @TLAModel
 package struct EWD998TerminationModel: Sendable {
     private enum Step: String, CaseIterable {
-        case terminate = "Terminate"
+        case deactivateNode = "Terminate"
         case sendMessage = "SendMsg"
         case receiveMessage = "RcvMsg"
         case detectTermination = "DetectTermination"
@@ -18,33 +17,33 @@ package struct EWD998TerminationModel: Sendable {
     package static var spec: TLASpec {
         #spec("AsyncTerminationDetection") { scope in
             Extends(.naturals)
-            let N = scope.parameter(as: Int.self, in: Int.all)
-            Assume(N > 0)
-            let Node = IntRange(0, through: N - 1)
+            let nodeCount = scope.parameter(tlaName: "N", as: Int.self, in: Int.all)
+            Assume(nodeCount > 0)
+            let nodes = IntRange(0, through: nodeCount - 1)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                initiallyIn: Functions(from: Node, to: Bool.all))
-            let pending = scope.sharedVar(initial: Dictionary<Int, Int>.mapping(over: Node) { _ in 0 })
-            let terminated = Node.allSatisfy { node in !active[node] && pending[node] == 0 }
+                initiallyIn: Functions(from: nodes, to: Bool.all))
+            let pendingMessages = scope.sharedVar(tlaName: "pending", initial: Dictionary<Int, Int>.mapping(over: nodes) { _ in 0 })
+            let terminated = nodes.allSatisfy { node in !active[node] && pendingMessages[node] == 0 }
             let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
 
             let Quiescence = Temporal()
             let Live = Temporal()
 
-            Do(Step.terminate, over: Node) { node in
+            Do(Step.deactivateNode, over: nodes) { node in
                 When(active[node])
                 active[node].set(false)
                 With(SetExpr<Bool>.literal(terminationDetected, terminated)) { detected in
                     terminationDetected.set(detected)
                 }
             }
-            Do(Step.sendMessage, over: Node, Node) { sender, receiver in
+            Do(Step.sendMessage, over: nodes, nodes) { sender, receiver in
                 When(active[sender])
-                pending[receiver] += 1
+                pendingMessages[receiver] += 1
             }
-            Do(Step.receiveMessage, over: Node) { node in
-                When(pending[node] > 0)
+            Do(Step.receiveMessage, over: nodes) { node in
+                When(pendingMessages[node] > 0)
                 active[node].set(true)
-                pending[node].set(pending[node] - 1)
+                pendingMessages[node].set(pendingMessages[node] - 1)
             }
             let detectTermination = Do(Step.detectTermination, when: terminated) {
                 terminationDetected.set(true)
@@ -52,16 +51,16 @@ package struct EWD998TerminationModel: Sendable {
             WeakFairness(detectTermination)
 
             Invariant("TypeOK") {
-                Functions(from: Node, to: Bool.all).contains(active)
-                    && Node.allSatisfy { node in pending[node] >= 0 }
+                Functions(from: nodes, to: Bool.all).contains(active)
+                    && nodes.allSatisfy { node in pendingMessages[node] >= 0 }
                     && Bool.all.contains(terminationDetected)
             }
             Invariant("Safe") { !terminationDetected || terminated }
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
             Live(.leadsTo(terminated, terminationDetected))
-            Constraint(Node.allSatisfy { node in pending[node] <= 3 })
+            Constraint(nodes.allSatisfy { node in pendingMessages[node] <= 3 })
 
-            Validation("AsyncTerminationDetection") { Bind(N, to: 4) }
+            Validation("AsyncTerminationDetection") { Bind(nodeCount, to: 4) }
         }
     }
 }
