@@ -5598,15 +5598,17 @@
     {
       "path": "specifications/ewd426",
       "name": "EWD 426: Token Stabilization",
-      "audit": "Exhaustive six-node TokenRing port locally matched the published graph, TypeOK, and Stab.",
-      "gap": "APTokenRing symbolic checks, SimTokenRing simulation, and hosted parity remain open.",
+      "audit": "Exhaustive six-node TokenRing port locally matched the published graph, TypeOK, and Stab. APTokenRing matched its complete original TLC graph with TypeOK and deadlock checking selected.",
+      "gap": "SimTokenRing simulation and hosted parity remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/ewd426/APTokenRing.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TokenRing.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -5631,10 +5633,16 @@
           "module": "specifications/ewd426/APTokenRing.tla",
           "configuration": "specifications/ewd426/APTokenRing.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TokenRing.swift",
+              "scenario": "APTokenRing",
+              "caseID": "ap-token-ring"
+            }
+          ],
           "evidence": []
         },
         {
@@ -6737,22 +6745,26 @@
     {
       "path": "specifications/glowingRaccoon",
       "name": "PCR Testing for Snippets of DNA",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "All five configurations matched the pinned original TLC graphs and selected checks locally. The staged machine checked its refinement to clean, and product checked its refinement to stages. The two symbolic configurations exercised their published inputs through TLC.",
+      "gap": "Hosted parity and review of the upstream proof companions remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/glowingRaccoon/APclean.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingClean.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/glowingRaccoon/APstages.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingStages.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -6766,14 +6778,20 @@
           "path": "specifications/glowingRaccoon/clean.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingClean.swift",
+            "Sources/UpstreamParity/Examples/GlowingStages.swift",
+            "Sources/UpstreamParity/Examples/GlowingProduct.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/glowingRaccoon/product.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingProduct.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -6787,7 +6805,10 @@
           "path": "specifications/glowingRaccoon/stages.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GlowingStages.swift",
+            "Sources/UpstreamParity/Examples/GlowingProduct.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -6796,50 +6817,80 @@
           "module": "specifications/glowingRaccoon/APclean.tla",
           "configuration": "specifications/glowingRaccoon/APclean.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingClean.swift",
+              "scenario": "APclean",
+              "caseID": "glowing-ap-clean"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/glowingRaccoon/APstages.tla",
           "configuration": "specifications/glowingRaccoon/APstages.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingStages.swift",
+              "scenario": "APstages",
+              "caseID": "glowing-ap-stages"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/glowingRaccoon/clean.tla",
           "configuration": "specifications/glowingRaccoon/clean.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingClean.swift",
+              "scenario": "Upstream",
+              "caseID": "glowing-clean"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/glowingRaccoon/product.tla",
           "configuration": "specifications/glowingRaccoon/product.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingProduct.swift",
+              "scenario": "Upstream",
+              "caseID": "glowing-product"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/glowingRaccoon/stages.tla",
           "configuration": "specifications/glowingRaccoon/stages.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GlowingStages.swift",
+              "scenario": "Upstream",
+              "caseID": "glowing-stages"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -8541,15 +8592,17 @@
     {
       "path": "specifications/PaxosHowToWinATuringAward",
       "name": "Paxos (How to Win a Turing Award)",
-      "audit": "not audited",
-      "gap": "MCConsensus matched locally on one initial state, four reachable states, three labeled transitions and Inv, with deadlock checking disabled. Other configurations and hosted evidence remain open.",
+      "audit": "MCConsensus and MCVoting matched their original graphs and selected properties locally, including the Voting refinement to Consensus. MCPaxosTiny matched its original graph, Inv, deadlock check and Voting refinement.",
+      "gap": "MCPaxosSmall and hosted evidence remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/PaxosHowToWinATuringAward/Consensus.tla",
           "role": "unclassified",
           "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringConsensus.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8565,21 +8618,27 @@
           "path": "specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringPaxos.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/PaxosHowToWinATuringAward/MCVoting.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringVoting.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/PaxosHowToWinATuringAward/Paxos.tla",
           "role": "unclassified",
           "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringPaxos.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8593,7 +8652,9 @@
           "path": "specifications/PaxosHowToWinATuringAward/Voting.tla",
           "role": "unclassified",
           "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TuringVoting.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -8628,20 +8689,32 @@
           "module": "specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
           "configuration": "specifications/PaxosHowToWinATuringAward/MCPaxosTiny.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TuringPaxos.swift",
+              "scenario": "tiny",
+              "caseID": "turing-paxos-tiny"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/PaxosHowToWinATuringAward/MCVoting.tla",
           "configuration": "specifications/PaxosHowToWinATuringAward/MCVoting.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TuringVoting.swift",
+              "scenario": "published",
+              "caseID": "turing-paxos-voting"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -9191,7 +9264,9 @@
           "path": "specifications/spanning/APspanning.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/APSpanning.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9215,7 +9290,8 @@
           "role": "behavior dependency",
           "reason": "MC_spanning extends this module for the broadcast behavior and invariants.",
           "implementations": [
-            "Sources/UpstreamParity/Examples/Spanning.swift"
+            "Sources/UpstreamParity/Examples/Spanning.swift",
+            "Sources/UpstreamParity/Examples/APSpanning.swift"
           ],
           "dispositionComplete": false
         }
@@ -9225,10 +9301,16 @@
           "module": "specifications/spanning/APspanning.tla",
           "configuration": "specifications/spanning/APspanning.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/APSpanning.swift",
+              "scenario": "APspanning",
+              "caseID": "ap-spanning"
+            }
+          ],
           "evidence": []
         },
         {
@@ -9411,7 +9493,9 @@
           "path": "specifications/SpecifyingSystems/AdvancedExamples/InnerSerial.tla",
           "role": "behavior dependency",
           "reason": "This model records operations with different record shapes, chosen read sources, and a growing partial operation order. UpdateOpOrder nondeterministically chooses a relation whose primed state is serializable; Spec adds response-group and ordering fairness. MCInnerSerial supplies InitMem and the finite Nat override. No Swift implementation covers these relation choices, primed predicates, and fairness bindings.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InnerSerial.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9425,14 +9509,18 @@
           "path": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.tla",
           "role": "configured root",
           "reason": "The configuration binds one register, one address, two values, two processes, InitWr, Done, and MaxQLen=1. It replaces InitMem and Nat. Spec, AlwaysResponds, Constraint, and DataInvariant remain required.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InnerSerial.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/RegisterInterface.tla",
           "role": "interface dependency",
           "reason": "This module declares Adr, Val, Proc, Reg and the regFile variable. Read, write, and free-register values share adr/val/op fields, with distinct operation tags. RegFileTypeInvariant requires nested process/register functions. InnerSequential and InnerSerial consume the interface; no Swift implementation exists.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InnerSerial.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9496,7 +9584,9 @@
           "path": "specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.tla",
           "role": "configured root",
           "reason": "The empty configuration runs assumption evaluation. PrintVal prints an arithmetic result and an updated record in conjunction order. This module has no state variables or transition specification. Evaluation evidence remains missing, not excluded.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/PrintValues.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9510,14 +9600,18 @@
           "path": "specifications/SpecifyingSystems/CachingMemory/InternalMemory.tla",
           "role": "behavior dependency",
           "reason": "ISpec starts from IInit and interleaves Req, Do, and Rsp for each process. buf holds requests, returned values, or NoVal; memory and control use finite function domains. Send and Reply remain supplied operators. No Swift implementation exists. The CachingMemory copy has a different source blob from the other three copies, so each published input identity must remain pinned separately.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.tla",
           "role": "configured root",
           "reason": "The configuration selects ISpec and TypeInvariant. It binds two processes, three addresses, two values, and NoVal. Send, Reply, and InitMemInt use the published MC replacements.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9538,7 +9632,9 @@
           "path": "specifications/SpecifyingSystems/CachingMemory/MemoryInterface.tla",
           "role": "interface dependency",
           "reason": "This interface declares four-argument Send and Reply operator constants, InitMemInt, and Proc/Adr/Val domains. MReq is the union of read and write record shapes; NoVal is chosen outside Val. All four copies have Git blob 4dbed39777baa271154a04d9378fa3d25c36d336. No Swift implementation covers these operator bindings and typed request alternatives.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9681,7 +9777,9 @@
           "path": "specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.tla",
           "role": "configured root",
           "reason": "The configuration replaces Message with MessageVal, binds qLen=3, and selects Spec and ChannelTypeInvariants. Unlike MCInnerFIFO.cfg, it does not select qConstraint. The parameter alone must not imply a checking constraint.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/BoundedFIFO.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9769,7 +9867,8 @@
           "role": "configured root",
           "reason": "Published configuration binding.",
           "implementations": [
-            "Sources/UpstreamParity/Examples/HourClock.swift"
+            "Sources/UpstreamParity/Examples/HourClock.swift",
+            "Sources/UpstreamParity/Examples/PublishedHourClock2.swift"
           ],
           "dispositionComplete": false
         },
@@ -9777,7 +9876,9 @@
           "path": "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
           "role": "configured root",
           "reason": "HourClock2.cfg selects HC as the behavior and HC2 as the property. APHourClock2 instead selects HC2 with invariant HCini. These selections require separate evidence despite their equivalent clock transitions.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/PublishedHourClock2.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9825,7 +9926,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/InternalMemory.tla",
           "role": "behavior dependency",
           "reason": "ISpec starts from IInit and interleaves Req, Do, and Rsp for each process. buf holds requests, returned values, or NoVal; memory and control use finite function domains. Send and Reply remain supplied operators. No Swift implementation exists. The CachingMemory copy has a different source blob from the other three copies, so each published input identity must remain pinned separately.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9839,7 +9942,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/LiveInternalMemory.tla",
           "role": "behavior dependency",
           "reason": "LISpec combines ISpec with per-process weak fairness for the union Do(p) or Rsp(p), not separate action fairness. The module also declares the separate-action Liveness formula and the busy-leads-to-ready LivenessProperty; MCLiveInternalMemory selects both as properties. The DSL must preserve group fairness and distinguish assumptions from checked temporal claims. No Swift implementation exists.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9860,7 +9965,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.tla",
           "role": "configured root",
           "reason": "The configuration selects LISpec, LivenessProperty, and Liveness. It binds two processes, three addresses, two values, and NoVal. Send, Reply, and InitMemInt use MC replacements.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9881,7 +9988,9 @@
           "path": "specifications/SpecifyingSystems/Liveness/MemoryInterface.tla",
           "role": "interface dependency",
           "reason": "This interface declares four-argument Send and Reply operator constants, InitMemInt, and Proc/Adr/Val domains. MReq is the union of read and write record shapes; NoVal is chosen outside Val. All four copies have Git blob 4dbed39777baa271154a04d9378fa3d25c36d336. No Swift implementation covers these operator bindings and typed request alternatives.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/InternalMemory.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -9988,7 +10097,9 @@
           "path": "specifications/SpecifyingSystems/SimpleMath/SimpleMath.tla",
           "role": "configured root",
           "reason": "The configuration binds seven distinct model values, a through g. The module checks logical and set-theoretic assumptions without state variables or a transition specification. Evaluation evidence remains missing, not excluded.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SimpleMath.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -10126,10 +10237,16 @@
           "module": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.tla",
           "configuration": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/InnerSerial.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-inner-serial"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10237,20 +10354,32 @@
           "module": "specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.tla",
           "configuration": "specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/PrintValues.swift",
+              "scenario": "Upstream",
+              "caseID": "print-values-0"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.tla",
           "configuration": "specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/InternalMemory.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-internal-memory"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10340,10 +10469,16 @@
           "module": "specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.tla",
           "configuration": "specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/BoundedFIFO.swift",
+              "scenario": "APMCInnerFIFO",
+              "caseID": "ap-mc-inner-fifo"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10453,10 +10588,16 @@
           "module": "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
           "configuration": "specifications/SpecifyingSystems/HourClock/HourClock2.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/PublishedHourClock2.swift",
+              "scenario": "Upstream",
+              "caseID": "published-hour-clock-2"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10505,10 +10646,16 @@
           "module": "specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.tla",
           "configuration": "specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/InternalMemory.swift",
+              "scenario": "Live",
+              "caseID": "mc-live-internal-memory"
+            }
+          ],
           "evidence": []
         },
         {
@@ -10535,10 +10682,16 @@
           "module": "specifications/SpecifyingSystems/SimpleMath/SimpleMath.tla",
           "configuration": "specifications/SpecifyingSystems/SimpleMath/SimpleMath.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SimpleMath.swift",
+              "scenario": "Upstream",
+              "caseID": "simple-math-0"
+            }
+          ],
           "evidence": []
         },
         {
@@ -11114,8 +11267,8 @@
     {
       "path": "specifications/transaction_commit",
       "name": "Transaction Commit Models",
-      "audit": "The three-manager TCommit port matched the published model locally on 34 reachable states, 93 labeled transitions, TCTypeOK and TCConsistent. Its configuration disables deadlock checking. The concrete TwoPhase port matched the published three-manager configuration on one initial state, 288 reachable states and 1,145 labeled transitions. TPTypeOK held and deadlock checking found no deadlocks. The backup transaction manager matched the cached original TLC graph and generated TLA locally on one initial state, 1,245 reached states and 4,850 labeled transitions. TypeOK and Consistency held and TLC found no deadlock. The configuration omits Termination.",
-      "gap": "Hosted parity for these three ports, other configurations in this family and the TwoPhase refinement proof remain open.",
+      "audit": "The three-manager TCommit port matched the published model locally on 34 reachable states, 93 labeled transitions, TCTypeOK and TCConsistent. Its configuration disables deadlock checking. The concrete TwoPhase port matched the published three-manager configuration on one initial state, 288 reachable states and 1,145 labeled transitions. TPTypeOK held and deadlock checking found no deadlocks. The backup transaction manager matched the cached original TLC graph and generated TLA locally on one initial state, 1,245 reached states and 4,850 labeled transitions. TypeOK and Consistency held and TLC found no deadlock. The configuration omits Termination. APTCommit matched the same checks and graph dimensions with the three published string identities.",
+      "gap": "Hosted parity, PaxosCommit and the TwoPhase refinement proof remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -11131,7 +11284,9 @@
           "path": "specifications/transaction_commit/APTCommit.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TransactionCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -11202,10 +11357,16 @@
           "module": "specifications/transaction_commit/APTCommit.tla",
           "configuration": "specifications/transaction_commit/APTCommit.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TransactionCommit.swift",
+              "scenario": "APTCommit",
+              "caseID": "ap-tcommit"
+            }
+          ],
           "evidence": []
         },
         {

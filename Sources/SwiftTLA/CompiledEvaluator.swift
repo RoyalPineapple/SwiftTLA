@@ -990,7 +990,7 @@ struct CompiledEvaluator: Sendable {
                     let body = expression.children[0]
 
                     tasks.append(.expression(body, scope))
-                case .integerSet, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .printT, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .sequenceFromFunction, .setSum, .functionSet, .randomSubset, .randomElement:
+                case .integerSet, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .printT, .printReturning, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .sequenceFromFunction, .setSum, .functionSet, .randomSubset, .randomElement:
                     schedule(expression.operation, expression.children)
 
                 }
@@ -1020,7 +1020,7 @@ extension CompiledOperation {
         switch self {
         case .nextState, .stutteringStep:
             throw EvalError.transitionPredicateRequiresGeneratedChecking
-        case .printT:
+        case .printT, .printReturning:
             throw EvalError.printTRequiresGeneratedEvaluation
         case .assertView(let shape):
             guard operandCount == 1, let value = values.last else {

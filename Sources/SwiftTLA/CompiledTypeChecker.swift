@@ -423,7 +423,10 @@ package struct CompiledTypeChecker: Sendable {
         for property in inputs.semantics.behavior.temporalProperties {
             do {
                 let domainBindings = try property.bindings.map { binding in
-                    try binding.map { try checkOperand($0, expected: .set(bindings[binding.binder] ?? .unknown)) }
+                    let expected = bindings[binding.binder] ?? .unknown
+                    let checked = try binding.map { try checkOperand($0, expected: .set(expected)) }
+                    bindings[binding.binder] = try CompiledValueType.merge(expected, element(checked.domain.resultType))
+                    return checked
                 }
                 let expression = try property.expression.map { predicate in
                     try predicate.map { try checkOperand($0, expected: .bool) }
@@ -1273,7 +1276,7 @@ package struct CompiledTypeChecker: Sendable {
         case .dictionary(let key, _): result = .set(key)
         case .array, .tuple: result = .set(.int)
         case .record, .nominalRecord: result = .set(.string)
-        case .oneOf(let first, let second) where first.recordFields != nil && second.recordFields != nil:
+        case .oneOf where source.resultType.hasRecordDomain:
             result = .set(.string)
         case .unknown: result = .set(.unknown)
         default: throw CompiledValueType.diagnostic("domain", "unsupported domain shape")
@@ -2565,6 +2568,10 @@ package struct CompiledTypeChecker: Sendable {
             let value = try checkOperand(expression.children[0])
             let predicate = try checkOperand(expression.children[1], expected: .bool)
             return try checkedType(.bool, expected: expected, children: [value, predicate])
+        case .printReturning:
+            let value = try checkOperand(expression.children[0])
+            let result = try checkOperand(expression.children[1], expected: expected)
+            return try checkedType(result.resultType, expected: expected, children: [value, result])
         case .printT:
             let value = try checkOperand(expression.children[0])
             return try checkedType(.bool, expected: expected, children: [value])

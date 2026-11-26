@@ -711,7 +711,7 @@ struct NativeSwiftEmitter {
                 bound.insert(binder)
             case .foldFunction(let binders): bound.formUnion(binders)
             case .stateVariable, .checkingRegister, .setCheckingRegister, .checkingLevel, .checkingDiameter,
-                 .enabledAction, .nextState, .stutteringStep, .printT, .call,
+                 .enabledAction, .nextState, .stutteringStep, .printT, .printReturning, .call,
                  .checkedCall, .operatorReference, .operatorApplication, .letIn,
                  .integerSet:
                 return false
@@ -728,7 +728,7 @@ struct NativeSwiftEmitter {
     ) throws -> String {
         switch id.operation {
         case .checkingRegister, .setCheckingRegister, .integerSet, .checkingLevel,
-             .checkingDiameter, .stutteringStep, .printT, .nextState:
+             .checkingDiameter, .stutteringStep, .printT, .printReturning, .nextState:
             return try contextExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate:
             return try arithmeticExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
@@ -800,13 +800,21 @@ struct NativeSwiftEmitter {
             let after = try expression(id.children[0], state: "nextState.", substitutions: substitutions, activeFunctions: activeFunctions)
             let predicate = try expression(id.children[1], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
             return "((\(before) == \(after)) ? true : \(predicate))"
-        case .printT:
-            guard let printTOutputName else { throw unsupported("PrintT outside generated evaluation") }
+        case .printT, .printReturning:
+            guard let printTOutputName else { throw unsupported("Print outside generated evaluation") }
             let value = try expression(id.children[0], state: state, substitutions: substitutions,
                 activeFunctions: activeFunctions)
             let projected = containsSourceNominal(id.children[0].resultType)
                 ? try formalValue("printed", type: id.children[0].resultType) : "printed.tlaValue"
-            return "(try { () throws -> \(nativeBoolType) in let printed = \(value); \(printTOutputName).append(\(projected)); return true }())"
+            if id.operation == .printT {
+                return "(try { () throws -> \(nativeBoolType) in let printed = \(value); \(printTOutputName).append(.value(\(projected))); return true }())"
+            }
+            let result = try expression(id.children[1], state: state, substitutions: substitutions,
+                activeFunctions: activeFunctions)
+            let returned = containsSourceNominal(id.children[1].resultType)
+                ? try formalValue("returned", type: id.children[1].resultType) : "returned.tlaValue"
+            let type = try swiftType(id.children[1].resultType)
+            return "(try { () throws -> \(type) in let printed = \(value); let returned = \(result); \(printTOutputName).append(.returning(\(projected), \(returned))); return returned }())"
         case .nextState:
             guard state != "nextState." else { throw unsupported("nested successor-state read") }
             return try expression(id.children[0], state: "nextState.", substitutions: substitutions,
@@ -1463,14 +1471,10 @@ struct NativeSwiftEmitter {
                 let resultType = try swiftType(node.resultType)
                 let domain = "\(resultType)([\(try fields.map { try literal(.string($0.name), as: .string) }.joined(separator: ", "))])"
                 return "(try { () throws -> \(resultType) in _ = \(try emit(0)); return \(domain) }())"
-            case .oneOf(let first, let second):
-                guard let firstFields = first.recordFields, let secondFields = second.recordFields else {
-                    throw unsupported("DOMAIN")
-                }
+            case .oneOf:
                 let resultType = try swiftType(node.resultType)
-                let firstDomain = "\(resultType)([\(try firstFields.map { try literal(.string($0.name), as: .string) }.joined(separator: ", "))])"
-                let secondDomain = "\(resultType)([\(try secondFields.map { try literal(.string($0.name), as: .string) }.joined(separator: ", "))])"
-                return "(try { () throws -> \(resultType) in switch \(try emit(0)) { case .first(_): return \(firstDomain); case .second(_): return \(secondDomain) } }())"
+                let cases = try recordDomainCases(childType(0), resultType: resultType, pattern: { $0 })
+                return "(try { () throws -> \(resultType) in switch \(try emit(0)) { \(cases.joined(separator: "\n")) } }())"
             default: throw unsupported("DOMAIN")
             }
         case .functionLiteral(let binding):

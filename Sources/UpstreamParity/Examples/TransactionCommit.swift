@@ -5,9 +5,15 @@ import SwiftTLAMacros
 package struct TransactionCommitModel: Sendable {
     package enum Manager: String, CaseIterable, FiniteTLAValueDomain {
         case r1, r2, r3
+        case ap1 = "r1_OF_RM", ap2 = "r2_OF_RM", ap3 = "r3_OF_RM"
         package static var defaultValue: Self { .r1 }
         package static let finiteValues = allCases
-        package var tlaValue: TLAValue { .constant(rawValue) }
+        package var tlaValue: TLAValue {
+            switch self {
+            case .r1, .r2, .r3: .constant(rawValue)
+            case .ap1, .ap2, .ap3: .string(rawValue)
+            }
+        }
     }
 
     package enum Phase: String, CaseIterable, TLAValueType {
@@ -22,7 +28,11 @@ package struct TransactionCommitModel: Sendable {
 
     package static var spec: TLASpec {
         #spec("TCommit") { scope in
-            let RM = scope.parameter(as: Set<Manager>.self, in: Subsets(of: Manager.all.assuming(Set<Manager>.self)))
+            let RM = scope.parameter(as: Set<Manager>.self, in: Set<Set<Manager>>([
+                Set<Manager>([]), Set([.r1]), Set([.r2]), Set([.r3]),
+                Set([.r1, .r2]), Set([.r1, .r3]), Set([.r2, .r3]),
+                Set([.r1, .r2, .r3]), Set([.ap1, .ap2, .ap3])
+            ]))
             let rmState = scope.sharedVar(initial: Dictionary<Manager, Phase>.mapping(over: RM) { _ in Phase.working })
             let canCommit = RM.allSatisfy { manager in
                 rmState[manager] == Phase.prepared || rmState[manager] == Phase.committed
@@ -52,6 +62,9 @@ package struct TransactionCommitModel: Sendable {
             }
             Validation("threeManagers") {
                 Bind(RM, to: Set<Manager>([.r1, .r2, .r3]))
+            }.checkingDeadlock(false)
+            Validation("APTCommit") {
+                Bind(RM, to: Set<Manager>([.ap1, .ap2, .ap3]))
             }.checkingDeadlock(false)
         }
     }

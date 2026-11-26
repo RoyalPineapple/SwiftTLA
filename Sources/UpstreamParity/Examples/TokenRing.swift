@@ -32,7 +32,8 @@ package struct TokenRingModel: Sendable {
             passToken
             WeakFairness(anyOf: [createToken, passToken])
 
-            Invariant("TypeOK") { Functions(from: nodes, to: values).contains(c) }
+            let typeOK = Invariant("TypeOK")
+            typeOK { Functions(from: nodes, to: values).contains(c) }
             let Stab = EventuallyAlways()
             let uniqueToken = IntRange(0, through: N).contains { split in
                 (0..<split).allSatisfy { i in c[i] == c[0] }
@@ -43,6 +44,10 @@ package struct TokenRingModel: Sendable {
                 Bind(N, to: 6)
                 Bind(M, to: 6)
             }.checkingDeadlock(false)
+            Validation("APTokenRing") {
+                Bind(N, to: 6)
+                Bind(M, to: 6)
+            }.checking(only: [typeOK])
         }
     }
 }

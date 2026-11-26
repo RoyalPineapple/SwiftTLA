@@ -302,6 +302,7 @@ public indirect enum StateExpr: Hashable, Sendable {
 
     case ifThenElse(StateExpr, StateExpr, StateExpr)
     case printT(StateExpr)
+    case printReturning(StateExpr, StateExpr)
 
     case setLiteral([StateExpr])
     case `in`(StateExpr, StateExpr)
@@ -401,4 +402,11 @@ extension StateExpr: ExpressibleByStringLiteral {
 /// Evaluates and records one formal value, then yields TRUE like TLC's PrintT.
 public func PrintT<Value: TLAValueType>(_ value: some TypedExpression<Value>) -> Expr<Bool> {
     Expr(.printT(value.stateExpr))
+}
+
+/// Prints both operands and returns the second, as specified by TLC's Print operator.
+public func Print<Value: TLAValueType, Result: TLAValueType>(
+    _ value: some TypedExpression<Value>, returning result: some TypedExpression<Result>
+) -> Expr<Result> {
+    Expr(.printReturning(value.stateExpr, result.stateExpr))
 }

@@ -1039,6 +1039,16 @@ final class ParserSession {
             return .functionApply(function, argument)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
+           compilerGrammarName(in: call.calledExpression) == "Print",
+           call.arguments.count == 2, call.arguments.first?.label == nil,
+           call.arguments.last?.label?.text == "returning",
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let first = call.arguments.first, let last = call.arguments.last,
+           let value = decodeTypedFacadeValue(first.expression, scope: scope),
+           let result = decodeTypedFacadeValue(last.expression, scope: scope) {
+            return .printReturning(value, result)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            compilerGrammarName(in: call.calledExpression) == "PrintT",
            call.arguments.count == 1, call.arguments.first?.label == nil,
            call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
@@ -2222,6 +2232,10 @@ final class ParserSession {
             case "fifth": return elements.count > 4 ? elements[4] : nil
             default: break
             }
+        }
+        if compilerGrammarName(in: call.calledExpression) == "Print",
+           let argument = call.arguments.last, argument.label?.text == "returning" {
+            return typedFacadeValueType(argument.expression, scope: scope)
         }
         if compilerGrammarName(in: call.calledExpression) == "PrintT" { return .bool }
         if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }

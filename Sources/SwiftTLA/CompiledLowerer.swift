@@ -1452,6 +1452,7 @@ struct CompiledLowerer {
                     scheduleUnary(value, at: path, scope: successorScope, operation: .nextState, on: &tasks)
                 case .not, .and, .or, .ifThenElse:
                     scheduleBooleanBranch(expression, at: path, scope: scope, on: &tasks)
+                case .printReturning(let value, let result): scheduleBinary(value, result, at: path, scope: scope, operation: .printReturning, on: &tasks)
                 case .printT(let value): scheduleUnary(value, at: path, scope: scope, operation: .printT, on: &tasks)
                 case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, operation: .cardinality, on: &tasks)
                 case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .powerSet, on: &tasks)

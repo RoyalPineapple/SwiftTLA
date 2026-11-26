@@ -16,6 +16,16 @@ extension NativeSwiftEmitter {
     func checkedView(_ value: String, from source: CompiledValueType, to target: CompiledValueType) throws -> String {
         if program.canProject(source: source, to: target) { return try projected(value, from: source, to: target) }
         if source.unionAlternatives != nil { return try unionProjection(value, from: source, to: target, checked: true) }
+        if let fields = source.recordFields, let alternatives = target.unionAlternatives {
+            let keys = Set(fields.map(\.name))
+            let matches = alternatives.indices.filter { index in
+                alternatives[index].recordFields.map { Set($0.map(\.name)) == keys } == true
+            }
+            if matches.count == 1, let index = matches.first {
+                let payload = try checkedView(value, from: source, to: alternatives[index])
+                return try unionValue(payload, type: target, index: index)
+            }
+        }
         if case .finite(let members) = source {
             let cases = members.indices.map { index in
                 let result: String
@@ -103,6 +113,16 @@ extension NativeSwiftEmitter {
         let throwing = checked ? " throws" : ""
         let prefix = checked ? "try " : ""
         return "(\(prefix){ (value: \(try swiftType(source)))\(throwing) -> \(try swiftType(target)) in\nswitch value { \(cases) } }(\(value)))"
+    }
+
+    func recordDomainCases(_ type: CompiledValueType, resultType: String, pattern: (String) -> String) throws -> [String] {
+        if let fields = type.recordFields {
+            let keys = try fields.map { try literal(.string($0.name), as: .string) }
+            return ["case \(pattern("_")): return \(resultType)([\(keys.joined(separator: ", "))])"]
+        }
+        guard case .oneOf(let first, let second) = type else { throw unsupported("DOMAIN") }
+        return try recordDomainCases(first, resultType: resultType) { pattern(".first(\($0))") }
+            + recordDomainCases(second, resultType: resultType) { pattern(".second(\($0))") }
     }
 
     func unionOrdering(_ type: CompiledValueType) throws -> String {

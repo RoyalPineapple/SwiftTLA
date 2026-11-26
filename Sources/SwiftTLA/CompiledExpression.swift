@@ -32,6 +32,7 @@ package enum CompiledOperation: Hashable, Sendable {
     case not
     case ifThenElse
     case printT
+    case printReturning
     case setLiteral
     case `in`
     case subset

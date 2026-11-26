@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-package struct HourClock2Model: Sendable {
+package struct HourClock2Model: ParameterlessGeneratedModel {
     package enum Step: String, CaseIterable { case tick = "HCnxt2" }
 
     package static var spec: TLASpec {

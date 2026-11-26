@@ -6,6 +6,12 @@ private struct AssumptionModelRegistration: Sendable {
 }
 
 private let assumptionModels: [AssumptionModelRegistration] = [
+    .init(id: "print-values", scenarios: {
+        try PrintValuesModel.validationScenarios().map { $0 as any AssumptionValidationScenario }
+    }),
+    .init(id: "simple-math", scenarios: {
+        try SimpleMathModel.validationScenarios().map { $0 as any AssumptionValidationScenario }
+    }),
     .init(id: "sums-even", scenarios: {
         try SumsEvenModel.validationScenarios().map { $0 as any AssumptionValidationScenario }
     }),

@@ -1195,6 +1195,7 @@ enum AlgorithmLowerer {
             case .sequenceFromSet(let set): return .sequenceFromSet(rewritten(set, localRoots: localRoots))
             case .sequenceFromFunction(let function): return .sequenceFromFunction(rewritten(function, localRoots: localRoots))
             case .printT(let value): return .printT(rewritten(value, localRoots: localRoots))
+            case .printReturning(let value, let result): return .printReturning(rewritten(value, localRoots: localRoots), rewritten(result, localRoots: localRoots))
             case .setSum(let function, let set): return .setSum(rewritten(function, localRoots: localRoots), rewritten(set, localRoots: localRoots))
             case .functionSet(let domain, let range): return .functionSet(rewritten(domain, localRoots: localRoots), rewritten(range, localRoots: localRoots))
             case .randomSubset(let count, let domain): return .randomSubset(rewritten(count, localRoots: localRoots), rewritten(domain, localRoots: localRoots))

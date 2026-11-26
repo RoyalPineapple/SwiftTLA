@@ -4,7 +4,7 @@ import SwiftTLAMacros
 @TLAModel
 package struct TuringConsensusModel: Sendable {
     package enum Choice: String, CaseIterable, FiniteTLAValueDomain {
-        case a, b, c
+        case a, b, c, v1, v2
         package static var defaultValue: Self { .a }
         package static let finiteValues = allCases
         package var tlaValue: TLAValue { .constant(rawValue) }
@@ -15,7 +15,7 @@ package struct TuringConsensusModel: Sendable {
     package static var spec: TLASpec {
         #spec("TuringConsensus") { scope in
             Extends(.finiteSets)
-            let Value = scope.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.a, .b, .c])]))
+            let Value = scope.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.a, .b, .c]), Set([.v1, .v2])]))
             let chosen = scope.sharedVar(initial: Set<Choice>())
             Do(Step.choose, when: chosen.isEmpty) {
                 With(Value) { value in chosen.insert(value) }

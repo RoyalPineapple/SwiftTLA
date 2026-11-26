@@ -393,6 +393,16 @@ package struct TLCGraphReader: Sendable {
 }
 
 enum TLCValueParser {
+    static func parsePrint(_ text: String) throws -> AssumptionPrint<CanonicalValue> {
+        // Pinned TLC separates the two Print operands with two spaces outside quoted or nested values.
+        let operands = try splitTopLevel(text.trimmingCharacters(in: .whitespacesAndNewlines), separator: "  ")
+        switch operands.count {
+        case 1: return .value(try parse(operands[0]))
+        case 2: return .returning(try parse(operands[0]), try parse(operands[1]))
+        default: throw TLCGraphEventError.unsupportedValue(text)
+        }
+    }
+
     static func parse(_ text: String) throws -> CanonicalValue {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { throw TLCGraphEventError.unsupportedValue(text) }

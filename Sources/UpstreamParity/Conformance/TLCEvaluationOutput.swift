@@ -1,11 +1,12 @@
 import Foundation
+import SwiftTLA
 
 package enum TLCEvaluationOutputError: Error, Equatable {
     case malformed(String)
 }
 
 package struct TLCEvaluationOutput: Sendable {
-    package let values: [CanonicalValue]
+    package let prints: [AssumptionPrint<CanonicalValue>]
 
     package init(reading url: URL) throws {
         let bytes = Array(try Data(contentsOf: url))
@@ -14,7 +15,7 @@ package struct TLCEvaluationOutput: Sendable {
             throw TLCEvaluationOutputError.malformed("header")
         }
         var offset = magic.count
-        var values: [CanonicalValue] = []
+        var prints: [AssumptionPrint<CanonicalValue>] = []
         while offset < bytes.count {
             let tag = bytes[offset]
             offset += 1
@@ -29,19 +30,17 @@ package struct TLCEvaluationOutput: Sendable {
                     throw TLCEvaluationOutputError.malformed("record UTF-8")
                 }
                 offset = end
-                let value: CanonicalValue
                 do {
-                    value = try TLCValueParser.parse(text)
+                    prints.append(try TLCValueParser.parsePrint(text))
                 } catch {
                     throw TLCEvaluationOutputError.malformed("printed TLA value")
                 }
-                values.append(value)
             case 2:
                 let count = try Self.readInteger(bytes, offset: &offset, width: 8)
-                guard count == UInt64(values.count), offset == bytes.count else {
+                guard count == UInt64(prints.count), offset == bytes.count else {
                     throw TLCEvaluationOutputError.malformed("completion footer")
                 }
-                self.values = values
+                self.prints = prints
                 return
             default:
                 throw TLCEvaluationOutputError.malformed("record tag")
