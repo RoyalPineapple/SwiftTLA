@@ -32,7 +32,13 @@ LOCAL THEOREM ActualNativeExpansionBindsTheAuthoredOperands ==
 LOCAL NativeTraversalIndex(stack) ==
     CASE NativeStackExpansion.lastIndex = "count" -> NativeTraversalCount(stack)
 
-NativeTraversalLast(stack) == NativeTraversalCells(stack)[NativeTraversalIndex(stack) - 1]
+LOCAL NativeTraversalElementInBounds(stack, index) ==
+    index >= NativeStackElementMinimum /\ index <= Len(stack)
+
+LOCAL NativeTraversalElement(stack, index) ==
+    NativeTraversalCells(stack)[index - NativeStackElementOffset]
+
+NativeTraversalLast(stack) == NativeTraversalElement(stack, NativeTraversalIndex(stack))
 
 NativeTraversalEnabled(stack) ==
     IF NativeTraversalCount(stack) <= NativeStackExpansion.countFloor THEN FALSE
@@ -97,6 +103,19 @@ LOCAL THEOREM NativeStackOperationsUseTheCheckedGuardAndIndex ==
     BY ONLY ActualNativeExpansionBindsTheAuthoredOperands, SeedAuthoredExpansionUsesTheBoundFieldsAndPushes,
         SMT DEF NativeStackExpansionUsesAuthoredOperands
 
+LOCAL THEOREM NativeTraversalElementReadsAValidIndex ==
+    ASSUME NEW stack \in Seq(SeedFrames), NEW index \in 1..Len(stack)
+    PROVE /\ NativeTraversalElementInBounds(stack, index)
+          /\ NativeTraversalElement(stack, index) = stack[index]
+PROOF
+<1>guard. NativeTraversalElementInBounds(stack, index)
+    BY ONLY (index \in 1..Len(stack)), SMT DEF NativeTraversalElementInBounds, NativeStackElementMinimum
+<1>offset. index - NativeStackElementOffset \in 0..(Len(stack) - 1)
+    BY ONLY (index \in 1..Len(stack)), SMT DEF NativeStackElementOffset
+<1>value. NativeTraversalElement(stack, index) = stack[index]
+    BY ONLY <1>offset, SMT DEF NativeTraversalElement, NativeTraversalCells, NativeStackElementOffset
+<1>. QED BY ONLY <1>guard, <1>value, PTL
+
 THEOREM NativeSeedTraversalAgreesWithSeedReplacement ==
     ASSUME NEW stack \in Seq(SeedFrames),
            NEW left \in SeedIntValues, NEW right \in SeedIntValues
@@ -107,8 +126,8 @@ PROOF
 <1>count. /\ NativeTraversalCount(stack) = Len(stack) /\ Len(stack) \in Nat
     BY ONLY (stack \in Seq(SeedFrames)), NativeTraversalCountUsesEveryArrayIndex, LenProperties, SMT
 <1>last. Len(stack) > 0 => NativeTraversalLast(stack) = stack[Len(stack)]
-    BY ONLY <1>count, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
-        DEF NativeTraversalLast, NativeTraversalIndex, NativeTraversalCells
+    BY ONLY (stack \in Seq(SeedFrames)), <1>count, NativeStackOperationsUseTheCheckedGuardAndIndex,
+        NativeTraversalElementReadsAValidIndex, SMT DEF NativeTraversalLast, NativeTraversalIndex
 <1>enabled. NativeTraversalEnabled(stack) <=> SeedExpansionEnabled(stack)
     BY ONLY <1>count, <1>last, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
         DEF NativeTraversalEnabled, SeedExpansionEnabled
@@ -190,7 +209,7 @@ NativeTraversalReachedFailures(stack) ==
         drop == NativeStackExpansion.prefixDrop
         prefixCount == count - drop
     IN IF count <= NativeStackExpansion.countFloor THEN <<>>
-       ELSE IF index \notin 1..Len(stack)
+       ELSE IF ~NativeTraversalElementInBounds(stack, index)
             THEN <<<<"indexOutOfBounds", index, Len(stack)>>>>
        ELSE IF NativeTraversalLast(stack)[NativeStackExpansion.localExpandedPosition] THEN <<>>
        ELSE IF prefixCount \notin SeedIntValues
@@ -226,14 +245,15 @@ PROOF
 <1>belowFloor. CASE count <= floor
     BY ONLY <1>belowFloor, SMT DEF count, floor, NativeTraversalReachedFailures
 <1>aboveFloor. CASE count > floor
-    <2>access. NativeTraversalIndex(pending) \in 1..Len(pending)
-        BY ONLY <1>aboveFloor, <1>access, SMT DEF count, floor
+    <2>access. NativeTraversalElementInBounds(pending, NativeTraversalIndex(pending))
+        BY ONLY SeedExpansionInput, <1>aboveFloor, <1>access, NativeTraversalElementReadsAValidIndex, SMT
+            DEF count, floor, SeedExpansionInput
     <2>shape. /\ pending \in Seq(SeedFrames) /\ Len(pending) \in 1..Len(pending)
         BY ONLY SeedExpansionInput, <1>count, <1>aboveFloor, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
             DEF SeedExpansionInput, count, floor
     <2>last. NativeTraversalLast(pending) = pending[Len(pending)]
-        BY ONLY <2>shape, <1>count, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
-            DEF NativeTraversalLast, NativeTraversalIndex, NativeTraversalCells
+        BY ONLY <2>shape, <1>count, NativeStackOperationsUseTheCheckedGuardAndIndex,
+            NativeTraversalElementReadsAValidIndex, SMT DEF NativeTraversalLast, NativeTraversalIndex
     <2>frame. pending[Len(pending)] \in SeedFrames
         BY ONLY <2>shape, ElementOfSeq, SMT
     <2>boolean. expanded \in BOOLEAN

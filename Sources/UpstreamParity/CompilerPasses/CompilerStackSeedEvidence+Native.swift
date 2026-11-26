@@ -27,7 +27,13 @@ private func matches(_ actual: [String], _ expected: String) -> Bool {
     actual == words(Parser.parse(source: expected))
 }
 
-func decodeTraversalSeedPrefixFloor(_ operations: String) throws -> Int {
+struct NativeTraversalSeedSequenceRuntime {
+    let prefixFloor: Int
+    let elementMinimum: Int
+    let elementOffset: Int
+}
+
+func decodeTraversalSeedSequenceRuntime(_ operations: String) throws -> NativeTraversalSeedSequenceRuntime {
     let failure = CompilationDiagnostic(
         code: .unsupportedGeneratedValueShape, stage: .validation,
         path: "native.traversal.operations.sequenceAppend",
@@ -77,7 +83,35 @@ func decodeTraversalSeedPrefixFloor(_ operations: String) throws -> Int {
             nextSafeAction: "Review the sequencePrefix proof interpretation against the runtime implementation."
         )
     }
-    return lowerBound
+    let elementHelpers = owner.memberBlock.members.compactMap { $0.decl.as(FunctionDeclSyntax.self) }
+        .filter { $0.name.text == "sequenceElement" }
+    guard elementHelpers.count == 1, let element = elementHelpers.first,
+          let condition = element.body?.statements.first?.item.as(GuardStmtSyntax.self),
+          let minimumExpr = condition.conditions.first?.condition.as(SequenceExprSyntax.self),
+          let minimumToken = minimumExpr.elements.last?.as(IntegerLiteralExprSyntax.self),
+          let minimum = Int(minimumToken.literal.text), minimum == 1,
+          let result = element.body?.statements.last?.item.as(ReturnStmtSyntax.self),
+          let access = result.expression?.as(SubscriptCallExprSyntax.self),
+          let index = access.arguments.first?.expression.as(SequenceExprSyntax.self),
+          let offsetToken = index.elements.last?.as(IntegerLiteralExprSyntax.self),
+          let offset = Int(offsetToken.literal.text), offset == 1,
+          matches(words(element), """
+              public static func sequenceElement<Element: Sendable>(_ sequence: [Element], at index: Int) throws -> Element {
+                  guard index >= \(minimum), index <= sequence.count else {
+                      throw NativeMachineEvaluationError.indexOutOfBounds(index: index, count: sequence.count)
+                  }
+                  return sequence[index - \(offset)]
+              }
+              """) else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.traversal.operations.sequenceElement",
+            expected: "the reviewed one-based bounds and zero-based Array subscript",
+            actual: "a different or missing stack element implementation",
+            nextSafeAction: "Review the sequenceElement proof interpretation against the runtime implementation."
+        )
+    }
+    return .init(prefixFloor: lowerBound, elementMinimum: minimum, elementOffset: offset)
 }
 
 /// Bind the compiler seed's checked stack operations and ordered tuple operands to the actual native visitor.
