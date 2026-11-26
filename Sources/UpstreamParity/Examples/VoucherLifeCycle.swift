@@ -21,43 +21,43 @@ package struct VoucherLifeCycleModel: Sendable {
 
     package static var spec: TLASpec {
         #spec("VoucherLifeCycle") { scope in
-            let V = scope.parameter(as: Set<Voucher>.self, in: Subsets(of: Voucher.all.assuming(Set<Voucher>.self)))
-            let vState = scope.sharedVar(initial: Dictionary<Voucher, Status>.mapping(over: V) { _ in Status.phantom })
-            let vlcState = scope.sharedVar(initial: Dictionary<Voucher, Phase>.mapping(over: V) { _ in Phase.initial })
+            let vouchers = scope.parameter(tlaName: "V", as: Set<Voucher>.self, in: Subsets(of: Voucher.all.assuming(Set<Voucher>.self)))
+            let voucherStatus = scope.sharedVar(tlaName: "vState", initial: Dictionary<Voucher, Status>.mapping(over: vouchers) { _ in Status.phantom })
+            let lifecyclePhase = scope.sharedVar(tlaName: "vlcState", initial: Dictionary<Voucher, Phase>.mapping(over: vouchers) { _ in Phase.initial })
 
-            Do(Step.issue, over: V) { v in
-                When(vState[v] == Status.phantom && vlcState[v] == Phase.initial)
-                vState[v].set(Status.valid)
-                vlcState[v].set(Phase.working)
+            Do(Step.issue, over: vouchers) { v in
+                When(voucherStatus[v] == Status.phantom && lifecyclePhase[v] == Phase.initial)
+                voucherStatus[v].set(Status.valid)
+                lifecyclePhase[v].set(Phase.working)
             }
-            Do(Step.transfer, over: V) { v in
-                When(vState[v] == Status.valid)
+            Do(Step.transfer, over: vouchers) { v in
+                When(voucherStatus[v] == Status.valid)
                 Skip()
             }
-            Do(Step.redeem, over: V) { v in
-                When(vState[v] == Status.valid && vlcState[v] == Phase.working)
-                vState[v].set(Status.redeemed)
-                vlcState[v].set(Phase.done)
+            Do(Step.redeem, over: vouchers) { v in
+                When(voucherStatus[v] == Status.valid && lifecyclePhase[v] == Phase.working)
+                voucherStatus[v].set(Status.redeemed)
+                lifecyclePhase[v].set(Phase.done)
             }
-            Do(Step.cancel, over: V) { v in
-                When(vState[v] == Status.valid && vlcState[v] == Phase.working)
-                vState[v].set(Status.cancelled)
-                vlcState[v].set(Phase.done)
+            Do(Step.cancel, over: vouchers) { v in
+                When(voucherStatus[v] == Status.valid && lifecyclePhase[v] == Phase.working)
+                voucherStatus[v].set(Status.cancelled)
+                lifecyclePhase[v].set(Phase.done)
             }
 
             Invariant("VTypeOK") {
-                Functions(from: V, to: SetExpr<Status>.literal(.phantom, .valid, .redeemed, .cancelled)).contains(vState)
-                Functions(from: V, to: SetExpr<Phase>.literal(.initial, .working, .done)).contains(vlcState)
+                Functions(from: vouchers, to: SetExpr<Status>.literal(.phantom, .valid, .redeemed, .cancelled)).contains(voucherStatus)
+                Functions(from: vouchers, to: SetExpr<Phase>.literal(.initial, .working, .done)).contains(lifecyclePhase)
             }
             Invariant("VConsistent") {
-                V.allSatisfy { v in
-                    (vlcState[v] == Phase.done && (vState[v] == Status.redeemed || vState[v] == Status.cancelled))
-                        || (vlcState[v] == Phase.initial && vState[v] == Status.phantom)
-                        || (vlcState[v] == Phase.working && vState[v] == Status.valid)
+                vouchers.allSatisfy { v in
+                    (lifecyclePhase[v] == Phase.done && (voucherStatus[v] == Status.redeemed || voucherStatus[v] == Status.cancelled))
+                        || (lifecyclePhase[v] == Phase.initial && voucherStatus[v] == Status.phantom)
+                        || (lifecyclePhase[v] == Phase.working && voucherStatus[v] == Status.valid)
                 }
             }
             Validation("published") {
-                Bind(V, to: Set<Voucher>([.v1, .v2, .v3]))
+                Bind(vouchers, to: Set<Voucher>([.v1, .v2, .v3]))
             }.checkingDeadlock(false)
         }
     }

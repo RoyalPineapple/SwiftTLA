@@ -44,137 +44,137 @@ package struct VoucherTransferModel: Sendable {
     }
     package static var spec: TLASpec {
         #spec("VoucherTransfer") { scope in
-            let V = scope.parameter(as: Set<Voucher>.self, in: Subsets(of: Voucher.all.assuming(Set<Voucher>.self)))
-            let SH = scope.parameter(as: Set<Participant>.self, in: Subsets(of: Participant.all.assuming(Set<Participant>.self)))
-            let DH = scope.parameter(as: Set<Participant>.self, in: Subsets(of: Participant.all.assuming(Set<Participant>.self)))
-            let participants = SH.union(DH)
-            let vState = scope.sharedVar(initial: Dictionary<Voucher, String>.mapping(over: V) { _ in "valid" })
-            let vlcState = scope.sharedVar(initial: Dictionary<Voucher, String>.mapping(over: V) { _ in "working" })
-            let shState = scope.sharedVar(initial: Dictionary<Participant, String>.mapping(over: SH) { _ in "holding" })
-            let dhState = scope.sharedVar(initial: Dictionary<Participant, String>.mapping(over: DH) { _ in "waiting" })
-            let vtpState = scope.sharedVar(initial: "init")
-            let vtpTPrepared = scope.sharedVar(initial: Set<Participant>())
-            let msgs = scope.sharedVar(initial: Set<Message>())
+            let vouchers = scope.parameter(tlaName: "V", as: Set<Voucher>.self, in: Subsets(of: Voucher.all.assuming(Set<Voucher>.self)))
+            let sourceHolders = scope.parameter(tlaName: "SH", as: Set<Participant>.self, in: Subsets(of: Participant.all.assuming(Set<Participant>.self)))
+            let destinationHolders = scope.parameter(tlaName: "DH", as: Set<Participant>.self, in: Subsets(of: Participant.all.assuming(Set<Participant>.self)))
+            let participants = sourceHolders.union(destinationHolders)
+            let voucherStatus = scope.sharedVar(tlaName: "vState", initial: Dictionary<Voucher, String>.mapping(over: vouchers) { _ in "valid" })
+            let lifecyclePhase = scope.sharedVar(tlaName: "vlcState", initial: Dictionary<Voucher, String>.mapping(over: vouchers) { _ in "working" })
+            let sourceHolderState = scope.sharedVar(tlaName: "shState", initial: Dictionary<Participant, String>.mapping(over: sourceHolders) { _ in "holding" })
+            let destinationHolderState = scope.sharedVar(tlaName: "dhState", initial: Dictionary<Participant, String>.mapping(over: destinationHolders) { _ in "waiting" })
+            let transactionProviderState = scope.sharedVar(tlaName: "vtpState", initial: "init")
+            let preparedParticipants = scope.sharedVar(tlaName: "vtpTPrepared", initial: Set<Participant>())
+            let messages = scope.sharedVar(tlaName: "msgs", initial: Set<Message>())
             let transferMessage: Message = Message.second(OtherMessage.second(Broadcast(type: "Transfer")))
             let abortMessage: Message = Message.second(OtherMessage.second(Broadcast(type: "Abort")))
 
-            let allVouchersAreValid = Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState)
-            let allLifecyclesAreWorking = Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState)
+            let allVouchersAreValid = Functions(from: vouchers, to: SetExpr<String>.literal("valid")).contains(voucherStatus)
+            let allLifecyclesAreWorking = Functions(from: vouchers, to: SetExpr<String>.literal("working")).contains(lifecyclePhase)
 
             Do(Step.providerRecordsPreparedPair, over: participants, participants) { sh, dh in
                 When(allVouchersAreValid)
                 When(allLifecyclesAreWorking)
-                When(vtpState == "init")
-                When(msgs.contains(Message.first(SourcePrepared.expression(type: "Prepared", vsh: sh))))
-                When(msgs.contains(Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: dh)))))
-                vtpTPrepared.insert(sh)
-                vtpTPrepared.insert(dh)
+                When(transactionProviderState == "init")
+                When(messages.contains(Message.first(SourcePrepared.expression(type: "Prepared", vsh: sh))))
+                When(messages.contains(Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: dh)))))
+                preparedParticipants.insert(sh)
+                preparedParticipants.insert(dh)
             }
 
-            Do(Step.providerTransfer, over: V) { v in
-                When(vState[v] == "valid")
-                When(vlcState[v] == "working")
-                When(vtpState == "init")
-                When(vtpTPrepared == participants)
-                vtpState.set("done")
-                msgs.insert(transferMessage)
+            Do(Step.providerTransfer, over: vouchers) { v in
+                When(voucherStatus[v] == "valid")
+                When(lifecyclePhase[v] == "working")
+                When(transactionProviderState == "init")
+                When(preparedParticipants == participants)
+                transactionProviderState.set("done")
+                messages.insert(transferMessage)
             }
 
-            Do(Step.providerAbort, over: V) { v in
-                When(vState[v] == "valid")
-                When(vlcState[v] == "working")
-                When(vtpState == "init")
-                vtpState.set("done")
-                msgs.insert(abortMessage)
+            Do(Step.providerAbort, over: vouchers) { v in
+                When(voucherStatus[v] == "valid")
+                When(lifecyclePhase[v] == "working")
+                When(transactionProviderState == "init")
+                transactionProviderState.set("done")
+                messages.insert(abortMessage)
             }
 
-            Do(Step.sourcePrepare, over: SH) { sh in
+            Do(Step.sourcePrepare, over: sourceHolders) { sh in
                 When(allVouchersAreValid)
                 When(allLifecyclesAreWorking)
-                When(shState[sh] == "holding")
-                shState[sh].set("prepared")
-                msgs.insert(Message.first(SourcePrepared.expression(type: "Prepared", vsh: sh)))
+                When(sourceHolderState[sh] == "holding")
+                sourceHolderState[sh].set("prepared")
+                messages.insert(Message.first(SourcePrepared.expression(type: "Prepared", vsh: sh)))
             }
 
-            Do(Step.sourceChooseToAbort, over: SH) { sh in
+            Do(Step.sourceChooseToAbort, over: sourceHolders) { sh in
                 When(allVouchersAreValid)
                 When(allLifecyclesAreWorking)
-                When(shState[sh] == "holding")
-                shState[sh].set("aborted")
+                When(sourceHolderState[sh] == "holding")
+                sourceHolderState[sh].set("aborted")
             }
 
-            Do(Step.sourceReceivesTransfer, over: SH) { sh in
+            Do(Step.sourceReceivesTransfer, over: sourceHolders) { sh in
                 When(allVouchersAreValid)
                 When(allLifecyclesAreWorking)
-                When(shState[sh] == "holding")
-                When(msgs.contains(transferMessage))
-                shState[sh].set("transferred")
+                When(sourceHolderState[sh] == "holding")
+                When(messages.contains(transferMessage))
+                sourceHolderState[sh].set("transferred")
             }
 
-            Do(Step.sourceReceivesAbort, over: SH) { sh in
+            Do(Step.sourceReceivesAbort, over: sourceHolders) { sh in
                 When(allVouchersAreValid)
                 When(allLifecyclesAreWorking)
-                When(shState[sh] == "holding")
-                When(msgs.contains(abortMessage))
-                shState[sh].set("aborted")
+                When(sourceHolderState[sh] == "holding")
+                When(messages.contains(abortMessage))
+                sourceHolderState[sh].set("aborted")
             }
 
-            Do(Step.destinationPrepare, over: DH) { dh in
+            Do(Step.destinationPrepare, over: destinationHolders) { dh in
                 When(allVouchersAreValid)
                 When(allLifecyclesAreWorking)
-                When(dhState[dh] == "waiting")
-                dhState[dh].set("prepared")
-                msgs.insert(Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: dh))))
+                When(destinationHolderState[dh] == "waiting")
+                destinationHolderState[dh].set("prepared")
+                messages.insert(Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: dh))))
             }
 
-            Do(Step.destinationChooseToAbort, over: DH) { dh in
+            Do(Step.destinationChooseToAbort, over: destinationHolders) { dh in
                 When(allVouchersAreValid)
                 When(allLifecyclesAreWorking)
-                When(dhState[dh] == "waiting")
-                dhState[dh].set("aborted")
+                When(destinationHolderState[dh] == "waiting")
+                destinationHolderState[dh].set("aborted")
             }
 
-            Do(Step.destinationReceivesTransfer, over: DH) { dh in
+            Do(Step.destinationReceivesTransfer, over: destinationHolders) { dh in
                 When(allVouchersAreValid)
                 When(allLifecyclesAreWorking)
-                When(dhState[dh] == "waiting")
-                When(msgs.contains(transferMessage))
-                dhState[dh].set("holding")
+                When(destinationHolderState[dh] == "waiting")
+                When(messages.contains(transferMessage))
+                destinationHolderState[dh].set("holding")
             }
 
-            Do(Step.destinationReceivesAbort, over: DH) { dh in
+            Do(Step.destinationReceivesAbort, over: destinationHolders) { dh in
                 When(allVouchersAreValid)
                 When(allLifecyclesAreWorking)
-                When(dhState[dh] == "waiting")
-                When(msgs.contains(abortMessage))
-                dhState[dh].set("aborted")
+                When(destinationHolderState[dh] == "waiting")
+                When(messages.contains(abortMessage))
+                destinationHolderState[dh].set("aborted")
             }
 
             Invariant("VTPTypeOK") {
-                Functions(from: V, to: SetExpr<String>.literal("valid")).contains(vState)
-                Functions(from: V, to: SetExpr<String>.literal("working")).contains(vlcState)
-                Functions(from: SH, to: SetExpr<String>.literal("holding", "prepared", "transferred", "aborted")).contains(shState)
-                Functions(from: DH, to: SetExpr<String>.literal("waiting", "prepared", "holding", "aborted")).contains(dhState)
-                SetExpr<String>.literal("init", "done").contains(vtpState)
-                vtpTPrepared.isSubset(of: participants)
-                msgs.allSatisfy { message in
+                Functions(from: vouchers, to: SetExpr<String>.literal("valid")).contains(voucherStatus)
+                Functions(from: vouchers, to: SetExpr<String>.literal("working")).contains(lifecyclePhase)
+                Functions(from: sourceHolders, to: SetExpr<String>.literal("holding", "prepared", "transferred", "aborted")).contains(sourceHolderState)
+                Functions(from: destinationHolders, to: SetExpr<String>.literal("waiting", "prepared", "holding", "aborted")).contains(destinationHolderState)
+                SetExpr<String>.literal("init", "done").contains(transactionProviderState)
+                preparedParticipants.isSubset(of: participants)
+                messages.allSatisfy { message in
                     message == transferMessage || message == abortMessage
-                        || SH.contains { sourceHolder in message == Message.first(SourcePrepared.expression(type: "Prepared", vsh: sourceHolder)) }
-                        || DH.contains { destinationHolder in message == Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: destinationHolder))) }
+                        || sourceHolders.contains { sourceHolder in message == Message.first(SourcePrepared.expression(type: "Prepared", vsh: sourceHolder)) }
+                        || destinationHolders.contains { destinationHolder in message == Message.second(OtherMessage.first(DestinationPrepared.expression(type: "Prepared", vdh: destinationHolder))) }
                 }
             }
             Invariant("VTPConsistent") {
-                SH.allSatisfy { sh in
-                    DH.allSatisfy { dh in
-                        !(shState[sh] == "transferred" && dhState[dh] == "aborted")
-                            && !(shState[sh] == "aborted" && dhState[dh] == "holding")
+                sourceHolders.allSatisfy { sh in
+                    destinationHolders.allSatisfy { dh in
+                        !(sourceHolderState[sh] == "transferred" && destinationHolderState[dh] == "aborted")
+                            && !(sourceHolderState[sh] == "aborted" && destinationHolderState[dh] == "holding")
                     }
                 }
             }
             Validation("published") {
-                Bind(V, to: Set<Voucher>([.v1, .v2, .v3]))
-                Bind(SH, to: Set<Participant>([.src1, .src2, .src3]))
-                Bind(DH, to: Set<Participant>([.dst1, .dst2, .dst3]))
+                Bind(vouchers, to: Set<Voucher>([.v1, .v2, .v3]))
+                Bind(sourceHolders, to: Set<Participant>([.src1, .src2, .src3]))
+                Bind(destinationHolders, to: Set<Participant>([.dst1, .dst2, .dst3]))
             }.checkingDeadlock(false)
         }
     }

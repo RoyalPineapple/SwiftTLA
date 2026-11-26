@@ -19,40 +19,40 @@ package struct AllFourNodeSpanTreesModel: Sendable {
     package static var spec: TLASpec {
         #spec("SpanTreeTest") { scope in
             Extends(.integers, .finiteSets)
-            let Nodes = scope.parameter(as: Set<Node>.self, in: Subsets(of: Set<Node>([Node.n1, Node.n2, Node.n3, Node.n4])))
-            let Root = scope.parameter(as: Node.self, in: Nodes)
-            let MaxCardinality = scope.parameter(as: Int.self, in: 5...5)
-            Assume(Nodes.contains(Root) && MaxCardinality >= 0 && MaxCardinality >= Nodes.count)
-            let possibleEdges = Where(Subsets(of: Nodes)) { edge in edge.count == 2 }
-            let Edges = scope.sharedVar(initiallyIn: Subsets(of: possibleEdges))
-            let mom = scope.sharedVar(initial: Dictionary<Node, Node>.mapping(over: Nodes) { n in n.expr })
-            let dist = scope.sharedVar(initial: Dictionary<Node, Int>.mapping(over: Nodes) { n in
-                If(n == Root, then: 0, else: MaxCardinality)
+            let nodes = scope.parameter(tlaName: "Nodes", as: Set<Node>.self, in: Subsets(of: Set<Node>([Node.n1, Node.n2, Node.n3, Node.n4])))
+            let root = scope.parameter(tlaName: "Root", as: Node.self, in: nodes)
+            let maxCardinality = scope.parameter(tlaName: "MaxCardinality", as: Int.self, in: 5...5)
+            Assume(nodes.contains(root) && maxCardinality >= 0 && maxCardinality >= nodes.count)
+            let possibleEdges = Where(Subsets(of: nodes)) { edge in edge.count == 2 }
+            let edges = scope.sharedVar(tlaName: "Edges", initiallyIn: Subsets(of: possibleEdges))
+            let parent = scope.sharedVar(tlaName: "mom", initial: Dictionary<Node, Node>.mapping(over: nodes) { n in n.expr })
+            let distanceFromRoot = scope.sharedVar(tlaName: "dist", initial: Dictionary<Node, Int>.mapping(over: nodes) { n in
+                If(n == root, then: 0, else: maxCardinality)
             })
 
             let relax = Do(Step.relax) {
-                With(Nodes, Nodes) { n, m in
-                    When(Edges.contains(Set<Node>().inserting(n).inserting(m)) && dist[m] < 1 + dist[n])
-                    With(IntRange(dist[m] + 1, through: dist[n] - 1)) { distance in
-                        dist[n].set(distance)
-                        mom[n].set(m)
+                With(nodes, nodes) { n, m in
+                    When(edges.contains(Set<Node>().inserting(n).inserting(m)) && distanceFromRoot[m] < 1 + distanceFromRoot[n])
+                    With(IntRange(distanceFromRoot[m] + 1, through: distanceFromRoot[n] - 1)) { distance in
+                        distanceFromRoot[n].set(distance)
+                        parent[n].set(m)
                     }
                 }
             }
             WeakFairnessNext()
             Invariant("TypeOK") {
-                Functions(from: Nodes, to: Nodes).contains(mom)
-                dist.keys == Nodes && Nodes.allSatisfy { n in dist[n] >= 0 }
-                Edges.allSatisfy { edge in edge.isSubset(of: Nodes) && edge.count == 2 }
+                Functions(from: nodes, to: nodes).contains(parent)
+                distanceFromRoot.keys == nodes && nodes.allSatisfy { n in distanceFromRoot[n] >= 0 }
+                edges.allSatisfy { edge in edge.isSubset(of: nodes) && edge.count == 2 }
             }
 
-            let postCondition = Nodes.allSatisfy { n in
-                let rootIsCorrect = n == Root && dist[n] == 0 && mom[n] == n
-                let unreachable = dist[n] == MaxCardinality && mom[n] == n && Nodes.allSatisfy { m in
-                    !Edges.contains(Set<Node>().inserting(n).inserting(m)) || dist[m] == MaxCardinality
+            let postCondition = nodes.allSatisfy { n in
+                let rootIsCorrect = n == root && distanceFromRoot[n] == 0 && parent[n] == n
+                let unreachable = distanceFromRoot[n] == maxCardinality && parent[n] == n && nodes.allSatisfy { m in
+                    !edges.contains(Set<Node>().inserting(n).inserting(m)) || distanceFromRoot[m] == maxCardinality
                 }
-                let linked = dist[n] >= 1 && dist[n] < MaxCardinality
-                    && Edges.contains(Set<Node>().inserting(n).inserting(mom[n])) && dist[n] == dist[mom[n]] + 1
+                let linked = distanceFromRoot[n] >= 1 && distanceFromRoot[n] < maxCardinality
+                    && edges.contains(Set<Node>().inserting(n).inserting(parent[n])) && distanceFromRoot[n] == distanceFromRoot[parent[n]] + 1
                 return rootIsCorrect || unreachable || linked
             }
             let Safety = Temporal()
@@ -60,9 +60,9 @@ package struct AllFourNodeSpanTreesModel: Sendable {
             let Liveness = Temporal()
             Liveness(.eventually(postCondition))
             Validation("Upstream") {
-                Bind(Nodes, to: Set<Node>([Node.n1, Node.n2, Node.n3, Node.n4]))
-                Bind(Root, to: Node.n1)
-                Bind(MaxCardinality, to: 5)
+                Bind(nodes, to: Set<Node>([Node.n1, Node.n2, Node.n3, Node.n4]))
+                Bind(root, to: Node.n1)
+                Bind(maxCardinality, to: 5)
             }.checkingDeadlock(false)
         }
     }

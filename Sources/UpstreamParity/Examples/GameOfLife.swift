@@ -12,11 +12,11 @@ package struct GameOfLifeModel: Sendable {
 
     package static var spec: TLASpec {
         #spec("GameOfLife") { scope in
-            let N = scope.parameter(as: Int.self, in: Int.all)
-            Assume(N >= 0)
+            let gridSize = scope.parameter(tlaName: "N", as: Int.self, in: Int.all)
+            Assume(gridSize >= 0)
 
-            let positions = IntRange(1, through: N).flatMapping { column in
-                IntRange(1, through: N).mapping { row in
+            let positions = IntRange(1, through: gridSize).flatMapping { column in
+                IntRange(1, through: gridSize).mapping { row in
                     Pair<Int, Int>.literal(column.expr, row.expr)
                 }
             }
@@ -44,7 +44,7 @@ package struct GameOfLifeModel: Sendable {
             Invariant("TypeOK") { grids.contains(grid) }
 
             Validation("GameOfLife") {
-                Bind(N, to: 4)
+                Bind(gridSize, to: 4)
             }
         }
     }

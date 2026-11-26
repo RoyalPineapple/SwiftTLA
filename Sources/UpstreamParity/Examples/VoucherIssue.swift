@@ -44,146 +44,146 @@ package struct VoucherIssueModel: Sendable {
     }
     package static var spec: TLASpec {
         #spec("VoucherIssue") { scope in
-            let V = scope.parameter(as: Set<Voucher>.self, in: Subsets(of: Voucher.all.assuming(Set<Voucher>.self)))
-            let H = scope.parameter(as: Set<Participant>.self, in: Subsets(of: Participant.all.assuming(Set<Participant>.self)))
-            let I = scope.parameter(as: Set<Participant>.self, in: Subsets(of: Participant.all.assuming(Set<Participant>.self)))
-            let participants = H.union(I)
-            let vState = scope.sharedVar(initial: Dictionary<Voucher, String>.mapping(over: V) { _ in "phantom" })
-            let vlcState = scope.sharedVar(initial: Dictionary<Voucher, String>.mapping(over: V) { _ in "init" })
-            let hState = scope.sharedVar(initial: Dictionary<Participant, String>.mapping(over: H) { _ in "waiting" })
-            let iState = scope.sharedVar(initial: Dictionary<Participant, String>.mapping(over: I) { _ in "waiting" })
-            let vtpState = scope.sharedVar(initial: "init")
-            let vtpIPrepared = scope.sharedVar(initial: Set<Participant>())
-            let msgs = scope.sharedVar(initial: Set<Message>())
+            let vouchers = scope.parameter(tlaName: "V", as: Set<Voucher>.self, in: Subsets(of: Voucher.all.assuming(Set<Voucher>.self)))
+            let holders = scope.parameter(tlaName: "H", as: Set<Participant>.self, in: Subsets(of: Participant.all.assuming(Set<Participant>.self)))
+            let issuers = scope.parameter(tlaName: "I", as: Set<Participant>.self, in: Subsets(of: Participant.all.assuming(Set<Participant>.self)))
+            let participants = holders.union(issuers)
+            let voucherStatus = scope.sharedVar(tlaName: "vState", initial: Dictionary<Voucher, String>.mapping(over: vouchers) { _ in "phantom" })
+            let lifecyclePhase = scope.sharedVar(tlaName: "vlcState", initial: Dictionary<Voucher, String>.mapping(over: vouchers) { _ in "init" })
+            let holderState = scope.sharedVar(tlaName: "hState", initial: Dictionary<Participant, String>.mapping(over: holders) { _ in "waiting" })
+            let issuerState = scope.sharedVar(tlaName: "iState", initial: Dictionary<Participant, String>.mapping(over: issuers) { _ in "waiting" })
+            let transactionProviderState = scope.sharedVar(tlaName: "vtpState", initial: "init")
+            let preparedParticipants = scope.sharedVar(tlaName: "vtpIPrepared", initial: Set<Participant>())
+            let messages = scope.sharedVar(tlaName: "msgs", initial: Set<Message>())
             let issueMessage: Message = Message.second(OtherMessage.second(Broadcast(type: "Issue")))
             let abortMessage: Message = Message.second(OtherMessage.second(Broadcast(type: "Abort")))
 
-            let allVouchersAreUnissued = Functions(from: V, to: SetExpr<String>.literal("phantom")).contains(vState)
-            let allLifecyclesAreInitial = Functions(from: V, to: SetExpr<String>.literal("init")).contains(vlcState)
+            let allVouchersAreUnissued = Functions(from: vouchers, to: SetExpr<String>.literal("phantom")).contains(voucherStatus)
+            let allLifecyclesAreInitial = Functions(from: vouchers, to: SetExpr<String>.literal("init")).contains(lifecyclePhase)
 
             Do(Step.providerRecordsPreparedPair, over: participants, participants) { h, i in
                 When(allVouchersAreUnissued)
                 When(allLifecyclesAreInitial)
-                When(vtpState == "init")
-                When(msgs.contains(Message.first(HolderPrepared.expression(type: "Prepared", vh: h))))
-                When(msgs.contains(Message.second(OtherMessage.first(IssuerPrepared.expression(type: "Prepared", vi: i)))))
-                vtpIPrepared.insert(h)
-                vtpIPrepared.insert(i)
+                When(transactionProviderState == "init")
+                When(messages.contains(Message.first(HolderPrepared.expression(type: "Prepared", vh: h))))
+                When(messages.contains(Message.second(OtherMessage.first(IssuerPrepared.expression(type: "Prepared", vi: i)))))
+                preparedParticipants.insert(h)
+                preparedParticipants.insert(i)
             }
 
-            Do(Step.providerIssue, over: V) { v in
-                When(vState[v] == "phantom")
-                When(vlcState[v] == "init")
-                When(vtpState == "init")
-                When(vtpIPrepared == participants)
-                vtpState.set("done")
-                vState[v].set("valid")
-                vlcState[v].set("working")
-                msgs.insert(issueMessage)
+            Do(Step.providerIssue, over: vouchers) { v in
+                When(voucherStatus[v] == "phantom")
+                When(lifecyclePhase[v] == "init")
+                When(transactionProviderState == "init")
+                When(preparedParticipants == participants)
+                transactionProviderState.set("done")
+                voucherStatus[v].set("valid")
+                lifecyclePhase[v].set("working")
+                messages.insert(issueMessage)
             }
 
-            Do(Step.providerAbort, over: V) { v in
-                When(vState[v] == "phantom")
-                When(vlcState[v] == "init")
-                When(vtpState == "init")
-                vtpState.set("done")
-                msgs.insert(abortMessage)
+            Do(Step.providerAbort, over: vouchers) { v in
+                When(voucherStatus[v] == "phantom")
+                When(lifecyclePhase[v] == "init")
+                When(transactionProviderState == "init")
+                transactionProviderState.set("done")
+                messages.insert(abortMessage)
             }
 
-            Do(Step.holderPrepare, over: H) { h in
+            Do(Step.holderPrepare, over: holders) { h in
                 When(allVouchersAreUnissued)
                 When(allLifecyclesAreInitial)
-                When(hState[h] == "waiting")
-                hState[h].set("prepared")
-                msgs.insert(Message.first(HolderPrepared.expression(type: "Prepared", vh: h)))
+                When(holderState[h] == "waiting")
+                holderState[h].set("prepared")
+                messages.insert(Message.first(HolderPrepared.expression(type: "Prepared", vh: h)))
             }
 
-            Do(Step.holderChooseToAbort, over: H) { h in
+            Do(Step.holderChooseToAbort, over: holders) { h in
                 When(allVouchersAreUnissued)
                 When(allLifecyclesAreInitial)
-                When(hState[h] == "waiting")
-                hState[h].set("aborted")
+                When(holderState[h] == "waiting")
+                holderState[h].set("aborted")
             }
 
-            Do(Step.holderReceivesIssue, over: H) { h in
-                When(Functions(from: V, to: SetExpr<String>.literal("phantom", "valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("init", "working")).contains(vlcState))
-                When(hState[h] == "waiting")
-                When(msgs.contains(issueMessage))
-                hState[h].set("holding")
+            Do(Step.holderReceivesIssue, over: holders) { h in
+                When(Functions(from: vouchers, to: SetExpr<String>.literal("phantom", "valid")).contains(voucherStatus))
+                When(Functions(from: vouchers, to: SetExpr<String>.literal("init", "working")).contains(lifecyclePhase))
+                When(holderState[h] == "waiting")
+                When(messages.contains(issueMessage))
+                holderState[h].set("holding")
             }
 
-            Do(Step.holderReceivesAbort, over: H) { h in
+            Do(Step.holderReceivesAbort, over: holders) { h in
                 When(allVouchersAreUnissued)
                 When(allLifecyclesAreInitial)
-                When(hState[h] == "waiting")
-                When(msgs.contains(abortMessage))
-                hState[h].set("aborted")
+                When(holderState[h] == "waiting")
+                When(messages.contains(abortMessage))
+                holderState[h].set("aborted")
             }
 
-            Do(Step.issuerPrepare, over: I) { i in
+            Do(Step.issuerPrepare, over: issuers) { i in
                 When(allVouchersAreUnissued)
                 When(allLifecyclesAreInitial)
-                When(iState[i] == "waiting")
-                iState[i].set("prepared")
-                msgs.insert(Message.second(OtherMessage.first(IssuerPrepared.expression(type: "Prepared", vi: i))))
+                When(issuerState[i] == "waiting")
+                issuerState[i].set("prepared")
+                messages.insert(Message.second(OtherMessage.first(IssuerPrepared.expression(type: "Prepared", vi: i))))
             }
 
-            Do(Step.issuerChooseToAbort, over: I) { i in
+            Do(Step.issuerChooseToAbort, over: issuers) { i in
                 When(allVouchersAreUnissued)
                 When(allLifecyclesAreInitial)
-                When(iState[i] == "waiting")
-                iState[i].set("aborted")
+                When(issuerState[i] == "waiting")
+                issuerState[i].set("aborted")
             }
 
-            Do(Step.issuerReceivesIssue, over: I) { i in
-                When(Functions(from: V, to: SetExpr<String>.literal("phantom", "valid")).contains(vState))
-                When(Functions(from: V, to: SetExpr<String>.literal("init", "working")).contains(vlcState))
-                When(iState[i] == "waiting")
-                When(msgs.contains(issueMessage))
-                iState[i].set("issued")
+            Do(Step.issuerReceivesIssue, over: issuers) { i in
+                When(Functions(from: vouchers, to: SetExpr<String>.literal("phantom", "valid")).contains(voucherStatus))
+                When(Functions(from: vouchers, to: SetExpr<String>.literal("init", "working")).contains(lifecyclePhase))
+                When(issuerState[i] == "waiting")
+                When(messages.contains(issueMessage))
+                issuerState[i].set("issued")
             }
 
-            Do(Step.issuerReceivesAbort, over: I) { i in
+            Do(Step.issuerReceivesAbort, over: issuers) { i in
                 When(allVouchersAreUnissued)
                 When(allLifecyclesAreInitial)
-                When(iState[i] == "waiting")
-                When(msgs.contains(abortMessage))
-                iState[i].set("aborted")
+                When(issuerState[i] == "waiting")
+                When(messages.contains(abortMessage))
+                issuerState[i].set("aborted")
             }
 
             Invariant("VTPTypeOK") {
-                Functions(from: V, to: SetExpr<String>.literal("phantom", "valid")).contains(vState)
-                Functions(from: V, to: SetExpr<String>.literal("init", "working")).contains(vlcState)
-                Functions(from: H, to: SetExpr<String>.literal("waiting", "prepared", "holding", "aborted")).contains(hState)
-                Functions(from: I, to: SetExpr<String>.literal("waiting", "prepared", "issued", "aborted")).contains(iState)
-                SetExpr<String>.literal("init", "done").contains(vtpState)
-                vtpIPrepared.isSubset(of: participants)
-                msgs.allSatisfy { message in
+                Functions(from: vouchers, to: SetExpr<String>.literal("phantom", "valid")).contains(voucherStatus)
+                Functions(from: vouchers, to: SetExpr<String>.literal("init", "working")).contains(lifecyclePhase)
+                Functions(from: holders, to: SetExpr<String>.literal("waiting", "prepared", "holding", "aborted")).contains(holderState)
+                Functions(from: issuers, to: SetExpr<String>.literal("waiting", "prepared", "issued", "aborted")).contains(issuerState)
+                SetExpr<String>.literal("init", "done").contains(transactionProviderState)
+                preparedParticipants.isSubset(of: participants)
+                messages.allSatisfy { message in
                     message == issueMessage || message == abortMessage
-                        || H.contains { holder in message == Message.first(HolderPrepared.expression(type: "Prepared", vh: holder)) }
-                        || I.contains { issuer in message == Message.second(OtherMessage.first(IssuerPrepared.expression(type: "Prepared", vi: issuer))) }
+                        || holders.contains { holder in message == Message.first(HolderPrepared.expression(type: "Prepared", vh: holder)) }
+                        || issuers.contains { issuer in message == Message.second(OtherMessage.first(IssuerPrepared.expression(type: "Prepared", vi: issuer))) }
                 }
             }
             Invariant("VTPConsistent") {
-                H.allSatisfy { h in
-                    I.allSatisfy { i in
-                        !(hState[h] == "holding" && iState[i] == "aborted")
-                            && !(hState[h] == "aborted" && iState[i] == "issued")
+                holders.allSatisfy { h in
+                    issuers.allSatisfy { i in
+                        !(holderState[h] == "holding" && issuerState[i] == "aborted")
+                            && !(holderState[h] == "aborted" && issuerState[i] == "issued")
                     }
                 }
             }
             let lifeCycle = Instance(of: VoucherLifeCycleModel.self) {
-                Bind(\.V, projecting: V)
+                Bind(\.vouchers, projecting: vouchers)
             }
             Refinement("VSpec", instance: lifeCycle) {
-                Map(\.vState, projecting: vState)
-                Map(\.vlcState, projecting: vlcState)
+                Map(\.voucherStatus, projecting: voucherStatus)
+                Map(\.lifecyclePhase, projecting: lifecyclePhase)
             }
             Validation("published") {
-                Bind(V, to: Set<Voucher>([.v1, .v2, .v3]))
-                Bind(H, to: Set<Participant>([.holder1, .holder2, .holder3]))
-                Bind(I, to: Set<Participant>([.issuer1, .issuer2, .issuer3]))
+                Bind(vouchers, to: Set<Voucher>([.v1, .v2, .v3]))
+                Bind(holders, to: Set<Participant>([.holder1, .holder2, .holder3]))
+                Bind(issuers, to: Set<Participant>([.issuer1, .issuer2, .issuer3]))
             }.checkingDeadlock(false)
         }
     }

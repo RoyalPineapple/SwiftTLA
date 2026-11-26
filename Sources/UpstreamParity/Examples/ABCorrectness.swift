@@ -22,33 +22,33 @@ package struct ABCorrectnessModel: Sendable {
     package static var spec: TLASpec {
         #spec("ABCorrectness") { scope in
             Extends(.naturals)
-            let Data = scope.parameter(as: Set<Datum>.self, in: Set<Set<Datum>>([Set<Datum>([Datum.d1, Datum.d2])]))
-            let sBit = scope.sharedVar(initiallyIn: 0...1)
-            let sAck = scope.sharedVar(initial: sBit)
-            let rBit = scope.sharedVar(initial: sBit)
-            let sent = scope.sharedVar(initiallyIn: Data)
-            let rcvd = scope.sharedVar(initiallyIn: Data)
+            let dataValues = scope.parameter(tlaName: "Data", as: Set<Datum>.self, in: Set<Set<Datum>>([Set<Datum>([Datum.d1, Datum.d2])]))
+            let senderBit = scope.sharedVar(tlaName: "sBit", initiallyIn: 0...1)
+            let acknowledgedBit = scope.sharedVar(tlaName: "sAck", initial: senderBit)
+            let receiverBit = scope.sharedVar(tlaName: "rBit", initial: senderBit)
+            let sent = scope.sharedVar(initiallyIn: dataValues)
+            let receivedValue = scope.sharedVar(tlaName: "rcvd", initiallyIn: dataValues)
 
-            Do(Step.send, over: Data) { value in
-                When(sAck == sBit)
+            Do(Step.send, over: dataValues) { value in
+                When(acknowledgedBit == senderBit)
                 sent.set(value)
-                sBit.set(1 - sBit)
+                senderBit.set(1 - senderBit)
             }
-            let receive = Do(Step.receive, when: rBit != sBit) {
-                rBit.set(sBit)
-                rcvd.set(sent)
+            let receive = Do(Step.receive, when: receiverBit != senderBit) {
+                receiverBit.set(senderBit)
+                receivedValue.set(sent)
             }
-            let acknowledge = Do(Step.acknowledge, when: rBit != sAck) {
-                sAck.set(rBit)
+            let acknowledge = Do(Step.acknowledge, when: receiverBit != acknowledgedBit) {
+                acknowledgedBit.set(receiverBit)
             }
             WeakFairness(receive)
             WeakFairness(acknowledge)
 
             Invariant("TypeInv") {
-                (0...1).contains(sBit) && (0...1).contains(sAck) && (0...1).contains(rBit)
-                    && Data.contains(sent) && Data.contains(rcvd)
+                (0...1).contains(senderBit) && (0...1).contains(acknowledgedBit) && (0...1).contains(receiverBit)
+                    && dataValues.contains(sent) && dataValues.contains(receivedValue)
             }
-            Validation("Upstream") { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2])) }
+            Validation("Upstream") { Bind(dataValues, to: Set<Datum>([Datum.d1, Datum.d2])) }
         }
     }
 }

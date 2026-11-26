@@ -28,22 +28,22 @@ package struct SchedulingAllocatorModel: Sendable {
         #spec("SchedulingAllocator") { scope in
             Extends(.finiteSets)
             Extends(.sequences)
-            let Clients = scope.parameter(as: Set<Client>.self, in: Set<Set<Client>>([Set([.c1, .c2, .c3])]))
-            let Resources = scope.parameter(as: Set<Resource>.self, in: Set<Set<Resource>>([Set([.r1, .r2])]))
-            let choices = Subsets(of: Resources)
-            let unsat = scope.sharedVar(initial: Dictionary<Client, Set<Resource>>.mapping(over: Clients) { _ in Set<Resource>() })
-            let alloc = scope.sharedVar(initial: Dictionary<Client, Set<Resource>>.mapping(over: Clients) { _ in Set<Resource>() })
+            let clients = scope.parameter(tlaName: "Clients", as: Set<Client>.self, in: Set<Set<Client>>([Set([.c1, .c2, .c3])]))
+            let resources = scope.parameter(tlaName: "Resources", as: Set<Resource>.self, in: Set<Set<Resource>>([Set([.r1, .r2])]))
+            let choices = Subsets(of: resources)
+            let unsat = scope.sharedVar(initial: Dictionary<Client, Set<Resource>>.mapping(over: clients) { _ in Set<Resource>() })
+            let alloc = scope.sharedVar(initial: Dictionary<Client, Set<Resource>>.mapping(over: clients) { _ in Set<Resource>() })
             let sched = scope.sharedVar(initial: [Client]())
             let positions = IntRange(1, through: sched.count)
-            let waiting = Clients.filter { c in !unsat[c].isEmpty && !sched.contains(c) }
+            let waiting = clients.filter { c in !unsat[c].isEmpty && !sched.contains(c) }
 
-            Do(Step.request, over: Clients, choices) { client, requested in
+            Do(Step.request, over: clients, choices) { client, requested in
                 When(unsat[client].isEmpty && alloc[client].isEmpty && !requested.isEmpty)
                 unsat[client].set(requested)
             }
-            let allocate = Do(Step.allocate, over: Clients, choices) { client, granted in
+            let allocate = Do(Step.allocate, over: clients, choices) { client, granted in
                 When(!granted.isEmpty && granted.isSubset(of: unsat[client]))
-                When(Clients.allSatisfy { other in alloc[other].intersection(granted).isEmpty })
+                When(clients.allSatisfy { other in alloc[other].intersection(granted).isEmpty })
                 With(positions) { i in
                     When(sched[i] == client)
                     When(IntRange(1, through: i - 1).allSatisfy { j in unsat[sched[j]].intersection(granted).isEmpty })
@@ -52,7 +52,7 @@ package struct SchedulingAllocatorModel: Sendable {
                     unsat[client].set(unsat[client].subtracting(granted))
                 }
             }
-            let giveBack = Do(Step.giveBack, over: Clients, choices) { client, returned in
+            let giveBack = Do(Step.giveBack, over: clients, choices) { client, returned in
                 When(!returned.isEmpty && returned.isSubset(of: alloc[client]))
                 alloc[client].set(alloc[client].subtracting(returned))
             }
@@ -75,17 +75,17 @@ package struct SchedulingAllocatorModel: Sendable {
 
             let typeInvariant = Invariant("TypeInvariant")
             typeInvariant {
-                positions.allSatisfy { i in Clients.contains(sched[i]) }
-                unsat.keys == Clients
-                alloc.keys == Clients
-                Clients.allSatisfy { client in
-                    unsat[client].isSubset(of: Resources) && alloc[client].isSubset(of: Resources)
+                positions.allSatisfy { i in clients.contains(sched[i]) }
+                unsat.keys == clients
+                alloc.keys == clients
+                clients.allSatisfy { client in
+                    unsat[client].isSubset(of: resources) && alloc[client].isSubset(of: resources)
                 }
             }
             let mutex = Invariant("ResourceMutex")
             mutex {
-                Clients.allSatisfy { first in
-                    Clients.allSatisfy { second in first == second || alloc[first].intersection(alloc[second]).isEmpty }
+                clients.allSatisfy { first in
+                    clients.allSatisfy { second in first == second || alloc[first].intersection(alloc[second]).isEmpty }
                 }
             }
             let allocatorInvariant = Invariant("AllocatorInvariant")
@@ -97,26 +97,26 @@ package struct SchedulingAllocatorModel: Sendable {
                 }
                 positions.allSatisfy { i in
                     unsat[sched[i]].allSatisfy { resource in
-                        Clients.allSatisfy { client in !alloc[client].contains(resource) }
+                        clients.allSatisfy { client in !alloc[client].contains(resource) }
                             || IntRange(1, through: i - 1).contains { j in
                                 unsat[sched[j]].contains(resource) || alloc[sched[j]].contains(resource)
                             }
-                            || Clients.contains { client in !sched.contains(client) && alloc[client].contains(resource) }
+                            || clients.contains { client in !sched.contains(client) && alloc[client].contains(resource) }
                     }
                 }
             }
             let ClientsWillReturn = Temporal()
-            ClientsWillReturn(forEach: Clients) { client in .leadsTo(unsat[client].isEmpty, alloc[client].isEmpty) }
+            ClientsWillReturn(forEach: clients) { client in .leadsTo(unsat[client].isEmpty, alloc[client].isEmpty) }
             let ClientsWillObtain = Temporal()
-            ClientsWillObtain(forEach: Clients) { client in .all([
+            ClientsWillObtain(forEach: clients) { client in .all([
                 .leadsTo(unsat[client].contains(Resource.r1), alloc[client].contains(Resource.r1)),
                 .leadsTo(unsat[client].contains(Resource.r2), alloc[client].contains(Resource.r2)),
             ]) }
             let InfOftenSatisfied = Temporal()
-            InfOftenSatisfied(forEach: Clients) { client in .alwaysEventually(unsat[client].isEmpty) }
+            InfOftenSatisfied(forEach: clients) { client in .alwaysEventually(unsat[client].isEmpty) }
             let simple = Instance(of: SimpleAllocatorModel.self) {
-                Bind(\.Clients, projecting: Clients)
-                Bind(\.Resources, projecting: Resources)
+                Bind(\.clients, projecting: clients)
+                Bind(\.resources, projecting: resources)
             }
             let SimpleAllocator = Refinement(instance: simple) {
                 Map(\.unsat, projecting: unsat)
@@ -124,12 +124,12 @@ package struct SchedulingAllocatorModel: Sendable {
             }
 
             Validation("published", label: "SchedulingAllocator") {
-                Bind(Clients, to: Set<Client>([.c1, .c2, .c3]))
-                Bind(Resources, to: Set<Resource>([.r1, .r2]))
+                Bind(clients, to: Set<Client>([.c1, .c2, .c3]))
+                Bind(resources, to: Set<Resource>([.r1, .r2]))
             }.checking(only: [typeInvariant, mutex, allocatorInvariant, ClientsWillReturn, ClientsWillObtain, InfOftenSatisfied])
             Validation("refinement", label: "AllocatorRefinement") {
-                Bind(Clients, to: Set<Client>([.c1, .c2, .c3]))
-                Bind(Resources, to: Set<Resource>([.r1, .r2]))
+                Bind(clients, to: Set<Client>([.c1, .c2, .c3]))
+                Bind(resources, to: Set<Resource>([.r1, .r2]))
             }.checking(only: [SimpleAllocator])
         }
     }

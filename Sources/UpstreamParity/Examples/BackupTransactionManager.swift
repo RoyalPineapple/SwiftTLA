@@ -33,32 +33,32 @@ package struct BackupTransactionManagerModel: Sendable {
 
     package static var spec: TLASpec {
         #spec("BackupTransactionManager") { scope in
-            let RM = scope.parameter(as: Set<Manager>.self, in: Subsets(of: Manager.all.assuming(Set<Manager>.self)))
-            let RMMAYFAIL = scope.parameter(as: Bool.self)
-            let TMMAYFAIL = scope.parameter(as: Bool.self)
+            let resourceManagers = scope.parameter(tlaName: "RM", as: Set<Manager>.self, in: Subsets(of: Manager.all.assuming(Set<Manager>.self)))
+            let resourceManagersMayFail = scope.parameter(tlaName: "RMMAYFAIL", as: Bool.self)
+            let transactionManagerMayFail = scope.parameter(tlaName: "TMMAYFAIL", as: Bool.self)
             let typeOK = Invariant("TypeOK")
             let consistency = Invariant("Consistency")
             let Termination = Temporal()
             Algorithm("protocolSteps") { scope in
-                let rmState = scope.sharedVar(initial: Dictionary<Manager, Phase>.mapping(over: RM) { _ in Phase.working })
-                let tmState = scope.sharedVar(initial: Decision.undecided)
-                let anyCommitted = RM.contains { manager in rmState[manager] == Phase.committed }
-                let canCommit = RM.allSatisfy { manager in rmState[manager] == Phase.prepared } || anyCommitted
-                let canAbort = RM.contains { manager in
-                    rmState[manager] == Phase.aborted || rmState[manager] == Phase.failed
+                let resourceManagerStates = scope.sharedVar(tlaName: "rmState", initial: Dictionary<Manager, Phase>.mapping(over: resourceManagers) { _ in Phase.working })
+                let coordinatorDecision = scope.sharedVar(tlaName: "tmState", initial: Decision.undecided)
+                let anyCommitted = resourceManagers.contains { manager in resourceManagerStates[manager] == Phase.committed }
+                let canCommit = resourceManagers.allSatisfy { manager in resourceManagerStates[manager] == Phase.prepared } || anyCommitted
+                let canAbort = resourceManagers.contains { manager in
+                    resourceManagerStates[manager] == Phase.aborted || resourceManagerStates[manager] == Phase.failed
                 } && !anyCommitted
 
-                Each(RM, fairness: .weak) { manager in
-                    While(Step.prepareDecideOrFail, rmState[manager] == Phase.working || rmState[manager] == Phase.prepared) {
+                Each(resourceManagers, fairness: .weak) { manager in
+                    While(Step.prepareDecideOrFail, resourceManagerStates[manager] == Phase.working || resourceManagerStates[manager] == Phase.prepared) {
                         Either {
-                            When(rmState[manager] == Phase.working) { rmState[manager].set(Phase.prepared) }
-                            When(tmState == Decision.commit) { rmState[manager].set(Phase.committed) }
-                            When(rmState[manager] == Phase.working || tmState == Decision.abort) {
-                                rmState[manager].set(Phase.aborted)
+                            When(resourceManagerStates[manager] == Phase.working) { resourceManagerStates[manager].set(Phase.prepared) }
+                            When(coordinatorDecision == Decision.commit) { resourceManagerStates[manager].set(Phase.committed) }
+                            When(resourceManagerStates[manager] == Phase.working || coordinatorDecision == Decision.abort) {
+                                resourceManagerStates[manager].set(Phase.aborted)
                             }
                             When(true) {
-                                If(RMMAYFAIL && !RM.contains { other in rmState[other] == Phase.failed }) {
-                                    rmState[manager].set(Phase.failed)
+                                If(resourceManagersMayFail && !resourceManagers.contains { other in resourceManagerStates[other] == Phase.failed }) {
+                                    resourceManagerStates[manager].set(Phase.failed)
                                 }
                             }
                         }
@@ -72,43 +72,43 @@ package struct BackupTransactionManagerModel: Sendable {
                             When(canAbort) { Goto(Step.recordPrimaryAbort) }
                         }
                     }
-                    Do(Step.recordPrimaryCommit) { tmState.set(Decision.commit) }
+                    Do(Step.recordPrimaryCommit) { coordinatorDecision.set(Decision.commit) }
                     Do(Step.finishAfterCommit) {
-                        If(TMMAYFAIL) { tmState.set(Decision.hidden) }
+                        If(transactionManagerMayFail) { coordinatorDecision.set(Decision.hidden) }
                         Stop()
                     }
-                    Do(Step.recordPrimaryAbort) { tmState.set(Decision.abort) }
+                    Do(Step.recordPrimaryAbort) { coordinatorDecision.set(Decision.abort) }
                     Do(Step.finishAfterAbort) {
-                        If(TMMAYFAIL) { tmState.set(Decision.hidden) }
+                        If(transactionManagerMayFail) { coordinatorDecision.set(Decision.hidden) }
                     }
                 }
 
                 Process(id: 10, fairness: .weak) {
                     Do(Step.recoverHiddenDecision) {
-                        When(tmState == Decision.hidden)
+                        When(coordinatorDecision == Decision.hidden)
                         Either {
                             When(canCommit) { Goto(Step.recordBackupCommit) }
                             When(canAbort) { Goto(Step.recordBackupAbort) }
                         }
                     }
                     Do(Step.recordBackupCommit) {
-                        tmState.set(Decision.commit)
+                        coordinatorDecision.set(Decision.commit)
                         Stop()
                     }
-                    Do(Step.recordBackupAbort) { tmState.set(Decision.abort) }
+                    Do(Step.recordBackupAbort) { coordinatorDecision.set(Decision.abort) }
                 }
 
                 typeOK {
-                    Functions(from: RM, to: SetExpr<Phase>.literal(.working, .prepared, .committed, .aborted, .failed)).contains(rmState)
-                    SetExpr<Decision>.literal(.undecided, .commit, .abort, .hidden).contains(tmState)
+                    Functions(from: resourceManagers, to: SetExpr<Phase>.literal(.working, .prepared, .committed, .aborted, .failed)).contains(resourceManagerStates)
+                    SetExpr<Decision>.literal(.undecided, .commit, .abort, .hidden).contains(coordinatorDecision)
                 }
-                consistency { !anyCommitted || !RM.contains { manager in rmState[manager] == Phase.aborted } }
-                Termination(.eventually(RM.allSatisfy { manager in Finished(manager) } && Finished(0) && Finished(10)))
+                consistency { !anyCommitted || !resourceManagers.contains { manager in resourceManagerStates[manager] == Phase.aborted } }
+                Termination(.eventually(resourceManagers.allSatisfy { manager in Finished(manager) } && Finished(0) && Finished(10)))
             }
             Validation("threeManagers") {
-                Bind(RM, to: Set<Manager>([.rm1, .rm2, .rm3]))
-                Bind(RMMAYFAIL, to: true)
-                Bind(TMMAYFAIL, to: true)
+                Bind(resourceManagers, to: Set<Manager>([.rm1, .rm2, .rm3]))
+                Bind(resourceManagersMayFail, to: true)
+                Bind(transactionManagerMayFail, to: true)
             }.checking(only: [typeOK, consistency])
         }
     }

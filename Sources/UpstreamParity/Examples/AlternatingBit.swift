@@ -22,71 +22,71 @@ package struct AlternatingBitModel: Sendable {
     package static var spec: TLASpec {
         #spec("MCAlternatingBit") { scope in
             Extends(.naturals, .sequences)
-            let Data = scope.parameter(as: Set<Datum>.self, in: Set<Set<Datum>>([Set<Datum>([Datum.d1, Datum.d2])]))
-            let msgQLen = scope.parameter(as: Int.self, in: 2...2)
-            let ackQLen = scope.parameter(as: Int.self, in: 2...2)
-            let msgQ = scope.sharedVar(initial: [Pair<Int, Datum>]())
-            let ackQ = scope.sharedVar(initial: [Int]())
-            let sBit = scope.sharedVar(initiallyIn: 0...1)
-            let sAck = scope.sharedVar(initial: sBit)
-            let rBit = scope.sharedVar(initial: sBit)
-            let sent = scope.sharedVar(initiallyIn: Data)
-            let rcvd = scope.sharedVar(initiallyIn: Data)
+            let dataValues = scope.parameter(tlaName: "Data", as: Set<Datum>.self, in: Set<Set<Datum>>([Set<Datum>([Datum.d1, Datum.d2])]))
+            let messageQueueLimit = scope.parameter(tlaName: "msgQLen", as: Int.self, in: 2...2)
+            let acknowledgementQueueLimit = scope.parameter(tlaName: "ackQLen", as: Int.self, in: 2...2)
+            let messageQueue = scope.sharedVar(tlaName: "msgQ", initial: [Pair<Int, Datum>]())
+            let acknowledgementQueue = scope.sharedVar(tlaName: "ackQ", initial: [Int]())
+            let senderBit = scope.sharedVar(tlaName: "sBit", initiallyIn: 0...1)
+            let acknowledgedBit = scope.sharedVar(tlaName: "sAck", initial: senderBit)
+            let receiverBit = scope.sharedVar(tlaName: "rBit", initial: senderBit)
+            let sent = scope.sharedVar(initiallyIn: dataValues)
+            let receivedValue = scope.sharedVar(tlaName: "rcvd", initiallyIn: dataValues)
 
-            Do(Step.send, over: Data) { value in
-                When(sAck == sBit)
-                msgQ.set(msgQ.appending(Pair<Int, Datum>.literal(1 - sBit, value)))
+            Do(Step.send, over: dataValues) { value in
+                When(acknowledgedBit == senderBit)
+                messageQueue.set(messageQueue.appending(Pair<Int, Datum>.literal(1 - senderBit, value)))
                 sent.set(value)
-                sBit.set(1 - sBit)
+                senderBit.set(1 - senderBit)
             }
-            let resend = Do(Step.resend, when: sAck != sBit) {
-                msgQ.set(msgQ.appending(Pair<Int, Datum>.literal(sBit, sent)))
+            let resend = Do(Step.resend, when: acknowledgedBit != senderBit) {
+                messageQueue.set(messageQueue.appending(Pair<Int, Datum>.literal(senderBit, sent)))
             }
-            let receive = Do(Step.receive, when: !msgQ.isEmpty) {
-                rBit.set(msgQ.head().first())
-                rcvd.set(msgQ.head().second())
-                msgQ.set(msgQ.tail())
+            let receive = Do(Step.receive, when: !messageQueue.isEmpty) {
+                receiverBit.set(messageQueue.head().first())
+                receivedValue.set(messageQueue.head().second())
+                messageQueue.set(messageQueue.tail())
             }
-            let sendAck = Do(Step.sendAck) { ackQ.set(ackQ.appending(rBit)) }
-            let receiveAck = Do(Step.receiveAck, when: !ackQ.isEmpty) {
-                sAck.set(ackQ.head())
-                ackQ.set(ackQ.tail())
+            let sendAck = Do(Step.sendAck) { acknowledgementQueue.set(acknowledgementQueue.appending(receiverBit)) }
+            let receiveAck = Do(Step.receiveAck, when: !acknowledgementQueue.isEmpty) {
+                acknowledgedBit.set(acknowledgementQueue.head())
+                acknowledgementQueue.set(acknowledgementQueue.tail())
             }
             Do(Step.loseMsg) {
-                With(IntRange(1, through: msgQ.count)) { i in msgQ.set(msgQ.removing(at: i)) }
+                With(IntRange(1, through: messageQueue.count)) { i in messageQueue.set(messageQueue.removing(at: i)) }
             }
             Do(Step.loseAck) {
-                With(IntRange(1, through: ackQ.count)) { i in ackQ.set(ackQ.removing(at: i)) }
+                With(IntRange(1, through: acknowledgementQueue.count)) { i in acknowledgementQueue.set(acknowledgementQueue.removing(at: i)) }
             }
             WeakFairness(resend)
             WeakFairness(sendAck)
             StrongFairness(receive)
             StrongFairness(receiveAck)
-            Constraint(msgQ.count <= msgQLen && ackQ.count <= ackQLen)
+            Constraint(messageQueue.count <= messageQueueLimit && acknowledgementQueue.count <= acknowledgementQueueLimit)
             let messages = Set<Int>([0, 1]).flatMapping { bit in
-                Data.mapping { value in Pair<Int, Datum>.literal(bit, value) }
+                dataValues.mapping { value in Pair<Int, Datum>.literal(bit, value) }
             }
             Invariant("ABTypeInv") {
-                Sequences(of: messages).contains(msgQ) && Sequences(of: Set<Int>([0, 1])).contains(ackQ)
-                (0...1).contains(sBit) && (0...1).contains(sAck) && (0...1).contains(rBit)
-                Data.contains(sent) && Data.contains(rcvd)
+                Sequences(of: messages).contains(messageQueue) && Sequences(of: Set<Int>([0, 1])).contains(acknowledgementQueue)
+                (0...1).contains(senderBit) && (0...1).contains(acknowledgedBit) && (0...1).contains(receiverBit)
+                dataValues.contains(sent) && dataValues.contains(receivedValue)
             }
-            let abstraction = Instance(of: ABCorrectnessModel.self) { Bind(\.Data, projecting: Data) }
+            let abstraction = Instance(of: ABCorrectnessModel.self) { Bind(\.dataValues, projecting: dataValues) }
             Refinement("ABCSpec", instance: abstraction) {
-                Map(\.sBit, projecting: sBit)
-                Map(\.sAck, projecting: sAck)
-                Map(\.rBit, projecting: rBit)
+                Map(\.senderBit, projecting: senderBit)
+                Map(\.acknowledgedBit, projecting: acknowledgedBit)
+                Map(\.receiverBit, projecting: receiverBit)
                 Map(\.sent, projecting: sent)
-                Map(\.rcvd, projecting: rcvd)
+                Map(\.receivedValue, projecting: receivedValue)
             }
             let SentLeadsToRcvd = Temporal()
-            SentLeadsToRcvd(forEach: Data) { d in
-                .leadsTo(sent == d && sBit != sAck, rcvd == d)
+            SentLeadsToRcvd(forEach: dataValues) { d in
+                .leadsTo(sent == d && senderBit != acknowledgedBit, receivedValue == d)
             }
             Validation("Upstream") {
-                Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2]))
-                Bind(msgQLen, to: 2)
-                Bind(ackQLen, to: 2)
+                Bind(dataValues, to: Set<Datum>([Datum.d1, Datum.d2]))
+                Bind(messageQueueLimit, to: 2)
+                Bind(acknowledgementQueueLimit, to: 2)
             }
         }
     }
