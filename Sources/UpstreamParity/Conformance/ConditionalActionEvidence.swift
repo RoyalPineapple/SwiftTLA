@@ -695,7 +695,16 @@ package enum ConditionalActionEvidence {
         let terminal = failureOutput != nil
             ? #"          /\ (ConditionalSourceHistory # <<>> => ~ENABLED Next)"#
             : #"          /\ ConditionalIntegerTerminal(ConditionalSelectedArm).failure = <<>>"#
-        let conclusion = failureOutput != nil ? #"""
+        let conclusion = failureOutput != nil && hasPrefix ? #"""
+        <1>sourceNativeHistory. ConditionalNativeHistory(TRUE) = ConditionalSourceHistory
+            BY ONLY <1>prefixPass, <1>nativeHistory, SMT DEF ConditionalSourceHistory
+        <1>sourceNativeStep. ConditionalNativeStep <=> ConditionalSourceStep
+            BY ONLY <1>prefixPass, <1>nativeSuccess, SMT DEF ConditionalSourceStep
+        <1>sourceNext. Next <=> ConditionalSourceStep
+            BY ONLY <1>step, PTL DEF Next, ConditionalPhysicalStep
+        <1>. QED BY ONLY <1>physicalHistory, <1>sourceNativeHistory, <1>sourceCheck, <1>layout,
+            <1>step, <1>sourceNativeStep, <1>nativeQueue, <1>sourceNext, <1>noSuccessor, <1>certified, PTL
+        """# : failureOutput != nil ? #"""
         <1>. QED BY ONLY <1>physicalHistory, <1>nativeHistory, <1>sourceCheck, <1>layout,
             <1>step, <1>nativeSuccess, <1>nativeQueue, <1>noSuccessor, <1>certified, PTL
             DEF ConditionalSourceHistory, ConditionalSourceStep
