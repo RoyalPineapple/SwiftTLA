@@ -72,12 +72,18 @@ private struct RecordUnionFieldModel {
         let src: OneOf<Token, Int>
     }
 
-    private enum Step: String, CaseIterable { case consume, inspect }
+    private enum Step: String, CaseIterable { case consume, inspect, hasTokenFields, hasPayloadFields }
 
     static var spec: TLASpec {
         #spec("RecordUnionField") { scope in
             let message = scope.sharedVar(initial: OneOf<Token, Payload>.first(
                 Token.expression(type: "tok", q: 1)))
+            Do(Step.hasTokenFields) {
+                When(message.recordFields == Set<String>(["q", "type", "q"]))
+            }
+            Do(Step.hasPayloadFields) {
+                When(Set<String>(["src", "type"]) == message.recordFields)
+            }
             Do(Step.consume) {
                 When(message.recordFields.contains("q"))
                 Assign(message, to: OneOf<Token, Payload>.second(
@@ -119,7 +125,11 @@ struct FormalUnionTests {
     func recordUnionFieldGuard() throws {
         var machine = try RecordUnionFieldModel.makeMachine()
         #expect(try machine.isEnabled(.consume))
+        #expect(try machine.isEnabled(.hasTokenFields))
+        #expect(try !machine.isEnabled(.hasPayloadFields))
         _ = try machine.send(.consume)
+        #expect(try !machine.isEnabled(.hasTokenFields))
+        #expect(try machine.isEnabled(.hasPayloadFields))
         #expect(machine.state.message == .second(.init(type: "pl", src: .first(.init(type: "original", q: 2)))))
         #expect(try machine.isEnabled(.inspect))
         #expect(try !machine.isEnabled(.consume))

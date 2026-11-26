@@ -921,6 +921,32 @@ struct NativeSwiftEmitter {
             }())
             """
         }
+        func recordShapeEquality(domain: CompiledExpression, keys: CompiledExpression) throws -> String? {
+            guard case .domain = domain.operation, let receiver = domain.children.first,
+                  receiver.resultType.unionAlternatives != nil, keys.resultType == .set(.string),
+                  expressionValues[domain] == nil, expressionValues[keys] == nil else { return nil }
+            let names: Set<CompiledValue>
+            switch keys.operation {
+            case .value(.set(let values)):
+                guard values.allSatisfy({ if case .string = $0 { true } else { false } }) else { return nil }
+                names = values
+            case .setLiteral:
+                var literals = Set<CompiledValue>()
+                for key in keys.children {
+                    guard case .value(let value) = key.operation, case .string = value,
+                          key.resultType == .string, expressionValues[key] == nil else { return nil }
+                    literals.insert(value)
+                }
+                names = literals
+            default: return nil
+            }
+            let cases = try recordDomainCases(receiver.resultType, pattern: { $0 }) { fields in
+                String(Set(fields.map { CompiledValue.string($0.name) }) == names)
+            }
+            let value = try self.expression(receiver, state: state, substitutions: substitutions,
+                activeFunctions: activeFunctions)
+            return "(try { () throws -> \(nativeBoolType) in switch \(value) { \(cases.joined(separator: "\n")) } }())"
+        }
         func domainRangeEquality(
             domain: CompiledExpression, range: CompiledExpression, domainFirst: Bool
         ) throws -> String? {
@@ -975,6 +1001,8 @@ struct NativeSwiftEmitter {
             return try checkedView(emit(0), from: childType(0), to: node.resultType)
         case .equal:
             if let structural = try nominalEquality(negated: false) { return structural }
+            if let shape = try recordShapeEquality(domain: node.children[0], keys: node.children[1])
+                ?? recordShapeEquality(domain: node.children[1], keys: node.children[0]) { return shape }
             if let optimized = try domainRangeEquality(
                 domain: node.children[0], range: node.children[1], domainFirst: true
             ) { return optimized }
@@ -1474,7 +1502,10 @@ struct NativeSwiftEmitter {
                 return "(try { () throws -> \(resultType) in _ = \(try emit(0)); return \(domain) }())"
             case .oneOf, .union:
                 let resultType = try swiftType(node.resultType)
-                let cases = try recordDomainCases(childType(0), resultType: resultType, pattern: { $0 })
+                let cases = try recordDomainCases(childType(0), pattern: { $0 }) { fields in
+                    let keys = try fields.map { try literal(.string($0.name), as: .string) }
+                    return "\(resultType)([\(keys.joined(separator: ", "))])"
+                }
                 return "(try { () throws -> \(resultType) in switch \(try emit(0)) { \(cases.joined(separator: "\n")) } }())"
             default: throw unsupported("DOMAIN")
             }

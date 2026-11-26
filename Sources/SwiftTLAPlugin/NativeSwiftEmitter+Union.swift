@@ -115,16 +115,18 @@ extension NativeSwiftEmitter {
         return "(\(prefix){ (value: \(try swiftType(source)))\(throwing) -> \(try swiftType(target)) in\nswitch value { \(cases) } }(\(value)))"
     }
 
-    func recordDomainCases(_ type: CompiledValueType, resultType: String, pattern: (String) -> String) throws -> [String] {
+    func recordDomainCases(
+        _ type: CompiledValueType, pattern: (String) -> String,
+        result: ([CompiledFieldType]) throws -> String
+    ) throws -> [String] {
         if let fields = type.recordFields {
-            let keys = try fields.map { try literal(.string($0.name), as: .string) }
-            return ["case \(pattern("_")): return \(resultType)([\(keys.joined(separator: ", "))])"]
+            return ["case \(pattern("_")): return \(try result(fields))"]
         }
         guard let alternatives = type.unionAlternatives else { throw unsupported("DOMAIN") }
         return try alternatives.enumerated().flatMap { index, alternative in
-            try recordDomainCases(alternative, resultType: resultType) {
+            try recordDomainCases(alternative, pattern: {
                 pattern(".\(self.unionCase(type, index: index))(\($0))")
-            }
+            }, result: result)
         }
     }
 
