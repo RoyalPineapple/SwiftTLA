@@ -53,7 +53,8 @@ package enum SequentialControlOutputEvidence {
         }) else { return nil }
         let directives = ["SPECIFICATION Spec", "CHECK_DEADLOCK TRUE"]
             + invariants.sorted().map { "INVARIANT \($0)" }
-        guard cfg.utf8.elementsEqual((directives.joined(separator: "\n") + "\n").utf8) else { return nil }
+        let expectedCFG = directives.joined(separator: "\n") + "\n"
+        guard cfg.utf8.elementsEqual(expectedCFG.utf8) else { return nil }
 
         let controlModule = "SwiftTLASequentialControl" + actual.name
         let nativeProof = try native.map { input in
@@ -71,32 +72,8 @@ package enum SequentialControlOutputEvidence {
             try authoredFailureHistory(in: actual.tla, program: $0, authored: authored.machine)
         }
         let configuredModule = controlModule + "ConfiguredProof"
-        let cfgBytes = Array(cfg.utf8)
-        let cfgPages = stride(from: 0, to: cfgBytes.count, by: 16).enumerated().map { index, offset in
-            let end = min(offset + 16, cfgBytes.count)
-            let page = "SequentialCFGPage\(index + 1)"
-            let fact = "page\(index + 1)"
-            let bytes = TLAValue.tuple(cfgBytes[offset..<end].map { .int(Int($0)) })
-            let start = offset + 1
-            let block = "CallerInputPageBlock\(index / 64 + 1)"
-            let statement = #"""
-                <2>\#(fact). CASE i \in \#(start)..\#(end)
-                    <3>actual. CallerInputByte[i - 1] = \#(page)[i - \#(offset)]
-                        BY ONLY <2>\#(fact), \#(block)AtFileOffsets, SMT DEF \#(page)
-                    <3>expected. SequentialNormalCFGByte(i) = \#(page)[i - \#(offset)]
-                        BY ONLY <2>\#(fact), SMT DEF SequentialNormalCFGByte
-                    <3>. QED BY ONLY <3>actual, <3>expected
-            """#
-            return (request: "CallerInputPage\(index + 1)", definition: "LOCAL \(page) == \(bytes)",
-                    selector: #"i \in \#(start)..\#(end) -> \#(page)[i - \#(offset)]"#,
-                    proof: statement, fact: "<2>\(fact)")
-        }
-        let pageModules = (1...((cfgPages.count + 63) / 64)).map { "CallerInputPageBlock\($0)" }.joined(separator: ", ")
-        let pages = cfgPages.map(\.request).joined(separator: " ")
-        let cfgPageDefinitions = cfgPages.map(\.definition).joined(separator: "\n")
-        let cfgSelectors = cfgPages.map(\.selector).joined(separator: " [] ")
-        let cfgPageProofs = cfgPages.map(\.proof).joined(separator: "\n")
-        let cfgPageFacts = cfgPages.map(\.fact).joined(separator: ", ")
+        let configuration = procedureCFG(expectedCFG, prefix: "Sequential",
+                                         theorem: "SequentialConfigurationBytesMatch")
         let authoredInitialFrame: String? = authored.literalInitials.flatMap { bindings in
             let fields = compilation.layout.variables.filter { $0.declaration.origin == .source }
             guard fields.count == bindings.count else { return nil }
@@ -217,13 +194,10 @@ package enum SequentialControlOutputEvidence {
         let historyFact = tlaFailureHistory == nil ? "" : ", TLASequentialHistoryUsesAuthoredFailures"
         let configured = #"""
         ---- MODULE \#(configuredModule) ----
-        EXTENDS \#(controlModule), \#(pageModules)
+        EXTENDS \#(controlModule), \#(configuration.blocks)
 
-        \* \#(pages)
-        SequentialActualCFG == [i \in 1..CallerInputSize |-> CallerInputByte[i - 1]]
-        \#(cfgPageDefinitions)
-        LOCAL SequentialNormalCFGByte(i) == CASE \#(cfgSelectors) [] OTHER -> 0
-        SequentialNormalCFG == [i \in 1..\#(cfgBytes.count) |-> SequentialNormalCFGByte(i)]
+        \#(configuration.proof)
+        SequentialNormalCFG == SequentialExpectedCFG
         SequentialSelectedEvaluationChecks == \#(selection)
         \#(initialDefinition)
         \#(behaviorDefinition)
@@ -247,14 +221,8 @@ package enum SequentialControlOutputEvidence {
             /\ PhysicalAuthoredSequentialTrace = LoweredSequentialSemantics
             /\ DeclaredSequentialConstructorsMatch(LoweredSequentialSemantics)
         PROOF
-        <1>length. CallerInputSize = \#(cfgBytes.count)
-            BY ONLY SMT DEF CallerInputSize
-        <1>bytes. \A i \in 1..\#(cfgBytes.count) : CallerInputByte[i - 1] = SequentialNormalCFGByte(i)
-            <2>. TAKE i \in 1..\#(cfgBytes.count)
-        \#(cfgPageProofs)
-            <2>. QED BY ONLY (i \in 1..\#(cfgBytes.count)), \#(cfgPageFacts), SMT
         <1>configuration. SequentialActualCFG = SequentialNormalCFG
-            BY ONLY <1>length, <1>bytes, SMT DEF SequentialActualCFG, SequentialNormalCFG
+            BY ONLY SequentialConfigurationBytesMatch, PTL DEF SequentialNormalCFG
         \#(initialStep)
         \#(typedSteps)
         \#(behaviorSteps)
@@ -309,9 +277,10 @@ package enum SequentialControlOutputEvidence {
                 guard !targets.isEmpty else { continue }
                 let sourceFailure = "AuthoredSequentialActionFailure\(index + 1)Branch\(branch + 1)"
                 let result = "TLASequentialAuthoredHistory\(index + 1)Arm\(branch + 1)"
-                let slots = "<<\(region.bindings.map {
+                let bindings = region.bindings.map {
                     "[binding |-> \($0.binder.ordinal), target |-> \($0.target.ordinal)]"
-                }.joined(separator: ", "))>>"
+                }
+                let slots = "<<\(bindings.joined(separator: ", "))>>"
                 definitions.append(#"""
                 LOCAL \#(result) ==
                     LET history == \#(sourceFailure)

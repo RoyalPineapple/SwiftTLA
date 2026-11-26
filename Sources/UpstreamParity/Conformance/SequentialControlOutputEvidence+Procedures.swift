@@ -724,7 +724,7 @@ extension SequentialControlOutputEvidence {
         """#
     }
 
-    private static func procedureCFG(
+    static func procedureCFG(
         _ expectedCFG: String, prefix: String, theorem: String
     ) -> (blocks: String, proof: String) {
         let cfgBytes = Array(expectedCFG.utf8)
