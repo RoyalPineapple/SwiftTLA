@@ -3814,7 +3814,7 @@
       "path": "specifications/byzpaxos",
       "name": "Byzantizing Paxos by Refinement",
       "audit": "reference inputs audited",
-      "gap": "Consensus matches the published LiveSpec configuration locally, including the complete labeled graph, TypeOK, Inv and Success. Hosted comparison is pending. The reduced VoteProof port uses strings for model values and lacks the published model-owned scenario. BPConProof and PConProof still need exact ports. The published BPConProof outcome is unknown.",
+      "gap": "Consensus and VoteProof match their published configurations locally. VoteProof matches the full state and labeled transition sets and the six selected checks. Hosted VoteProof comparison is pending. BPConProof and PConProof still need exact ports. The published BPConProof outcome is unknown.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3843,9 +3843,10 @@
         {
           "path": "specifications/byzpaxos/VoteProof.tla",
           "role": "configured root",
-          "reason": "The configuration binds two values, three acceptors, all four majority quorums, and ballots 0 through 2. It selects Spec, TypeOK, VInv1 through VInv4, and Refines with deadlock checking disabled. VoteProofModel remains a partial port.",
+          "reason": "The configuration binds two values, three acceptors, all four majority quorums, and ballots 0 through 2. It selects Spec, TypeOK, VInv1 through VInv4, and Refines with deadlock checking disabled. The published scenario uses the parameterized acceptor action. The reduced canonical fixture has separate coverage.",
           "implementations": [
-            "Sources/UpstreamParity/CanonicalCorpus/VoteProof.swift"
+            "Sources/UpstreamParity/CanonicalCorpus/VoteProof.swift",
+            "Sources/UpstreamParity/Examples/PublishedVoteProof.swift"
           ],
           "dispositionComplete": false
         }
@@ -3891,10 +3892,16 @@
           "module": "specifications/byzpaxos/VoteProof.tla",
           "configuration": "specifications/byzpaxos/VoteProof.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/PublishedVoteProof.swift",
+              "scenario": "published",
+              "caseID": "byzpaxos-voteproof"
+            }
+          ],
           "evidence": []
         }
       ],

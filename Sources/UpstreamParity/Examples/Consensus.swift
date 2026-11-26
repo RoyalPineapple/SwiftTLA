@@ -29,7 +29,7 @@ package struct ConsensusModel: Sendable {
         #spec("Consensus") { configuration in
             Extends(.finiteSets)
             Extends(.integers)
-            let Value = configuration.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.one, .two, .three])]))
+            let Value = configuration.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.one, .two]), Set([.one, .two, .three])]))
             let Consensus = Algorithm(fairness: .weak) { scope in
                 let chosen = scope.sharedVar(initial: Set<Choice>())
 

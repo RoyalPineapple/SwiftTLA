@@ -10,11 +10,19 @@ configuration. It is not a place to invent a friendlier algorithm.
 2. If the source contains a PlusCal algorithm, port it with the scoped DSL:
    `#spec`, `Algorithm`, `Each`, and labeled `Do` blocks. Preserve the shared
    variables, process family, atomic labels, fairness, and formal properties.
+   When its published translation has a single repeated action and no control state,
+   a parameterized `Do` can express that action directly. Keep the same argument
+   domain and keep internal choices inside the action.
 3. If the source is direct TLA+, use the typed `#spec` vocabulary directly.
    Do not manufacture an `Algorithm` around it.
 4. If an upstream construct is unsupported, implement its compiler support before declaring the port complete.
    Do not replace it with raw `TLAValue`, `StateExpr`, `ActionExpr`, or Swift control flow.
    Do not simplify the upstream algorithm or disable its checks.
+
+Apply these rules when revisiting older ports too. Compare the Swift declarations
+with the published state variables, `Init`, action boundaries in `Next`, and the
+checks selected by the configuration. Preserve observable control locations and
+fairness. Use familiar Swift spelling where the correspondence stays clear.
 
 ## Typed authoring rules
 

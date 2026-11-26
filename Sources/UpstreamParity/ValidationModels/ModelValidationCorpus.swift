@@ -69,6 +69,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "transaction-two-phase", scenarios: { try TwoPhaseCommitModel.validationScenarios() }),
     .init(id: "tcommit", scenarios: { try TransactionCommitModel.validationScenarios() }),
     .init(id: "byzpaxos-consensus", scenarios: { try ConsensusModel.validationScenarios() }),
+    .init(id: "byzpaxos-voteproof", scenarios: { try PublishedVoteProofModel.validationScenarios() }),
     .init(id: "span-tree", scenarios: { try PublishedSpanTreeModel.validationScenarios() }),
     .init(id: "span-tree-four", scenarios: { try AllFourNodeSpanTreesModel.validationScenarios() }),
     .init(id: "ap-span-tree", scenarios: { try APSpanTreeModel.validationScenarios() }),
