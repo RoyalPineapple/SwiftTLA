@@ -262,42 +262,37 @@ PROOF
 \* The prefix maps represent the checker's authored dictionary with entry
 \* reads represented explicitly. Acceptance supplies the comparison, not
 \* a claim that all authored inputs are accepted by the checker.
+ReturnedRootAssignmentReceiptFieldsInput(rows, index, maps, definitionNames, definitionBinders,
+                                         loweredNames, loweredIDs, scheduled, physical) ==
+    /\ Len(rows) \in Nat
+    /\ index \in 1..Len(rows)
+    /\ index \in DOMAIN rows
+    /\ AssignmentRhsCertificate(rows[index])
+    /\ CompilerOccurrenceTree(rows[index].view, rows[index].emitted.count)
+    /\ maps[1] = CopyEntryRoutes(Keys)
+    /\ \A position \in 1..(Len(rows) - 1) :
+            maps[position + 1] =
+                CopyReplace(Keys, maps[position], rows[position].target, <<"capture", position>>)
+    /\ \A a, b \in 1..(index - 1) : definitionNames[a] = definitionNames[b] => a = b
+    /\ \A origin \in DOMAIN rows[index].view.kinds : rows[index].view.kinds[origin] = "read" =>
+            scheduled[origin] = maps[index][rows[index].view.reads[origin]]
+    /\ \A origin \in DOMAIN rows[index].view.kinds : rows[index].view.kinds[origin] = "read" =>
+            LET key == rows[index].view.reads[origin]
+                name == loweredNames[origin]
+                id == loweredIDs[origin]
+                slot == 1 + id[2] - definitionBinders[1]
+            IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
+               /\ (\/ /\ id[1] = "state" /\ name = key /\ scheduled[origin] = <<"state", key>>
+                   \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
+                      /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
+                      /\ scheduled[origin] = <<"capture", slot>>)
+    /\ PhysicalAssignmentOperandsMatch(rows[index], physical)
+    /\ \A node \in 1..rows[index].emitted.count : rows[index].emitted.nodes[node].kind = "read" =>
+            physical.reads[node] = scheduled[rows[index].emitted.origins[node]]
+
 ReturnedRootAssignmentReceiptInput(receipt) ==
-    LET rows == receipt.rows
-        index == receipt.index
-        maps == receipt.maps
-        definitionNames == receipt.definitionNames
-        definitionBinders == receipt.definitionBinders
-        loweredNames == receipt.loweredNames
-        loweredIDs == receipt.loweredIDs
-        scheduled == receipt.scheduled
-        physical == receipt.physical
-    IN
-        /\ Len(rows) \in Nat
-        /\ index \in 1..Len(rows)
-        /\ index \in DOMAIN rows
-        /\ AssignmentRhsCertificate(rows[index])
-        /\ CompilerOccurrenceTree(rows[index].view, rows[index].emitted.count)
-        /\ maps[1] = CopyEntryRoutes(Keys)
-        /\ \A position \in 1..(Len(rows) - 1) :
-                maps[position + 1] =
-                    CopyReplace(Keys, maps[position], rows[position].target, <<"capture", position>>)
-        /\ \A a, b \in 1..(index - 1) : definitionNames[a] = definitionNames[b] => a = b
-        /\ \A origin \in DOMAIN rows[index].view.kinds : rows[index].view.kinds[origin] = "read" =>
-                scheduled[origin] = maps[index][rows[index].view.reads[origin]]
-        /\ \A origin \in DOMAIN rows[index].view.kinds : rows[index].view.kinds[origin] = "read" =>
-                LET key == rows[index].view.reads[origin]
-                    name == loweredNames[origin]
-                    id == loweredIDs[origin]
-                    slot == 1 + id[2] - definitionBinders[1]
-                IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
-                   /\ (\/ /\ id[1] = "state" /\ name = key /\ scheduled[origin] = <<"state", key>>
-                       \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
-                          /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
-                          /\ scheduled[origin] = <<"capture", slot>>)
-        /\ PhysicalAssignmentOperandsMatch(rows[index], physical)
-        /\ \A node \in 1..rows[index].emitted.count : rows[index].emitted.nodes[node].kind = "read" =>
-                physical.reads[node] = scheduled[rows[index].emitted.origins[node]]
+    ReturnedRootAssignmentReceiptFieldsInput(receipt.rows, receipt.index, receipt.maps, receipt.definitionNames,
+        receipt.definitionBinders, receipt.loweredNames, receipt.loweredIDs, receipt.scheduled, receipt.physical)
 
 ReturnedRootAssignmentReceiptOutput(receipt) ==
     LET rows == receipt.rows
@@ -361,7 +356,8 @@ PROOF
                                ScheduledRootReplacementNames(maps[index], definitionNames))[origin].payload
                     /\ PhysicalAssignmentReadsMatchRoutes(rows, index, physical)
     BY (ReturnedRootAssignmentReceiptInput(boundReceipt)), PTL
-        DEF ReturnedRootAssignmentReceiptInput, ReturnedRootAssignmentReceiptOutput, rows, index, maps, definitionNames, definitionBinders, loweredNames, loweredIDs, scheduled, physical
+        DEF ReturnedRootAssignmentReceiptInput, ReturnedRootAssignmentReceiptFieldsInput,
+            ReturnedRootAssignmentReceiptOutput, rows, index, maps, definitionNames, definitionBinders, loweredNames, loweredIDs, scheduled, physical
 <1>. DEFINE view == rows[index].view
             count == Len(rows) - 1
             replacements == ScheduledRootReplacementNames(maps[index], definitionNames)
@@ -413,6 +409,28 @@ PROOF
         ScheduledReadLookupsSupplyThePhysicalAssignmentRoutes, SMT
 <1>. QED BY ONLY <1>incoming, <1>names, <1>routes DEF view, replacements
 
+THEOREM ReturnedRootAssignmentReceiptFieldsSupplyPhysicalRoutes ==
+    \A rows, index, maps, definitionNames, definitionBinders, loweredNames, loweredIDs, scheduled, physical :
+        ReturnedRootAssignmentReceiptFieldsInput(rows, index, maps, definitionNames, definitionBinders,
+            loweredNames, loweredIDs, scheduled, physical) =>
+                PhysicalAssignmentReadsMatchRoutes(rows, index, physical)
+PROOF
+<1>. TAKE rows, index, maps, definitionNames, definitionBinders, loweredNames, loweredIDs, scheduled, physical
+<1>. SUFFICES ASSUME ReturnedRootAssignmentReceiptFieldsInput(rows, index, maps, definitionNames,
+                         definitionBinders, loweredNames, loweredIDs, scheduled, physical)
+              PROVE PhysicalAssignmentReadsMatchRoutes(rows, index, physical)
+    OBVIOUS
+<1>. DEFINE receipt == [rows |-> rows, index |-> index, maps |-> maps,
+                         definitionNames |-> definitionNames, definitionBinders |-> definitionBinders,
+                         loweredNames |-> loweredNames, loweredIDs |-> loweredIDs, scheduled |-> scheduled,
+                         physical |-> physical]
+<1>input. ReturnedRootAssignmentReceiptInput(receipt)
+    BY ONLY ReturnedRootAssignmentReceiptFieldsInput(rows, index, maps, definitionNames, definitionBinders,
+                 loweredNames, loweredIDs, scheduled, physical), SMT DEF ReturnedRootAssignmentReceiptInput, receipt
+<1>output. ReturnedRootAssignmentReceiptOutput(receipt)
+    BY ONLY <1>input, ReturnedRootAssignmentReceiptRecordSuppliesScheduledReadRoutes, SMT
+<1>. QED BY ONLY <1>output, SMT DEF ReturnedRootAssignmentReceiptOutput, receipt
+
 THEOREM ReturnedRootAssignmentReceiptSuppliesScheduledReadRoutes ==
     ASSUME NEW rows, Len(rows) \in Nat, NEW index \in 1..Len(rows), index \in DOMAIN rows,
            AssignmentRhsCertificate(rows[index]),
@@ -449,7 +467,7 @@ PROOF
                             loweredNames |-> loweredNames, loweredIDs |-> loweredIDs,
                             scheduled |-> scheduled, physical |-> physical]
 <1>inputs. ReturnedRootAssignmentReceiptInput(boundReceipt)
-    BY SMT DEF ReturnedRootAssignmentReceiptInput, boundReceipt
+    BY SMT DEF ReturnedRootAssignmentReceiptInput, ReturnedRootAssignmentReceiptFieldsInput, boundReceipt
 <1>outputs. ReturnedRootAssignmentReceiptOutput(boundReceipt)
     BY ONLY <1>inputs, ReturnedRootAssignmentReceiptRecordSuppliesScheduledReadRoutes, SMT
 <1>. QED BY ONLY <1>outputs, SMT DEF ReturnedRootAssignmentReceiptOutput, boundReceipt

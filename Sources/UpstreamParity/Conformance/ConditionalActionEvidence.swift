@@ -811,26 +811,12 @@ package enum ConditionalActionEvidence {
                 BY ONLY SMT DEF ConditionalSelectedArm, ConditionalArmFor, ConditionalSourceComparison,
                     ConditionalBefore, ConditionalLayoutIntKeys, Arithmetic!CopyReferenceValue
         """#
-        let readReceiptProof = descriptors.contains { !$0.scheduledReads.isEmpty } ? #"""
-        THEOREM ConditionalReceiptSuppliesPhysicalRoutes ==
-            \A receipt : Arithmetic!ReturnedRootAssignmentReceiptInput(receipt) =>
-                Arithmetic!PhysicalAssignmentReadsMatchRoutes(receipt.rows, receipt.index, receipt.physical)
-        PROOF
-        <1>. TAKE receipt
-        <1>. SUFFICES ASSUME Arithmetic!ReturnedRootAssignmentReceiptInput(receipt)
-                      PROVE Arithmetic!PhysicalAssignmentReadsMatchRoutes(receipt.rows, receipt.index, receipt.physical)
-            OBVIOUS
-        <1>output. Arithmetic!ReturnedRootAssignmentReceiptOutput(receipt)
-            BY ONLY (Arithmetic!ReturnedRootAssignmentReceiptInput(receipt)),
-                Arithmetic!ReturnedRootAssignmentReceiptRecordSuppliesScheduledReadRoutes, SMT
-        <1>. QED BY ONLY <1>output, SMT DEF Arithmetic!ReturnedRootAssignmentReceiptOutput
-        """# + "\n\n" : ""
         return #"""
         ---- MODULE \#(name) ----
         EXTENDS \#(model), TLAPS, Sequences, \#(sourceModules)
         LOCAL INSTANCE SequenceTheorems
 
-        \#(readReceiptProof)ConditionalLayoutIntKeys == \#(TLAValue.set(input.integerKeys))
+        ConditionalLayoutIntKeys == \#(TLAValue.set(input.integerKeys))
         LOCAL ConditionalIntegerFieldNames == \#(integerFieldNames)
         ConditionalIntValues == \#(TLAValue.int(Int.min))..\#(TLAValue.int(Int.max))
         ConditionalTypedState == \#(types.joined(separator: " /\\ "))
@@ -1333,7 +1319,6 @@ package enum ConditionalActionEvidence {
             let readColumn = TLAValue.tuple(scheduled.map { row in
                 .tuple(row.origins.map { row.byOrigin[$0 - 1] })
             })
-            let receiptName = "ConditionalReturnedReceipt\(arm + 1)"
             let returnedMapsColumn = "ConditionalReturnedMaps\(arm + 1)"
             let mapsColumn = "ConditionalInterpretedBindingMaps\(arm + 1)"
             let writesColumn = "ConditionalRecordedBindingWrites\(arm + 1)"
@@ -1353,19 +1338,10 @@ package enum ConditionalActionEvidence {
             LOCAL \#(loweredNamesColumn) == \#(loweredNames)
             LOCAL \#(loweredIDsColumn) == \#(loweredReadIDs)
             LOCAL \#(scheduledColumn) == \#(scheduledByOrigin)
-            LOCAL \#(receiptName)(rows, index, plan) ==
-                [rows |-> rows, index |-> index, physical |-> plan,
-                 maps |-> \#(mapsColumn), definitionNames |-> \#(namesColumn),
-                 definitionBinders |-> \#(bindersColumn), loweredNames |-> \#(loweredNamesColumn)[index],
-                 loweredIDs |-> \#(loweredIDsColumn)[index], scheduled |-> \#(scheduledColumn)[index]]
             """#
             return (receipt, #"""
             <3>arm\#(arm + 1). CASE arm = \#(arm + 1)
-                <4>. DEFINE compilerReceipt == \#(receiptName)(rows, index, plan)
-                <4>geometry. /\ compilerReceipt.rows = rows /\ compilerReceipt.index = index
-                             /\ compilerReceipt.physical = plan
-                    BY ONLY SMT DEF compilerReceipt, \#(receiptName)
-                <4>input. Arithmetic!ReturnedRootAssignmentReceiptInput(compilerReceipt)
+                <4>routes. Arithmetic!PhysicalAssignmentReadsMatchRoutes(rows, index, plan)
                     <5>range. Len(rows) = \#(scheduled.count) /\ index \in 1..\#(scheduled.count)
                         BY ONLY <3>arm\#(arm + 1), <1>integerRows, <2>shape, (arm \in ConditionalArms),
                             (index \in DOMAIN rows), SMT DEF rows
@@ -1520,73 +1496,13 @@ package enum ConditionalActionEvidence {
                         plan.reads[node] = selectedRoutes[rows[index].emitted.origins[node]]
                         BY ONLY <5>physicalOrder, <5>readProjection, <5>projected, <5>originOrder, <5>source, <5>count,
                             SMT DEF selectedRoutes
-                    <5>tableFields. /\ compilerReceipt.maps = maps
-                                     /\ compilerReceipt.definitionNames = definitionNames
-                                     /\ compilerReceipt.definitionBinders = definitionBinders
-                        BY ONLY SMT DEF compilerReceipt, \#(receiptName), maps, definitionNames, definitionBinders
-                    <5>rowFields. /\ compilerReceipt.loweredNames = selectedNames /\ compilerReceipt.loweredIDs = selectedIDs
-                                   /\ compilerReceipt.scheduled = selectedRoutes
-                        BY ONLY SMT DEF compilerReceipt, \#(receiptName),
-                            selectedNames, selectedIDs, selectedRoutes, loweredNames, loweredReadIDs, scheduled
-                    <5>geometryInput.
-                        /\ Len(compilerReceipt.rows) \in Nat
-                        /\ compilerReceipt.index \in 1..Len(compilerReceipt.rows)
-                        /\ compilerReceipt.index \in DOMAIN compilerReceipt.rows
-                        /\ Arithmetic!AssignmentRhsCertificate(compilerReceipt.rows[compilerReceipt.index])
-                        /\ Arithmetic!CompilerOccurrenceTree(compilerReceipt.rows[compilerReceipt.index].view, compilerReceipt.rows[compilerReceipt.index].emitted.count)
-                        /\ Arithmetic!PhysicalAssignmentOperandsMatch(compilerReceipt.rows[compilerReceipt.index], compilerReceipt.physical)
-                        BY ONLY (index \in DOMAIN rows), <2>operands, <5>certificate, <5>source, <5>routeInput, <4>geometry, SMT
-                    <5>routesInput.
-                        /\ compilerReceipt.maps[1] = Arithmetic!CopyEntryRoutes(ConditionalIntKeys)
-                        /\ \A position \in 1..(Len(compilerReceipt.rows) - 1) :
-                                compilerReceipt.maps[position + 1] =
-                                    Arithmetic!CopyReplace(ConditionalIntKeys, compilerReceipt.maps[position], compilerReceipt.rows[position].target, <<"capture", position>>)
-                        BY ONLY <5>routeInput, <4>geometry, <5>tableFields, SMT
-                    <5>freshNamesInput.
-                        \A a, b \in 1..(compilerReceipt.index - 1) : compilerReceipt.definitionNames[a] = compilerReceipt.definitionNames[b] => a = b
-                        BY ONLY <5>lexicalScope, <4>geometry, <5>tableFields, SMT
-                    <5>lookupFieldInput.
-                        \A origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds : compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
-                                compilerReceipt.scheduled[origin] = compilerReceipt.maps[compilerReceipt.index][compilerReceipt.rows[compilerReceipt.index].view.reads[origin]]
-                        BY ONLY <5>lookupInput, <4>geometry, <5>tableFields, <5>rowFields, SMT
-                    <5>scopeFieldInput.
-                        \A origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds : compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
-                                LET key == compilerReceipt.rows[compilerReceipt.index].view.reads[origin]
-                                    name == compilerReceipt.loweredNames[origin]
-                                    id == compilerReceipt.loweredIDs[origin]
-                                    slot == 1 + id[2] - compilerReceipt.definitionBinders[1]
-                                IN /\ \A p \in 1..(compilerReceipt.index - 1) : compilerReceipt.definitionNames[p] # key
-                                   /\ (\/ /\ id[1] = "state" /\ name = key /\ compilerReceipt.scheduled[origin] = <<"state", key>>
-                                       \/ /\ id[1] = "binding" /\ slot \in 1..(compilerReceipt.index - 1)
-                                          /\ id[2] = compilerReceipt.definitionBinders[slot] /\ name = compilerReceipt.definitionNames[slot]
-                                          /\ compilerReceipt.scheduled[origin] = <<"capture", slot>>)
-                        <6>. TAKE origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds
-                        <6>read. compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
-                            /\ origin \in DOMAIN rows[index].view.kinds
-                            /\ rows[index].view.kinds[origin] = "read"
-                            BY ONLY <4>geometry, (origin \in DOMAIN compilerReceipt.rows[compilerReceipt.index].view.kinds), SMT
-                        <6>point. compilerReceipt.rows[compilerReceipt.index].view.kinds[origin] = "read" =>
-                            LET key == rows[index].view.reads[origin]
-                                name == selectedNames[origin]
-                                id == selectedIDs[origin]
-                                slot == 1 + id[2] - definitionBinders[1]
-                            IN /\ \A p \in 1..(index - 1) : definitionNames[p] # key
-                               /\ (\/ /\ id[1] = "state" /\ name = key /\ selectedRoutes[origin] = <<"state", key>>
-                                   \/ /\ id[1] = "binding" /\ slot \in 1..(index - 1)
-                                      /\ id[2] = definitionBinders[slot] /\ name = definitionNames[slot]
-                                      /\ selectedRoutes[origin] = <<"capture", slot>>)
-                            BY ONLY <6>read, <5>scopeInput, SMT
-                        <6>. QED BY ONLY <6>point, <4>geometry, <5>tableFields, <5>rowFields, SMT
-                    <5>physicalFieldInput.
-                        \A node \in 1..compilerReceipt.rows[compilerReceipt.index].emitted.count : compilerReceipt.rows[compilerReceipt.index].emitted.nodes[node].kind = "read" =>
-                                compilerReceipt.physical.reads[node] = compilerReceipt.scheduled[compilerReceipt.rows[compilerReceipt.index].emitted.origins[node]]
-                        BY ONLY <5>physicalInput, <4>geometry, <5>rowFields, SMT
-                    <5>. QED BY ONLY <5>geometryInput, <5>routesInput, <5>freshNamesInput,
-                        <5>lookupFieldInput, <5>scopeFieldInput, <5>physicalFieldInput, PTL
-                        DEF Arithmetic!ReturnedRootAssignmentReceiptInput
-                <4>physical. Arithmetic!PhysicalAssignmentReadsMatchRoutes(compilerReceipt.rows, compilerReceipt.index, compilerReceipt.physical)
-                    BY ONLY <4>input, ConditionalReceiptSuppliesPhysicalRoutes, SMT
-                <4>. QED BY ONLY <4>physical, <4>geometry, SMT
+                    <5>fields. Arithmetic!ReturnedRootAssignmentReceiptFieldsInput(rows, index, maps, definitionNames,
+                                   definitionBinders, selectedNames, selectedIDs, selectedRoutes, plan)
+                        BY ONLY (index \in DOMAIN rows), <2>operands, <5>certificate, <5>source, <5>routeInput,
+                            <5>lexicalScope, <5>lookupInput, <5>scopeInput, <5>physicalInput,
+                            PTL DEF Arithmetic!ReturnedRootAssignmentReceiptFieldsInput
+                    <5>. QED BY ONLY <5>fields, Arithmetic!ReturnedRootAssignmentReceiptFieldsSupplyPhysicalRoutes, SMT
+                <4>. QED BY ONLY <4>routes, PTL
             """#)
         }
         let ranges = arms.map { "1..\($0.integerCaptures.count)" }
