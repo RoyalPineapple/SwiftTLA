@@ -178,6 +178,7 @@ struct SequentialLoopControlTests {
             let second = captureFirst ? disabled : assignment
             let variant = source.replacingOccurrences(of: loop, with: """
                 While(Step.advance, value < 2) {
+                    Assign(value, to: value)
                     \(first)
                     \(second)
                 """)
@@ -195,7 +196,7 @@ struct SequentialLoopControlTests {
             #expect(authored == lowered)
             let blocked = try #require(lowered.actions.first?.branches.first { $0.control == .disabled })
             let captures = blocked.observations.filter { if case .capture = $0 { return true }; return false }
-            #expect(captures.count == (captureFirst ? 1 : 0))
+            #expect(captures.count == (captureFirst ? 2 : 1))
 
             let runtime = CompiledRuntime(compilation: compilation)
             let advance = try #require(compilation.layout.testActionID(named: "advance"))
@@ -226,8 +227,9 @@ struct SequentialLoopControlTests {
             let counter = try #require(program.layout.variables.first { $0.declaration.origin == .programCounter })
             let regions = program[program.layout.actions[0].id].body.orderedAlternativeFailureRegions(afterControlGuardOf: counter.id)
             if captureFirst {
-                let binding = try #require(regions.first?.bindings.first)
-                #expect(binding.target == value)
+                let bindings = try #require(regions.first?.bindings)
+                #expect(bindings.map(\.target) == [value, value])
+                #expect(Set(bindings.map(\.binder)).count == 2)
             } else {
                 #expect(regions.isEmpty)
             }
