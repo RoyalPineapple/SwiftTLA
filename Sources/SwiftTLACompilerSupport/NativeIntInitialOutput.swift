@@ -83,9 +83,12 @@ package func verifyOrderedIntInitialExpression(_ declaration: DeclSyntax?, named
 /// Decodes the physically emitted Int leaf or ordered postorder closure.
 /// A returned step is an index in the existing checked expression plan.
 package func decodeNativeOrderedIntExpression(
-    _ tokens: ArraySlice<String>, reads: [[String]: String]
-) -> (steps: [NativeIntInitialStep], consumed: Int)? {
+    _ tokens: ArraySlice<String>, reads: [[String]: String],
+    projections: [(sourceType: [String], reads: [[String]: String], cases: [String: Int])] = []
+) -> (steps: [NativeIntInitialStep], consumed: Int,
+      projectedReads: [(step: Int, read: String, cases: [String: Int])])? {
     var cursor = tokens.startIndex
+    var projectedReads: [(step: Int, read: String, cases: [String: Int])] = []
     func take(_ pattern: [String]) -> Bool {
         guard tokens[cursor...].starts(with: pattern, by: { $0.utf8.elementsEqual($1.utf8) }) else { return false }
         cursor += pattern.count
@@ -99,7 +102,16 @@ package func decodeNativeOrderedIntExpression(
         return index
     }
     let readPatterns = reads.keys.sorted { $0.count > $1.count }
-    func readLeaf() -> NativeIntInitialStep? {
+    func readLeaf(at step: Int) -> NativeIntInitialStep? {
+        for projection in projections {
+            guard let decoded = decodeNativeIntReadProjection(tokens[cursor...],
+                sourceType: projection.sourceType, reads: projection.reads) else { continue }
+            let cases = Dictionary(uniqueKeysWithValues: decoded.cases.map { ($0.key, $0.value) })
+            guard cases == projection.cases else { return nil }
+            cursor += decoded.consumed
+            projectedReads.append((step, decoded.read, cases))
+            return .slot(decoded.read)
+        }
         if take(["SwiftTLA", ".", "_nativeIntMinimum", "(", ")"]) { return .integer(Int.min) }
         let negative = take(["-"])
         if let spelling = tokens[cursor...].first, let integer = Int((negative ? "-" : "") + spelling),
@@ -111,8 +123,8 @@ package func decodeNativeOrderedIntExpression(
         return .slot(read)
     }
     if !take(["(", "try", "{", "(", ")", "throws", "->"] + nativeIntTypeTokens + ["in"]) {
-        guard let leaf = readLeaf() else { return nil }
-        return ([leaf], cursor - tokens.startIndex)
+        guard let leaf = readLeaf(at: 0) else { return nil }
+        return ([leaf], cursor - tokens.startIndex, projectedReads)
     }
     var steps: [NativeIntInitialStep] = []
     var stack: [Int] = []
@@ -124,7 +136,7 @@ package func decodeNativeOrderedIntExpression(
             stack.removeLast(2)
             step = .add(left, right)
         } else {
-            guard let leaf = readLeaf() else { return nil }
+            guard let leaf = readLeaf(at: steps.count) else { return nil }
             step = leaf
         }
         stack.append(steps.count)
@@ -133,5 +145,36 @@ package func decodeNativeOrderedIntExpression(
     let root = steps.count - 1
     guard steps.count >= 3, stack == [root],
           take(["return", "_arithmetic\(root)", "}", "(", ")", ")"]) else { return nil }
-    return (steps, cursor - tokens.startIndex)
+    return (steps, cursor - tokens.startIndex, projectedReads)
+}
+
+/// Decode an emitted integer projection separately from its compiled domain check.
+package func decodeNativeIntReadProjection(
+    _ tokens: ArraySlice<String>, sourceType: [String], reads: [[String]: String]
+) -> (read: String, cases: [(key: String, value: Int)], consumed: Int)? {
+    var cursor = tokens.startIndex
+    func take(_ pattern: [String]) -> Bool {
+        guard tokens[cursor...].starts(with: pattern, by: { $0.utf8.elementsEqual($1.utf8) }) else { return false }
+        cursor += pattern.count
+        return true
+    }
+    let prefix = ["(", "{", "(", "value", ":"] + sourceType + [")", "->"]
+        + nativeIntTypeTokens + ["in", "switch", "value", "{"]
+    guard !sourceType.isEmpty, take(prefix) else { return nil }
+    var cases: [(key: String, value: Int)] = []
+    var keys: Set<String> = []
+    while take(["case", "."]) {
+        guard let key = tokens[cursor...].first, keys.insert(key).inserted else { return nil }
+        cursor += 1
+        guard take([":", "return"]),
+              let decoded = decodeNativeOrderedIntExpression(tokens[cursor...], reads: [:]),
+              decoded.steps.count == 1,
+              case .integer(let value) = decoded.steps[0] else { return nil }
+        cursor += decoded.consumed
+        cases.append((key, value))
+    }
+    guard !cases.isEmpty, take(["}", "}", ")", "("]),
+          let operand = reads.keys.sorted(by: { $0.count > $1.count }).first(where: take),
+          let read = reads[operand], take([")"]) else { return nil }
+    return (read, cases, cursor - tokens.startIndex)
 }

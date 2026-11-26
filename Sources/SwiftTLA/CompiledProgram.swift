@@ -43,6 +43,27 @@ package struct CompiledProgram: Sendable {
     package subscript(_ id: ResolvedFunctionID) -> ResolvedFunction { functions[id.ordinal] }
     package subscript(_ id: ActionID) -> CompiledAction { behavior.actions[id.ordinal] }
 
+    /// Return the selected read only if its checked representation yields the same formal integer.
+    package func integerReadComputation(_ rhs: CompiledExpression) -> CompiledExpression? {
+        guard rhs.resultType == .int else { return nil }
+        let read: CompiledExpression
+        if rhs.operation == .convert {
+            guard let child = enums.integerProjectionInput(rhs),
+                  canProject(source: child.resultType, to: rhs.resultType) else { return nil }
+            read = child
+        } else {
+            read = rhs
+        }
+        guard read.children.isEmpty else { return nil }
+        let stored: CompiledValueType?
+        switch read.operation {
+        case .stateVariable(let id): stored = variableTypes[id]
+        case .boundValue(let id): stored = bindingTypes[id]
+        default: return nil
+        }
+        return stored == read.resultType ? read : nil
+    }
+
     package func requiresOrderedIntOutput(_ action: ActionID) -> Bool {
         moduleMetadata.orderedIntProofActionNames.contains(layout.actions[action.ordinal].declaration.name)
     }

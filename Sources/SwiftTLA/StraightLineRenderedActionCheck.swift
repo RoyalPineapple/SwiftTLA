@@ -362,7 +362,7 @@ package enum StraightLineRenderedActionCheck {
     // shortcut: only direct scalar addition trees are checked here; extend to other expression forms with their output rules.
     private static func addition(_ expression: CompiledExpression,
                                  variables: [VariableID: String],
-                                 binders: [BinderID: String]) -> AdditionTree? {
+                                 binders: [BinderID: String], enums: CompiledEnums = .init()) -> AdditionTree? {
         let swiftIntMinimum = checkedIntegerLiteral(.min)
         let swiftIntMaximum = checkedIntegerLiteral(.max)
         var pending = [(expression, false)]
@@ -388,6 +388,9 @@ package enum StraightLineRenderedActionCheck {
                 pending.append((node, true))
                 pending.append((node.children[1], false))
                 pending.append((node.children[0], false))
+            case .convert:
+                guard let read = enums.integerProjectionInput(node) else { return nil }
+                pending.append((read, false))
             case .stateVariable(let id):
                 guard node.children.isEmpty, let name = variables[id] else { return nil }
                 values.append(name)
@@ -785,7 +788,7 @@ package enum StraightLineRenderedActionCheck {
     package static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String],
                        moduleName: String? = nil, reservedNames: Set<String> = [],
-                       required: Bool = false) throws {
+                       required: Bool = false, enums: CompiledEnums = .init()) throws {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.id, $0.formalName)
         })
@@ -858,9 +861,13 @@ package enum StraightLineRenderedActionCheck {
                     continue
                 }
                 if case .add = expression.operation {
-                    guard let value = addition(expression, variables: variables, binders: binders),
+                    guard let value = addition(expression, variables: variables, binders: binders, enums: enums),
                           let rendered = tokens(value.value) else { try unsupported(); return }
                     expected.append(contentsOf: rendered)
+                    continue
+                }
+                if expression.operation == .convert, let read = enums.integerProjectionInput(expression) {
+                    pending.append(.value(read))
                     continue
                 }
                 guard expression.children.isEmpty else { try unsupported(); return }
@@ -892,7 +899,7 @@ package enum StraightLineRenderedActionCheck {
                     guard let name = variables[id] else { throw mismatch() }
                     let assignment: [Task] = [.token("\(name)'"), .token("="), .value(value)]
                     if case .add = value.operation,
-                       let tree = addition(value, variables: variables, binders: binders) {
+                       let tree = addition(value, variables: variables, binders: binders, enums: enums) {
                         guard let guardTokens = tokens(tree.defined) else { throw mismatch() }
                         schedule([.token("("), .token("IF")] + guardTokens.map(Task.token)
                             + [.token("THEN")] + assignment
@@ -916,7 +923,7 @@ package enum StraightLineRenderedActionCheck {
                     let definition: [Task] = [.token("("), .token("LET"), .token(name),
                         .token("=="), .value(value), .token("IN"), .action(body), .token(")")]
                     if case .add = value.operation,
-                       let tree = addition(value, variables: variables, binders: binders) {
+                       let tree = addition(value, variables: variables, binders: binders, enums: enums) {
                         guard let guardTokens = tokens(tree.defined) else { throw mismatch() }
                         schedule([.token("("), .token("IF")] + guardTokens.map(Task.token)
                             + [.token("THEN")] + definition
@@ -942,14 +949,14 @@ package enum StraightLineRenderedActionCheck {
                                   body: String, module: String, layout: CompiledLayout,
                                   binders: [BinderID: String],
                                   failureDeclarations: [String], moduleName: String? = nil,
-                                  reservedNames: Set<String> = [], required: Bool = false) throws {
+                                  reservedNames: Set<String> = [], required: Bool = false, enums: CompiledEnums = .init()) throws {
         let moduleHeader = module.components(separatedBy: "\n").first?
             .split(whereSeparator: \.isWhitespace) ?? []
         let declaredModuleName = moduleHeader.count == 4 && moduleHeader[0] == "----"
             && moduleHeader[1] == "MODULE" && moduleHeader[3] == "----"
             && isFormalIdentifier(String(moduleHeader[2])) ? String(moduleHeader[2]) : nil
         try verify(action.body, rendered: body, layout: layout, binders: binders,
-            moduleName: moduleName ?? declaredModuleName, reservedNames: reservedNames)
+            moduleName: moduleName ?? declaredModuleName, reservedNames: reservedNames, enums: enums)
         let parameters = try action.bindings.map { binding -> String in
             guard let name = binders[binding.binder], isFormalIdentifier(name) else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape,
@@ -965,13 +972,14 @@ package enum StraightLineRenderedActionCheck {
             declarations: [(header, "\(header) == \(body)")])
         try verifyAdditionFailures(action, module: module, layout: layout,
             binders: binders, parameters: parameters,
-            failureDeclarations: failureDeclarations, required: required)
+            failureDeclarations: failureDeclarations, required: required, enums: enums)
     }
 
     private static func verifyAdditionFailures(_ action: CompiledAction, module: String,
                                                layout: CompiledLayout, binders: [BinderID: String],
                                                parameters: [String],
-                                               failureDeclarations: [String], required: Bool) throws {
+                                               failureDeclarations: [String], required: Bool, enums: CompiledEnums) throws {
+        let checkPrefix = required || (action.bindings.isEmpty && enums.projectedAssignmentBinders(in: action.body) != nil)
         // shortcut: branching continuations need their own failure rule.
         let programCounter = layout.programCounterID()
         func controlWrite(_ node: CompiledActionExpr) -> Bool {
@@ -1027,8 +1035,9 @@ package enum StraightLineRenderedActionCheck {
         })
         func scalarValue(_ expression: CompiledExpression) -> String? {
             if case .add = expression.operation {
-                return addition(expression, variables: variables, binders: binders)?.value
+                return addition(expression, variables: variables, binders: binders, enums: enums)?.value
             }
+            let expression = enums.integerProjectionInput(expression) ?? expression
             guard expression.children.isEmpty else { return nil }
             switch expression.operation {
             case .stateVariable(let id): return variables[id]
@@ -1041,7 +1050,7 @@ package enum StraightLineRenderedActionCheck {
         var remainder = body
         while case .define(let binder, let expression, let continuation) = remainder {
             guard let name = binders[binder], let value = scalarValue(expression) else { break }
-            definitions.append((name, value, addition(expression, variables: variables, binders: binders)))
+            definitions.append((name, value, addition(expression, variables: variables, binders: binders, enums: enums)))
             remainder = continuation
         }
         if definitions.contains(where: { $0.addition != nil }) {
@@ -1088,7 +1097,7 @@ package enum StraightLineRenderedActionCheck {
                         let selectedFailure = try verifyDeclaration("__SwiftTLAOverflowFailure\(suffix)", value: selected)
                         try verifyDeclaration("__SwiftTLAOverflowOperands\(suffix)", value: operands)
                         try verifyDeclaration("__SwiftTLAOverflowOperation\(suffix)", value: "\"addition\"")
-                        if required {
+                        if checkPrefix {
                             let prefix = definitions[..<position].map { (name: $0.name, value: $0.value) }
                             try verifyDeclaration("__SwiftTLAOverflowBefore\(suffix)",
                                 value: "(IF \(selectedFailure) THEN \(renderRHSBindingPrefix(prefix)) ELSE <<>>)")

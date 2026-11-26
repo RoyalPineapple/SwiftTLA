@@ -53,7 +53,7 @@ package enum OrderedRHSTLAProof {
         guard let targets = assignmentTargets[step.id],
               let decoded = OrderedRHSPhysicalAction.decode(in: bundle.root.tla, action: step.renderedName,
                   body: body, fields: roots, counter: counter, destination: endControl.description,
-                  binderNames: program.binderNames, assignmentTargets: targets) else { return nil }
+                  program: program, assignmentTargets: targets) else { return nil }
         let physical = decoded.action
 
         // Preserve the original one-action packet. In a larger machine the selected action proof

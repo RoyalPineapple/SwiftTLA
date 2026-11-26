@@ -1285,6 +1285,8 @@ struct CompiledTLARenderer {
 
     private func repeatable(_ expression: CompiledExpression) -> Bool {
         switch expression.operation {
+        case .convert:
+            return enums.integerProjectionInput(expression) != nil
         case .value, .stateVariable, .boundValue, .controlLocation,
              .setLiteral, .tupleLiteral, .equal, .notEqual, .lessThan, .lessOrEqual,
              .greaterThan, .greaterOrEqual, .and, .or, .not, .in, .ifThenElse:

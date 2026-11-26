@@ -2736,7 +2736,7 @@ private extension CompiledModuleMetadata {
                 layout: layout, binders: renderer.bindings.binders,
                 moduleName: renderer.moduleName,
                 reservedNames: renderer.reservedNames.union(renderer.bindings.operatorNames.values),
-                required: requiresIndependentCheck)
+                required: requiresIndependentCheck, enums: renderer.enums)
             return DirectModuleAction(
                 sourceName: declaration.declaration.name,
                 renderedName: renderedName,
@@ -2783,7 +2783,7 @@ private extension CompiledModuleMetadata {
                 failureDeclarations: directOutput.evaluationFailureDeclarations,
                 moduleName: renderer.moduleName,
                 reservedNames: renderer.reservedNames.union(renderer.bindings.operatorNames.values),
-                required: orderedIntProofActionNames.contains(rendered.sourceName))
+                required: orderedIntProofActionNames.contains(rendered.sourceName), enums: renderer.enums)
         }
         try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
             layout: layout, binders: renderer.bindings.binders, module: directOutput.source)
@@ -2942,7 +2942,9 @@ private extension CompiledModuleMetadata {
             var emptySequenceOccurrence = 0
             var noMatchingCaseOccurrence = 0
             let failures = try renderer.evaluationFailures(behavior.actions[index].body,
-                retainingRHSBindings: orderedIntProofActionNames.contains(renderedAction.sourceName))
+                retainingRHSBindings: orderedIntProofActionNames.contains(renderedAction.sourceName)
+                    || (behavior.actions[index].bindings.isEmpty
+                        && renderer.enums.projectedAssignmentBinders(in: behavior.actions[index].body) != nil))
             for failure in failures {
                 let occurrence: Int
                 let failurePrefix: String

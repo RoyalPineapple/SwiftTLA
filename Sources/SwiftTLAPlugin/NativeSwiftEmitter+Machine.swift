@@ -1079,6 +1079,7 @@ extension NativeSwiftEmitter {
         let counter = program.layout.variables.first { $0.declaration.origin == .programCounter }?.id
         let alternativeRegions = action.bindings.isEmpty
             ? action.body.orderedAlternativeFailureRegions(afterControlGuardOf: counter) : []
+        let projectedSpine = action.bindings.isEmpty ? program.enums.projectedAssignmentBinders(in: action.body) : nil
         var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(action.body, 0, [])]
         var nextID = 1
         var declarations: [String] = []
@@ -1150,10 +1151,20 @@ extension NativeSwiftEmitter {
                 checkedBody = body
             } else {
                 let recording: String
-                if case .define(let site, let value, _) = node,
-                   let source = nativeActionFailureRecordingSource(value: value, site: site, action: action.id,
-                       lexical: bindings.map(binder), regions: alternativeRegions, program: program) {
-                    recording = source + "\n"
+                if case .define(let site, let value, _) = node {
+                    var projectedPreceding: [String]?
+                    if value.operation == .add, let projectedSpine {
+                        guard projectedSpine.indices.contains(bindings.count), projectedSpine[bindings.count] == site,
+                              projectedSpine.starts(with: bindings) else { throw unsupported("assignment capture order") }
+                        projectedPreceding = try bindings.map { id in
+                            guard let type = program.bindingTypes[id] else { throw unsupported("missing assignment binding") }
+                            return try projected(binder(id), from: type, to: .int)
+                        }
+                    }
+                    let source = nativeActionFailureRecordingSource(value: value, site: site, action: action.id,
+                        lexical: bindings.map(binder), regions: alternativeRegions, program: program,
+                        projectedPreceding: projectedPreceding)
+                    recording = source.map { $0 + "\n" } ?? ""
                 } else {
                     recording = ""
                 }
@@ -1211,7 +1222,8 @@ extension NativeSwiftEmitter {
         try verifyGeneratedActionWriteOutput(declaration, action: action.body, program: program,
             stateFields: stateMemberNames, parts: parts.writes, conditions: parts.conditions,
             requireScalarLeaves: isTotalScalarAssignment(action.body)
-                || program.requiresOrderedIntOutput(action.id), externalBindings: action.bindings)
+                || program.requiresOrderedIntOutput(action.id), externalBindings: action.bindings,
+            integerRepresentation: nativeIntegerRepresentation)
         return declaration
     }
 
@@ -2441,12 +2453,55 @@ private func isTotalScalarAssignment(_ root: CompiledActionExpr) -> Bool {
     return true
 }
 
+struct NativeIntegerRepresentation {
+    let type: String
+    let literalOwner: String
+    let cases: [(name: String, value: Int)]
+
+    func projectedValue(_ operand: String) -> String {
+        let arms = cases.map { member in
+            let value = member.value == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(member.value)
+            return "case .\(member.name): return \(value)"
+        }.joined(separator: "\n")
+        return "({ (value: \(type)) -> \(nativeIntType) in\nswitch value { \(arms) } })(\(operand))"
+    }
+}
+
+extension NativeSwiftEmitter {
+    func nativeIntegerRepresentation(_ type: CompiledValueType) -> NativeIntegerRepresentation? {
+        let cases: [(String, CompiledValue)]
+        let literalOwner: String
+        let swiftName: String
+        switch type {
+        case .named(let name) where !name.hasSuffix("?"):
+            guard let members = program.enums.cases[name],
+                  let spelledType = try? swiftType(type) else { return nil }
+            swiftName = spelledType
+            cases = members.map { (enumMember($0.name, of: name), $0.value) }
+            literalOwner = name
+        case .finite(let members):
+            guard let spelledType = try? swiftType(type) else { return nil }
+            swiftName = spelledType
+            cases = members.enumerated().map { (finiteCaseName(members, index: $0.offset), $0.element) }
+            literalOwner = swiftName
+        default: return nil
+        }
+        let integers = cases.compactMap { name, value -> (name: String, value: Int)? in
+            guard case .integer(let integer) = value else { return nil }
+            return (name, integer)
+        }
+        guard !integers.isEmpty, integers.count == cases.count else { return nil }
+        return .init(type: swiftName, literalOwner: literalOwner, cases: integers)
+    }
+}
+
 func verifyGeneratedActionWriteOutput(
     _ declaration: DeclSyntax?, action: CompiledActionExpr, program: CompiledProgram,
     stateFields: [VariableID: String],
     parts: [(id: Int, slot: String, value: String)],
     conditions: [(id: Int, value: String)] = [], requireScalarLeaves: Bool = false,
-    externalBindings: [CompiledActionBinding] = []
+    externalBindings: [CompiledActionBinding] = [],
+    integerRepresentation: ((CompiledValueType) -> NativeIntegerRepresentation?)? = nil
 ) throws {
     guard let visitor = declaration?.as(FunctionDeclSyntax.self),
           visitor.body != nil else {
@@ -2495,6 +2550,7 @@ func verifyGeneratedActionWriteOutput(
         visitor.name.text == "_visitUpdates\($0.id.ordinal)"
     }
     let observesAlternatives = observedAction.map { program[$0.id].bindings.isEmpty } == true
+    let projectedSpine = observesAlternatives ? program.enums.projectedAssignmentBinders(in: action) : nil
     let counter = program.layout.variables.first { $0.declaration.origin == .programCounter }?.id
     let alternativeRegions = observesAlternatives
         ? action.orderedAlternativeFailureRegions(afterControlGuardOf: counter) : []
@@ -2746,7 +2802,26 @@ func verifyGeneratedActionWriteOutput(
     }
     let stackFrame = CompiledValueType.tuple([.int, .bool])
     let stackFrameType = "Pair<\(nativeIntType), \(nativeBoolType)>"
-    func directScalarTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+    func representedRead(_ expression: CompiledExpression, parameters: [String]) -> String? {
+        guard expression.children.isEmpty else { return nil }
+        switch expression.operation {
+        case .stateVariable(let id) where program.variableTypes[id] == expression.resultType:
+            return stateFields[id].map { "state.state.\($0)" }
+        case .boundValue(let id) where program.bindingTypes[id] == expression.resultType:
+            if let parameter = program.layout.parameters.first(where: { $0.binder == id }) {
+                return "configuration.`\(parameter.reference.name)`"
+            }
+            guard let name = program.binderNames[id].map({ "_\($0)_\(id.ordinal)" }),
+                  parameters.contains(name) else { return nil }
+            return name
+        default: return nil
+        }
+    }
+    typealias IntegerProjection = (representation: NativeIntegerRepresentation, operand: String)
+    func directScalarTokens(
+        _ expression: CompiledExpression, parameters: [String],
+        projectionTokens: ((IntegerProjection) -> [String])? = nil
+    ) -> [String]? {
         guard expression.resultType == .int || expression.resultType == .bool else { return nil }
         switch expression.operation {
         case .stateVariable(let variable):
@@ -2773,6 +2848,14 @@ func verifyGeneratedActionWriteOutput(
             guard let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
                   parameters.contains(name) || externalScalarNames.contains(name) else { return nil }
             return [name]
+        case .convert where expression.resultType == .int:
+            guard let read = program.integerReadComputation(expression),
+                  let representation = integerRepresentation?(read.resultType),
+                  let operand = representedRead(read, parameters: parameters) else { return nil }
+            if let projectionTokens { return projectionTokens((representation, operand)) }
+            let projection = representation.projectedValue(operand)
+            return Parser.parse(source: projection).tokens(viewMode: .sourceAccurate)
+                .filter { $0.tokenKind != .endOfFile }.map(\.text)
         case .value(.integer(let integer)) where expression.resultType == .int:
             if integer == Int.min { return ["SwiftTLA", ".", "_nativeIntMinimum", "(", ")"] }
             return integer < 0 ? ["-", String(integer.magnitude)] : [String(integer)]
@@ -2782,7 +2865,10 @@ func verifyGeneratedActionWriteOutput(
             return nil
         }
     }
-    func arithmeticIntTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+    func arithmeticIntTokens(
+        _ expression: CompiledExpression, parameters: [String],
+        onProjection: ((Int, IntegerProjection) -> Void)? = nil
+    ) -> [String]? {
         func checkedOperation(_ operation: CompiledOperation) -> (name: String, rightFirst: Bool, arity: Int)? {
             switch operation {
             case .add: return ("add", false, 2)
@@ -2807,12 +2893,15 @@ func verifyGeneratedActionWriteOutput(
             return ["(", "try", "SwiftTLA", ".", "_NativeMachineOperations", ".", rootOperation.name, "("]
                 + left + [","] + right + [")", ")"]
         }
+        let prologue = ["(", "try", "{", "(", ")", "throws", "->"] + nativeIntTypeTokens + ["in"]
         var pending: [(expression: CompiledExpression, expanded: Bool)] = [(expression, false)]
         var values: [String] = []
         var statements: [String] = []
         var ordinal = 0
         while let (node, expanded) = pending.popLast() {
             guard node.resultType == .int else { return nil }
+            let name = "_arithmetic\(ordinal)"
+            let binding = ["let", name, ":"] + nativeIntTypeTokens + ["="]
             let value: [String]
             if let operation = checkedOperation(node.operation) {
                 guard node.children.count == operation.arity else { return nil }
@@ -2832,17 +2921,20 @@ func verifyGeneratedActionWriteOutput(
                         index == 0 ? [argument] : [",", argument]
                     } + [")"]
             } else {
-                guard let direct = directScalarTokens(node, parameters: parameters) else { return nil }
+                let offset = prologue.count + statements.count + binding.count
+                let projectionTokens: ((IntegerProjection) -> [String])? = onProjection.map { observe in
+                    { projection in observe(offset, projection); return [] }
+                }
+                guard let direct = directScalarTokens(node, parameters: parameters,
+                    projectionTokens: projectionTokens) else { return nil }
                 value = direct
             }
-            let name = "_arithmetic\(ordinal)"
             ordinal += 1
-            statements += ["let", name, ":"] + nativeIntTypeTokens + ["="] + value
+            statements += binding + value
             values.append(name)
         }
         guard values.count == 1, let result = values.first else { return nil }
-        return ["(", "try", "{", "(", ")", "throws", "->"] + nativeIntTypeTokens + ["in"] + statements +
-            ["return", result, "}", "(", ")", ")"]
+        return prologue + statements + ["return", result, "}", "(", ")", ")"]
     }
     func rangeMembershipSource(_ expression: CompiledExpression, parameters: [String]) -> String? {
         guard expression.operation == .in, expression.resultType == .bool,
@@ -3170,12 +3262,82 @@ func verifyGeneratedActionWriteOutput(
         }())
         """
     }
+    func verifyProjectedInitializer(
+        _ value: CompiledExpression, parameters: [String], actual: [String], at path: String
+    ) throws -> Bool {
+        guard value.operation == .add || value.operation == .convert else { return false }
+        var projections: [(offset: Int, projection: IntegerProjection)] = []
+        let expected: [String]?
+        if value.operation == .add {
+            expected = arithmeticIntTokens(value, parameters: parameters) { offset, projection in
+                projections.append((offset, projection))
+            }
+        } else {
+            expected = directScalarTokens(value, parameters: parameters) { projection in
+                projections.append((0, projection))
+                return []
+            }
+        }
+        guard let expected, !projections.isEmpty else { return false }
+
+        func words(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                .filter { $0.tokenKind != .endOfFile }.map(\.text)
+        }
+        var expectedOffset = 0
+        var actualOffset = 0
+        func requireFixedTokens(upTo end: Int) throws {
+            let span = expected[expectedOffset..<end]
+            guard actual[actualOffset...].starts(with: span, by: { $0.utf8.elementsEqual($1.utf8) }) else {
+                throw invalid(path, "the captured value reads its compiled source",
+                    "unexpected emitted token at \(actualOffset)")
+            }
+            actualOffset += span.count
+            expectedOffset = end
+        }
+        for (offset, projection) in projections {
+            try requireFixedTokens(upTo: offset)
+            let type = words(projection.representation.type)
+            let read = words(projection.operand)
+            guard let decoded = decodeNativeIntReadProjection(actual[actualOffset...],
+                       sourceType: type, reads: [read: projection.operand]),
+                  decoded.read == projection.operand else {
+                throw invalid(path, "the emitted integer projection reads its compiled source",
+                    "expected the conversion of \(projection.operand)")
+            }
+            let observed = Dictionary(uniqueKeysWithValues: decoded.cases.map { ($0.key, $0.value) })
+            for member in projection.representation.cases where observed[member.name] != member.value {
+                let actual = observed[member.name].map(String.init) ?? "missing"
+                throw invalid(path, "each emitted conversion case returns its declared integer",
+                    "case \(member.name): expected \(member.value), actual \(actual)")
+            }
+            guard observed.count == projection.representation.cases.count else {
+                throw invalid(path, "the complete declared integer conversion cases", "unexpected emitted conversion case")
+            }
+            actualOffset += decoded.consumed
+        }
+        try requireFixedTokens(upTo: expected.count)
+        guard actualOffset == actual.endIndex else {
+            throw invalid(path, "the complete emitted arithmetic expression", "trailing emitted tokens")
+        }
+        return true
+    }
     func checkedValueTokens(
         _ expression: CompiledExpression, parameters: [String], actual: [String]
     ) -> (expected: [String], actual: [String])? {
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
                 .map(\.text).filter { !$0.isEmpty }
+        }
+        if let representation = integerRepresentation?(expression.resultType) {
+            if case .value(.integer(let value)) = expression.operation,
+               expression.children.isEmpty,
+               let member = representation.cases.first(where: { $0.value == value }) {
+                return (tokens("\(representation.literalOwner).\(member.name)"), actual)
+            }
+            if let read = representedRead(expression, parameters: parameters) {
+                return (tokens(read), actual)
+            }
         }
         if let source = domainRangeEqualitySource(expression, parameters: parameters) {
             return (tokens(source), actual)
@@ -3423,9 +3585,26 @@ func verifyGeneratedActionWriteOutput(
                 "current bindings, updates, and emitter parameters", "unexpected parameter list")
         }
         let preceding = Array(parent.dropLast(2))
+        var projectedPreceding: [String]?
+        if value.operation == .add, let projectedSpine {
+            guard projectedSpine.indices.contains(preceding.count), projectedSpine[preceding.count] == binding else {
+                throw invalid("native.action.failures.\(id)", "the complete prior assignment prefix", "unexpected site")
+            }
+            projectedPreceding = try zip(projectedSpine, preceding).map { prior, local in
+                guard let name = program.binderNames[prior], local == "_\(name)_\(prior.ordinal)",
+                      let type = program.bindingTypes[prior] else {
+                    throw invalid("native.action.failures.\(id)", "the preceding declaration in order", local)
+                }
+                if type == .int { return local }
+                guard let representation = integerRepresentation?(type) else {
+                    throw invalid("native.action.failures.\(id)", "a declared integer representation", local)
+                }
+                return representation.projectedValue(local)
+            }
+        }
         let recording = observedAction.flatMap {
             nativeActionFailureRecordingSource(value: value, site: binding, action: $0.id,
-                lexical: preceding, regions: alternativeRegions, program: program)
+                lexical: preceding, regions: alternativeRegions, program: program, projectedPreceding: projectedPreceding)
         }
         if let recording {
             let expected = Parser.parse(source: recording).tokens(viewMode: .sourceAccurate)
@@ -3454,18 +3633,21 @@ func verifyGeneratedActionWriteOutput(
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
         try requireParsedIntegerScalar(value, id: id, parameters: parent,
             at: "native.action.binding.\(id)")
-        let checkedInitializer = checkedValueTokens(value, parameters: parent, actual: initializer)
-        if checkedInitializer == nil, requireScalarLeaves || booleanPredicateNodes(value) != nil {
-            throw invalid("native.action.binding.\(id)",
-                "a complete generated scalar value or Boolean branch tree", "unreadable value expression")
-        }
-        if let checkedInitializer,
-           canonicalPredicateNames(checkedInitializer.actual) !=
-                canonicalPredicateNames(checkedInitializer.expected) {
-            throw invalid("native.action.binding.\(id)",
-                "the captured value reads its compiled source",
-                firstTokenDifference(canonicalPredicateNames(checkedInitializer.actual),
-                    canonicalPredicateNames(checkedInitializer.expected)))
+        if try !verifyProjectedInitializer(value, parameters: parent,
+            actual: initializer, at: "native.action.binding.\(id)") {
+            let checkedInitializer = checkedValueTokens(value, parameters: parent, actual: initializer)
+            if checkedInitializer == nil, requireScalarLeaves || booleanPredicateNodes(value) != nil {
+                throw invalid("native.action.binding.\(id)",
+                    "a complete generated scalar value or Boolean branch tree", "unreadable value expression")
+            }
+            if let checkedInitializer,
+               canonicalPredicateNames(checkedInitializer.actual) !=
+                    canonicalPredicateNames(checkedInitializer.expected) {
+                throw invalid("native.action.binding.\(id)",
+                    "the captured value reads its compiled source",
+                    firstTokenDifference(canonicalPredicateNames(checkedInitializer.actual),
+                        canonicalPredicateNames(checkedInitializer.expected)))
+            }
         }
     }
     guard failureRecordings.isEmpty else {

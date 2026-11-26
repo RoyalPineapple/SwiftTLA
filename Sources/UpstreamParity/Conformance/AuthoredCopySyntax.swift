@@ -949,10 +949,11 @@ enum AuthoredCopySyntax {
                 reads[slot] = .string(authoredName)
                 if let captured {
                     guard case .tuple(let reference) = captured, reference.count == 2,
-                          case .variable(let name)? = lowered, let compiled, compiled.children.isEmpty
+                          case .variable(let name)? = lowered, let compiled, let scheduled,
+                          let read = scheduled.program.integerReadComputation(compiled)
                     else { throw unsupported }
                     let identity: TLAValue
-                    switch (reference[0], reference[1], compiled.operation) {
+                    switch (reference[0], reference[1], read.operation) {
                     case (.string("state"), .string(let key), .stateVariable(let id))
                         where key.utf8.elementsEqual(authoredName.utf8):
                         identity = .tuple([.string("state"), .int(id.ordinal)])
@@ -1008,6 +1009,7 @@ enum AuthoredCopySyntax {
     }
 
     struct ScheduledRHS {
+        let program: CompiledProgram
         let definition: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt.Definition
         let compiled: OrderedRHSPhysicalAction.Conditional.Definition
         let target: VariableID

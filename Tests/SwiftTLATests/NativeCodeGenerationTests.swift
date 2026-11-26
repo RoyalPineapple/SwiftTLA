@@ -229,9 +229,14 @@ struct NativeCodeGenerationTests {
 
     @Test("Implicit representation changes are explicit typed conversion nodes")
     func resolvesExplicitConversions() throws {
+        let step = AtomicStep(model: .init(label: .init(name: "advance"), statements: [
+            .set(target: .root("number"), value: .int(1)),
+            .set(target: .root("sum"), value: .add(.variable("number"), .int(.max))),
+        ]))
         let specification = TLASpec(name: "Conversions", variables: [
-            .init(name: "number", initialization: .value(.int(1)), generatedSwiftType: "Number", origin: .source)
-        ], actions: [], invariants: [
+            .init(name: "number", initialization: .value(.int(1)), generatedSwiftType: "Number", origin: .source),
+            .init(name: "sum", initial: .int(0)),
+        ], actions: [.init(name: "advance", body: try AlgorithmLowerer.lowerAtomicStep(step).action)], invariants: [
             .init(name: "Small", body: .lessThan(.variable("number"), .int(2)))
         ])
         let types = SourceTypeResolver(metadata: .init(enums: [.init(typeName: "Number", cases: [(name: "one", value: .int(1))])]))
@@ -246,6 +251,84 @@ struct NativeCodeGenerationTests {
         var formalValues: [CompiledValue] = [.integer(1)]
         try conversion.operation.apply(to: &formalValues, operandCount: 1)
         #expect(formalValues == [.integer(1)])
+        let entry = try #require(program.layout.variables.first { $0.declaration.name == "number" })
+        #expect(conversion.computation.operation == .stateVariable(entry.id))
+        let action = try #require(program.behavior.actions.first)
+        guard case .define(let first, let assigned, let rest) = action.body,
+              case .define(_, let sum, _) = rest else {
+            Issue.record("Expected the two scheduled assignment definitions")
+            return
+        }
+        #expect(assigned.resultType == .named("Number"))
+        #expect(sum.operation == .add)
+        let read = try #require(sum.children.first)
+        #expect(read.operation == .convert)
+        #expect(read.resultType == .int)
+        #expect(read.computation.resultType == assigned.resultType)
+        #expect(read.computation.operation == .boundValue(first))
+        #expect(program.integerReadComputation(read)?.operation == .boundValue(first))
+        #expect(program.integerReadComputation(conversion)?.operation == .stateVariable(entry.id))
+        let output = try program.renderModule()
+        let actionName = try #require(program.layout.actions.first).renderedName
+        let header = actionName + " == "
+        let declaration = try #require(output.renderedModuleSource.split(separator: "\n").first { $0.hasPrefix(header) })
+        let body = String(declaration.dropFirst(header.count))
+        let before = try #require(output.evaluationFailureDeclarations.first { $0.hasPrefix("__SwiftTLAOverflowBefore0 == ") })
+        let prior = try #require(program.binderNames[first])
+        #expect(before.contains("(LET \(prior) == 1 IN <<\(prior)>>)"))
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: body, layout: program.layout,
+            binders: program.binderNames, moduleName: program.moduleName, required: true, enums: program.enums)
+        let binderName = try #require(program.binderNames[first])
+        let wrongOperand = body.replacingOccurrences(of: "(\(binderName) + ", with: "(0 + ")
+        #expect(wrongOperand != body)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: wrongOperand, layout: program.layout,
+                binders: program.binderNames, moduleName: program.moduleName, required: true, enums: program.enums)
+        }
+
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "Conversions", program: program))
+        let members = try emitter.machineMembers()
+        let visitorName = "_visitUpdates\(action.id.ordinal)"
+        let visitor = try #require(members.first { $0.as(FunctionDeclSyntax.self)?.name.text == visitorName })
+        let parts = try emitter.actionFunctions(action)
+        func verifyNative(_ declaration: DeclSyntax) throws {
+            try verifyGeneratedActionWriteOutput(declaration, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions,
+                requireScalarLeaves: true, integerRepresentation: emitter.nativeIntegerRepresentation)
+        }
+        try verifyNative(visitor)
+        let switchResult = "case .`one`: return 1"
+        let rhsCase = try #require(visitor.description.range(of: switchResult))
+        let catchCase = try #require(visitor.description.range(of: switchResult, options: .backwards))
+        try #require(rhsCase != catchCase)
+        let wrongPrefix = visitor.description.replacingCharacters(in: catchCase, with: "case .`one`: return 7")
+        let wrongRecording = try #require(Parser.parse(source: wrongPrefix).statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyNative(wrongRecording)
+            Issue.record("The native failure recorded a different preceding value")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.failures.1")
+        }
+        let changed = visitor.description.replacingCharacters(in: rhsCase, with: "case .`one`: return 7")
+        let wrongSwitch = try #require(Parser.parse(source: changed).statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyNative(wrongSwitch)
+            Issue.record("The emitted operand's switch changed a compiled integer")
+        } catch let error as CompilationDiagnostic {
+            #expect(error.path == "native.action.binding.1")
+            #expect(error.actual.contains("expected 1, actual 7"))
+        }
+        let operand = emitter.binder(first)
+        let rhsOperand = try #require(visitor.description.range(of: "})(\(operand))"))
+        let redirected = visitor.description.replacingCharacters(in: rhsOperand, with: "})(state.state.number)")
+        let wrongRead = try #require(Parser.parse(source: redirected).statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyNative(wrongRead)
+            Issue.record("The emitted conversion read the entry field instead of the captured operand")
+        } catch let error as CompilationDiagnostic {
+            #expect(error.path == "native.action.binding.1")
+            #expect(error.actual.contains("expected the conversion of \(operand)"))
+        }
     }
 
     @Test("Local declaration scopes resolve directly to their typed executable body")

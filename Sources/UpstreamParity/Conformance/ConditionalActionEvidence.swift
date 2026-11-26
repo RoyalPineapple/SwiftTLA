@@ -385,7 +385,7 @@ package enum ConditionalActionEvidence {
             sharedInput = nil
         } else {
             let scheduled = (0..<sharedCount).map { index in
-                AuthoredCopySyntax.ScheduledRHS(definition: firstDefinitions[index], compiled: shared[index],
+                AuthoredCopySyntax.ScheduledRHS(program: program, definition: firstDefinitions[index], compiled: shared[index],
                     target: sharedOrigins[index].target, terms: continuation.prefix[index])
             }
             let name = integerModule + "Shared"
@@ -417,7 +417,7 @@ package enum ConditionalActionEvidence {
             let compiled = shared + localDefinitions
             let count = origins.prefix { roles[$0.target.ordinal] == .int }.count
             let scheduledPrefix = (0..<count).map { index in
-                AuthoredCopySyntax.ScheduledRHS(definition: definitions[index], compiled: compiled[index],
+                AuthoredCopySyntax.ScheduledRHS(program: program, definition: definitions[index], compiled: compiled[index],
                     target: origins[index].target, terms: scheduled.captures[index])
             }
             let sourceName = integerModule + "Arm" + String(arm + 1)

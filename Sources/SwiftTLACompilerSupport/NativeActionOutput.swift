@@ -146,13 +146,14 @@ private func nativeAlternativeFailureRecordingSource(regions: [AlternativeFailur
 }
 
 package func nativeActionFailureRecordingSource(value: CompiledExpression, site: BinderID, action: ActionID,
-    lexical: [String], regions: [AlternativeFailureRegion], program: CompiledProgram) -> String? {
+    lexical: [String], regions: [AlternativeFailureRegion], program: CompiledProgram,
+    projectedPreceding: [String]? = nil) -> String? {
     let addition = value.operation == .add && value.resultType == .int
     if addition || value.isObservedAlternativeIntegerOperation,
        let branch = nativeAlternativeFailureRecordingSource(regions: regions, site: site,
            action: action.ordinal, lexical: lexical, program: program) {
         return branch
     }
-    guard addition, program.requiresOrderedIntOutput(action) else { return nil }
-    return nativeOrderedIntAssignmentFailureSource(actionOrdinal: action.ordinal, preceding: lexical)
+    guard addition, program.requiresOrderedIntOutput(action) || projectedPreceding != nil else { return nil }
+    return nativeOrderedIntAssignmentFailureSource(actionOrdinal: action.ordinal, preceding: projectedPreceding ?? lexical)
 }

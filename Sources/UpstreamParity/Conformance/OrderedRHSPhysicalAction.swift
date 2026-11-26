@@ -346,7 +346,7 @@ enum OrderedRHSPhysicalAction {
 
     static func decode(in module: String, action: String, body: CompiledActionExpr,
                        fields: [CompiledVariableLayout], counter: CompiledVariableLayout, destination: String,
-                       binderNames: [BinderID: String], assignmentTargets: [BinderID: VariableID])
+                       program: CompiledProgram, assignmentTargets: [BinderID: VariableID])
         -> (action: Action, targets: [String])? {
         guard let text = actionText(in: module, named: action),
               let tokens = StraightLineRenderedActionCheck.tokens(text) else { return nil }
@@ -364,12 +364,12 @@ enum OrderedRHSPhysicalAction {
         for offset in definitions {
             guard case .define(let binder, let value, let next) = remaining,
                   offset + 3 < tokens.count,
-                  let name = binderNames[binder], tokens[offset + 1].utf8.elementsEqual(name.utf8),
+                  let name = program.binderNames[binder], tokens[offset + 1].utf8.elementsEqual(name.utf8),
                   let target = assignmentTargets[binder], let field = rawNames[target],
                   tokens[offset + 2] == "==",
                   let end = tokens[(offset + 3)...].firstIndex(of: "IN"),
                   let expression = expression(tokens[(offset + 3)..<end], bindings: scope.reads),
-                  matches(expression.plan, value, rawNames: rawNames, captures: scope.positions),
+                  matches(expression.plan, value, rawNames: rawNames, captures: scope.positions, program: program),
                   let guardParts = additionGuards(tokens, before: offset, count: expression.additionNodes.count),
                   scope.reads[name] == nil, scope.positions[binder] == nil else { return nil }
             let position = captures.count + 1
@@ -405,7 +405,7 @@ enum OrderedRHSPhysicalAction {
               case .ifElse(let predicate, let yes, let no) = remaining,
               let split = conditional(physical), let yesTokens = parentheses(split.yes),
               let noTokens = parentheses(split.no),
-              let condition = comparison(split.condition, predicate: predicate, scope: scope, rawNames: rawNames),
+              let condition = comparison(split.condition, predicate: predicate, scope: scope, rawNames: rawNames, program: program),
               let first = arm(yesTokens, body: yes, scope: scope, names: names, rawNames: rawNames,
                               program: program, retainingDefinitions: retainingDefinitions),
               let second = arm(noTokens, body: no, scope: scope, names: names, rawNames: rawNames,
@@ -415,7 +415,7 @@ enum OrderedRHSPhysicalAction {
         // guard/definedness and failure-gating constructions against the same text.
         do {
             try StraightLineRenderedActionCheck.verify(action.body, rendered: text, layout: program.layout,
-                binders: program.binderNames, moduleName: program.moduleName, required: true)
+                binders: program.binderNames, moduleName: program.moduleName, required: true, enums: program.enums)
         } catch { return nil }
         return .init(sharedDefinitions: shared.definitions, sharedCaptures: shared.captures,
                      selectionBody: physical.joined(separator: " "), condition: condition,
@@ -450,7 +450,7 @@ enum OrderedRHSPhysicalAction {
     }
 
     private static func comparison(_ text: ArraySlice<String>, predicate: CompiledExpression,
-                                   scope: CaptureScope, rawNames: [VariableID: String]) -> TLAValue? {
+                                   scope: CaptureScope, rawNames: [VariableID: String], program: CompiledProgram) -> TLAValue? {
         let comparison: (operation: String, symbol: String)
         switch predicate.operation {
         case .lessThan: comparison = ("lessThan", "<")
@@ -462,8 +462,8 @@ enum OrderedRHSPhysicalAction {
               let left = expression(inside[..<separator], bindings: scope.reads, allowingBooleans: true),
               let right = expression(inside[(separator + 1)...], bindings: scope.reads, allowingBooleans: true),
               left.plan.kinds.count == 1, right.plan.kinds.count == 1,
-              matches(left.plan, predicate.children[0], rawNames: rawNames, captures: scope.positions),
-              matches(right.plan, predicate.children[1], rawNames: rawNames, captures: scope.positions)
+              matches(left.plan, predicate.children[0], rawNames: rawNames, captures: scope.positions, program: program),
+              matches(right.plan, predicate.children[1], rawNames: rawNames, captures: scope.positions, program: program)
         else { return nil }
         func term(_ plan: Plan) -> TLAValue {
             plan.kinds[0] == .string("literal") ? .tuple([.string("literal"), plan.literals[0]]) : plan.reads[0]
@@ -493,7 +493,7 @@ enum OrderedRHSPhysicalAction {
                   let expectedName = program.binderNames[binder], inside[inside.startIndex + 1] == expectedName,
                   let end = inside.dropFirst(3).firstIndex(of: "IN"),
                   let decoded = expression(inside[(inside.startIndex + 3)..<end], bindings: scope.reads, allowingBooleans: true),
-                  matches(decoded.plan, value, rawNames: rawNames, captures: scope.positions),
+                  matches(decoded.plan, value, rawNames: rawNames, captures: scope.positions, program: program),
                   let guards = guardTexts(guardTokens, count: decoded.additionNodes.count),
                   scope.reads[expectedName] == nil, scope.positions[binder] == nil else { return nil }
             let position = scope.positions.count + 1
@@ -558,10 +558,13 @@ enum OrderedRHSPhysicalAction {
     }
 
     private static func matches(_ plan: Plan, _ root: CompiledExpression, rawNames: [VariableID: String],
-                                captures: [BinderID: Int]) -> Bool {
+                                captures: [BinderID: Int], program: CompiledProgram) -> Bool {
         var pending = [(plan.kinds.count - 1, root)]
         while let (index, expression) = pending.popLast() {
             switch expression.operation {
+            case .convert:
+                guard let read = program.integerReadComputation(expression) else { return false }
+                pending.append((index, read))
             case .value(.integer(let value)):
                 guard plan.kinds[index] == .string("literal"), plan.literals[index] == .int(value) else { return false }
             case .value(.boolean(let value)):
