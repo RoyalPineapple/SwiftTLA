@@ -685,8 +685,8 @@ public enum _NativeMachineOperations: Sendable {
     }
 
     public static func sequenceHead<Element: Sendable>(_ sequence: [Element]) throws -> Element {
-        guard let first = sequence.first else { throw NativeMachineEvaluationError.emptySequence }
-        return first
+        guard !sequence.isEmpty else { throw NativeMachineEvaluationError.emptySequence }
+        return sequence[sequence.startIndex]
     }
 
     public static func sequenceTail<Element: Sendable>(_ sequence: [Element]) throws -> [Element] {

@@ -36,7 +36,10 @@ public struct _NativeSet<Identity: _NativeSetIdentity>: Hashable, Sendable,
     public var count: Int { elements.count }
 
     public func contains(_ member: Element) -> Bool {
-        elements.contains { Identity.equal($0, member) }
+        for index in elements.indices where Identity.equal(elements[index], member) {
+            return true
+        }
+        return false
     }
     @discardableResult
     public mutating func insert(_ member: Element) -> (inserted: Bool, memberAfterInsert: Element) {
