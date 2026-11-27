@@ -132,7 +132,7 @@ func operation(_ name: String, _ size: Int) throws -> Operation {
         if name == "choices.initials" { return { try Choices.initialMachines(configuration: config).count } }
         if name == "choices.selected" { return { try Choices.makeMachine(.init(value: size), configuration: config).state.value } }
         if name == "choices.ambiguousInit" { return {
-            do { try Choices.makeMachine(configuration: config); preconditionFailure("expected ambiguous initial") }
+            do { _ = try Choices.makeMachine(configuration: config); preconditionFailure("expected ambiguous initial") }
             catch GeneratedMachineError.ambiguousInitialState { return size }
         } }
         var m = try Choices.makeMachine(.init(value: size), configuration: config)
