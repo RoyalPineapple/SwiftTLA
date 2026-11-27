@@ -199,8 +199,9 @@ to the same machine.
 
 `Actor` owns one generated machine. Actor isolation serializes `send(_:)`,
 and it exposes the same generated `State` and `Action`
-values. Its initializer accepts the same typed initial state as
-`makeMachine(_:)`.
+values. A separate `await actor.state` reads the state when that call runs.
+Other callers can send actions between the two calls. Its initializer accepts
+the same typed initial state as `makeMachine(_:)`.
 
 **Example ID:** `generated-machine-actor`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
