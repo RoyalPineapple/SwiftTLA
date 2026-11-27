@@ -127,13 +127,10 @@ LOCAL Collect(plan, action, visits, failures) ==
 
 LOCAL Select(plan, acc) ==
     IF plan.selector # "selected" THEN Stop("unsupported", <<>>)
-    ELSE CASE acc.tag = plan.selectorGuards[1].test ->
-                Stop("disabled", plan.errors[plan.selectorGuards[1].error])
-           [] acc.tag = plan.selectorGuards[2].test ->
-                Stop("ambiguous", plan.errors[plan.selectorGuards[2].error])
-           [] acc.tag = "one" ->
-                Continue([name \in {plan.lookupBinding} |-> acc.payload][plan.lookupResult])
-           [] OTHER -> Stop("unsupported", <<>>)
+    ELSE IF acc.tag = plan.selectorGuards[1].test THEN Stop("disabled", plan.errors[plan.selectorGuards[1].error])
+    ELSE IF acc.tag = plan.selectorGuards[2].test THEN Stop("ambiguous", plan.errors[plan.selectorGuards[2].error])
+    ELSE IF acc.tag = "one" THEN Continue([name \in {plan.lookupBinding} |-> acc.payload][plan.lookupResult])
+    ELSE Stop("unsupported", <<>>)
 
 LOCAL Project(storage, plan) ==
     LET snapshot == storage[plan.projection[1]]
@@ -232,8 +229,16 @@ PROOF
         IF Len(visits) = 0 THEN Stop("disabled", plan.errors[plan.selectorGuards[1].error])
         ELSE IF Len(visits) # 1 THEN Stop("ambiguous", plan.errors[plan.selectorGuards[2].error])
         ELSE Continue(visits[1])
-    BY ONLY <1>fold, DecodedSendOperands(plan, action), SMT DEF DecodedSendOperands,
-        Select, NoSend, ManySends, OneSend
+    <2>operands. /\ plan.selector = "selected" /\ plan.selectorGuards[1].test = "none"
+                  /\ plan.selectorGuards[2].test = "many" /\ plan.lookupResult = plan.lookupBinding
+        BY ONLY DecodedSendOperands(plan, action) DEF DecodedSendOperands
+    <2>empty. Select(plan, NoSend) = Stop("disabled", plan.errors[plan.selectorGuards[1].error])
+        BY ONLY <2>operands, SMT DEF Select, NoSend
+    <2>one. Select(plan, OneSend(visits[1])) = Continue(visits[1])
+        BY ONLY <2>operands, SMT DEF Select, OneSend
+    <2>many. Select(plan, ManySends) = Stop("ambiguous", plan.errors[plan.selectorGuards[2].error])
+        BY ONLY <2>operands, SMT DEF Select, ManySends
+    <2>. QED BY ONLY <1>fold, <2>empty, <2>one, <2>many, SMT
 <1>receiver. Receiver(plan, action) = plan.writeTarget
     BY ONLY DecodedSendOperands(plan, action), SMT DEF DecodedSendOperands, Receiver, DecodedSendReceiver
 <1>finish. \A selected :
