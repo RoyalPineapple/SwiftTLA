@@ -6,6 +6,29 @@ import SwiftSyntax
 @testable import SwiftTLAPlugin
 
 struct ArrayValueTests {
+    @Test("array search stops at the first matching element or reached predicate error")
+    func searchesInOrder() throws {
+        for (input, expected) in [([], false), ([2, 2], false), ([2, 1, 0], true)] {
+            var machine = try ArrayPredicateSearchMachine.makeMachine(configuration: .init(input: input))
+            #expect(try machine.send(.search).after.found == expected)
+            let predicate = input.expr.contains { divisor in 1 % divisor == 0 }
+            #expect(try compiledValue(predicate.stateExpr) == .bool(expected))
+        }
+
+        let failures: [([Int], NativeMachineEvaluationError, EvalError)] = [
+            ([2, 0, -1, 1], .divisionByZero, .divisionByZero),
+            ([2, -1, 0, 1], .negativeModuloDivisor(-1), .negativeModuloDivisor(-1))
+        ]
+        for (input, nativeError, formalError) in failures {
+            var machine = try ArrayPredicateSearchMachine.makeMachine(configuration: .init(input: input))
+            let before = machine.snapshot
+            #expect(throws: nativeError) { try machine.send(.search) }
+            #expect(machine.snapshot == before)
+            let predicate = input.expr.contains { divisor in 1 % divisor == 0 }
+            #expect(throws: formalError) { try compiledValue(predicate.stateExpr) }
+        }
+    }
+
     @Test("injective choices compose directly with ordinary Swift array expressions")
     func injectiveSequenceUsesArray() {
         let values = Set<Int>([1, 2]).expr

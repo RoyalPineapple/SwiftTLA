@@ -1731,13 +1731,19 @@ struct NativeSwiftEmitter {
         return array
     }
 
-    /// Recognize the one-based quantifier emitted by formalSequenceAllSatisfy.
-    private mutating func arrayAllSatisfy(
+    /// Recognize the one-based range and element binding emitted by formalSequenceQuantifier.
+    private mutating func arrayQuantifier(
         receiver: CompiledExpression, binding: BinderID, quantifier: CompiledExpression,
         state: String, substitutions: [BinderID: String], activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String? {
-        guard case .array(let elementType) = receiver.resultType,
-              case .forAll(let index) = quantifier.operation else { return nil }
+        guard case .array(let elementType) = receiver.resultType else { return nil }
+        let index: BinderID
+        let method: String
+        switch quantifier.operation {
+        case .forAll(let binding): (index, method) = (binding, "allSatisfy")
+        case .exists(let binding): (index, method) = (binding, "contains")
+        default: return nil
+        }
         let range = quantifier.children[0], body = quantifier.children[1]
         guard case .letValue(let element) = body.operation,
               let arrayReference = indexedArray(range, index: index, lookup: body.children[0]),
@@ -1759,7 +1765,7 @@ struct NativeSwiftEmitter {
         let previous = nativeBinderTypes.updateValue(elementType, forKey: element)
         defer { nativeBinderTypes[element] = previous }
         let test = try expression(predicate, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        return "(try (\(array)).allSatisfy { (\(binder(element)): \(try swiftType(elementType))) throws -> \(nativeBoolType) in \(test) })"
+        return "(try (\(array)).\(method) { (\(binder(element)): \(try swiftType(elementType))) throws -> \(nativeBoolType) in \(test) })"
     }
 
     private mutating func controlExpression(
@@ -1782,7 +1788,7 @@ struct NativeSwiftEmitter {
             body += hasOtherwise ? "return \(try emit(node.children.count - 1))" : "throw NativeMachineEvaluationError.noMatchingCase"
             return "(try { () throws -> \(try swiftType(result)) in\n\(body)\n}())"
         case .letValue(let binding):
-            if let direct = try arrayAllSatisfy(receiver: node.children[0], binding: binding, quantifier: node.children[1],
+            if let direct = try arrayQuantifier(receiver: node.children[0], binding: binding, quantifier: node.children[1],
                 state: state, substitutions: substitutions, activeFunctions: activeFunctions) {
                 return direct
             }

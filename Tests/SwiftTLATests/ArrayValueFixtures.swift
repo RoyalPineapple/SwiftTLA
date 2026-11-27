@@ -93,3 +93,19 @@ struct EmptySequenceReadMachine {
         }
     }
 }
+
+@TLAModel
+struct ArrayPredicateSearchMachine {
+    enum Step: String, CaseIterable { case search }
+
+    static var spec: TLASpec {
+        #spec("ArrayPredicateSearchMachine") { scope in
+            let input = scope.parameter(as: [Int].self, in: Sequences(of: IntRange(-1, through: 2)))
+            let values = scope.sharedVar(initial: input)
+            let found = scope.sharedVar(initial: false)
+            Do(Step.search) {
+                found.set(values.contains(where: { 1 % $0 == 0 }))
+            }
+        }
+    }
+}

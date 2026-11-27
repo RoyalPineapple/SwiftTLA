@@ -909,13 +909,14 @@ package func formalSequenceContains(_ sequence: StateExpr, _ element: StateExpr)
     .exists(.setLiteral([element]), sought, .exists(positions, index, match)))
 }
 
-package func formalSequenceAllSatisfy(_ sequence: StateExpr, parameter: String, predicate: StateExpr) -> StateExpr {
+package func formalSequenceQuantifier(_ sequence: StateExpr, parameter: String, predicate: StateExpr, all: Bool) -> StateExpr {
   let names = sequence.freeVariableNames.union(predicate.freeVariableNames).union([parameter])
   let receiver = StateExpr.freshBoundName("__sequence", avoiding: names)
   let index = StateExpr.freshBoundName("__index", avoiding: names)
   let positions = StateExpr.integerRange(.int(1), .tupleLength(.variable(receiver)))
   let element = StateExpr.tupleDynamicAccess(.variable(receiver), .variable(index))
-  return .letValue(receiver, sequence, .forAll(positions, index, .letValue(parameter, element, predicate)))
+  let body = StateExpr.letValue(parameter, element, predicate)
+  return .letValue(receiver, sequence, all ? .forAll(positions, index, body) : .exists(positions, index, body))
 }
 
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
@@ -925,9 +926,23 @@ extension TypedExpression where ExpressionValue: FormalSequenceValue {
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
     _ predicate: (WithValue<ExpressionValue.Element>) -> Predicate
   ) -> Expr<Bool> {
-    let parameter = generatedBinderName(file: file, line: line, column: column)
+    sequenceQuantifier(all: true, parameter: generatedBinderName(file: file, line: line, column: column), predicate)
+  }
+
+  /// Searches in sequence order, stopping at the first match.
+  @_disfavoredOverload
+  public func contains<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    where predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Bool> {
+    sequenceQuantifier(all: false, parameter: generatedBinderName(file: file, line: line, column: column), predicate)
+  }
+
+  private func sequenceQuantifier<Predicate: TypedExpression<Bool>>(
+    all: Bool, parameter: String, _ predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Bool> {
     let element = WithValue<ExpressionValue.Element>(expression: .variable(parameter))
-    return Expr(formalSequenceAllSatisfy(stateExpr, parameter: parameter, predicate: predicate(element).stateExpr))
+    return Expr(formalSequenceQuantifier(stateExpr, parameter: parameter, predicate: predicate(element).stateExpr, all: all))
   }
 
   @_disfavoredOverload

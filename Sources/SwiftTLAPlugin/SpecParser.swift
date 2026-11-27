@@ -839,7 +839,7 @@ final class ParserSession {
         let arguments = call.arguments.filter { !["file", "line", "column"].contains($0.label?.text ?? "") }
         let name: String
         let domains: [ExprSyntax]
-        var sequenceAllSatisfy = false
+        var sequencePredicate: CollectionPredicateKind?
         let closure: ClosureExprSyntax
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            let kind = CollectionPredicateKind(rawValue: member.declName.baseName.sourceIdentifierName),
@@ -852,8 +852,8 @@ final class ParserSession {
                 closure = explicit
             } else { return nil }
             name = kind == .contains ? "Exists" : "ForAll"
-            if kind == .allSatisfy, case .array = typedFacadeValueType(receiver, scope: scope) {
-                sequenceAllSatisfy = true
+            if case .array = typedFacadeValueType(receiver, scope: scope) {
+                sequencePredicate = kind
             }
             domains = [receiver]
         } else {
@@ -892,8 +892,8 @@ final class ParserSession {
             algorithmParseFailure = algorithmParseFailure ?? "\(name) could not decode its predicate."
             return nil
         }
-        if sequenceAllSatisfy, let sequence = bindings.first {
-            return formalSequenceAllSatisfy(sequence.domain, parameter: sequence.name, predicate: predicate)
+        if let sequencePredicate, let sequence = bindings.first {
+            return formalSequenceQuantifier(sequence.domain, parameter: sequence.name, predicate: predicate, all: sequencePredicate == .allSatisfy)
         }
         for binding in bindings.reversed() {
             predicate = name == "ForAll"
@@ -3306,7 +3306,7 @@ extension ParserSession {
 
         let shape = scope.shape(for: collectionReference)
         if case .set = shape { return nil }
-        if kind == .allSatisfy, case .array = shape { return nil }
+        if case .array = shape { return nil }
         let sourceName = collectionReference.baseName.sourceIdentifierName
         let collection = scope.value(for: collectionReference) ?? .variable(sourceName)
         let parameter = generatedBinderName(
