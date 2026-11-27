@@ -8512,7 +8512,7 @@
       "path": "specifications/NanoBlockchain",
       "name": "Nano Blockchain Protocol",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "Small and Medium use one typed Swift model with the published VIEW and five block variants. Large, hosted evidence and disposition of the unselected balance operators remain open.",
+      "gap": "Small, Medium and Large use one typed Swift model with the published VIEW and five block variants. Large graph parity, hosted evidence and disposition of the unselected balance operators remain open.",
       "sourceAudit": {
         "swiftSourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
         "implementation": "Sources/UpstreamParity/Examples/NanoBlockchain.swift",
@@ -8553,10 +8553,16 @@
           "configurationSHA256": "da1cf666fb693335057fc9e93d4a56b2b2f7ea244410dabe09bf7351d0f395d1",
           "requiredHashDomain": ["h1", "h2", "h3", "h4", "h5"],
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/NanoBlockchain.swift",
+              "scenario": "Large",
+              "caseID": "nano-large"
+            }
+          ],
           "evidence": []
         },
         {

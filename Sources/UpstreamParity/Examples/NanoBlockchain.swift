@@ -6,7 +6,7 @@ import SwiftTLAMacros
 @TLAModel
 package struct NanoBlockchainModel: Sendable {
     package enum Atom: String, CaseIterable, FiniteTLAValueDomain {
-        case h1, h2, h3, h4, prv1, prv2, pub1, pub2, n1, n2
+        case h1, h2, h3, h4, h5, prv1, prv2, pub1, pub2, n1, n2
         case noHash = "NoHashVal", noBlock = "NoBlockVal"
         package static var defaultValue: Self { .noHash }
         package static let finiteValues = allCases
@@ -64,7 +64,7 @@ package struct NanoBlockchainModel: Sendable {
 
     package static var spec: TLASpec {
         #spec("MCNano") { scope in
-            let Hash = scope.parameter(as: Set<Atom>.self, in: Subsets(of: Set<Atom>([.h1, .h2, .h3, .h4])))
+            let Hash = scope.parameter(as: Set<Atom>.self, in: Subsets(of: Set<Atom>([.h1, .h2, .h3, .h4, .h5])))
             let Node = Set<Atom>([.n1, .n2])
             let PrivateKey = Set<Atom>([.prv1, .prv2])
             let PublicKey = Set<Atom>([.pub1, .pub2])
@@ -297,6 +297,9 @@ package struct NanoBlockchainModel: Sendable {
             }.viewing(Pair.literal(distributedLedger, received))
             Validation("Medium") {
                 Bind(Hash, to: Set<Atom>([.h1, .h2, .h3, .h4]))
+            }.viewing(Pair.literal(distributedLedger, received))
+            Validation("Large") {
+                Bind(Hash, to: Set<Atom>([.h1, .h2, .h3, .h4, .h5]))
             }.viewing(Pair.literal(distributedLedger, received))
         }
     }

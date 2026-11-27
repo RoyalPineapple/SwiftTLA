@@ -54,3 +54,4 @@ Verification/FiniteGraph/fixtures/print-values/* whitespace=-blank-at-eol,-blank
 Verification/FiniteGraph/fixtures/glowing-raccoon/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/car-talk-puzzle-*/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/multicar-elevator/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/nano-blockchain/MCNano*.cfg whitespace=-blank-at-eof

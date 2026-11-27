@@ -4004,6 +4004,33 @@
       "timeoutSeconds": 1800
     },
     {
+      "id": "nano-large",
+      "sourceModel": "nano-blockchain",
+      "scenario": "Large",
+      "module": "nano-blockchain/MCNano.tla",
+      "configuration": "nano-blockchain/MCNanoLarge.cfg",
+      "imports": [
+        "nano-blockchain/Nano.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCNano",
+          "importedModule": "Nano"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/NanoBlockchain/MCNano.tla",
+        "sha256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48"
+      },
+      "exploration": {
+        "maximumStateLimit": 120130844,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48",
+      "cfgSHA256": "da1cf666fb693335057fc9e93d4a56b2b2f7ea244410dabe09bf7351d0f395d1",
+      "timeoutSeconds": 28800
+    },
+    {
       "id": "mc-reachable",
       "sourceModel": "misra-reachable",
       "scenario": "Upstream",
