@@ -35,27 +35,6 @@ struct MixedCandidateDivisionFailureModel: Sendable {
 }
 
 @TLAModel
-struct SendCandidateOrderModel: Sendable {
-    enum Step: String, CaseIterable { case lateFailure, duplicate }
-
-    static var spec: TLASpec {
-        #spec("SendCandidateOrderModel") { scope in
-            let result = scope.sharedVar(initial: -1)
-            Do(Step.lateFailure) {
-                Choose(0...2) { candidate in
-                    Assign(result, to: 2 / (2 - candidate))
-                }
-            }
-            Do(Step.duplicate) {
-                Choose(0...2) { _ in
-                    Assign(result, to: 7)
-                }
-            }
-        }
-    }
-}
-
-@TLAModel
 struct EitherBranchDivisionFailureModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 
@@ -552,6 +531,27 @@ struct RecordCandidateFailuresModel: Sendable {
                     let first = message.recordFields.contains("a")
                         && message.assuming(Reply.self).a == 0 && message.assuming(Reply.self).z == 1
                     value.set(If(first, then: 1 / divisor, else: 1 % modulus))
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
+struct SendCandidateOrderModel: Sendable {
+    enum Step: String, CaseIterable { case lateFailure, duplicate }
+
+    static var spec: TLASpec {
+        #spec("SendCandidateOrderModel") { scope in
+            let result = scope.sharedVar(initial: -1)
+            Do(Step.lateFailure) {
+                Choose(0...2) { candidate in
+                    Assign(result, to: 2 / (2 - candidate))
+                }
+            }
+            Do(Step.duplicate) {
+                Choose(0...2) { _ in
+                    Assign(result, to: 7)
                 }
             }
         }
