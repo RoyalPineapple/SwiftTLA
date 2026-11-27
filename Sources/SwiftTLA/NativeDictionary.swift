@@ -18,11 +18,7 @@ public struct _NativeDictionary<KeyIdentity: _NativeSetIdentity, ValueIdentity: 
     public typealias Value = ValueIdentity.Element
     public typealias Element = (key: Key, value: Value)
 
-    private struct StoredKey: Hashable, Sendable {
-        let value: Key
-        static func == (lhs: Self, rhs: Self) -> Bool { KeyIdentity.equal(lhs.value, rhs.value) }
-        func hash(into hasher: inout Hasher) { KeyIdentity.hash(value, into: &hasher) }
-    }
+    private typealias StoredKey = _NativeIdentityKey<KeyIdentity>
     private var storage: [StoredKey: Value]
 
     public init() { storage = [:] }

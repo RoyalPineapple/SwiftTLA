@@ -28,7 +28,9 @@ struct GeneratedSwiftRecordTests {
         let machine = try GeneratedSwiftRecord.makeMachine()
         #expect(machine.state.archive.map(\.count).sorted() == [0, 1])
         let sameArchive = type(of: machine.state.archive).init([
-            GeneratedSwiftRecord.Packet(count: 1, ready: false), .init(count: 0, ready: false)])
+            GeneratedSwiftRecord.Packet(count: 1, ready: false), .init(count: 0, ready: false),
+            .init(count: 1, ready: false)])
+        #expect(sameArchive.map(\.count) == [1, 0])
         #expect(Set([sameArchive, machine.state.archive]).count == 1)
         #expect(machine.state.archive.contains(.init(count: 1, ready: false)))
         #expect(!machine.state.archive.contains(.init(count: 9, ready: false)))

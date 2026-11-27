@@ -6,6 +6,13 @@ public protocol _NativeSetIdentity: Sendable {
     static func hash(_ value: Element, into hasher: inout Hasher)
 }
 
+struct _NativeIdentityKey<Identity: _NativeSetIdentity>: Hashable, Sendable {
+    let value: Identity.Element
+
+    static func == (lhs: Self, rhs: Self) -> Bool { Identity.equal(lhs.value, rhs.value) }
+    func hash(into hasher: inout Hasher) { Identity.hash(value, into: &hasher) }
+}
+
 /// Typed set storage that does not consult source-defined equality or hashing.
 @_documentation(visibility: internal)
 public struct _NativeSet<Identity: _NativeSetIdentity>: Hashable, Sendable,
@@ -15,8 +22,8 @@ public struct _NativeSet<Identity: _NativeSetIdentity>: Hashable, Sendable,
 
     public init() { elements = [] }
     public init<S: Sequence>(_ values: S) where S.Element == Element {
-        elements = []
-        for value in values { insert(value) }
+        var seen = Set<_NativeIdentityKey<Identity>>()
+        elements = values.filter { seen.insert(_NativeIdentityKey(value: $0)).inserted }
     }
     public init(arrayLiteral elements: Element...) { self.init(elements) }
 

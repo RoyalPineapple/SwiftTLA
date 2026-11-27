@@ -407,7 +407,22 @@ struct NativeSwiftEmitter {
             members = "(try \(try retained(mapped.children[1])).sorted(by: \(try ordering(input))).flatMap { (\(binder(binding)): \(try swiftType(input))) throws -> [\(try swiftType(element))] in \(try retained(mapped.children[0])) })"
         default: return nil
         }
-        // shortcut: finite nominal domains scan retained members; use compiler-owned hashed keys if large domains dominate.
+        // These fields have the same equivalence under structural ordering and modeled hashing.
+        if let fields = element.recordFields, fields.allSatisfy({ [.int, .bool, .string].contains($0.type) }),
+           let identity = typeDeclarations.identityElements.firstIndex(of: element) {
+            let order: String
+            switch node.operation {
+            case .intersection, .setDifference: order = "let _recordOrder = \(try crossOrdering(element, element))"
+            default: order = ""
+            }
+            return """
+            (try { () throws -> [\(try swiftType(element))] in
+                \(order)
+                \(prelude)
+                return [\(try swiftType(element))](SwiftTLA._NativeSet<_SetIdentity\(identity)>(\(members)))
+            }())
+            """
+        }
         return """
         (try { () throws -> [\(try swiftType(element))] in
             let _recordOrder = \(try crossOrdering(element, element))
