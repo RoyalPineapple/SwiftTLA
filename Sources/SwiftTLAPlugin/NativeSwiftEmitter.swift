@@ -24,6 +24,7 @@ struct NativeSwiftEmitter {
     let propertyCases: [PropertyID: String]
     private let variableNames: [VariableID: String]
     private var expressionValues: [CompiledExpression: String] = [:]
+    private var invariantReadBindings: [CompiledExpression: String]?
     private var successorBindings: [BinderID: (value: CompiledExpression, substitutions: [BinderID: String])] = [:]
     private var nativeBinderTypes: [BinderID: CompiledValueType] = [:]
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
@@ -1149,6 +1150,66 @@ struct NativeSwiftEmitter {
         return "(\(try emit(1)).contains(\(try emit(0))))"
     }
 
+    mutating func invariantExpression(_ predicate: CompiledExpression) throws -> String {
+        invariantReadBindings = [:]
+        defer { invariantReadBindings = nil }
+        return try expression(predicate)
+    }
+
+    private struct DictionaryReadPath: Hashable {
+        let variable: VariableID
+        let keys: [BinderID]
+
+        init?(_ expression: CompiledExpression, endingAt binding: BinderID, types: [BinderID: CompiledValueType]) {
+            var receiver = expression
+            var keys: [BinderID] = []
+            while case .functionApply = receiver.operation,
+                  case .dictionary(let key, let value) = receiver.children[0].resultType,
+                  case .boundValue(let id) = receiver.children[1].operation,
+                  types[id] == key, receiver.children[1].resultType == key, receiver.resultType == value {
+                keys.append(id)
+                receiver = receiver.children[0]
+            }
+            guard keys.first == binding, case .stateVariable(let variable) = receiver.operation else { return nil }
+            self.variable = variable
+            self.keys = keys
+        }
+    }
+
+    private mutating func quantifiedPredicate(_ predicate: CompiledExpression, binding: BinderID,
+        state: String, substitutions: [BinderID: String], activeFunctions: Set<ResolvedFunctionID>) throws -> String {
+        func emit(_ node: CompiledExpression) throws -> String {
+            try expression(node, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        guard let outer = invariantReadBindings, state == "state.", substitutions.isEmpty, expressionValues.isEmpty else {
+            return try emit(predicate)
+        }
+        defer { invariantReadBindings = outer }
+
+        var reads: [DictionaryReadPath: [CompiledExpression]] = [:]
+        var repeated: [DictionaryReadPath] = []
+        var pending = [predicate]
+        while let node = pending.popLast() {
+            if let path = DictionaryReadPath(node, endingAt: binding, types: nativeBinderTypes) {
+                reads[path, default: []].append(node)
+                if reads[path]?.count == 2 { repeated.append(path) }
+            }
+            pending.append(contentsOf: node.children)
+        }
+        var declarations: [String] = []
+        for path in repeated {
+            let occurrences = reads[path]!
+            let first = occurrences[0]
+            let name = "_dictionaryRead\(ordinal(for: first))"
+            // Each iteration caches its first successful read at the original use site.
+            let value = try emit(first)
+            declarations.append(try cachedBinding(named: name, type: first.resultType, value: value))
+            for occurrence in occurrences { invariantReadBindings?[occurrence] = "(try \(name)())" }
+        }
+        let body = try emit(predicate)
+        return declarations.isEmpty ? body : (declarations + ["return \(body)"]).joined(separator: "\n")
+    }
+
     private mutating func collectionExpression(
         _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
@@ -1191,7 +1252,8 @@ struct NativeSwiftEmitter {
                     substitutions: substitutions, activeFunctions: activeFunctions)
                 let upper = try self.expression(range.children[1], state: state,
                     substitutions: substitutions, activeFunctions: activeFunctions)
-                let predicate = try emit(1)
+                let predicate = try quantifiedPredicate(node.children[1], binding: binding, state: state,
+                    substitutions: substitutions, activeFunctions: activeFunctions)
                 return """
                 (try { () throws -> \(nativeBoolType) in
                     guard let bounds = try SwiftTLA._NativeMachineOperations.integerRangeBounds(\(lower), \(upper)) else { return \(all) }
@@ -1200,7 +1262,8 @@ struct NativeSwiftEmitter {
                 """
             }
             let domain = try members(0)
-            let predicate = try emit(1)
+            let predicate = try quantifiedPredicate(node.children[1], binding: binding, state: state,
+                    substitutions: substitutions, activeFunctions: activeFunctions)
             return "(try \(domain).sorted(by: \(try ordering(element))).\(method) { (\(binder(binding)): \(try swiftType(element))) throws -> \(nativeBoolType) in \(predicate) })"
         }
         switch expression {
@@ -1603,6 +1666,9 @@ struct NativeSwiftEmitter {
             guard case .dictionary(let input, let result) = node.resultType else { throw unsupported("function literal") }
             return "\(try dictionaryConstructor(node.resultType, inferred: true))(uniqueKeysWithValues: try \(try emit(0)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> (\(try swiftType(input)), \(try swiftType(result))) in (\(binder(binding)), \(try emit(1))) })"
         case .functionApply:
+            if state == "state.", substitutions.isEmpty, expressionValues.isEmpty, let read = invariantReadBindings?[node] {
+                return read
+            }
             let argument = node.children[1].operation
             let result = node.resultType
             let source = childType(0)

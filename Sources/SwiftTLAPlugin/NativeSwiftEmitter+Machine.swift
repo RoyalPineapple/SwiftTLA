@@ -1586,7 +1586,7 @@ extension NativeSwiftEmitter {
             defer { checkingLevelName = previousCheckingLevelName }
             declarations += try nativeDeclarations("""
             private static func _invariant\(invariant.id.ordinal)(in state: Snapshot, atLevel level: \(nativeIntType)\(configurationParameters)) throws -> \(nativeBoolType) {
-                \(try expression(invariant.predicate.expression))
+                \(try invariantExpression(invariant.predicate.expression))
             }
             """)
             checks.append("if checking.contains(.\(propertyCases[invariant.id]!)), try !Self._invariant\(invariant.id.ordinal)(in: _execution, atLevel: level\(arguments)) { result.append(.\(propertyCases[invariant.id]!)) }")
