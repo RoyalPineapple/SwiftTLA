@@ -1435,6 +1435,91 @@ struct CompiledTLARenderer {
         return "\(layout.formalName) == INSTANCE \(moduleNames[layout.moduleName] ?? layout.moduleName)\(withClause)"
     }
 
+    /// Only successful, mandatory reads on the left of a short circuit establish a view.
+    /// Rebuild rendering nodes per occurrence: the same IR child may also occur on an unchecked path.
+    func invariantPredicate(_ root: CompiledExpression) throws -> String {
+        typealias View = [UInt8]
+        typealias Scope = (binders: Set<BinderID>, views: Set<View>)
+        struct Visit {
+            var node: CompiledExpression
+            let scope: Scope
+            var children: Range<Int> = 0..<0
+        }
+
+        func view(_ node: CompiledExpression, binders: Set<BinderID>) throws -> View? {
+            guard case .assertView(.record) = node.operation else { return nil }
+            var reads = node.children
+            while let read = reads.popLast() {
+                switch read.operation {
+                case .value, .stateVariable: break
+                case .boundValue(let id) where binders.contains(id): break
+                case .functionApply, .recordAccess, .tupleAccess, .convert:
+                    reads.append(contentsOf: read.children)
+                default: return nil
+                }
+            }
+            // Match the actual operand AND the full emitted predicate, including formal UTF-8 names.
+            return Array(try state(node).utf8)
+        }
+
+        func strict(_ op: CompiledOperation) -> Bool {
+            switch op {
+            case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
+                 .recordAccess, .tupleAccess, .convert, .not: true
+            default: false
+            }
+        }
+
+        var visits = [Visit(node: root, scope: ([], []))]
+        var index = 0
+        while index < visits.count {
+            let node = visits[index].node
+            let scope = visits[index].scope
+            let start = visits.count
+            switch node.operation {
+            case .forAll(let binder), .exists(let binder):
+                visits.append(Visit(node: node.children[0], scope: scope))
+                visits.append(Visit(node: node.children[1], scope: (scope.binders.union([binder]), [])))
+            case .and, .or:
+                var right = scope
+                var required = [node.children[0]]
+                while let child = required.popLast() {
+                    if let established = try view(child, binders: scope.binders) {
+                        right.views.insert(established)
+                    } else if strict(child.operation) {
+                        required.append(contentsOf: child.children)
+                    }
+                }
+                visits.append(Visit(node: node.children[0], scope: scope))
+                visits.append(Visit(node: node.children[1], scope: right))
+            case .ifThenElse:
+                for child in node.children { visits.append(Visit(node: child, scope: scope)) }
+            case .assertView:
+                if !scope.views.isEmpty, let key = try view(node, binders: scope.binders),
+                   scope.views.contains(key) {
+                    // The renderer erases convert, retaining the checked result type for its parent.
+                    visits[index].node = .init(operation: .convert, resultType: node.resultType, children: node.children)
+                }
+            default:
+                if strict(node.operation) || node.operation == .functionApply {
+                    for child in node.children { visits.append(Visit(node: child, scope: scope)) }
+                }
+            }
+            visits[index].children = start..<visits.count
+            index += 1
+        }
+        for index in visits.indices.reversed() {
+            let range = visits[index].children
+            guard !range.isEmpty else { continue }
+            let node = visits[index].node
+            let children = range.map { visits[$0].node }
+            if children != node.children {
+                visits[index].node = .init(operation: node.operation, resultType: node.resultType, children: children)
+            }
+        }
+        return try state(visits[0].node)
+    }
+
     func state(_ expression: CompiledExpression, stateNames: [VariableID: String] = [:]) throws -> String {
         var tasks = [StateRenderingTask.expression(expression)]
         var parts: [String] = []

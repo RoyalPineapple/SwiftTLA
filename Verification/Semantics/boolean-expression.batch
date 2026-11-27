@@ -3,3 +3,5 @@ IndexedHistoryRules
 ActionOutcomeInterface
 BooleanExpressionConstructorRules
 BooleanExpressionComposition
+CheckedViewInvariantRule
+CheckedViewInvariantMachineProof

@@ -7,7 +7,7 @@ script = File.join(root, 'scripts/proof-family-inputs.sh')
 
 expected = {
   'scoped-action-binding' => ['Verification/Semantics/scoped-action-binding.batch', 'LexicalBindingTests'],
-  'boolean-expression' => ['Verification/Semantics/boolean-expression.batch', 'ShortCircuitFailureProofTests|BooleanBranchLoweringContractTests'],
+  'boolean-expression' => ['Verification/Semantics/boolean-expression.batch', 'ShortCircuitFailureProofTests|BooleanBranchLoweringContractTests|CheckedViewInvariantTests'],
   'sequence-expression' => ['Verification/Semantics/sequence-expression.batch', 'SequenceExpressionLoweringContractTests|GeneratedAtomicUpdateProofTests|CollectionCheckingTests']
 }
 expected.each do |family, (batch, tests)|

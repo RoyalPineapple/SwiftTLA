@@ -7,7 +7,7 @@ case "$1" in
         printf '%s\n' 'batch=Verification/Semantics/scoped-action-binding.batch' 'tests=LexicalBindingTests'
         ;;
     boolean-expression)
-        printf '%s\n' 'batch=Verification/Semantics/boolean-expression.batch' 'tests=ShortCircuitFailureProofTests|BooleanBranchLoweringContractTests'
+        printf '%s\n' 'batch=Verification/Semantics/boolean-expression.batch' 'tests=ShortCircuitFailureProofTests|BooleanBranchLoweringContractTests|CheckedViewInvariantTests'
         ;;
     sequence-expression)
         printf '%s\n' 'batch=Verification/Semantics/sequence-expression.batch' 'tests=SequenceExpressionLoweringContractTests|GeneratedAtomicUpdateProofTests|CollectionCheckingTests'

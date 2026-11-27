@@ -2684,7 +2684,7 @@ private extension CompiledModuleMetadata {
     ) throws -> RenderedModule {
         let layout = renderer.layout
         func statePredicate(_ expression: CompiledExpression, negated: Bool = false) throws -> String {
-            let rendered = try renderer.state(expression)
+            let rendered = try renderer.invariantPredicate(expression)
             let predicate = negated ? "~(\(rendered))" : rendered
             // TLC folds constant operators before registering invariants. Keep their
             // truth values unchanged while making initial-state witnesses observable.
