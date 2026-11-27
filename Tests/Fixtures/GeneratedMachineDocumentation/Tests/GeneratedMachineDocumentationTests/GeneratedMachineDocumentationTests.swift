@@ -155,7 +155,12 @@ struct GeneratedMachineDocumentationTests {
         let authored = try HourRangeFixture.spec.compile().render().tlaBundle
         let generated = try HourRangeFixture.render().tlaBundle
         #expect(authored.tla == expected.tla)
-        #expect(generated.tla == expected.tla)
+        // The generated machine also exports the bindings preceding overflow. This tick has none.
+        let insertion = try #require(expected.tla.range(of: "__SwiftTLAAnyEvaluationFailure0 =="))
+        var expectedGenerated = expected.tla
+        expectedGenerated.insert(contentsOf: "__SwiftTLAOverflowBefore0 == (IF __SwiftTLAOverflowFailure0 THEN <<>> ELSE <<>>)\n",
+                                 at: insertion.lowerBound)
+        #expect(generated.tla == expectedGenerated)
         #expect(authored.cfg == expected.cfg)
         #expect(generated.cfg == expected.cfg)
 

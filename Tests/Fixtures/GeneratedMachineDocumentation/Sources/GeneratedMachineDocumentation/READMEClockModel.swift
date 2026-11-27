@@ -38,7 +38,7 @@ public struct ClockModel: Sendable {
                 }
             }
 
-            let validTime = Invariant {
+            Invariant("validTime") {
                 (0...23).contains(hour)
                 (0...59).contains(minute)
                 (0...59).contains(second)
