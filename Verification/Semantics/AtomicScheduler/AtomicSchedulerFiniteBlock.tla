@@ -1,5 +1,5 @@
 ---- MODULE AtomicSchedulerFiniteBlock ----
-EXTENDS AtomicSchedulerEntrySource, SchedulerCallStack, AtomicSchedulerHandoff, AtomicSchedulerSingleSet, AtomicPriorReadBindings, AtomicSchedulerEmptyReturnSource, ScheduledLetActionTrace
+EXTENDS AtomicSchedulerEntrySource, SchedulerCallStack, AtomicSchedulerHandoff, AtomicSchedulerSingleSet, AtomicPriorReadBindings, AtomicSchedulerEmptyReturnSource, StandaloneAtomicRun
 
 SchedulerEmptyEntry(entry) ==
     [key \in {SchedulerNameValues, SchedulerNameAssignments} |->
@@ -406,6 +406,9 @@ THEOREM ReturnedSchedulerBodiesSupplyTheActualDefineColumn ==
            NEW pending, NEW terminalAction
     PROVE LET actions == CompiledLetSuffixes(trace,pending,terminalAction)
           IN /\ actions[Len(trace.rows)+1] = terminalAction
+             /\ \E items : \A i \in 1..Len(trace.rows) :
+                    /\ trace.bodies[i] = <<trace.bodies[i][1]>> /\ trace.bodies[i][1].kind = "letBinding"
+                    /\ trace.bodies[i][1].body = trace.bodies[i+1] /\ trace.bodies[i+1] \in Seq(items)
              /\ ActualActionDefinesMatchTheScheduledLets(trace,actions)
              /\ \A i \in DOMAIN trace.rows :
                     /\ actions[i].name = trace.rows[i].binding
@@ -479,7 +482,12 @@ PROOF
                             value |-> trace.bodies[i][1].value, body |-> actions[i+1]]
         BY ONLY <1>actions, (i \in DOMAIN trace.rows), SMT DEF ActualActionDefinesMatchTheScheduledLets
     <2>. QED BY ONLY <1>lets, <2>define, (i \in DOMAIN trace.rows), SMT DEF bodies
-<1>. QED BY ONLY <1>actions, <1>sameRows DEF actions
+<1>shape. \E items : \A i \in 1..count :
+                /\ bodies[i] = <<bodies[i][1]>> /\ bodies[i][1].kind = "letBinding"
+                /\ bodies[i][1].body = bodies[i+1] /\ bodies[i+1] \in Seq(items)
+    <2>. WITNESS statementSet
+    <2>. QED BY ONLY <1>edges,<1>children,SMT
+<1>. QED BY ONLY <1>actions, <1>sameRows, <1>shape, PTL DEF actions, bodies, count
 
 THEOREM TheSchedulerSuppliesItsCertifiedRows ==
     ASSUME NEW entry, NEW shapes, SchedulerBlockEntryReady(entry, shapes),
@@ -717,7 +725,7 @@ ScheduleAtomicBody(statements,allocator) ==
     IF SchedulerDeclAndEntry THEN SchedulerReturnedValue(SchedulerEntryFor(statements,allocator))
     ELSE "unrecognized scheduler entry"
 
-THEOREM ActualReturnedBlockSuppliesTheCompleteAssignmentOutcome ==
+THEOREM TheCertifiedBodyIsTheArgumentToLower ==
     ASSUME NEW statements, NEW allocator, NEW shapes, NEW before \in AssignmentBindings, NEW Lower(_),
            SchedulerBlockEntryReady(SchedulerEntryFor(statements,allocator),shapes)
     PROVE \E trace,history : LET entry == SchedulerEntryFor(statements,allocator)
@@ -751,4 +759,82 @@ PROOF
     BY ONLY <1>returned,<1>forward,SMT
 <1>. WITNESS trace,history
 <1>. QED BY ONLY <1>witness,<1>returned,<1>observed,PTL
+
+\* The depth bound is the number of authored writes. Run takes the actual body
+\* and initial empty dictionary; neither the trace nor the action column is an input.
+StandaloneBlockAction(statements, allocator, Less(_, _)) ==
+    LET schedule(xs) == ScheduleAtomicBody(xs,allocator)
+        run(body,values) == ActualStandaloneRun(body,values,Len(statements),Less)
+    IN ActualStandaloneLowerAtomicStepAction(statements,schedule,run)
+
+ActionsForReturnedLets(trace, Less(_, _)) ==
+    LET terminal == ActualStandaloneTerminalRun(trace.bodies[Len(trace.rows)+1],AtomicLowererEmptyValues,Less)
+    IN CompiledLetSuffixes(trace,AtomicLowererEmptyValues,terminal)
+
+THEOREM ActualReturnedBlockSuppliesTheCompleteAssignmentOutcome ==
+    ASSUME NEW statements, NEW allocator, NEW shapes, NEW before \in AssignmentBindings, NEW Less(_, _),
+           SchedulerBlockEntryReady(SchedulerEntryFor(statements,allocator),shapes)
+    PROVE \E trace,history :
+        /\ ScheduledRowsHaveCompleteOutcome(SchedulerEntryFor(statements,allocator),shapes,before,trace,history)
+        /\ ScheduleAtomicBody(statements,allocator) = trace.bodies[1]
+        /\ LET actions == ActionsForReturnedLets(trace,Less)
+           IN /\ StandaloneBlockAction(statements,allocator,Less) = actions[1]
+              /\ ActualActionDefinesMatchTheScheduledLets(trace,actions)
+              /\ \A i \in DOMAIN trace.rows :
+                    /\ actions[i].name = trace.rows[i].binding
+                    /\ actions[i].value = trace.rows[i].substitutedRhs
+                    /\ actions[i].body = actions[i+1]
+PROOF
+<1>. DEFINE entry == SchedulerEntryFor(statements,allocator)
+            schedule(xs) == ScheduleAtomicBody(xs,allocator)
+            run(body,values) == ActualStandaloneRun(body,values,Len(statements),Less)
+            lower(body) == run(body,AtomicLowererEmptyValues).action
+            call == LowerCall(statements,schedule,lower)
+<1>entry. entry.values=statements
+    BY ONLY IsaM("simp"),SMT DEF entry,SchedulerEntryFor,SchedulerBlockEntry
+<1>handoff. PICK trace,history :
+    /\ ScheduledRowsHaveCompleteOutcome(entry,shapes,before,trace,history)
+    /\ schedule(statements)=trace.bodies[1]
+    /\ call=[called |-> TRUE,body |-> trace.bodies[1],result |-> lower(trace.bodies[1])]
+    BY ONLY SchedulerBlockEntryReady(SchedulerEntryFor(statements,allocator),shapes),
+        (before \in AssignmentBindings),TheCertifiedBodyIsTheArgumentToLower
+        DEF entry,schedule,call
+<1>. DEFINE count == Len(trace.rows)
+            terminal == ActualStandaloneTerminalRun(trace.bodies[count+1],AtomicLowererEmptyValues,Less)
+            actions == CompiledLetSuffixes(trace,AtomicLowererEmptyValues,terminal)
+<1>actual. SchedulerActualBlockReturns(entry,trace) /\ count=Len(entry.values)
+    BY ONLY <1>handoff,PTL DEF ScheduledRowsHaveCompleteOutcome,count
+<1>nat. Len(entry.values) \in Nat
+    BY ONLY SchedulerBlockEntryReady(SchedulerEntryFor(statements,allocator),shapes),
+        LenProperties,SMT DEF entry,SchedulerBlockEntryReady
+<1>items. PICK items : \A i \in 1..count :
+             /\ trace.bodies[i] = <<trace.bodies[i][1]>> /\ trace.bodies[i][1].kind = "letBinding"
+             /\ trace.bodies[i][1].body = trace.bodies[i+1] /\ trace.bodies[i+1] \in Seq(items)
+    BY ONLY <1>actual,<1>nat,ReturnedSchedulerBodiesSupplyTheActualDefineColumn,SMT DEF count
+<1>size. count \in Nat /\ Len(statements)=count
+    BY ONLY <1>actual,<1>nat,<1>entry,SMT
+<1>recursive. ActualStandaloneRun(trace.bodies[1],AtomicLowererEmptyValues,count,Less).action=actions[1]
+    BY ONLY <1>items,<1>size,StandaloneRunReturnsTheCompiledLetSuffix DEF count,actions,terminal
+<1>outer. StandaloneBlockAction(statements,allocator,Less)=run(schedule(statements),AtomicLowererEmptyValues).action
+    BY ONLY ActualStandaloneLowersTheSchedulerReturnWithEmptyValues DEF StandaloneBlockAction,run,schedule
+<1>same. StandaloneBlockAction(statements,allocator,Less)=actions[1]
+    BY ONLY <1>outer,<1>recursive,<1>size,<1>handoff,SMT DEF run
+<1>column. /\ ActualActionDefinesMatchTheScheduledLets(trace,actions)
+           /\ \A i \in DOMAIN trace.rows : /\ actions[i].name = trace.rows[i].binding
+                                            /\ actions[i].value = trace.rows[i].substitutedRhs
+    <2>available. \A pending,terminalAction :
+        LET column == CompiledLetSuffixes(trace,pending,terminalAction)
+        IN /\ ActualActionDefinesMatchTheScheduledLets(trace,column)
+           /\ \A i \in DOMAIN trace.rows :
+                 /\ column[i].name = trace.rows[i].binding
+                 /\ column[i].value = trace.rows[i].substitutedRhs
+        BY ONLY <1>handoff, PTL DEF ScheduledRowsHaveCompleteOutcome
+    <2>. QED BY ONLY <2>available, IsaM("blast") DEF actions
+<1>each. \A i \in DOMAIN trace.rows :
+                    /\ actions[i].name = trace.rows[i].binding
+                    /\ actions[i].value = trace.rows[i].substitutedRhs
+                    /\ actions[i].body = actions[i+1]
+    BY ONLY <1>column,IsaM("auto"),SMT DEF ActualActionDefinesMatchTheScheduledLets
+<1>. WITNESS trace,history
+<1>. QED BY ONLY <1>handoff,<1>same,<1>column,<1>each,PTL DEF entry,schedule,ActionsForReturnedLets,actions,terminal,count
 ====

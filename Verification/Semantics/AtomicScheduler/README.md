@@ -1,8 +1,10 @@
-# From authored assignments to the body passed to lower
+# From authored assignments to the action returned by lower
 
 For a finite block of root assignments with literal/read/add right-hand sides and a valid allocator, the scheduler starts with empty pending writes and replacements. Each assignment adds one LET around the recursively returned suffix. A later write to the same target replaces its pending final write while preserving both LET evaluations.
 
-`CertifiedTraceDescribesTheSourceSchedulerReturn` proves that every certified trace with ready entries has the body computed from those calls and returns. `ActualReturnedBlockSuppliesTheCompleteAssignmentOutcome` constructs the trace and its history, then uses that equality for the argument to `lower`. Its first-overflow result and preceding bindings use the same rows. The Swift interpretation covers normal returns under the reviewed representation of the scheduler operations. The result stops at the argument to `lower`. [Parent theorem](AtomicSchedulerFiniteBlock.tla#L720)
+For the standalone `Do` route, `ActualReturnedBlockSuppliesTheCompleteAssignmentOutcome` uses the same scheduler return to compute the action returned by `lowerAtomicStep`. At every authored index the returned definition has that row’s fresh binder and substituted RHS, and its body is the next definition or the terminal action. `StandaloneBlockAction` takes the authored statements, allocator and key ordering. Its traversal depth comes from the number of authored writes. The proof uses the checked caller and LET branches under a reviewed interpretation of ordinary Swift returns, optionals and collections. [Parent theorem](AtomicSchedulerFiniteBlock.tla#L774)
+
+The same rows supply the abstract first-overflow and preceding-bindings history. Frame completion, typed operand resolution, and the meaning of the configured TLA for arbitrary blocks still need to be linked to this returned action.
 
 ## Reproduce the focused checks
 
@@ -14,9 +16,9 @@ body="$proof/AtomicSchedulerFiniteBlock.tla"
 inputs=$(mktemp -d)/scheduler
 python3 "$proof/prepare-inputs.py" "$inputs"
 
-scripts/local-validation.sh proof-step "$PACKET" 616 644 "$body" "$inputs/compiler.bin" "$inputs/caller.bin" \
-    --also 646 706 "$body" "$inputs/compiler.bin" "$inputs/caller.bin"
-scripts/local-validation.sh proof-step "$PACKET" 720 753 "$body" "$inputs/compiler.bin" "$inputs/caller.bin"
+scripts/local-validation.sh proof-step "$PACKET" 624 652 "$body" "$inputs/compiler.bin" "$inputs/caller.bin" \
+    --also 654 714 "$body" "$inputs/compiler.bin" "$inputs/caller.bin"
+scripts/local-validation.sh proof-step "$PACKET" 774 839 "$body" "$inputs/compiler.bin" "$inputs/caller.bin"
 ```
 
 The input helper reproduces the byte containers checked at `06c0987ea7d4ecc43b17711c53b1653d30af6410`. It compares the four compiler files addressed by the proofs with the checkout and verifies both whole-container SHA-256 digests. Other compiler files retained after the addressed ranges come from that Git revision.
@@ -30,7 +32,7 @@ scripts/local-validation.sh proof-step "$PACKET" 69 83 "$proof/WrongHandoffExpla
     "$inputs/authored-argument.bin" "$inputs/caller.bin"  # expected focused pass
 ```
 
-## Retained results
+## Retained scheduler handoff results
 
 | Checked selection | Obligations discharged | Proof log SHA-256 |
 | --- | ---: | --- |

@@ -2948,7 +2948,7 @@ private extension CompiledModuleMetadata {
             let failures = try renderer.evaluationFailures(behavior.actions[index].body,
                 retainingRHSBindings: orderedIntProofActionNames.contains(renderedAction.sourceName)
                     || (behavior.actions[index].bindings.isEmpty
-                        && renderer.enums.projectedAssignmentBinders(in: behavior.actions[index].body) != nil))
+                        && renderer.enums.integerAssignmentBinders(in: behavior.actions[index].body, requiresProjection: false) != nil))
             for failure in failures {
                 let occurrence: Int
                 let failurePrefix: String

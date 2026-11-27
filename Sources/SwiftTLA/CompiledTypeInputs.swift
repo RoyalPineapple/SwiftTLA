@@ -34,6 +34,10 @@ package struct CompiledEnums: Sendable {
 
     /// A straight-line capture spine with a represented integer and a terminal write frame.
     package func projectedAssignmentBinders(in action: CompiledActionExpr) -> [BinderID]? {
+        integerAssignmentBinders(in: action, requiresProjection: true)
+    }
+
+    func integerAssignmentBinders(in action: CompiledActionExpr, requiresProjection: Bool) -> [BinderID]? {
         var body = action
         if case .and(.guard_, let continuation) = body { body = continuation }
         var binders: [BinderID] = []
@@ -58,7 +62,7 @@ package struct CompiledEnums: Sendable {
             binders.append(binder)
             body = continuation
         }
-        guard usesRepresentation else { return nil }
+        guard !requiresProjection || usesRepresentation else { return nil }
         let captured = Set(binders)
         var frame = [body]
         var writesCapture = false

@@ -979,7 +979,7 @@ package enum StraightLineRenderedActionCheck {
                                                layout: CompiledLayout, binders: [BinderID: String],
                                                parameters: [String],
                                                failureDeclarations: [String], required: Bool, enums: CompiledEnums) throws {
-        let checkPrefix = required || (action.bindings.isEmpty && enums.projectedAssignmentBinders(in: action.body) != nil)
+        let checkPrefix = required || (action.bindings.isEmpty && enums.integerAssignmentBinders(in: action.body, requiresProjection: false) != nil)
         // shortcut: branching continuations need their own failure rule.
         let programCounter = layout.programCounterID()
         func controlWrite(_ node: CompiledActionExpr) -> Bool {
