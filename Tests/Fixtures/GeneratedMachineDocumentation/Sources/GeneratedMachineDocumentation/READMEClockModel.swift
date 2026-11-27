@@ -14,7 +14,7 @@ public struct ClockModel: Sendable {
             let minute = scope.sharedVar(initiallyIn: 0...59)
             let second = scope.sharedVar(initiallyIn: 0...59)
 
-            let clock = Algorithm(label: "Clock") {
+            Algorithm("clock", label: "Clock") {
                 Loop(Step.tick) {
                     Either {
                         When(second < 59) {
@@ -37,14 +37,12 @@ public struct ClockModel: Sendable {
                     }
                 }
             }
-            clock
 
             let validTime = Invariant {
                 (0...23).contains(hour)
                 (0...59).contains(minute)
                 (0...59).contains(second)
             }
-            validTime
         }
     }
 }
