@@ -49,9 +49,21 @@ public struct _NativeDictionary<KeyIdentity: _NativeSetIdentity, ValueIdentity: 
     public mutating func removeValue(forKey key: Key) -> Value? {
         storage.removeValue(forKey: StoredKey(value: key))
     }
-    public func makeIterator() -> IndexingIterator<[Element]> {
-        storage.map { (key: $0.key.value, value: $0.value) }.makeIterator()
+    public struct Iterator: IteratorProtocol, Sequence, Sendable {
+        private var base: Dictionary<StoredKey, Value>.Iterator
+
+        fileprivate init(_ dictionary: _NativeDictionary) {
+            base = dictionary.storage.makeIterator()
+        }
+
+        public mutating func next() -> _NativeDictionary.Element? {
+            guard let entry = base.next() else { return nil }
+            return (entry.key.value, entry.value)
+        }
     }
+
+    public func makeIterator() -> Iterator { Iterator(self) }
+
     public static func == (lhs: Self, rhs: Self) -> Bool {
         guard lhs.count == rhs.count else { return false }
         for (key, value) in lhs.storage {

@@ -84,6 +84,18 @@ struct GeneratedSwiftRecordTests {
         #expect(unchanged.state.history.map(\.count) == [0])
     }
 
+    @Test("a generated dictionary iterator retains its original entries across mutations")
+    func iteratesOriginalDictionaryEntries() throws {
+        var lookup = try GeneratedSwiftRecord.makeMachine().state.lookup
+        let iterator = lookup.makeIterator()
+        lookup[.init(count: 1, ready: false)] = 9
+        lookup.removeValue(forKey: .init(count: 0, ready: false))
+
+        let original = Dictionary(uniqueKeysWithValues: iterator.map { ($0.key.count, $0.value) })
+        #expect(original == [0: 0, 1: 1])
+        #expect(lookup.count == 1 && lookup[.init(count: 1, ready: false)] == 9)
+    }
+
     @Test("dictionary domain equality uses modeled key identity in both operand orders")
     func comparesDictionaryKeysByTheirFields() throws {
         let machine = try GeneratedSwiftRecord.makeMachine()
