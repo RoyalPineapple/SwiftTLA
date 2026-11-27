@@ -727,6 +727,7 @@ public enum _NativeMachineOperations: Sendable {
         function.keys
     }
 
+    @inlinable
     public static func functionUpdated<Key: Hashable & Sendable, Value: Sendable>(_ function: [Key: Value], at key: Key, to value: Value) -> [Key: Value] {
         guard function[key] != nil else { return function }
         var updated = function
