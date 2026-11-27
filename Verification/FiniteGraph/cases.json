@@ -3950,6 +3950,65 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "tcp-mctcp",
+      "sourceModel": "tcp",
+      "scenario": "Upstream",
+      "module": "tcp/MCtcp.tla",
+      "configuration": "tcp/MCtcp.cfg",
+      "imports": [
+        "tcp/tcp.tla",
+        "tcp/SequencesExt.tla",
+        "die-hardest/FiniteSetsExt.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCtcp",
+          "importedModule": "tcp"
+        },
+        {
+          "importingModule": "tcp",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/tcp/MCtcp.tla",
+        "sha256": "7b8b8167e2bd0ab8991168afd4a1c057906939ffb6166cd93ea283fe002c606e"
+      },
+      "exploration": {
+        "maximumStateLimit": 5000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "7b8b8167e2bd0ab8991168afd4a1c057906939ffb6166cd93ea283fe002c606e",
+      "cfgSHA256": "bcff6863df5e5bb08459ce22596c03ab988dd28fea3cfd5b0be2266ea0ca6876",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "nano-small",
       "sourceModel": "nano-blockchain",
       "scenario": "Small",

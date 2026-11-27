@@ -11068,8 +11068,8 @@
     {
       "path": "specifications/tcp",
       "name": "TCP as defined in RFC 9293",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "partial source and pinned-configuration audit",
+      "gap": "MCtcp has a typed port. Hosted parity and the three symbolic configurations remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -11090,8 +11090,10 @@
           "path": "specifications/tcp/MCtcp.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TCP.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/tcp/tcp_proof.tla",
@@ -11102,10 +11104,12 @@
         },
         {
           "path": "specifications/tcp/tcp.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "MCtcp imports this connection state machine and supplies its finite initial states and constraints.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TCP.swift"
+          ],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -11123,10 +11127,16 @@
           "module": "specifications/tcp/MCtcp.tla",
           "configuration": "specifications/tcp/MCtcp.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TCP.swift",
+              "scenario": "Upstream",
+              "caseID": "tcp-mctcp"
+            }
+          ],
           "evidence": []
         },
         {

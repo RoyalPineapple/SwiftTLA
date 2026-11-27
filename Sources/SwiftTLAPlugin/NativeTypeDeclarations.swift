@@ -85,7 +85,7 @@ struct NativeTypeDeclarations: Sendable {
             })
             pending.append(contentsOf: program.behavior.invariants.map { $0.predicate.expression })
             pending.append(contentsOf: program.behavior.reachabilityProperties.map { $0.predicate.expression })
-            pending.append(contentsOf: [program.behavior.constraint, program.behavior.assume].compactMap { $0?.expression })
+            pending.append(contentsOf: [program.behavior.constraint, program.behavior.actionConstraint, program.behavior.assume].compactMap { $0?.expression })
             var actions = program.behavior.actions.map(\.body)
             while let action = actions.popLast() {
                 switch action {
