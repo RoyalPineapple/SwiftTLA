@@ -15,6 +15,9 @@ public protocol StateMachine: Sendable {
     func hasSameConfiguration(as other: Self) -> Bool
     /// Explicit conversions used by independent validation and export.
     func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection
+    /// Returns false when capture should use the ordinary validated projection.
+    @_documentation(visibility: internal)
+    func _visitFormalProjection<Sink: _NativeProjectionSink>(of snapshot: Snapshot, into sink: inout Sink) throws -> Bool
     /// Reconstructs an independently sampled initial state at the formal JSON boundary.
     func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self?
     func formalCall(for action: Action) throws -> FormalActionCall
@@ -60,6 +63,11 @@ public protocol StateMachine: Sendable {
         _ visit: (Action, Self) throws -> Bool,
         onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool
     ) throws -> Bool
+}
+
+extension StateMachine {
+    @_documentation(visibility: internal)
+    public func _visitFormalProjection<Sink: _NativeProjectionSink>(of snapshot: Snapshot, into sink: inout Sink) throws -> Bool { false }
 }
 
 /// A generated machine whose immutable model parameters are represented by a

@@ -13,23 +13,27 @@ extension NativeSwiftEmitter {
             }
             let route = stateValue(variable.id, prefix: "snapshot.")
             let type = program.variableTypes[variable.id]!
-            return (formalName: name, route: route, type: type,
-                value: try formalValue(route, type: type))
+            return (formalName: name, route: route, type: type)
         }
         let tokens = fields.map { field in
             "SwiftTLA._nativeFormalProjectionToken(validating: \(String(reflecting: field.formalName)))!"
         }.joined(separator: ", ")
-        let entries = fields.enumerated().map { index, field in
+        let table = DeclSyntax(stringLiteral: """
+        private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [\(tokens)]
+        """)
+        if fields.contains(where: { hasConstantFunctionDomain($0.type) }) {
+            return try sharedProjectionDeclarations(table: table, fields: fields)
+        }
+        let projected = try fields.map { (formalName: $0.formalName, route: $0.route, type: $0.type, value: try formalValue($0.route, type: $0.type)) }
+        let entries = projected.enumerated().map { index, field in
             "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: \(index), value: \(field.value))"
         }.joined(separator: ",\n")
-        let declarations = [DeclSyntax(stringLiteral: """
-        private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [\(tokens)]
-        """), DeclSyntax(stringLiteral: """
+        let declarations = [table, DeclSyntax(stringLiteral: """
         public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {
             try SwiftTLA._nativeFormalProjection([\(entries)])
         }
         """)]
-        try verifyGeneratedFormalProjectionOutput(declarations, fields: fields)
+        try verifyGeneratedFormalProjectionOutput(declarations, fields: projected)
         return declarations
     }
 
@@ -206,5 +210,81 @@ extension NativeSwiftEmitter {
             }
         }
         return emit(value)
+    }
+}
+
+extension NativeSwiftEmitter {
+    private func hasConstantFunctionDomain(_ type: CompiledValueType) -> Bool {
+        guard case .dictionary(.named(let name), _) = type, let cases = program.enums.cases[name], !cases.isEmpty else { return false }
+        return cases.allSatisfy { if case .constant = $0.value { true } else { false } }
+    }
+
+    private func sharedProjectionDeclarations(table: DeclSyntax,
+        fields: [(formalName: String, route: String, type: CompiledValueType)]) throws -> [DeclSyntax] {
+        var layouts: [DeclSyntax] = []
+        var functions: [(name: String, input: String, body: String)] = []
+        var types: [CompiledValueType] = []
+        func helper(_ type: CompiledValueType) throws -> String {
+            if let index = types.firstIndex(of: type) { return "projectValue\(index)" }
+            let name = "projectValue\(types.count)"
+            types.append(type)
+            let expression: String
+            switch type {
+            case .dictionary(let key, let member) where hasConstantFunctionDomain(type):
+                expression = "try out.constantFunction(value, key: { key in \(try formalValue("key", type: key)) }, value: \(try helper(member)))"
+            case .set(let member):
+                expression = "try out.members(value, \(try helper(member)))"
+            case .record(let fields), .nominalRecord(_, let fields):
+                let layout = "__swifttlaProjectionRecord\(layouts.count)"
+                let names = fields.map { String(reflecting: $0.name) }.joined(separator: ", ")
+                layouts.append(DeclSyntax(stringLiteral: "private static let \(layout) = SwiftTLA._NativeProjectionRecord([\(names)])"))
+                let cases = try fields.enumerated().map { index, field in
+                    "case \(index): try \(try helper(field.type))(value.\(fieldName(type, index: index)), &child)"
+                }
+                expression = """
+                try out.record(Self.\(layout)) { ordinal, child in
+                    switch ordinal {
+                    \(cases.joined(separator: "\n"))
+                    default: throw SwiftTLA.TLAStateProjectionDiagnostic.invalidValue(path: "record field ordinal")
+                    }
+                }
+                """
+            case .oneOf, .union:
+                let cases = try (type.unionAlternatives ?? []).enumerated().map { index, member in
+                    "case .\(unionCase(type, index: index))(let item): try \(try helper(member))(item, &out)"
+                }
+                expression = "switch value {\n\(cases.joined(separator: "\n"))\n}"
+            default:
+                expression = "try out.projected(\(try formalValue("value", type: type)))"
+            }
+            functions.append((name, try swiftType(type), expression))
+            return name
+        }
+        let readers = try fields.map { try helper($0.type) }
+        var sinkType = "__SwiftTLAProjectionSink"
+        while functions.contains(where: { $0.input.contains(sinkType) }) { sinkType += "_" }
+        let helpers = functions.map {
+            "func \($0.name)(_ value: \($0.input), _ out: inout \(sinkType)) throws {\n\($0.body)\n}"
+        }
+        let visits = fields.enumerated().map { index, field in
+            "try sink.field(SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(index)), \(field.route), \(readers[index]))"
+        }
+        let walk = DeclSyntax(stringLiteral: """
+        public func _visitFormalProjection<\(sinkType): SwiftTLA._NativeProjectionSink>(of snapshot: Snapshot, into sink: inout \(sinkType)) throws -> Swift.Bool {
+            \(helpers.joined(separator: "\n"))
+            \(visits.joined(separator: "\n"))
+            return true
+        }
+        """)
+        let projection = DeclSyntax(stringLiteral: """
+        public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {
+            var sink = SwiftTLA._NativeProjectionCollector()
+            _ = try _visitFormalProjection(of: snapshot, into: &sink)
+            return try sink.projection()
+        }
+        """)
+        try verifyGeneratedFormalProjectionTokenTable(table, names: fields.map(\.formalName))
+        try verifyGeneratedFormalProjectionVisits(walk, routes: fields.map(\.route), readers: readers, types: fields.map(\.type))
+        return [table, projection, walk] + layouts
     }
 }

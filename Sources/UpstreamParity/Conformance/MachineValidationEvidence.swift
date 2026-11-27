@@ -134,9 +134,13 @@ package enum MachineValidationEvidence {
             }
             if case .tupleFields(let slots) = observation.identity {
                 do {
-                    let full = try machine.formalProjection(of: snapshot)
-                    if sampled { projectionTime = DispatchTime.now().uptimeNanoseconds - start }
-                    try representativeEncoder.encode(full, tupleView: slots, key: &stateKeyEncoder)
+                    try representativeEncoder.encode(tupleView: slots, key: &stateKeyEncoder,
+                        visit: { try machine._visitFormalProjection(of: snapshot, into: &$0) },
+                        projection: {
+                            let full = try machine.formalProjection(of: snapshot)
+                            if sampled { projectionTime = DispatchTime.now().uptimeNanoseconds - start }
+                            return full
+                        })
                     return representativeEncoder.bytes
                 } catch {
                     // Match ordinary capture's diagnostic if the VIEW also fails.

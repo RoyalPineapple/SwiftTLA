@@ -112,7 +112,7 @@ public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
         entries.map { "\($0.token) = \($0.value)" }.joined(separator: ", ")
     }
 
-    private static func validate(_ value: TLAValue, at path: String) throws {
+    package static func validate(_ value: TLAValue, at path: String) throws {
         switch value {
         case .int, .bool, .string:
             return
