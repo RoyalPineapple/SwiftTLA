@@ -191,7 +191,9 @@ struct NativeMachineExecutionTests {
             _ = try machine.send(.select)
             Issue.record("All three executable choices must remain ambiguous")
         } catch GeneratedMachineError.ambiguousAction {}
-        #expect(machine.state.selected == 0)
+        let prior = machine.snapshot
+        #expect(throws: GeneratedMachineError.ambiguousAction) { try machine.commit(.select) }
+        #expect(machine.snapshot == prior && machine.state.selected == 0)
         let graph = try ReachabilityGraph(initialMachines: ConstrainedExecutionChoice.initialMachines(), maximumStates: 4)
         #expect(Set(graph.transitions.keys.map { $0.state.selected }) == [0, 1])
         #expect(graph.transitions.values.flatMap { $0 }.allSatisfy { $0.target.state.selected == 1 })

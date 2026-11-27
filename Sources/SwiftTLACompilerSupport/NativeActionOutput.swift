@@ -119,7 +119,7 @@ package func verifyGeneratedValidationDelegationOutput(_ declaration: DeclSyntax
 
 package func verifyGeneratedSuccessorOutput(
     _ declaration: DeclSyntax?, body: CompiledActionExpr, actionID: Int, parameters: String, arguments: String,
-    configurationParameters: String, configurationArguments: String
+    configurationParameters: String, configurationArguments: String, usesCollectionCommit: Bool = false
 ) throws {
     let single = body.emitsAtMostOneCandidate
     let callback = single ? "try visit(updates.applying(to: state))" : """
@@ -129,9 +129,20 @@ package func verifyGeneratedSuccessorOutput(
         try visit(candidate)
     }
     """
+    let direct = usesCollectionCommit ? """
+    if context == nil {
+        var candidate = state
+        let enabled: \(nativeBoolType)
+        do { enabled = try Self._commit\(actionID)(&candidate\(configurationArguments)) }
+        catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure { return [failure] }
+        if enabled { try visit(candidate) }
+        return []
+    }
+    """ : ""
     let expected = Parser.parse(source: """
     private static func _visitSuccessors\(actionID)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
                                                   _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
+        \(direct)
         \(single ? "" : "var emitted: [Snapshot] = []")
         return try _visitUpdates\(actionID)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
             \(callback)
@@ -193,4 +204,45 @@ package func nativeActionFailureRecordingSource(value: CompiledExpression, site:
     }
     guard addition, program.requiresOrderedIntOutput(action) || projectedPreceding != nil else { return nil }
     return nativeOrderedIntAssignmentFailureSource(actionOrdinal: action.ordinal, preceding: projectedPreceding ?? lexical)
+}
+
+/// Check the two call boundaries of the prepare/install rule independently of the RHS renderer.
+package func verifyGeneratedCommitOutput(_ entry: DeclSyntax, helpers: [DeclSyntax],
+    routes: [(name: String, ordinal: Int)], configurationArguments: String) throws {
+    func words(_ text: String) -> [String] {
+        Parser.parse(source: text).tokens(viewMode: .sourceAccurate).filter { $0.tokenKind != .endOfFile }.map(\.text)
+    }
+    func tokens<Node: SyntaxProtocol>(_ node: Node) -> [String] {
+        node.tokens(viewMode: .sourceAccurate).map(\.text)
+    }
+    func mismatch() -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.action.commit", expected: "prepare before installation or delegate to send",
+            actual: "generated commit route differs", nextSafeAction: "Report this native commit generation failure.")
+    }
+    let arms = routes.map { route in
+        """
+        if case .\(route.name) = action {
+            guard try Self._commit\(route.ordinal)(&_execution\(configurationArguments)) else {
+                throw GeneratedMachineError.noMatchingSuccessor
+            }
+            return
+        }
+        """
+    }
+    guard tokens(entry) == words("public mutating func commit(_ action: Action) throws { " +
+            arms.joined(separator: "\n") + "\n_ = try send(action) }"),
+          routes.count == helpers.count else { throw mismatch() }
+    for (route, helper) in zip(routes, helpers) {
+        guard let method = helper.as(FunctionDeclSyntax.self), method.name.text == "_commit\(route.ordinal)",
+              let items = method.body?.statements.map({ $0 }), items.count == 5,
+              let prepare = items[0].item.as(FunctionDeclSyntax.self), prepare.name.text == "prepare",
+              tokens(prepare.signature.parameterClause) == words("(_ state: Snapshot)"),
+              let install = items[1].item.as(FunctionDeclSyntax.self), install.name.text == "install",
+              install.signature.effectSpecifiers == nil,
+              let destination = install.signature.parameterClause.parameters.last, tokens(destination) == words("into state: inout Snapshot"),
+              tokens(items[2]) == words("guard let prepared = try prepare(state) else { return false }"),
+              tokens(items[3]) == words("install(prepared, into: &state)"),
+              tokens(items[4]) == words("return true") else { throw mismatch() }
+    }
 }

@@ -189,12 +189,42 @@ extension NativeSwiftEmitter {
             try updateFunction($0, configurationParameters: appendedParameters)
         }
         declarations += try enabledDeclarations(configurationParameters: appendedParameters, configurationArguments: appendedArguments)
-        let actionFunctions = try api.actions.map { apiAction in
+        var commitHelpers: [DeclSyntax] = []
+        var collectionActions: [(name: String, ordinal: Int)] = []
+        for apiAction in api.actions {
             let action = program[apiAction.compiledAction]
-            return try successorFunction(action, api: apiAction, configurationParameters: appendedParameters, configurationArguments: appendedArguments)
+            var candidate = self
+            let mutation = try? candidate.collectionCommit(action, configurationParameters: appendedParameters)
+            if let mutation {
+                self = candidate
+                commitHelpers.append(mutation)
+                declarations.append(mutation)
+                collectionActions.append((apiAction.swiftIdentifier, action.id.ordinal))
+            }
+            declarations.append(try successorFunction(action, api: apiAction, configurationParameters: appendedParameters,
+                configurationArguments: appendedArguments, usesCollectionCommit: mutation != nil))
         }
-        declarations += actionFunctions
         declarations += try dispatchDeclarations(configurationArguments: appendedArguments)
+        if !api.actions.isEmpty {
+            let routes = collectionActions.map { name, ordinal in
+                """
+                if case .\(name) = action {
+                    guard try Self._commit\(ordinal)(&_execution\(appendedArguments)) else {
+                        throw GeneratedMachineError.noMatchingSuccessor
+                    }
+                    return
+                }
+                """
+            }
+            let entry = DeclSyntax(stringLiteral: """
+            public mutating func commit(_ action: Action) throws {
+                \(routes.joined(separator: "\n"))
+                _ = try send(action)
+            }
+            """)
+            try verifyGeneratedCommitOutput(entry, helpers: commitHelpers, routes: collectionActions, configurationArguments: appendedArguments)
+            declarations.append(entry)
+        }
         declarations += try propertyDeclarations(configurationParameters: appendedParameters)
         declarations += try refinementDeclarations(nested: nested)
         if nested {
@@ -562,7 +592,7 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
-    private func executionState(values: (VariableID) -> String) -> String {
+    func executionState(values: (VariableID) -> String) -> String {
         let publicFields = model.api.variables.map {
             "\($0.argumentLabel): \(values($0.id))"
         }.joined(separator: ", ")
@@ -1278,7 +1308,7 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
-    func successorFunction(_ action: CompiledAction, api: GeneratedMachineAPI.Action, configurationParameters: String, configurationArguments: String) throws -> DeclSyntax {
+    func successorFunction(_ action: CompiledAction, api: GeneratedMachineAPI.Action, configurationParameters: String, configurationArguments: String, usesCollectionCommit: Bool) throws -> DeclSyntax {
         let parameters = try action.bindings.map { binding in
             "\(binder(binding.binder)): \(try swiftType(program.bindingTypes[binding.binder]!))"
         }.joined(separator: ", ")
@@ -1291,9 +1321,21 @@ extension NativeSwiftEmitter {
             try visit(candidate)
         }
         """
+        // Checking contexts can additionally record intermediate failure evidence.
+        let direct = usesCollectionCommit ? """
+        if context == nil {
+            var candidate = state
+            let enabled: \(nativeBoolType)
+            do { enabled = try Self._commit\(action.id.ordinal)(&candidate\(configurationArguments)) }
+            catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure { return [failure] }
+            if enabled { try visit(candidate) }
+            return []
+        }
+        """ : ""
         let declaration = DeclSyntax(stringLiteral: """
         private static func _visitSuccessors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
                                                       _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
+            \(direct)
             \(single ? "" : "var emitted: [Snapshot] = []")
             return try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
                 \(emit)
@@ -1303,7 +1345,7 @@ extension NativeSwiftEmitter {
         try verifyGeneratedSuccessorOutput(declaration, body: action.body, actionID: action.id.ordinal,
             parameters: parameters, arguments: arguments,
             configurationParameters: configurationParameters,
-            configurationArguments: configurationArguments)
+            configurationArguments: configurationArguments, usesCollectionCommit: usesCollectionCommit)
         return declaration
     }
 

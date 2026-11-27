@@ -83,9 +83,12 @@ expose typed fields. Finite unions become generated enums containing
 exactly their declared values. These mappings apply recursively to nested
 values.
 
-`send(_:)` applies one action. `isEnabled(_:)` reports whether that action is
-currently permitted. Both operations can throw a generated-machine diagnostic.
-A rejected action leaves `state` unchanged.
+Use `try machine.commit(action)` to apply one action. Use `try machine.send(action)`
+when the caller needs the typed transition with its before and after states.
+Both require exactly one successor, report the same first error, and preserve the
+complete machine snapshot if the action fails. A saved state or transition remains
+valid after subsequent commits. The generated actor also supports `try await actor.commit(action)`.
+`isEnabled(_:)` reports whether an action is currently permitted.
 
 Generated model expressions evaluate `ENABLED` only when expression evaluation reaches that operand.
 A false guard or a satisfied alternative can skip the reference and its dependencies.

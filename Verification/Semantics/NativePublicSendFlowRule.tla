@@ -370,4 +370,43 @@ THEOREM ConditionalSingletonIdentifiesItsPayload ==
             selected /\ event.payload = observed.payload
     BY ONLY SMT
 
+\* Both entry points call the same prepare/installation helper. prepare takes
+\* a Snapshot by value; install is nonthrowing and is reached only on success.
+LOCAL CommitVisits(prepared, install) ==
+    IF prepared.kind = "ready" THEN <<install[prepared.value]>> ELSE <<>>
+LOCAL CommitFailures(prepared) ==
+    IF prepared.kind = "error" THEN <<prepared.value>> ELSE <<>>
+LOCAL CommitObservation(sent) ==
+    [kind |-> sent.kind, current |-> sent.current,
+     error |-> IF sent.kind = "success" THEN <<>> ELSE sent.value]
+
+THEOREM PreparedCommitPreservesSendStateAndFirstError ==
+    ASSUME NEW plan, NEW action, NEW prior, DecodedSendOperands(plan, action),
+           NEW inputs, NEW snapshots, NEW reasons, <<>> \notin reasons,
+           NEW install \in [inputs -> snapshots],
+           NEW prepared,
+           prepared \in [kind : {"ready"}, value : inputs]
+                    \cup [kind : {"error"}, value : reasons]
+                    \cup {[kind |-> "disabled", value |-> <<>>]}
+    PROVE LET visits == CommitVisits(prepared, install)
+              failures == CommitFailures(prepared)
+              sent == DecodedPublicSend(plan, prior, action, visits, failures)
+              direct == CASE prepared.kind = "error" ->
+                                [kind |-> "evaluationFailure", current |-> prior, error |-> prepared.value]
+                           [] prepared.kind = "disabled" ->
+                                [kind |-> "disabled", current |-> prior,
+                                 error |-> plan.errors[plan.selectorGuards[1].error]]
+                           [] OTHER -> [kind |-> "success", current |-> install[prepared.value], error |-> <<>>]
+          IN direct = CommitObservation(sent)
+PROOF
+<1>shapes. /\ CommitVisits(prepared, install) \in Seq(snapshots)
+           /\ CommitFailures(prepared) \in Seq(reasons)
+    BY SMT DEF CommitVisits, CommitFailures, Seq
+<1>send. DecodedPublicSend(plan, prior, action, CommitVisits(prepared,install), CommitFailures(prepared))
+       = PublicSendOutcome(plan, prior, action, CommitVisits(prepared,install), CommitFailures(prepared))
+    BY ONLY <1>shapes, DecodedSendUsesTheFirstErrorOrCommitsExactlyOneCallback,
+        DecodedSendOperands(plan, action), (<<>> \notin reasons)
+<1>. QED BY <1>send, PublicSendOutcomeUsesTheEmptyAndSingletonQueues, SMT
+    DEF CommitObservation, CommitVisits, CommitFailures
+
 ====

@@ -135,3 +135,21 @@ struct FiniteInitialStepMachine {
         }
     }
 }
+
+@TLAModel
+struct OrderedCollectionCommitFailure {
+    enum Step: String, CaseIterable { case advance }
+    static var spec: TLASpec {
+        #spec("OrderedCollectionCommitFailure") { scope in
+            let start = scope.parameter(as: Int.self, in: 0...1)
+            let queue = scope.sharedVar(initial: [Int]())
+            let divisor = scope.sharedVar(initial: start)
+            let number = scope.sharedVar(initial: Int.max)
+            Do(Step.advance) {
+                queue.set(queue.appending(1))
+                divisor.set(1 / divisor)
+                number.set(number + 1)
+            }
+        }
+    }
+}
