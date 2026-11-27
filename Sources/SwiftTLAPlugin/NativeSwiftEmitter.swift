@@ -135,14 +135,19 @@ struct NativeSwiftEmitter {
             return "Set<\(try swiftType(element))>"
         case .array(let element): return "[\(try swiftType(element))]"
         case .dictionary(let key, let value):
-            if containsSourceNominal(key),
-               let keyIndex = typeDeclarations.identityElements.firstIndex(of: key),
-               let valueIndex = typeDeclarations.identityElements.firstIndex(of: value) {
-                return "SwiftTLA._NativeDictionary<_SetIdentity\(keyIndex), _SetIdentity\(valueIndex)>"
+            if let ids = nativeDictionaryIdentities(for: type) {
+                return "SwiftTLA._NativeDictionary<_SetIdentity\(ids.key), _SetIdentity\(ids.value)>"
             }
             return "[\(try swiftType(key)): \(try swiftType(value))]"
         case .unknown: throw unsupported("unresolved value type")
         }
+    }
+
+    func nativeDictionaryIdentities(for type: CompiledValueType) -> (key: Int, value: Int)? {
+        guard case .dictionary(let key, let value) = type, containsSourceNominal(key),
+              let keyIndex = typeDeclarations.identityElements.firstIndex(of: key),
+              let valueIndex = typeDeclarations.identityElements.firstIndex(of: value) else { return nil }
+        return (keyIndex, valueIndex)
     }
 
     func dictionaryConstructor(_ type: CompiledValueType, inferred: Bool = false) throws -> String {

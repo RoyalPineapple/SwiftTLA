@@ -287,11 +287,15 @@ extension NativeSwiftEmitter {
             types.append(type)
             return result
         }
+        func needsIdentityHelper(_ type: CompiledValueType) -> Bool {
+            // Native dictionary storage already uses the modeled identity for both keys and values.
+            containsSourceNominal(type) && nativeDictionaryIdentities(for: type) == nil
+        }
         func equal(_ type: CompiledValueType, _ lhs: String, _ rhs: String) -> String {
-            containsSourceNominal(type) ? "_identityEqual\(index(type))(\(lhs), \(rhs))" : "(\(lhs) == \(rhs))"
+            needsIdentityHelper(type) ? "_identityEqual\(index(type))(\(lhs), \(rhs))" : "(\(lhs) == \(rhs))"
         }
         func hash(_ type: CompiledValueType, _ value: String, into hasher: String) -> String {
-            containsSourceNominal(type)
+            needsIdentityHelper(type)
                 ? "_identityHash\(index(type))(\(value), into: &\(hasher))" : "\(hasher).combine(\(value))"
         }
         func member(_ name: String) -> String {

@@ -96,6 +96,21 @@ struct GeneratedSwiftRecordTests {
         #expect(lookup.count == 1 && lookup[.init(count: 1, ready: false)] == 9)
     }
 
+    @Test("generated state equality preserves modeled dictionary key and value associations")
+    func comparesDictionaryEntriesByModeledIdentity() throws {
+        let initial = try GeneratedSwiftRecord.makeMachine().state
+        let zero = GeneratedSwiftRecord.Packet(count: 0, ready: false)
+        let one = GeneratedSwiftRecord.Packet(count: 1, ready: false)
+        func state(zeroValue: Int, oneValue: Int) -> GeneratedSwiftRecord.State {
+            .init(packet: initial.packet, previousCount: initial.previousCount, history: initial.history,
+                archive: initial.archive, lookup: [one: oneValue, zero: zeroValue])
+        }
+
+        #expect(zero == one)
+        #expect(Set([initial, state(zeroValue: 0, oneValue: 1)]).count == 1)
+        #expect(initial != state(zeroValue: 1, oneValue: 0))
+    }
+
     @Test("dictionary domain equality uses modeled key identity in both operand orders")
     func comparesDictionaryKeysByTheirFields() throws {
         let machine = try GeneratedSwiftRecord.makeMachine()
