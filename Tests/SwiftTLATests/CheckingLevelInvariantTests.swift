@@ -2,6 +2,23 @@ import Testing
 @testable import SwiftTLA
 
 struct CheckingLevelInvariantTests {
+    @Test("A snapshot that passed as an initial state can violate the same invariant at a later level")
+    func rechecksAnInitialSnapshotReachedAtALaterLevel() throws {
+        let initial = try CheckingLevelInvariantModel.makeMachine()
+        var otherInitial = initial
+        _ = try otherInitial.send(.advance)
+        _ = try otherInitial.send(.advance)
+
+        let result = try ReachabilityGraph.check(initialMachines: [initial, otherInitial], maximumStates: 3,
+            checking: .init(properties: [.BeforeThirdState], checkDeadlock: false))
+        guard case .counterexample(let failure) = result else {
+            Issue.record("The third level must violate BeforeThirdState")
+            return
+        }
+        #expect(failure.violations == [.invariant(.BeforeThirdState)])
+        #expect(failure.trace.last?.state == otherInitial.snapshot)
+    }
+
     @Test("Native invariant evaluation uses the discovered state's BFS level")
     func evaluatesDiscoveredLevel() throws {
         let initial = try CheckingLevelInvariantModel.makeMachine()

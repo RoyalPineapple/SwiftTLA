@@ -413,6 +413,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         func recordBoundaryViolations(_ machine: Machine, atLevel level: Int, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
             try recordReachability(machine, from: predecessor)
+            guard !stopOnViolation else { return }
             let failures = try machine.violatedInvariants(checking: checking.properties, atLevel: level).map(SafetyViolation.invariant)
             guard !failures.isEmpty, violations[machine.snapshot] == nil else { return }
             violations[machine.snapshot] = failures
@@ -454,7 +455,11 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             let machine = currentLayer.removeLast()
             try Task.checkCancellation()
             let successors = try machine.successors(checking: &context)
-            var failures = try machine.violatedInvariants(checking: checking.properties, atLevel: context.level).map(SafetyViolation.invariant)
+            // In decisive mode discovery already checked this snapshot at its expansion level.
+            var failures: [SafetyViolation<Machine.Property>] = []
+            if !stopOnViolation {
+                failures = try machine.violatedInvariants(checking: checking.properties, atLevel: context.level).map(SafetyViolation.invariant)
+            }
             if successors.isEmpty {
                 deadlockedStates.insert(machine.snapshot)
                 if checking.checkDeadlock { failures.append(.deadlock) }
