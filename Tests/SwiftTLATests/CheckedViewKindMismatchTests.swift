@@ -7,6 +7,27 @@ import SwiftSyntax
 
 @Suite("Checked view kind mismatch")
 struct CheckedViewKindMismatchTests {
+    @Test("Only total field checks on a stable record can use record-set membership")
+    func recordMembershipPreservesReachedFailures() throws {
+        let shape = FormalValueShape.record([.init(name: "tag", shape: .finite(typeName: "Tag", values: [.int(1)])),
+            .init(name: "balance", shape: .integer)])
+        func predicate(_ balance: CompiledValueType, group: Bool) throws -> String {
+            let source = CompiledValueType.record([.init(name: "tag", type: .int), .init(name: "balance", type: balance)])
+            return try shape.predicate(for: "r", sourceType: source, recordInput: group ? source : nil)
+        }
+        #expect(try predicate(.int, group: true).contains(#"r \in [tag: {1}, balance: Int]"#))
+        let fields = CompiledValueType.record([.init(name: "tag", type: .int), .init(name: "balance", type: .int)])
+        let distinctKeys = CompiledValueType.oneOf(.record([.init(name: "other", type: .unknown)]), fields)
+        #expect(try shape.predicate(for: "r", sourceType: distinctKeys, recordInput: distinctKeys)
+            .contains(#"r \in [tag: {1}, balance: Int]"#))
+        let uncertain = CompiledValueType.oneOf(.dictionary(.string, .unknown), fields)
+        #expect(try shape.predicate(for: "r", sourceType: uncertain, recordInput: uncertain)
+            == shape.predicate(for: "r", sourceType: uncertain))
+        // A rejected tag must still short-circuit a potentially invalid integer membership.
+        #expect(try predicate(.unknown, group: true) == predicate(.unknown, group: false))
+        #expect(try !predicate(.int, group: false).contains("balance: Int"))
+    }
+
     @Test("A checked record may carry variants distinguished by their field names")
     func checkedRecordVariants() {
         let debit = FormalValueShape.record([.init(name: "amount", shape: .integer)])

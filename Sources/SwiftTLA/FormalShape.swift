@@ -83,6 +83,7 @@ public indirect enum FormalValueShape: Hashable, Sendable {
     func predicate(
         for value: String,
         sourceType: CompiledValueType? = nil,
+        recordInput: CompiledValueType? = nil,
         depth: Int = 0,
         namedMembers: ((String) -> [CompiledValue]?)? = nil,
         renderFinite: ((CompiledValue) throws -> String)? = nil
@@ -111,8 +112,9 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         if let sourceType, !sourceType.canHaveOuterShape(self) { return "FALSE" }
         var bound = "_shapeMember\(depth)"
         while value.contains(bound) || String(describing: self).contains(bound) { bound += "_" }
-        func nested(_ shape: Self, _ value: String, sourceType: CompiledValueType? = nil) throws -> String {
-            try shape.predicate(for: value, sourceType: sourceType, depth: depth + 1,
+        func nested(_ shape: Self, _ value: String, sourceType: CompiledValueType? = nil,
+                    recordInput: CompiledValueType? = nil) throws -> String {
+            try shape.predicate(for: value, sourceType: sourceType, recordInput: recordInput, depth: depth + 1,
                 namedMembers: namedMembers, renderFinite: renderFinite)
         }
         switch self {
@@ -157,24 +159,107 @@ public indirect enum FormalValueShape: Hashable, Sendable {
             let sourceFields = sourceType?.recordFields
             if let sourceFields, Set(sourceFields.map(\.name)) != Set(fields.map(\.name)) { return "FALSE" }
             let keys = fields.map { TLAValue.string($0.name).description }.joined(separator: ", ")
+            let matched = recordInput?.fieldsAfterDomainCheck(fields.map(\.name), namedMembers: namedMembers)
+            if fields.count > 1, let matched,
+               let domains = try totalRecordDomains(fields, sourceFields: matched,
+                   namedMembers: namedMembers, renderFinite: renderFinite) {
+                return "(DOMAIN \(value) = {\(keys)} /\\ \(value) \\in [\(domains)])"
+            }
             let checks = try fields.map { field in
                 try nested(field.shape, "\(value)[\(TLAValue.string(field.name).description)]",
-                    sourceType: sourceFields?.first { $0.name == field.name }?.type)
+                    sourceType: sourceFields?.first { $0.name == field.name }?.type,
+                    recordInput: matched?.first { FormalStringIdentity.equal($0.name, field.name) }?.type)
             }
             return "(DOMAIN \(value) = {\(keys)}" + checks.map { " /\\ (\($0))" }.joined() + ")"
         case .union:
             let ordered = possibleShapes.filter(\.isScalar) + possibleShapes.filter { !$0.isScalar }
             let predicates = try ordered.map {
-                try $0.predicate(for: value, sourceType: sourceType, depth: depth + 1,
+                try $0.predicate(for: value, sourceType: sourceType, recordInput: recordInput, depth: depth + 1,
                     namedMembers: namedMembers, renderFinite: renderFinite)
             }
             return "(" + predicates.map { "(\($0))" }.joined(separator: " \\/ ") + ")"
         case .unsupported: return "FALSE"
         }
     }
+
+    // TLC can test record-set fields in a different order. Each membership must be total.
+    private func totalRecordDomains(_ fields: [Field], sourceFields: [CompiledFieldType],
+                                    namedMembers: ((String) -> [CompiledValue]?)?,
+                                    renderFinite: ((CompiledValue) throws -> String)?) throws -> String? {
+        var domains: [String] = []
+        for field in fields {
+            guard let type = sourceFields.first(where: { FormalStringIdentity.equal($0.name, field.name) })?.type
+            else { return nil }
+            let domain: String
+            switch (field.shape, type) {
+            case (.integer, .int): domain = "Int"
+            case (.boolean, .bool): domain = "BOOLEAN"
+            case (.string, .string): domain = "STRING"
+            case (.finite(_, let allowed), .int):
+                guard allowed.allSatisfy({ if case .int = $0 { return true }; return false }) else { return nil }
+                domain = "{\(allowed.map(\.description).joined(separator: ", "))}"
+            case (.finite(_, let allowed), _):
+                let source: [CompiledValue]
+                switch type {
+                case .named(let name):
+                    guard let members = namedMembers?(name) else { return nil }
+                    source = members
+                case .finite(let members): source = members
+                default: return nil
+                }
+                // Model values with type prefixes can raise when TLC compares unlike types.
+                guard !source.isEmpty, (source + allowed.map(CompiledValue.init(formal:))).allSatisfy({ value in
+                    if case .constant(let name) = value { return !name.contains("_") }
+                    return false
+                }), let renderFinite else { return nil }
+                let matching = source.filter(field.shape.accepts).sorted()
+                guard !matching.isEmpty else { return nil }
+                domain = "{\(try matching.map(renderFinite).joined(separator: ", "))}"
+            default: return nil
+            }
+            domains.append("\(field.name): \(domain)")
+        }
+        return domains.joined(separator: ", ")
+    }
 }
 
 private extension CompiledValueType {
+    // Only the arm with these exact keys can get past the preceding DOMAIN guard.
+    func fieldsAfterDomainCheck(_ keys: [String], namedMembers: ((String) -> [CompiledValue]?)?) -> [CompiledFieldType]? {
+        var candidates = [self]
+        var matched: [CompiledFieldType]?
+        while let candidate = candidates.popLast() {
+            if let alternatives = candidate.unionAlternatives {
+                candidates.append(contentsOf: alternatives)
+            } else if let fields = candidate.recordFields {
+                guard fields.allSatisfy({ isTLARecordFieldName($0.name) && !$0.name.hasPrefix(FormalStringEncoding.prefix) })
+                else { return nil }
+                guard fields.count == keys.count,
+                      keys.allSatisfy({ key in fields.contains { FormalStringIdentity.equal($0.name, key) } })
+                else { continue }
+                guard matched == nil else { return nil }
+                matched = fields
+            } else {
+                let members: [CompiledValue]
+                switch candidate {
+                case .int, .bool, .string, .modelValue, .controlLocation: continue
+                case .finite(let values): members = values
+                case .named(let name):
+                    guard let values = namedMembers?(name) else { return nil }
+                    members = values
+                default: return nil
+                }
+                guard members.allSatisfy({ value in
+                    switch value {
+                    case .integer, .boolean, .string, .constant, .controlLocation: true
+                    default: false
+                    }
+                }) else { return nil }
+            }
+        }
+        return matched
+    }
+
     func canHaveOuterShape(_ shape: FormalValueShape) -> Bool {
         if let alternatives = unionAlternatives {
             return alternatives.contains { $0.canHaveOuterShape(shape) }

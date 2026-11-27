@@ -301,6 +301,7 @@ struct CompiledTLARenderer {
     var enums: CompiledEnums = .init()
     var moduleNames: [String: String] = [:]
     var parameterDomains: [BinderID: CompiledExpression] = [:]
+    var groupTotalRecordFields = false
     private let finiteCandidateCache = FiniteCandidateCache()
 
     func assumptions(_ behavior: CompiledBehavior) throws -> [String] {
@@ -936,8 +937,8 @@ struct CompiledTLARenderer {
     }
 
     private func checkedShapePredicate(_ shape: FormalValueShape, value: String,
-                                       sourceType: CompiledValueType) throws -> String {
-        try shape.predicate(for: value, sourceType: sourceType,
+                                       sourceType: CompiledValueType, recordInput: CompiledValueType? = nil) throws -> String {
+        try shape.predicate(for: value, sourceType: sourceType, recordInput: recordInput,
             namedMembers: { enums.domains[$0]?.sorted() },
             renderFinite: { try $0.rendered(using: layout).description })
     }
@@ -1517,7 +1518,8 @@ struct CompiledTLARenderer {
                 var name = "_checkedValue"
                 let shapeNames = String(describing: shape)
                 while operand.contains(name) || shapeNames.contains(name) { name += "_" }
-                let predicate = try checkedShapePredicate(shape, value: name, sourceType: sourceType)
+                let predicate = try checkedShapePredicate(shape, value: name, sourceType: sourceType,
+                    recordInput: groupTotalRecordFields ? sourceType : nil)
                 parts.append("(LET \(name) == \(operand) IN CASE \(predicate) -> \(name))")
             case .expression(let expression):
                 switch expression.operation {

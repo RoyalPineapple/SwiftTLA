@@ -2508,7 +2508,11 @@ extension CompiledProgram {
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
             actions: behavior.actions, functions: functions, enums: enums, moduleNames: moduleNames,
-            parameterDomains: behavior.parameterDomains)
+            parameterDomains: behavior.parameterDomains,
+            // A by-name operand can be evaluated fewer times by record-set membership.
+            groupTotalRecordFields: structuralPath.isEmpty && metadata.imports.isEmpty && refinements.isEmpty
+                && formalModuleReplacements.isEmpty && metadata.symmetrySets.isEmpty
+                && requiredStandardModules.union(metadata.extendsModules).isSubset(of: [.integers, .naturals, .finiteSets, .sequences]))
         var imports: [TLAModuleFile] = []
         var ownership: [TLAModuleBundle.OwnershipEntry] = []
         var dependencies: [TLAModuleBundle.ModuleDependency] = []
