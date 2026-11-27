@@ -32,3 +32,30 @@ struct RecordActionParameterModel {
         }
     }
 }
+
+@TLAModel
+struct BoundedPacketActionModel {
+    enum Symbol: String, CaseIterable, FiniteTLAValueDomain {
+        case first, second
+        static let finiteValues = allCases
+        static var defaultValue: Self { .first }
+        var tlaValue: TLAValue { .constant(rawValue) }
+    }
+    struct Packet: Hashable, Sendable {
+        let elements: [Symbol]
+    }
+    enum Step: String, CaseIterable { case write, reset }
+
+    static var spec: TLASpec {
+        #spec("BoundedPacketActions") { scope in
+            let limit = scope.parameter(as: Int.self, in: 1...2)
+            let size = scope.sharedVar(initial: 0)
+            let lengths = IntRange(1, through: limit)
+            let packets = Sequences(of: Set<Symbol>([.first, .second]), lengths: lengths).mapping { elements in
+                Packet.expression(elements: elements)
+            }
+            Do(Step.write, over: packets) { packet in size.set(packet.elements.count) }
+            Do(Step.reset) { size.set(0) }
+        }
+    }
+}

@@ -1102,6 +1102,22 @@ struct NativeSwiftEmitter {
         return "(\(try emit(0)) ? \(try emit(1)) : \(try emit(2)))"
     }
 
+    func nominalMembership(domain: String, element: CompiledValueType,
+                           candidate: String, candidateType: CompiledValueType) throws -> String {
+        let order = try crossOrdering(element, candidateType)
+        let reverse = element == candidateType ? "_recordOrder" : try crossOrdering(candidateType, element)
+        return """
+        (try { () throws -> \(nativeBoolType) in
+            let _recordDomain = \(domain)
+            let _recordCandidate = \(candidate)
+            let _recordOrder = \(order)
+            return _recordDomain.contains { _recordMember in
+                !(_recordOrder(_recordMember, _recordCandidate) || (\(reverse))(_recordCandidate, _recordMember))
+            }
+        }())
+        """
+    }
+
     private mutating func membershipExpression(
         _ node: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
@@ -1112,19 +1128,8 @@ struct NativeSwiftEmitter {
         if let members = try nominalSetElements(node.children[1], state: state,
             substitutions: substitutions, activeFunctions: activeFunctions) {
             guard case .set(let element) = node.children[1].resultType else { throw unsupported("record membership") }
-            let candidateType = node.children[0].resultType
-            let order = try crossOrdering(element, candidateType)
-            let reverse = element == candidateType ? "_recordOrder" : try crossOrdering(candidateType, element)
-            return """
-            (try { () throws -> \(nativeBoolType) in
-                let _recordDomain = \(members)
-                let _recordCandidate = \(try emit(0))
-                let _recordOrder = \(order)
-                return _recordDomain.contains { _recordMember in
-                    !(_recordOrder(_recordMember, _recordCandidate) || (\(reverse))(_recordCandidate, _recordMember))
-                }
-            }())
-            """
+            return try nominalMembership(domain: members, element: element,
+                candidate: emit(0), candidateType: node.children[0].resultType)
         }
         if hasSymbolicMembership(node.children[1]) {
             let ownsDepth = !hasDepthScope

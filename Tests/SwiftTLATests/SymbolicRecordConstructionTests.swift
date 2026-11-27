@@ -97,6 +97,24 @@ struct SymbolicRecordConstructionTests {
         }
     }
 
+    @Test("Nested record argument domains govern both enumeration and dispatch")
+    func dispatchesBoundedSequenceRecords() throws {
+        let two = BoundedPacketActionModel.Action.write(packet: .init(elements: [.first, .second]))
+        var narrow = try BoundedPacketActionModel.makeMachine(configuration: .init(limit: 1))
+        let before = narrow.snapshot
+        #expect(try !narrow.actionCandidates().contains(two))
+        #expect(try narrow.successors(for: two).isEmpty)
+        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try narrow.send(two) }
+        #expect(narrow.snapshot == before)
+
+        var wide = try BoundedPacketActionModel.makeMachine(configuration: .init(limit: 2))
+        #expect(try wide.actionCandidates().contains(two))
+        try wide.send(two)
+        #expect(wide.state.size == 2)
+        try wide.send(.reset)
+        #expect(wide.state.size == 0)
+    }
+
     @Test("Symbolic record constructors preserve nested Swift values and parameter bindings")
     func executesTypedRecords() throws {
         let scenario = try #require(try SymbolicRecordConstructionModel.validationScenarios().first)

@@ -1359,11 +1359,13 @@ extension NativeSwiftEmitter {
             public func formalCall(for action: Action) throws -> FormalActionCall {}
             """)
         }
+        var domainDeclarations: [DeclSyntax] = []
         var visitorCases: [String] = []
         var formalCases: [String] = []
         var candidateEnumeration: [String] = []
         for api in model.api.actions {
             let action = program[api.compiledAction]
+            var domainParameters: [String] = []
             var pattern: [String] = []
             var invocation: [String] = []
             var visitorValidations: [String] = []
@@ -1374,8 +1376,6 @@ extension NativeSwiftEmitter {
             for (binding, apiBinding) in zip(action.bindings, api.bindings) {
                 let name = binder(binding.binder)
                 let type = program.bindingTypes[binding.binder]!
-                let recordMembers = try nominalSetElements(binding.domain, state: "_execution.")
-                let domain = try recordMembers ?? actionDomain(binding, state: "_execution.")
                 if apiBinding.isPublic {
                     pattern.append("\(apiBinding.swiftIdentifier): let \(name)")
                     actionArguments.append("\(apiBinding.swiftIdentifier): \(name)")
@@ -1392,11 +1392,24 @@ extension NativeSwiftEmitter {
                 formalArguments.append(try formalValue(argumentValue, type: type))
                 if apiBinding.isPublic {
                     let membership: String
-                    if recordMembers != nil {
-                        let candidate = CompiledExpression(operation: .boundValue(binding.binder), resultType: type, children: [])
-                        membership = try expression(.init(operation: .in, resultType: .bool, children: [candidate, binding.domain]),
-                            state: "_execution.", substitutions: [binding.binder: name])
+                    let domain: String
+                    if case .set(let element) = binding.domain.resultType,
+                       let recordMembers = try nominalSetElements(binding.domain, state: "_execution.") {
+                        // Parse the domain once outside the nested visitor switch and candidate loops.
+                        let helper = "_actionDomain\(binding.binder.ordinal)"
+                        let generated = try nativeDeclarations("""
+                        private func \(helper)(\(domainParameters.joined(separator: ", "))) throws -> [\(try swiftType(element))] {
+                            return \(recordMembers)
+                        }
+                        """)
+                        guard generated.count == 1, !generated[0].hasError else {
+                            throw unsupported("unparsable action domain for \(action.id.ordinal).\(binding.sourceName)")
+                        }
+                        domainDeclarations += generated
+                        domain = "(try \(helper)(\(invocation.joined(separator: ", "))))"
+                        membership = try nominalMembership(domain: domain, element: element, candidate: name, candidateType: type)
                     } else {
+                        domain = try actionDomain(binding, state: "_execution.")
                         membership = "\(domain).contains(\(name))"
                     }
                     visitorValidations.append("guard \(membership) else { return [] }")
@@ -1406,6 +1419,7 @@ extension NativeSwiftEmitter {
                 } else {
                     invocation.append("\(name): \(argumentValue)")
                 }
+                domainParameters.append("\(name): \(try swiftType(type))")
             }
             let label = ".\(api.swiftIdentifier)" + (pattern.isEmpty ? "" : "(\(pattern.joined(separator: ", ")))")
             let formalName = program.layout.actions[action.id.ordinal].renderedName
@@ -1595,7 +1609,7 @@ extension NativeSwiftEmitter {
             },
             configurationArguments: configurationArguments,
             boundRoutes: scalarBoundRoutes(program: program, actions: model.api.actions))
-        return declarations
+        return declarations + domainDeclarations
     }
 
     mutating func propertyDeclarations(configurationParameters: String) throws -> [DeclSyntax] {
