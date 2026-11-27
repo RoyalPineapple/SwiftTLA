@@ -838,7 +838,11 @@ PROOF
                                       <<callback>>, <<>>) =
         [kind |-> "success", current |-> callback,
          value |-> [action |-> ArithmeticSendAction, before |-> ArithmeticSendBefore[2], after |-> callback[2]]]
-        BY ONLY EmptyAndSingletonSendQueuesHaveTheirLengths, SMT DEF PublicSendOutcome
+        <3>emptyLength. Len(<<>>) = 0
+            BY ONLY EmptyAndSingletonSendQueuesHaveTheirLengths, PTL
+        <3>singleton. Len(<<callback>>) = 1 /\ <<callback>>[1] = callback
+            BY ONLY EmptyAndSingletonSendQueuesHaveTheirLengths, IsaM("blast")
+        <3>. QED BY ONLY <3>emptyLength, <3>singleton, IsaM("simp") DEF PublicSendOutcome
     <2>selected. sent =
         [kind |-> "success", current |-> callback,
          value |-> [action |-> ArithmeticSendAction, before |-> ArithmeticSendBefore[2], after |-> callback[2]]]
