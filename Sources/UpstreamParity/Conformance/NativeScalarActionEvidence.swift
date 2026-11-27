@@ -333,12 +333,6 @@ package func nativePublicSendBinding(_ source: String, operations: String, check
               """) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
 
     let helpers = try parse(operations)
-    try require("_appendNativeOutcome", """
-        @_documentation(visibility: internal)
-        public func _appendNativeOutcome<Outcome: Sendable>(_ outcomes: inout [Outcome], _ outcome: Outcome) {
-            outcomes.append(outcome)
-        }
-        """, in: helpers)
     try require("_firstNativeEvaluationFailure", """
         @_documentation(visibility: internal)
         public func _firstNativeEvaluationFailure(
@@ -347,16 +341,10 @@ package func nativePublicSendBinding(_ source: String, operations: String, check
             failures.first
         }
         """, in: helpers)
-    let singleton = try require("_singleNativeOutcome", """
-        @_documentation(visibility: internal)
-        public func _singleNativeOutcome<Outcome: Sendable>(
-            _ outcomes: [Outcome], missing: GeneratedMachineError, ambiguous: GeneratedMachineError
-        ) throws -> Outcome {
-            guard let first = outcomes.first else { throw missing }
-            guard outcomes.count == 1 else { throw ambiguous }
-            return first
-        }
-        """, in: helpers)
+    let outcome = try checked(declarations.compactMap { $0.as(EnumDeclSyntax.self) }.filter { $0.name.text == "_SendOutcome" })
+    let singleton = try checked(outcome.memberBlock.members.compactMap { $0.decl.as(FunctionDeclSyntax.self) }.filter {
+        $0.name.text == "selected"
+    })
     try require("_recordNativeOrderedIntAssignmentFailure", """
         @_documentation(visibility: internal)
         public func _recordNativeOrderedIntAssignmentFailure<Registers>(
@@ -413,7 +401,7 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
           let returned = sendSteps[3].item.as(ReturnStmtSyntax.self) else { throw invalid }
     let operands = Array(write.elements)
     let select = selected.initializer?.value.as(TryExprSyntax.self)?.expression.as(FunctionCallExprSyntax.self)
-    let selectedCall = select?.arguments.first?.expression.as(FunctionCallExprSyntax.self)
+    let selectedCall = select?.calledExpression.as(MemberAccessExprSyntax.self)?.base?.as(FunctionCallExprSyntax.self)
     let transition = returned.expression?.as(FunctionCallExprSyntax.self)
     guard let select, let selector = member(select.calledExpression), let selectedCall,
           let selectedName = name(selected), let prior = name(capture), let captureSource = reference(capture.initializer?.value),
@@ -439,18 +427,15 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
         guard let label = argument.label?.text, let origin = reference(argument.expression) else { throw invalid }
         return "\(label) |-> \(string(origin))"
     }
-    let errors = try select.arguments.dropFirst().map { argument -> String in
+    let errors = try select.arguments.map { argument -> String in
         guard let error = member(argument.expression), let kind = argument.label?.text else { throw invalid }
         return "\(kind) |-> \(string(error))"
     }
 
     let start = try instructions(method(selectedCallee, arity: 1))
-    guard start.count == 2, let checking = local(start[0]),
-          let delegate = start[1].item.as(ReturnStmtSyntax.self),
-          checking.typeAnnotation?.type.is(OptionalTypeSyntax.self) == true, checking.initializer == nil,
-          let delegatedCall = delegate.expression?.as(TryExprSyntax.self)?.expression.as(FunctionCallExprSyntax.self),
-          let delegatedName = reference(delegatedCall.calledExpression) else { throw invalid }
-    let collection = try instructions(method(delegatedName, arity: 2))
+    guard start.count == 5, let checking = local(start[0]),
+          checking.typeAnnotation?.type.is(OptionalTypeSyntax.self) == true, checking.initializer == nil else { throw invalid }
+    let collection = Array(start.dropFirst())
     guard collection.count == 4, let collectorBinding = local(collection[0]),
           let visitorBinding = local(collection[1]), let failed = value(collection[2])?.as(IfExprSyntax.self),
           let collectorReturn = collection[3].item.as(ReturnStmtSyntax.self) else { throw invalid }
@@ -466,9 +451,9 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
           let callback = visitorCall.trailingClosure?.statements.first,
           let append = value(callback)?.as(FunctionCallExprSyntax.self),
           let appendOperation = member(append.calledExpression),
-          let target = append.arguments.first?.expression.as(InOutExprSyntax.self),
-          let appendTarget = reference(target.expression),
-          let appendix = append.arguments.dropFirst().first?.expression,
+          let target = append.calledExpression.as(MemberAccessExprSyntax.self)?.base,
+          let appendTarget = reference(target),
+          let appendix = append.arguments.first?.expression,
           let appended = reference(appendix),
           let snapshots = reference(collectorReturn.expression) else { throw invalid }
     let collectionOrder = try collection.map { step -> String in
@@ -480,30 +465,29 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
     let receivers = try scalarDispatchRoutes(method(visitor, arity: 3), handles: scalarActionHandles(declarations))
 
     let selectorSteps = try instructions(singleton)
-    let guards = selectorSteps.compactMap { $0.item.as(GuardStmtSyntax.self) }
-    let checks = try guards.map { clause -> (String, String) in
-        guard let condition = clause.conditions.first?.condition,
-              let thrown = clause.body.statements.first?.item.as(ThrowStmtSyntax.self),
-              let result = reference(thrown.expression) else { throw invalid }
-        switch condition {
-        case .optionalBinding(let binding):
-            guard let property = member(binding.initializer?.value) else { throw invalid }
-            return (property, result)
-        case .expression(let expression):
-            guard let comparison = expression.as(SequenceExprSyntax.self) else { throw invalid }
-            let operands = Array(comparison.elements)
-            guard operands.count == 3, let property = member(operands[0]),
-                  operands[1].as(BinaryOperatorExprSyntax.self)?.operator.text == "==",
-                  operands[2].as(IntegerLiteralExprSyntax.self)?.literal.text == "1" else { throw invalid }
-            return (property, result)
-        default:
-            throw invalid
-        }
+    guard let step = selectorSteps.first, let selection = value(step)?.as(SwitchExprSyntax.self),
+          selection.cases.count == 3 else { throw invalid }
+    let arms = try selection.cases.map { item -> SwitchCaseSyntax in
+        guard let branch = item.as(SwitchCaseSyntax.self) else { throw invalid }
+        return branch
     }
-    guard let firstBinding = guards.first?.conditions.first?.condition.as(OptionalBindingConditionSyntax.self),
-          let picked = firstBinding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-          let selectedReturn = selectorSteps.last?.item.as(ReturnStmtSyntax.self),
+    func pattern(_ branch: SwitchCaseSyntax) throws -> [String] {
+        guard let label = branch.label.as(SwitchCaseLabelSyntax.self),
+              let item = label.caseItems.first else { throw invalid }
+        return Array(item.pattern.tokens(viewMode: .sourceAccurate)).map(\.text)
+    }
+    let checks = try arms.prefix(2).map { branch -> (String, String) in
+        let words = try pattern(branch)
+        guard words.count == 2, words[0] == ".",
+              let thrown = branch.statements.first?.item.as(ThrowStmtSyntax.self),
+              let result = reference(thrown.expression) else { throw invalid }
+        return (words[1], result)
+    }
+    let payload = try pattern(arms[2])
+    guard payload.count == 6, Array(payload.prefix(4)) == [".", "one", "(", "let"], payload.last == ")",
+          let selectedReturn = arms[2].statements.first?.item.as(ReturnStmtSyntax.self),
           let selectorResult = reference(selectedReturn.expression) else { throw invalid }
+    let picked = payload[4]
     let tests = actionTuple(checks.map { "[test |-> \(string($0.0)), error |-> \(string($0.1))]" })
     let targets = actionTuple(receivers.map {
         "[handle |-> \(string($0.handle)), slot |-> \(string($0.receiver)), visitor |-> \($0.visitor)]"
@@ -639,12 +623,12 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
     <1>wiring.
         /\\ \(binding).checking = "none" /\\ \(binding).visitor = "_visitSuccessors"
         /\\ \(binding).failureGate = "_firstNativeEvaluationFailure"
-        /\\ \(binding).appendOperation = "_appendNativeOutcome" /\\ \(binding).appended = "$0"
+        /\\ \(binding).appendOperation = "record" /\\ \(binding).appended = "$0"
         /\\ \(binding).suppliedAction = \(binding).inputAction /\\ \(binding).visitorAction = \(binding).inputAction
         /\\ \(binding).collector = \(binding).appendTarget /\\ \(binding).collector = \(binding).snapshots
-        /\\ \(binding).selector = "_singleNativeOutcome"
+        /\\ \(binding).selector = "selected"
         /\\ DOMAIN \(binding).selectorGuards = {1, 2}
-        /\\ \(binding).selectorGuards[1].test = "first" /\\ \(binding).selectorGuards[2].test = "count"
+        /\\ \(binding).selectorGuards[1].test = "none" /\\ \(binding).selectorGuards[2].test = "many"
         /\\ \(binding).lookupResult = \(binding).lookupBinding
         /\\ \(binding).projection = <<\(binding).writeTarget, "state">>
         /\\ \(binding).captureSource = \(binding).getter
@@ -1655,7 +1639,7 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
             locations: locations.map { ($0.caseName, $0.label) }, checking: checking, predicate: predicate,
             program: program, controlledFork: controlledFork)
         let successor = try checked(functions.filter { $0.name.text == "_visitSuccessors\(index)" })
-        try verifyGeneratedSuccessorOutput(DeclSyntax(successor), actionID: index, parameters: "", arguments: "",
+        try verifyGeneratedSuccessorOutput(DeclSyntax(successor), body: program[action.id].body, actionID: index, parameters: "", arguments: "",
             configurationParameters: "", configurationArguments: "")
         return (label: action.declaration.name, formalLabel: formalLabels[index], handle: labels[index],
             visitor: physicalRoutes[index].visitor, fields: fields.map(\.name), visit: decoded.visit, shared: decoded.shared,

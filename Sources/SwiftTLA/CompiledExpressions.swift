@@ -359,6 +359,22 @@ package indirect enum CompiledActionExpr: Sendable {
 }
 
 extension CompiledActionExpr {
+    /// The update visitor for one fully bound action calls its continuation zero or one times.
+    package var emitsAtMostOneCandidate: Bool {
+        var pending = [self]
+        while let node = pending.popLast() {
+            switch node {
+            case .assign, .unchanged, .guard_: break
+            case .define(_, _, let body): pending.append(body)
+            case .and(let left, let right), .ifElse(_, let left, let right):
+                pending.append(right)
+                pending.append(left)
+            case .existsAction, .or: return false
+            }
+        }
+        return true
+    }
+
     func verifyBranchwiseContinuation(at path: String) throws {
         var pending: [(CompiledActionExpr, Bool)] = [(self, false)]
         while let (node, withinConjunctionLeft) = pending.popLast() {

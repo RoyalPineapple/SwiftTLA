@@ -45,11 +45,44 @@ package func verifyGeneratedPublicSendOutput(_ declarations: [DeclSyntax]) throw
           }) else {
         throw invalid("native.action.successorRoute", "both wrappers preserve the complete successor list")
     }
+    let outcomes = declarations.compactMap { $0.as(EnumDeclSyntax.self) }.filter { $0.name.text == "_SendOutcome" }
+    let collectors = methods.filter { $0.name.text == "_sendOutcome" }
+    guard outcomes.count == 1, collectors.count == 1,
+          Array(outcomes[0].tokens(viewMode: .sourceAccurate)).map(\.text) == tokens("""
+        private enum _SendOutcome {
+            case none, one(Snapshot), many
+
+            mutating func record(_ candidate: Snapshot) {
+                switch self {
+                case .none: self = .one(candidate)
+                case .one, .many: self = .many
+                }
+            }
+
+            func selected(missing: GeneratedMachineError, ambiguous: GeneratedMachineError) throws -> Snapshot {
+                switch self {
+                case .none: throw missing
+                case .many: throw ambiguous
+                case .one(let first): return first
+                }
+            }
+        }
+        """),
+          Array(collectors[0].tokens(viewMode: .sourceAccurate)).map(\.text) == tokens("""
+        private func _sendOutcome(for action: Action) throws -> _SendOutcome {
+            var context: CheckingContext<CheckingRegisters>?
+            var result: _SendOutcome = .none
+            let failures = try _visitSuccessors(for: action, checking: &context) { result.record($0) }
+            if let failure = SwiftTLA._firstNativeEvaluationFailure(failures) { throw failure }
+            return result
+        }
+        """) else {
+        throw invalid("native.action.sendCollector", "retain only the first candidate and drain failures before selection")
+    }
     let send = methods.filter { $0.name.text == "send" }
     let expectedSend = tokens("""
         public mutating func send(_ action: Action) throws -> Transition {
-            let next = try SwiftTLA._singleNativeOutcome(
-                _successors(for: action), missing: .noMatchingSuccessor, ambiguous: .ambiguousAction)
+            let next = try _sendOutcome(for: action).selected(missing: .noMatchingSuccessor, ambiguous: .ambiguousAction)
             let before = state
             _execution = next
             return Transition(action: action, before: before, after: state)
@@ -85,19 +118,23 @@ package func verifyGeneratedValidationDelegationOutput(_ declaration: DeclSyntax
 }
 
 package func verifyGeneratedSuccessorOutput(
-    _ declaration: DeclSyntax?, actionID: Int, parameters: String, arguments: String,
+    _ declaration: DeclSyntax?, body: CompiledActionExpr, actionID: Int, parameters: String, arguments: String,
     configurationParameters: String, configurationArguments: String
 ) throws {
+    let single = body.emitsAtMostOneCandidate
+    let callback = single ? "try visit(updates.applying(to: state))" : """
+    let candidate = updates.applying(to: state)
+    if !emitted.contains(candidate) {
+        emitted.append(candidate)
+        try visit(candidate)
+    }
+    """
     let expected = Parser.parse(source: """
     private static func _visitSuccessors\(actionID)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
                                                   _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
-        var emitted: [Snapshot] = []
+        \(single ? "" : "var emitted: [Snapshot] = []")
         return try _visitUpdates\(actionID)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
-            let candidate = updates.applying(to: state)
-            if !emitted.contains(candidate) {
-                emitted.append(candidate)
-                try visit(candidate)
-            }
+            \(callback)
         }
     }
     """).statements.first?.item.as(FunctionDeclSyntax.self)

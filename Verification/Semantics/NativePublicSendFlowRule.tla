@@ -28,12 +28,12 @@ DecodedSendOperands(plan, action) ==
     /\ distinct(<<plan.inputAction, plan.captured, plan.getter>>)
     /\ plan.checking = "none" /\ plan.visitor = "_visitSuccessors"
     /\ plan.failureGate = "_firstNativeEvaluationFailure"
-    /\ plan.appendOperation = "_appendNativeOutcome" /\ plan.appended = "$0"
+    /\ plan.appendOperation = "record" /\ plan.appended = "$0"
     /\ plan.suppliedAction = plan.inputAction /\ plan.visitorAction = plan.inputAction
     /\ plan.collector = plan.appendTarget /\ plan.collector = plan.snapshots
-    /\ plan.selector = "_singleNativeOutcome"
+    /\ plan.selector = "selected"
     /\ DOMAIN plan.selectorGuards = {1, 2}
-    /\ plan.selectorGuards[1].test = "first" /\ plan.selectorGuards[2].test = "count"
+    /\ plan.selectorGuards[1].test = "none" /\ plan.selectorGuards[2].test = "many"
     /\ plan.lookupResult = plan.lookupBinding
     /\ plan.projection = <<plan.writeTarget, "state">>
     /\ plan.captureSource = plan.getter
@@ -72,37 +72,68 @@ PROOF
 LOCAL Continue(value) == [updates |-> <<value>>, failure |-> <<>>]
 LOCAL Stop(kind, reason) == [updates |-> <<>>, failure |-> [kind |-> kind, value |-> reason]]
 
+LOCAL NoSend == [tag |-> "none", payload |-> <<>>]
+LOCAL OneSend(value) == [tag |-> "one", payload |-> value]
+LOCAL ManySends == [tag |-> "many", payload |-> <<>>]
+LOCAL RecordSend(acc, value) == IF acc.tag = "none" THEN OneSend(value) ELSE ManySends
+
+LOCAL SendHistory(h,visits,n) ==
+    /\ DOMAIN h = 0..n /\ h[0] = NoSend
+    /\ \A i \in 1..n : h[i] = RecordSend(h[i-1],visits[i])
+LOCAL SendFold(visits,n) == (CHOOSE h : SendHistory(h,visits,n))[n]
+
+THEOREM SendFoldRetainsExactlyOnePayload ==
+    ASSUME NEW visits, NEW n \in Nat
+    PROVE SendFold(visits, n) = IF n = 0 THEN NoSend
+                                ELSE IF n = 1 THEN OneSend(visits[1]) ELSE ManySends
+PROOF
+<1>. DEFINE expected(i) == IF i=0 THEN NoSend ELSE IF i=1 THEN OneSend(visits[1]) ELSE ManySends
+            witness == [i \in 0..n |-> expected(i)]
+            actual == CHOOSE h : SendHistory(h,visits,n)
+<1>exists. SendHistory(witness,visits,n)
+    BY ONLY (n \in Nat), SMT DEF witness, expected, SendHistory, RecordSend, NoSend, OneSend, ManySends
+<1>actual. SendHistory(actual,visits,n) BY ONLY <1>exists, Zenon DEF actual
+<1>initial. actual[0] = NoSend BY ONLY <1>actual DEF SendHistory
+<1>record. \A i \in 1..n : actual[i] = RecordSend(actual[i-1],visits[i])
+    BY ONLY <1>actual DEF SendHistory
+<1>first. n=1 => actual[n] = OneSend(visits[1])
+    BY ONLY <1>record, <1>initial, (n \in Nat), SMT DEF RecordSend, NoSend
+<1>many. n >= 2 => actual[n] = ManySends
+    <2>. SUFFICES ASSUME n >= 2 PROVE actual[n] = ManySends OBVIOUS
+    <2>prev. n-1 \in 1..n /\ n \in 1..n BY ONLY (n \in Nat), (n >= 2), SMT
+    <2>seen. actual[n-1] = RecordSend(actual[(n-1)-1],visits[n-1])
+        BY ONLY <1>record, <2>prev
+    <2>nonempty. actual[n-1].tag # "none"
+        BY ONLY <2>seen, SMT DEF RecordSend, OneSend, ManySends
+    <2>last. actual[n] = RecordSend(actual[n-1],visits[n]) BY ONLY <1>record, <2>prev
+    <2>. QED BY ONLY <2>last, <2>nonempty DEF RecordSend
+<1>. QED BY ONLY <1>initial, <1>first, <1>many, (n \in Nat), SMT DEF SendFold, actual
+
 LOCAL Collect(plan, action, visits, failures) ==
     LET input == [name \in {plan.inputAction} |-> action]
         fromVisitor == Rank(plan.callbackOrder, plan.visitorResult)
         gate == Rank(plan.callbackOrder, plan.failureGate)
         returned == Rank(plan.callbackOrder, "return")
-        buffer == [name \in {plan.collector} |-> IF name = plan.appendTarget THEN visits ELSE <<>>]
+        buffer == [name \in {plan.collector} |-> IF name = plan.appendTarget THEN SendFold(visits, Len(visits)) ELSE NoSend]
         failure == Outcomes!ActionHistoryFirstFailure(failures)
     IN IF /\ plan.checking = "none" /\ plan.visitor = "_visitSuccessors"
           /\ plan.failureGate = "_firstNativeEvaluationFailure"
-          /\ plan.appendOperation = "_appendNativeOutcome" /\ plan.appended = "$0"
+          /\ plan.appendOperation = "record" /\ plan.appended = "$0"
           /\ input[plan.suppliedAction] = input[plan.visitorAction]
           /\ fromVisitor < gate /\ gate < returned
        THEN IF failure = <<>> THEN Continue(buffer[plan.snapshots])
             ELSE Stop("evaluationFailure", failure)
        ELSE Stop("unsupported", <<>>)
 
-LOCAL SelectorGuard(plan, guard, visits) ==
-    CASE guard.test = "first" ->
-         IF Len(visits) = 0 THEN Stop("disabled", plan.errors[guard.error]) ELSE Continue(visits)
-    [] guard.test = "count" ->
-         IF Len(visits) # 1 THEN Stop("ambiguous", plan.errors[guard.error]) ELSE Continue(visits)
-    [] OTHER -> Stop("unsupported", <<>>)
-
-LOCAL Select(plan, visits) ==
-    LET checked == Outcomes!ContinueBranch(SelectorGuard(plan, plan.selectorGuards[1], visits),
-                         [values \in {visits} |-> SelectorGuard(plan, plan.selectorGuards[2], values)])
-    IN IF plan.selector = "_singleNativeOutcome"
-       THEN Outcomes!ContinueBranch(checked,
-            [values \in {visits} |->
-                Continue([name \in {plan.lookupBinding} |-> values[1]][plan.lookupResult])])
-       ELSE Stop("unsupported", <<>>)
+LOCAL Select(plan, acc) ==
+    IF plan.selector # "selected" THEN Stop("unsupported", <<>>)
+    ELSE CASE acc.tag = plan.selectorGuards[1].test ->
+                Stop("disabled", plan.errors[plan.selectorGuards[1].error])
+           [] acc.tag = plan.selectorGuards[2].test ->
+                Stop("ambiguous", plan.errors[plan.selectorGuards[2].error])
+           [] acc.tag = "one" ->
+                Continue([name \in {plan.lookupBinding} |-> acc.payload][plan.lookupResult])
+           [] OTHER -> Stop("unsupported", <<>>)
 
 LOCAL Project(storage, plan) ==
     LET snapshot == storage[plan.projection[1]]
@@ -132,7 +163,7 @@ LOCAL Unchanged(prior, kind, value) == [kind |-> kind, current |-> prior, value 
 
 DecodedPublicSend(plan, prior, action, visits, failures) ==
     LET collected == Collect(plan, action, visits, failures)
-        selected == Outcomes!ContinueBranch(collected, [values \in {visits} |-> Select(plan, values)])
+        selected == Outcomes!ContinueBranch(collected, [values \in {SendFold(visits, Len(visits))} |-> Select(plan, values)])
         completed == Outcomes!ContinueBranch(selected,
             [snapshot \in {visits[index] : index \in DOMAIN visits} |-> Finish(plan, action, prior, snapshot)])
     IN IF /\ Rank(plan.send, plan.selected) < Rank(plan.send, plan.writeTarget)
@@ -189,47 +220,20 @@ PROOF
     BY ONLY (failures \in Seq(reasons)), LenProperties, ElementOfSeq, SMT
 <1>collect.
     Collect(plan, action, visits, failures) =
-      IF Len(failures) = 0 THEN Continue(visits) ELSE Stop("evaluationFailure", failures[1])
+      IF Len(failures) = 0 THEN Continue(SendFold(visits, Len(visits))) ELSE Stop("evaluationFailure", failures[1])
     BY ONLY DecodedSendOperands(plan, action), <1>collectOrder, <1>nonempty,
         (<<>> \notin reasons), SMT DEF DecodedSendOperands, Collect, Outcomes!ActionHistoryFirstFailure
+<1>length. Len(visits) \in Nat BY ONLY (visits \in Seq(snapshots)), LenProperties
+<1>fold. SendFold(visits, Len(visits)) =
+    IF Len(visits) = 0 THEN NoSend ELSE IF Len(visits) = 1 THEN OneSend(visits[1]) ELSE ManySends
+    BY ONLY <1>length, SendFoldRetainsExactlyOnePayload
 <1>select.
-    Select(plan, visits) =
+    Select(plan, SendFold(visits, Len(visits))) =
         IF Len(visits) = 0 THEN Stop("disabled", plan.errors[plan.selectorGuards[1].error])
         ELSE IF Len(visits) # 1 THEN Stop("ambiguous", plan.errors[plan.selectorGuards[2].error])
         ELSE Continue(visits[1])
-    <2>operands.
-        /\ plan.selector = "_singleNativeOutcome"
-        /\ plan.selectorGuards[1].test = "first"
-        /\ plan.selectorGuards[2].test = "count"
-        /\ plan.lookupResult = plan.lookupBinding
-        BY ONLY DecodedSendOperands(plan, action) DEF DecodedSendOperands
-    <2>first. SelectorGuard(plan, plan.selectorGuards[1], visits) =
-        IF Len(visits) = 0 THEN Stop("disabled", plan.errors[plan.selectorGuards[1].error])
-        ELSE Continue(visits)
-        BY ONLY <2>operands, SMT DEF SelectorGuard
-    <2>second. SelectorGuard(plan, plan.selectorGuards[2], visits) =
-        IF Len(visits) # 1 THEN Stop("ambiguous", plan.errors[plan.selectorGuards[2].error])
-        ELSE Continue(visits)
-        BY ONLY <2>operands, SMT DEF SelectorGuard
-    <2>empty. CASE Len(visits) = 0
-        BY ONLY <2>empty, <2>operands, <2>first, IsaM("auto")
-            DEF Select, Stop, Outcomes!ContinueBranch
-    <2>one. CASE Len(visits) = 1
-        BY ONLY <2>one, <2>operands, <2>first, <2>second, IsaM("auto")
-            DEF Select, Continue, Outcomes!ContinueBranch
-    <2>many. CASE Len(visits) # 0 /\ Len(visits) # 1
-        <3>. DEFINE countCheck == [values \in {visits} |-> SelectorGuard(plan, plan.selectorGuards[2], values)]
-                    checked == Outcomes!ContinueBranch(SelectorGuard(plan, plan.selectorGuards[1], visits), countCheck)
-                    ambiguous == Stop("ambiguous", plan.errors[plan.selectorGuards[2].error])
-        <3>lookup. countCheck[visits] = ambiguous
-            BY ONLY <2>many, <2>second, SMT DEF countCheck, ambiguous
-        <3>checked. checked = ambiguous
-            BY ONLY <2>many, <2>first, <3>lookup, SMT DEF checked, Continue, Outcomes!ContinueBranch
-        <3>result. Select(plan, visits) = ambiguous
-            BY ONLY <2>operands, <3>checked, SMT
-                DEF Select, checked, countCheck, ambiguous, Stop, Outcomes!ContinueBranch
-        <3>. QED BY ONLY <2>many, <3>result, SMT DEF ambiguous
-    <2>. QED BY ONLY <2>empty, <2>one, <2>many
+    BY ONLY <1>fold, DecodedSendOperands(plan, action), SMT DEF DecodedSendOperands,
+        Select, NoSend, ManySends, OneSend
 <1>receiver. Receiver(plan, action) = plan.writeTarget
     BY ONLY DecodedSendOperands(plan, action), SMT DEF DecodedSendOperands, Receiver, DecodedSendReceiver
 <1>finish. \A selected :
@@ -290,7 +294,7 @@ PROOF
 <1>selected. Len(visits) = 1 => visits[1] \in {visits[index] : index \in DOMAIN visits}
     BY ONLY (visits \in Seq(snapshots)), LenProperties, SMT
 <1>. DEFINE collected == Collect(plan, action, visits, failures)
-            selectNext == [values \in {visits} |-> Select(plan, values)]
+            selectNext == [values \in {SendFold(visits, Len(visits))} |-> Select(plan, values)]
             selectedCall == Outcomes!ContinueBranch(collected, selectNext)
             targets == {visits[index] : index \in DOMAIN visits}
             commit == [snapshot \in targets |-> Finish(plan, action, prior, snapshot)]
@@ -309,11 +313,11 @@ PROOF
     BY ONLY <1>send, SMT DEF observed, completed, selectedCall, collected, selectNext, commit, targets,
         DecodedPublicSend
 <1>selection.
-    selectedCall = IF Len(failures) = 0 THEN Select(plan, visits) ELSE Stop("evaluationFailure", failures[1])
-    <2>lookup. selectNext[visits] = Select(plan, visits)
+    selectedCall = IF Len(failures) = 0 THEN Select(plan, SendFold(visits, Len(visits))) ELSE Stop("evaluationFailure", failures[1])
+    <2>lookup. selectNext[SendFold(visits, Len(visits))] = Select(plan, SendFold(visits, Len(visits)))
         BY ONLY SMT DEF selectNext
     <2>normal. CASE Len(failures) = 0
-        <3>input. collected = Continue(visits)
+        <3>input. collected = Continue(SendFold(visits, Len(visits)))
             BY ONLY <2>normal, <1>collect, SMT DEF collected
         <3>. QED BY ONLY <2>normal, <2>lookup, <3>input, <1>lengths, SMT
             DEF selectedCall, Continue, Outcomes!ContinueBranch

@@ -1283,20 +1283,24 @@ extension NativeSwiftEmitter {
             "\(binder(binding.binder)): \(try swiftType(program.bindingTypes[binding.binder]!))"
         }.joined(separator: ", ")
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
+        let single = action.body.emitsAtMostOneCandidate
+        let emit = single ? "try visit(updates.applying(to: state))" : """
+        let candidate = updates.applying(to: state)
+        if !emitted.contains(candidate) {
+            emitted.append(candidate)
+            try visit(candidate)
+        }
+        """
         let declaration = DeclSyntax(stringLiteral: """
         private static func _visitSuccessors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
                                                       _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
-            var emitted: [Snapshot] = []
+            \(single ? "" : "var emitted: [Snapshot] = []")
             return try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
-                let candidate = updates.applying(to: state)
-                if !emitted.contains(candidate) {
-                    emitted.append(candidate)
-                    try visit(candidate)
-                }
+                \(emit)
             }
         }
         """)
-        try verifyGeneratedSuccessorOutput(declaration, actionID: action.id.ordinal,
+        try verifyGeneratedSuccessorOutput(declaration, body: action.body, actionID: action.id.ordinal,
             parameters: parameters, arguments: arguments,
             configurationParameters: configurationParameters,
             configurationArguments: configurationArguments)
@@ -1506,9 +1510,33 @@ extension NativeSwiftEmitter {
         public func enabledActions() throws -> [Action] {
             try _actions().filter { try isEnabled($0) }
         }
+        private enum _SendOutcome {
+            case none, one(Snapshot), many
+
+            mutating func record(_ candidate: Snapshot) {
+                switch self {
+                case .none: self = .one(candidate)
+                case .one, .many: self = .many
+                }
+            }
+
+            func selected(missing: GeneratedMachineError, ambiguous: GeneratedMachineError) throws -> Snapshot {
+                switch self {
+                case .none: throw missing
+                case .many: throw ambiguous
+                case .one(let first): return first
+                }
+            }
+        }
+        private func _sendOutcome(for action: Action) throws -> _SendOutcome {
+            var context: CheckingContext<CheckingRegisters>?
+            var result: _SendOutcome = .none
+            let failures = try _visitSuccessors(for: action, checking: &context) { result.record($0) }
+            if let failure = SwiftTLA._firstNativeEvaluationFailure(failures) { throw failure }
+            return result
+        }
         public mutating func send(_ action: Action) throws -> Transition {
-            let next = try SwiftTLA._singleNativeOutcome(
-                _successors(for: action), missing: .noMatchingSuccessor, ambiguous: .ambiguousAction)
+            let next = try _sendOutcome(for: action).selected(missing: .noMatchingSuccessor, ambiguous: .ambiguousAction)
             let before = state
             _execution = next
             return Transition(action: action, before: before, after: state)

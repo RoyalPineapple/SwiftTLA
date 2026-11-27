@@ -140,7 +140,9 @@ func decodeGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws -> 
     }
 
     let visitor = try function(named: "_visitUpdates0")
-    try verifyGeneratedSuccessorOutput(DeclSyntax(try function(named: "_visitSuccessors0")),
+    let actions = try OrderedIntTraversalPass.spec.compile().semantics.behavior.actions
+    guard actions.count == 1, let action = actions.first, action.id.ordinal == 0 else { throw fail("expand") }
+    try verifyGeneratedSuccessorOutput(DeclSyntax(try function(named: "_visitSuccessors0")), body: action.body,
         actionID: 0, parameters: "", arguments: "", configurationParameters: "", configurationArguments: "")
     let dispatch = try function(named: "_visitSuccessors", arity: 3, firstLabel: "for")
     let collected = try function(named: "_successors", arity: 2, firstLabel: "for")

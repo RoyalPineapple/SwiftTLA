@@ -428,15 +428,15 @@ private struct ReachableInvariantFailure {
         let successor = try #require(members.first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitSuccessors\(generatedAction.id.ordinal)"
         })
-        try verifyGeneratedSuccessorOutput(successor, actionID: generatedAction.id.ordinal,
+        try verifyGeneratedSuccessorOutput(successor, body: generatedAction.body, actionID: generatedAction.id.ordinal,
             parameters: "", arguments: "", configurationParameters: "", configurationArguments: "")
         let droppedUpdate = successor.description.replacingOccurrences(
-            of: "let candidate = updates.applying(to: state)", with: "let candidate = state")
+            of: "updates.applying(to: state)", with: "state")
         #expect(droppedUpdate != successor.description)
         let wrongSuccessor = try #require(Parser.parse(source: droppedUpdate)
             .statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
-            try verifyGeneratedSuccessorOutput(wrongSuccessor, actionID: generatedAction.id.ordinal,
+            try verifyGeneratedSuccessorOutput(wrongSuccessor, body: generatedAction.body, actionID: generatedAction.id.ordinal,
                 parameters: "", arguments: "", configurationParameters: "", configurationArguments: "")
         }
         let validationEntry = try #require(members.first {

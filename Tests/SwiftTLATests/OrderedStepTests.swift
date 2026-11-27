@@ -247,6 +247,23 @@ import SwiftSyntax
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.send")
         }
+        let collectorIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_sendOutcome"
+        })
+        let original = members[collectorIndex].description
+        try #require(original.components(separatedBy: "result.record($0)").count == 2)
+        let discarded = original.replacingOccurrences(of: "result.record($0)", with: "_ = $0")
+        try #require(discarded != original)
+        wrongMembers = members
+        wrongMembers[collectorIndex] = try #require(Parser.parse(source: discarded)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated send discarded its callback")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.sendCollector")
+        }
         let successorIndex = try #require(members.firstIndex {
             guard let method = $0.as(FunctionDeclSyntax.self) else { return false }
             return method.name.text == "_successors"

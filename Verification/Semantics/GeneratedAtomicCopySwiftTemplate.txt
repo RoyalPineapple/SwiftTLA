@@ -98,13 +98,8 @@ private static func _visitSuccessors0(
     checking context: inout CheckingContext<CheckingRegisters>?,
     _ visit: (Snapshot) throws -> Void
 ) throws -> [NativeMachineEvaluationError] {
-    var emitted: [Snapshot] = []
     return try _visitUpdates0(from: state, checking: &context) { updates in
-        let candidate = updates.applying(to: state)
-        if !emitted.contains(candidate) {
-            emitted.append(candidate)
-            try visit(candidate)
-        }
+        try visit(updates.applying(to: state))
     }
 }
 
