@@ -143,10 +143,11 @@ struct GeneratedAtomicUpdateProofTests {
                     else { fatalError("Missing authored initial state") }
                     var attempted = machine
                     if increment == 0 {
-                        let transition = try attempted.send(.choose)
-                        guard transition.action == .choose, transition.before == machine.state,
-                              attempted.state == transition.after, transition.after.left == 4,
-                              transition.after.right == 4, !transition.after.selected
+                        let transitionBefore = attempted.state
+                        try attempted.send(.choose)
+                        guard transitionBefore == machine.state,
+                              attempted.state == attempted.state, attempted.state.left == 4,
+                              attempted.state.right == 4, !attempted.state.selected
                         else { fatalError("The false arm did not commit its updates") }
                         continue
                     }
@@ -166,7 +167,7 @@ struct GeneratedAtomicUpdateProofTests {
                           failure.before.map(\.value) == (prefix ? [3] : [3, 2])
                     else { fatalError("Unexpected local failure observation") }
                     do {
-                        _ = try attempted.send(.choose)
+                        try attempted.send(.choose)
                         fatalError("A failed action returned a successor")
                     } catch let error as NativeMachineEvaluationError {
                         guard error == reason, attempted.state == machine.state
@@ -244,11 +245,12 @@ struct GeneratedAtomicUpdateProofTests {
                 for var machine in ordered {
                     let before = machine.state
                     if machine.state.left < machine.state.right && machine.state.increment == 0 {
-                        let transition = try machine.send(.choose)
+                        let transitionBefore = machine.state
+                        try machine.send(.choose)
                         let expected = GeneratedScalarConditionalOverflowProofModel.State(
                             left: Int.max, right: Int.max, selected: true, increment: 0)
-                        let label = try machine.formalCall(for: transition.action)
-                        print("success \(label.name == "choose" && label.arguments.isEmpty && transition.action == .choose && transition.before == before && transition.after == expected && machine.state == expected)")
+                        let label = try machine.formalCall(for: .choose)
+                        print("success \(label.name == "choose" && label.arguments.isEmpty && transitionBefore == before && machine.state == expected)")
                         continue
                     }
                     let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
@@ -256,7 +258,7 @@ struct GeneratedAtomicUpdateProofTests {
                     let amount = machine.state.increment == 0 ? 2 : 1
                     let expected = NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, amount])
                     do {
-                        _ = try machine.send(.choose)
+                        try machine.send(.choose)
                         print("unexpected successor")
                     } catch let failure as NativeMachineEvaluationError {
                         print("send overflow \(failure == expected && machine.state == before)")
@@ -275,10 +277,11 @@ struct GeneratedAtomicUpdateProofTests {
                 let renamed = try GeneratedScalarConditionalProofModel.initialMachines()
                 if var machine = renamed.first(where: { $0.state.left < $0.state.right }) {
                     let before = machine.state
-                    let transition = try machine.send(.action_rawValue)
-                    let label = try machine.formalCall(for: transition.action)
+                    let transitionBefore = machine.state
+                    try machine.send(.action_rawValue)
+                    let label = try machine.formalCall(for: .action_rawValue)
                     let expected = GeneratedScalarConditionalProofModel.State(left: 2, right: 3, selected: true)
-                    print("renamed label \(label.name == "rawValue" && label.arguments.isEmpty && transition.action == .action_rawValue && transition.before == before && transition.after == expected && machine.state == expected)")
+                    print("renamed label \(label.name == "rawValue" && label.arguments.isEmpty && transitionBefore == before && machine.state == expected)")
                 } else {
                     print("renamed label false")
                 }
@@ -439,11 +442,10 @@ struct GeneratedAtomicUpdateProofTests {
     func stackActionReturnsItsWrittenChildSlots() throws {
         let before = OrderedIntTraversalPass.State(pending: [.init(first: 7, second: false)], leftChild: 2, rightChild: 3)
         var machine = OrderedIntTraversalPass._machineForRefinement(before)
-        let transition = try machine.send(.expand)
+        try machine.send(.expand)
         let expected = OrderedIntTraversalPass.State(pending: [
             .init(first: 7, second: true), .init(first: 3, second: false), .init(first: 2, second: false)
         ], leftChild: 2, rightChild: 3)
-        #expect(transition.after == expected)
         #expect(machine.state == expected)
 
         let operationsPath = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -1103,7 +1105,7 @@ struct GeneratedAtomicUpdateProofTests {
 
         var machine = try GeneratedPredicateCaptureProofModel.makeMachine()
         #expect(machine.state.left == 2 && machine.state.right == 3)
-        _ = try machine.send(.compare)
+        try machine.send(.compare)
         #expect(machine.state.matched == false)
     }
 
@@ -1164,7 +1166,7 @@ struct GeneratedAtomicUpdateProofTests {
         var enabled = try #require(machines.first { $0.state.left == 2 })
         let disabled = try #require(machines.first { $0.state.left == 4 })
         #expect(enabled.state.right == 3 && !enabled.state.advanced)
-        _ = try enabled.send(.advance)
+        try enabled.send(.advance)
         #expect(enabled.state.advanced)
         #expect(try disabled.successors(for: .advance).isEmpty)
     }
@@ -1766,7 +1768,7 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(machines.allSatisfy { $0.state.right == 3 && !$0.state.selected })
         for machine in machines {
             var selected = machine
-            _ = try selected.send(.choose)
+            try selected.send(.choose)
             #expect(selected.state.selected == (machine.state.left < machine.state.right))
         }
     }

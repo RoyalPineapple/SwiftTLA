@@ -161,7 +161,7 @@ struct SimulationCheckingTests {
         let initial = try scenario.initialMachines()
         var raw = try #require(initial.first)
         #expect(try raw.isEnabled(.advance))
-        _ = try raw.send(.advance)
+        try raw.send(.advance)
         #expect(raw.state.value == 1)
         #expect(try !raw.satisfiesStateConstraint())
 

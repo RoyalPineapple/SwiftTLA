@@ -10,7 +10,7 @@ struct SwiftStringFormalEncodingTests {
         var machine = try StringLiteralModel.makeMachine()
         let actions = try machine.enabledActions()
         #expect(actions.count == 1)
-        _ = try machine.send(try #require(actions.first))
+        try machine.send(try #require(actions.first))
 
         let expected = "quote\" slash\\ newline\n return\r tab\t form\u{c} é"
         #expect(machine.state.text.formalString.utf8.elementsEqual(expected.utf8))

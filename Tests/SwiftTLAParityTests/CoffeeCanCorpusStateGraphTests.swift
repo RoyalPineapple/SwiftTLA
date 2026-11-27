@@ -22,9 +22,9 @@ struct CoffeeCanCorpusStateGraphTests {
             #expect(Set(enabled) == Set(checked.map(\.action)))
             for action in enabled {
                 var next = machine
-                let transition = try next.send(action)
-                #expect(transition.before == machine.state)
-                #expect(transition.after == next.state)
+                let transitionBefore = next.state
+                try next.send(action)
+                #expect(transitionBefore == machine.state)
                 #expect(checked.contains { $0.action == action && $0.target == next.snapshot })
                 let before = machine.state.can
                 let after = next.state.can

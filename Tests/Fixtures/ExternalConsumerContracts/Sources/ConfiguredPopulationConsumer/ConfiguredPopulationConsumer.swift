@@ -38,8 +38,8 @@ var machine = try DeviceContract.makeMachine(configuration: configuration)
 guard machine.state.phase == [.east: 0, .west: 0] else {
     throw FixtureError.invalidInitialState
 }
-let transition = try machine.send(.advance(process: .east))
-guard transition.after.phase == [.east: 1, .west: 0], machine.state.phase == transition.after.phase else {
+try machine.send(.advance(process: .east))
+guard machine.state.phase == [.east: 1, .west: 0] else {
     throw FixtureError.invalidTransition
 }
 guard try machine.formalCall(for: .advance(process: .east)) ==
@@ -53,8 +53,8 @@ guard try machine.formalCall(for: .advance(process: .east)) ==
     throw FixtureError.invalidFormalProjection
 }
 let actor = try DeviceContract.Actor(configuration: configuration)
-let actorTransition = try await actor.send(.advance(process: .east))
-guard actorTransition == transition, await actor.state == machine.state else {
+try await actor.send(.advance(process: .east))
+guard await actor.state == machine.state else {
     throw FixtureError.invalidActorTransition
 }
 let singletonConfiguration = try DeviceContract.Configuration(devices: [.east])
@@ -72,7 +72,7 @@ do {
 } catch ExplorationError.configurationMismatch {
 }
 do {
-    _ = try singleton.send(.advance(process: .west))
+    try singleton.send(.advance(process: .west))
     throw FixtureError.acceptedAbsentMember
 } catch GeneratedMachineError.noMatchingSuccessor {
     guard singleton.state.phase == [.east: 0] else {

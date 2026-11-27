@@ -15,17 +15,17 @@ final class GeneratedAppleModelTests: XCTestCase {
 
     func testBluetoothGeneratedLifecycleExposesScanActions() async throws {
         var machine = try BluetoothModel.makeMachine()
-        _ = try machine.send(.poweredOn)
+        try machine.send(.poweredOn)
         XCTAssertTrue(try machine.isEnabled(.startScan))
         XCTAssertFalse(try machine.isEnabled(.stopScan))
 
-        _ = try machine.send(.startScan)
+        try machine.send(.startScan)
         let scanning = machine.state
         XCTAssertEqual(scanning.phase, .scanning)
         XCTAssertFalse(try machine.isEnabled(.startScan))
         XCTAssertTrue(try machine.isEnabled(.stopScan))
 
-        _ = try machine.send(.stopScan)
+        try machine.send(.stopScan)
         let poweredOn = machine.state
         XCTAssertEqual(poweredOn.phase, .poweredOn)
     }
@@ -38,19 +38,19 @@ final class GeneratedAppleModelTests: XCTestCase {
 
     func testPeripheralGeneratedLifecycle() async throws {
         var machine = try PeripheralModel.makeMachine()
-        _ = try machine.send(.connected)
-        _ = try machine.send(.beginDiscovery)
-        _ = try machine.send(.finishDiscovery)
+        try machine.send(.connected)
+        try machine.send(.beginDiscovery)
+        try machine.send(.finishDiscovery)
         let ready = machine.state
         XCTAssertEqual(ready.phase, .ready)
-        _ = try machine.send(.disconnect)
+        try machine.send(.disconnect)
         let disconnected = machine.state
         XCTAssertEqual(disconnected.phase, .disconnected)
 
         var failedDiscovery = try PeripheralModel.makeMachine()
-        _ = try failedDiscovery.send(.connected)
-        _ = try failedDiscovery.send(.beginDiscovery)
-        _ = try failedDiscovery.send(.discoveryFailed)
+        try failedDiscovery.send(.connected)
+        try failedDiscovery.send(.beginDiscovery)
+        try failedDiscovery.send(.discoveryFailed)
         XCTAssertEqual(failedDiscovery.state.phase, .connected)
     }
 
@@ -86,17 +86,17 @@ final class GeneratedAppleModelTests: XCTestCase {
         var correlation = RecordingCallbackCorrelation()
         var machine = try CameraWorkflow.makeMachine()
 
-        _ = try machine.send(.ready)
+        try machine.send(.ready)
 
         XCTAssertEqual(correlation.begin(id: firstID), firstID)
-        _ = try machine.send(.record)
-        _ = try machine.send(.stopRecording)
+        try machine.send(.record)
+        try machine.send(.stopRecording)
         let completedAction = try XCTUnwrap(correlation.consumeCallback(for: firstID, error: nil))
-        _ = try machine.send(completedAction)
+        try machine.send(completedAction)
         XCTAssertEqual(machine.state.phase, .live)
 
         XCTAssertEqual(correlation.begin(id: secondID), secondID)
-        _ = try machine.send(.record)
+        try machine.send(.record)
         let stateBeforeLateCallback = machine.state
         XCTAssertEqual(correlation.pendingAttemptID, secondID)
         XCTAssertNil(correlation.consumeCallback(for: firstID, error: nil))
@@ -104,9 +104,10 @@ final class GeneratedAppleModelTests: XCTestCase {
         XCTAssertEqual(machine.state, stateBeforeLateCallback)
 
         let submittedAction = try XCTUnwrap(correlation.consumeCallback(for: secondID, error: RecordingFailure()))
-        let secondTransition = try machine.send(submittedAction)
-        XCTAssertEqual(secondTransition.before.phase, .recording)
-        XCTAssertEqual(secondTransition.after.phase, .live)
+        let secondTransitionBefore = machine.state
+        try machine.send(submittedAction)
+        XCTAssertEqual(secondTransitionBefore.phase, .recording)
+        XCTAssertEqual(machine.state.phase, .live)
 
         let stateBeforeDuplicateCallback = machine.state
         XCTAssertNil(correlation.consumeCallback(for: secondID, error: nil))

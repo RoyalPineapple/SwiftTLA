@@ -56,7 +56,7 @@ struct EWD840CorpusExecutionTests {
                 #expect(try machine.isEnabled(action) == active)
                 guard active else { continue }
                 var next = machine
-                _ = try next.send(action)
+                try next.send(action)
                 #expect(next.state.active[node] == false)
                 for other in 0..<configuration.N where other != node {
                     #expect(next.state.active[other] == machine.state.active[other])

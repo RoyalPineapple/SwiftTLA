@@ -150,7 +150,8 @@ struct IntegerRangeMembershipTests {
                 for value in -4...4 {
                     var machine = try IntegerRangeMembershipModel.makeMachine(
                         configuration: .init(lower: lower, upper: upper, value: value))
-                    #expect(try machine.send(.check).after.result == (lower <= value && value <= upper))
+                    try machine.send(.check)
+                    #expect(machine.state.result == (lower <= value && value <= upper))
                     let bindings = CompiledBindings().binding(.integer(lower), to: lowerBinder)
                         .binding(.integer(upper), to: upperBinder).binding(.integer(value), to: valueBinder)
                     let evaluator = CompiledEvaluator(variableValues: [:], operators: compilation.semantics.operators,
@@ -164,7 +165,8 @@ struct IntegerRangeMembershipTests {
     @Test("generated membership accepts a logical member beyond the enumeration width budget")
     func checksLargeRangeWithoutEnumeration() throws {
         var machine = try IntegerRangeMembershipModel.makeMachine(configuration: .init(lower: 0, upper: 0, value: 4))
-        #expect(try machine.send(.large).after.result)
+        try machine.send(.large)
+        #expect(machine.state.result)
         let compilation = try IntegerRangeMembershipModel.spec.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let action = try #require(program.behavior.actions.first {

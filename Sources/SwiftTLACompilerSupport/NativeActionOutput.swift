@@ -79,13 +79,11 @@ package func verifyGeneratedPublicSendOutput(_ declarations: [DeclSyntax]) throw
         """) else {
         throw invalid("native.action.sendCollector", "retain only the first candidate and drain failures before selection")
     }
-    let send = methods.filter { $0.name.text == "send" }
+    let send = methods.filter { $0.name.text == "_applySelected" }
     let expectedSend = tokens("""
-        public mutating func send(_ action: Action) throws -> Transition {
+        private mutating func _applySelected(_ action: Action) throws {
             let next = try _sendOutcome(for: action).selected(missing: .noMatchingSuccessor, ambiguous: .ambiguousAction)
-            let before = state
             _execution = next
-            return Transition(action: action, before: before, after: state)
         }
         """)
     guard send.count == 1,
@@ -230,8 +228,8 @@ package func verifyGeneratedCommitOutput(_ entry: DeclSyntax, helpers: [DeclSynt
         }
         """
     }
-    guard tokens(entry) == words("public mutating func commit(_ action: Action) throws { " +
-            arms.joined(separator: "\n") + "\n_ = try send(action) }"),
+    guard tokens(entry) == words("public mutating func send(_ action: Action) throws { " +
+            arms.joined(separator: "\n") + "\ntry _applySelected(action) }"),
           routes.count == helpers.count else { throw mismatch() }
     for (route, helper) in zip(routes, helpers) {
         guard let method = helper.as(FunctionDeclSyntax.self), method.name.text == "_commit\(route.ordinal)",

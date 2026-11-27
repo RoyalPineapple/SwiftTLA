@@ -2,7 +2,7 @@ import SwiftTLA
 
 /// Generates a typed Swift state machine from a struct's source model.
 ///
-/// The generated surface includes `State`, `Action`, `Transition`, direct
+/// The generated surface includes `State`, `Action`, direct
 /// execution, and a typed actor that owns the generated machine.
 @attached(member, names: arbitrary)
 @attached(memberAttribute)

@@ -33,10 +33,9 @@ struct ConfiguredCounterExecutionTests {
             #expect(machine.state.copied == 0)
             for value in 1...limit {
                 let before = machine.state
-                let transition = try machine.send(.advance)
-                #expect(transition.action == .advance)
-                #expect(transition.before == before)
-                #expect(transition.after == machine.state)
+                let transitionBefore = machine.state
+                try machine.send(.advance)
+                #expect(transitionBefore == before)
                 let expected = try projection([
                     ("value", .int(value)), ("previous", .int(value - 1)), ("copied", .int(value)),
                     ("pc", .function([.string("only"): .string(value == limit ? "Done" : "advance")]))

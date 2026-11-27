@@ -179,10 +179,11 @@ struct CameraApp: App {
         }
         let before = machine.state.phase
         do {
-            let transition = try machine.send(action)
+            try machine.send(action)
             self.machine = machine
             effects.diagnostic = nil
-            cameraLog.info("accepted action=\(String(describing: action), privacy: .public) attempt=\(attemptID?.uuidString ?? "none", privacy: .public) before=\(String(describing: transition.before.phase), privacy: .public) after=\(String(describing: transition.after.phase), privacy: .public)")
+            let after = machine.state.phase
+            cameraLog.info("accepted action=\(String(describing: action), privacy: .public) attempt=\(attemptID?.uuidString ?? "none", privacy: .public) before=\(String(describing: before), privacy: .public) after=\(String(describing: after), privacy: .public)")
             return true
         } catch {
             let breadcrumb = attemptID?.uuidString ?? "none"

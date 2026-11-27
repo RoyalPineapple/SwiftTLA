@@ -21,11 +21,10 @@ DecodedSendOperands(plan, action) ==
     /\ \E row \in DOMAIN plan.receivers : plan.receivers[row].handle = action
     /\ \A row \in DOMAIN plan.receivers :
          plan.receivers[row].handle = action => plan.receivers[row].slot = plan.writeTarget
-    /\ plan.send = <<plan.selected, plan.captured, plan.writeTarget, plan.result>>
+    /\ plan.send = <<plan.selected, plan.writeTarget>>
     /\ distinct(plan.send)
     /\ plan.callbackOrder = <<plan.collector, plan.visitorResult, plan.failureGate, "return">>
     /\ distinct(plan.callbackOrder)
-    /\ distinct(<<plan.inputAction, plan.captured, plan.getter>>)
     /\ plan.checking = "none" /\ plan.visitor = "_visitSuccessors"
     /\ plan.failureGate = "_firstNativeEvaluationFailure"
     /\ plan.appendOperation = "record" /\ plan.appended = "$0"
@@ -36,9 +35,7 @@ DecodedSendOperands(plan, action) ==
     /\ plan.selectorGuards[1].test = "none" /\ plan.selectorGuards[2].test = "many"
     /\ plan.lookupResult = plan.lookupBinding
     /\ plan.projection = <<plan.writeTarget, "state">>
-    /\ plan.captureSource = plan.getter
     /\ plan.writeValue = plan.selected
-    /\ plan.fields = [action |-> plan.inputAction, before |-> plan.captured, after |-> plan.getter]
 
 DecodedSendRoutesMatch(plan, routes) ==
     /\ DOMAIN plan.receivers = DOMAIN routes
@@ -136,9 +133,6 @@ LOCAL Project(storage, plan) ==
     LET snapshot == storage[plan.projection[1]]
     IN [field \in {"state"} |-> snapshot[2]][plan.projection[2]]
 
-LOCAL ReadSendState(plan, earlier, later, step) ==
-    Project(IF Rank(plan.send, step) < Rank(plan.send, plan.writeTarget) THEN earlier ELSE later, plan)
-
 LOCAL CommittedSend(snapshot, transition) ==
     Continue([kind |-> "success", current |-> snapshot, value |-> transition])
 
@@ -148,13 +142,9 @@ LOCAL Finish(plan, action, prior, selected) ==
         local == [name \in {plan.selected} |-> selected]
         write == [key \in {plan.writeTarget} |-> local[plan.writeValue]]
         later == Store!NativeMaterializedSlots(DOMAIN earlier, earlier, write)
-        captured == [name \in {plan.getter} |->
-            ReadSendState(plan, earlier, later, plan.captured)][plan.captureSource]
-        returned == ReadSendState(plan, earlier, later, plan.result)
-        locals == [name \in {plan.inputAction, plan.captured, plan.getter} |->
-            IF name = plan.inputAction THEN action
-            ELSE IF name = plan.captured THEN captured ELSE returned]
-    IN CommittedSend(later[receiver], [field \in DOMAIN plan.fields |-> locals[plan.fields[field]]])
+    \* Observe the state on either side of the send. Its Swift return type is Void.
+    IN CommittedSend(later[receiver],
+         [action |-> action, before |-> Project(earlier, plan), after |-> Project(later, plan)])
 
 LOCAL Unchanged(prior, kind, value) == [kind |-> kind, current |-> prior, value |-> value]
 
@@ -164,7 +154,6 @@ DecodedPublicSend(plan, prior, action, visits, failures) ==
         completed == Outcomes!ContinueBranch(selected,
             [snapshot \in {visits[index] : index \in DOMAIN visits} |-> Finish(plan, action, prior, snapshot)])
     IN IF /\ Rank(plan.send, plan.selected) < Rank(plan.send, plan.writeTarget)
-          /\ Rank(plan.send, plan.writeTarget) < Rank(plan.send, plan.result)
        THEN IF completed.failure = <<>> THEN completed.updates[1]
             ELSE Unchanged(prior, completed.failure.kind, completed.failure.value)
        ELSE Unchanged(prior, "unsupported", <<>>)
@@ -204,9 +193,7 @@ THEOREM DecodedSendUsesTheFirstErrorOrCommitsExactlyOneCallback ==
 PROOF
 <1>send.
     /\ Rank(plan.send, plan.selected) = 1
-    /\ Rank(plan.send, plan.captured) = 2
-    /\ Rank(plan.send, plan.writeTarget) = 3
-    /\ Rank(plan.send, plan.result) = 4
+    /\ Rank(plan.send, plan.writeTarget) = 2
     BY ONLY DecodedSendOperands(plan, action), SMT DEF DecodedSendOperands, Rank
 <1>collectOrder.
     /\ Rank(plan.callbackOrder, plan.visitorResult) = 2
@@ -248,10 +235,7 @@ PROOF
     <2>. TAKE selected
     <2>bindings.
         /\ plan.projection = <<plan.writeTarget, "state">>
-        /\ plan.writeValue = plan.selected /\ plan.captureSource = plan.getter
-        /\ plan.fields = [action |-> plan.inputAction, before |-> plan.captured, after |-> plan.getter]
-        /\ plan.inputAction # plan.captured /\ plan.inputAction # plan.getter
-        /\ plan.captured # plan.getter
+        /\ plan.writeValue = plan.selected
         BY ONLY DecodedSendOperands(plan, action), SMT DEF DecodedSendOperands
     <2>. DEFINE
         before == [key \in {Receiver(plan, action)} |-> prior]
@@ -267,35 +251,10 @@ PROOF
         /\ Project(before, plan) = prior[2]
         /\ Project(after, plan) = selected[2]
         BY ONLY <2>commit, <2>bindings, IsaM("auto") DEF Project
-    <2>order.
-        /\ Rank(plan.send, plan.captured) < Rank(plan.send, plan.writeTarget)
-        /\ ~(Rank(plan.send, plan.result) < Rank(plan.send, plan.writeTarget))
-        BY ONLY <1>send, SMT
-    <2>. DEFINE captured == [name \in {plan.getter} |->
-                    ReadSendState(plan, before, after, plan.captured)][plan.captureSource]
-                afterState == ReadSendState(plan, before, after, plan.result)
-                locals == [name \in {plan.inputAction, plan.captured, plan.getter} |->
-                    IF name = plan.inputAction THEN action
-                    ELSE IF name = plan.captured THEN captured ELSE afterState]
-                fields == [field \in DOMAIN plan.fields |-> locals[plan.fields[field]]]
-    <2>values.
-        /\ captured = prior[2] /\ afterState = selected[2]
-        BY ONLY <2>order, <2>bindings, <2>reads, SMT DEF captured, afterState, ReadSendState
-    <2>returned.
-        fields = [action |-> action, before |-> prior[2], after |-> selected[2]]
-        BY ONLY <2>bindings, <2>values, SMT DEF fields, locals
-    <2>effect. Finish(plan, action, prior, selected) =
-        CommittedSend(after[Receiver(plan, action)], fields)
-        BY ONLY DEF Finish, before, after, write, selectedBinding, fields, locals, captured, afterState
     <2>installed. after[Receiver(plan, action)] = selected
         BY ONLY <2>commit, <1>receiver, IsaM("simp")
-    <2>returnedEffect. CommittedSend(after[Receiver(plan, action)], fields) =
-        CommittedSend(selected, [action |-> action, before |-> prior[2], after |-> selected[2]])
-        BY ONLY <2>installed, <2>returned, SMT
-    <2>result. Finish(plan, action, prior, selected) =
-        CommittedSend(selected, [action |-> action, before |-> prior[2], after |-> selected[2]])
-        BY ONLY <2>effect, <2>returnedEffect, SMT
-    <2>. QED BY ONLY <2>result DEF CommittedSend
+    <2>. QED BY ONLY <2>installed, <2>reads
+        DEF Finish, before, after, write, selectedBinding, CommittedSend
 <1>selected. Len(visits) = 1 => visits[1] \in {visits[index] : index \in DOMAIN visits}
     BY ONLY (visits \in Seq(snapshots)), LenProperties, SMT
 <1>. DEFINE collected == Collect(plan, action, visits, failures)

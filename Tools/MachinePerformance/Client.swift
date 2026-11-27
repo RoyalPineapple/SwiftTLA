@@ -81,14 +81,14 @@ func operation(_ name: String, _ size: Int) throws -> Operation {
     case "pulse.send", "pulse.blocked", "pulse.failure", "pulse.enabled":
         var m = try Pulse.makeMachine()
         switch name {
-        case "pulse.send": return { let t = try m.send(.increment); return t.before.count ^ t.after.count }
+        case "pulse.send": return { let old = m.state.count; try m.send(.increment); return old ^ m.state.count }
         case "pulse.enabled": return { try m.isEnabled(.increment) ? 1 : 0 }
         case "pulse.blocked": return {
-            do { _ = try m.send(.blocked); preconditionFailure("guard accepted") }
+            do { try m.send(.blocked); preconditionFailure("guard accepted") }
             catch GeneratedMachineError.noMatchingSuccessor { precondition(m.state.count == 0); return 1 }
         }
         default: return {
-            do { _ = try m.send(.fail); preconditionFailure("division succeeded") }
+            do { try m.send(.fail); preconditionFailure("division succeeded") }
             catch NativeMachineEvaluationError.divisionByZero { precondition(m.state.count == 0); return 1 }
         }
         }
@@ -100,30 +100,31 @@ func operation(_ name: String, _ size: Int) throws -> Operation {
         }
         var m = try Inventory.makeMachine(configuration: config)
         switch name {
-        case "inventory.discard": return { _ = try m.send(.touch); return m.state.counts[1]! }
-        case "inventory.touch": return { let t = try m.send(.touch); return t.before.counts[1]! ^ t.after.counts[1]! }
-        case "inventory.increment": return { let t = try m.send(.increment); return t.before.tick ^ t.after.tick }
+        case "inventory.discard": return { try m.send(.touch); return m.state.counts[1]! }
+        case "inventory.touch": return { let old = m.state.counts[1]!; try m.send(.touch); return old ^ m.state.counts[1]! }
+        case "inventory.increment": return { let old = m.state.tick; try m.send(.increment); return old ^ m.state.tick }
         case "inventory.keep32":
             var history = Array(repeating: m.state, count: 32)
             var index = 0
             return {
-                let t = try m.send(.touch)
+                let previous = m.state
+                try m.send(.touch)
                 let old = history[index].counts[1]!
-                history[index] = t.before
+                history[index] = previous
                 index = (index + 1) % history.count
-                return old ^ t.after.counts[1]!
+                return old ^ m.state.counts[1]!
             }
         case "inventory.hash": return { m.snapshot.hashValue }
         case "inventory.project": return { try m.formalProjection(of: m.snapshot).entries.count }
         case "inventory.invariant": return { try m.violatedInvariants(atLevel: 0).count }
         default:
-            for _ in 0..<size { _ = try m.send(.append) }
+            for _ in 0..<size { try m.send(.append) }
             let original = m
             return {
                 var copy = original
-                let t = try copy.send(.append)
-                precondition(t.before.queue.count == size)
-                return observeArray(t.after.queue)
+                try copy.send(.append)
+                precondition(original.state.queue.count == size)
+                return observeArray(copy.state.queue)
             }
         }
     case "choices.initials", "choices.selected", "choices.ambiguousInit", "choices.send", "choices.enabled", "choices.successors":
@@ -131,14 +132,14 @@ func operation(_ name: String, _ size: Int) throws -> Operation {
         if name == "choices.initials" { return { try Choices.initialMachines(configuration: config).count } }
         if name == "choices.selected" { return { try Choices.makeMachine(.init(value: size), configuration: config).state.value } }
         if name == "choices.ambiguousInit" { return {
-            do { _ = try Choices.makeMachine(configuration: config); preconditionFailure("expected ambiguous initial") }
+            do { try Choices.makeMachine(configuration: config); preconditionFailure("expected ambiguous initial") }
             catch GeneratedMachineError.ambiguousInitialState { return size }
         } }
         var m = try Choices.makeMachine(.init(value: size), configuration: config)
         if name == "choices.enabled" { return { try m.isEnabled(.pick) ? 1 : 0 } }
         if name == "choices.successors" { return { try m.successors(for: .pick).count } }
         return {
-            do { _ = try m.send(.pick); preconditionFailure("expected ambiguous action") }
+            do { try m.send(.pick); preconditionFailure("expected ambiguous action") }
             catch GeneratedMachineError.ambiguousAction { precondition(m.state.value == size); return 1 }
         }
     case "counter.cycle", "counter.graph", "counter.render":
@@ -156,7 +157,7 @@ func operation(_ name: String, _ size: Int) throws -> Operation {
         let action = try initial.actionCandidates().first!
         return {
             var m = initial
-            for _ in 0..<size { _ = try m.send(action) }
+            for _ in 0..<size { try m.send(action) }
             precondition(m.state.value == size && m.state.previous == size - 1 && m.state.copied == size)
             return m.state.value
         }
@@ -185,9 +186,9 @@ func operation(_ name: String, _ size: Int) throws -> Operation {
         let action = try initial.actionCandidates().first { try initial.formalCall(for: $0).name == "PickSameColorBlack" }!
         return {
             var m = initial
-            let t = try m.send(action)
-            precondition(t.after.can.black == size - 1 && t.before.can.black == size)
-            return t.after.can.black
+            try m.send(action)
+            precondition(m.state.can.black == size - 1 && initial.state.can.black == size)
+            return m.state.can.black
         }
     case "fifo.cycle":
         let config = try BoundedFIFOModel.Configuration(Message: [.m1,.m2,.m3], constrainQueue: true, qLen: 3)
@@ -197,7 +198,7 @@ func operation(_ name: String, _ size: Int) throws -> Operation {
             try candidates.first { try m.formalCall(for: $0).name == name }!
         }
         return {
-            for action in actions { _ = try m.send(action) }
+            for action in actions { try m.send(action) }
             precondition(m.state.q.isEmpty && m.state.out.ack == m.state.out.rdy && m.state.in.val == m.state.out.val)
             return m.state.out.ack
         }
@@ -208,8 +209,9 @@ func operation(_ name: String, _ size: Int) throws -> Operation {
 func actorBurst(_ actor: isolated Pulse.Actor, _ count: Int) throws -> Int {
     var total = 0
     for _ in 0..<count {
-        let t = try actor.send(.increment)
-        total &+= t.before.count ^ t.after.count
+        let before = actor.state.count
+        try actor.send(.increment)
+        total &+= before ^ actor.state.count
     }
     return total
 }
@@ -222,12 +224,12 @@ if arguments.count == 2 && arguments[1] == "layout" {
     let rows = [
         layout("Int",Int.self), layout("[Int:Int]",[Int:Int].self), layout("[Int]",[Int].self),
         layout("Pulse.State",Pulse.State.self), layout("Pulse.Action",Pulse.Action.self),
-        layout("Pulse.Snapshot",Pulse.Snapshot.self), layout("Pulse.Transition",Pulse.Transition.self),
+        layout("Pulse.Snapshot",Pulse.Snapshot.self),
         layout("Inventory.State",Inventory.State.self), layout("Inventory.Snapshot",Inventory.Snapshot.self),
-        layout("Inventory.Transition",Inventory.Transition.self), layout("ConfiguredCounter.State",ConfiguredCounter.State.self),
+        layout("ConfiguredCounter.State",ConfiguredCounter.State.self),
         layout("ConfiguredCounter.Snapshot",ConfiguredCounter.Snapshot.self), layout("BoundedFIFO.State",BoundedFIFOModel.State.self),
         layout("CoffeeCan.State",CoffeeCanModel.State.self), layout("Nano.State",NanoBlockchainModel.State.self),
-        layout("Nano.Snapshot",NanoBlockchainModel.Snapshot.self), layout("Nano.Transition",NanoBlockchainModel.Transition.self)
+        layout("Nano.Snapshot",NanoBlockchainModel.Snapshot.self)
     ]
     print(String(decoding: try JSONSerialization.data(withJSONObject: rows), as: UTF8.self))
     exit(0)
@@ -240,7 +242,7 @@ let actor = name.hasPrefix("pulse.actor") ? try Pulse.Actor() : nil
 var checksum = 0
 func now() -> UInt64 { DispatchTime.now().uptimeNanoseconds }
 let firstStart = now()
-if let actor { let t = try await actor.send(.increment); checksum &+= t.before.count ^ t.after.count }
+if let actor { checksum &+= try await actorBurst(actor, 1) }
 else { checksum &+= try body() }
 let first = now() - firstStart
 var samples: [UInt64] = [], totals: [UInt64] = []
@@ -250,8 +252,7 @@ for _ in 0..<batches {
         checksum &+= try await actorBurst(actor, iterations)
     } else if let actor {
         for _ in 0..<iterations {
-            let t = try await actor.send(.increment)
-            checksum &+= t.before.count ^ t.after.count
+            checksum &+= try await actorBurst(actor, 1)
         }
     } else {
         for _ in 0..<iterations { checksum &+= try body() }
@@ -260,7 +261,7 @@ for _ in 0..<batches {
 }
 for _ in 0..<min(128, iterations * batches) {
     let start = now()
-    if let actor { let t = try await actor.send(.increment); checksum &+= t.before.count ^ t.after.count }
+    if let actor { checksum &+= try await actorBurst(actor, 1) }
     else { checksum &+= try body() }
     samples.append(now() - start)
 }

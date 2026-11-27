@@ -11,11 +11,11 @@ struct GeneratedDuplicateSuccessorTests {
     func generatedMachineSendsOneSemanticTransition() throws {
         var machine = try GeneratedDuplicateSuccessor.makeMachine()
 
-        let transition = try machine.send(.choose)
+        let transitionBefore = machine.state
+        try machine.send(.choose)
 
-        #expect(transition.before.selected == 0)
-        #expect(transition.after.selected == 1)
-        #expect(machine.state == transition.after)
+        #expect(transitionBefore.selected == 0)
+        #expect(machine.state.selected == 1)
 
         let initial = try GeneratedDuplicateSuccessor.makeMachine()
         var context = CheckingContext(registers: try initial.initialCheckingRegisters())
@@ -28,7 +28,7 @@ struct GeneratedDuplicateSuccessorTests {
         #expect(found)
         #expect(listed.count == 1)
         #expect(visited == [listed[0].machine.snapshot])
-        #expect(visited[0].state == transition.after)
+        #expect(visited[0].state == machine.state)
     }
 
     @Test("compiled exploration retains one labeled edge for identical derivations")

@@ -14,7 +14,7 @@ struct NamedTupleStateTests {
         let tracePoint = TLAValue.tuple([1, 2, 3, 4, 5, 6].map(TLAValue.int))
         let decoded = try #require(NamedTupleStateModel.Coordinates(formalValue: tracePoint))
         machine = try NamedTupleStateModel.makeMachine(.init(point: decoded, empty: empty, single: single))
-        _ = try machine.send(.rotate)
+        try machine.send(.rotate)
         #expect(machine.state.point.tlaValue == .tuple([6, 1, 2, 3, 4, 7].map(TLAValue.int)))
     }
 

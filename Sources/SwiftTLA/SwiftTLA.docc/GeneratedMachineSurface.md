@@ -12,7 +12,6 @@ Each generated machine exposes these `Sendable` value types:
 - `State`: immutable typed values for declared variables.
 - `Action`: a typed action identity and typed parameters.
 - `Property`: a model-owned identity for each invariant, reachability goal, temporal property, and refinement.
-- `Transition`: the typed action and state before and after one successful transition.
 
 Collections use native `Set`, `Array`, and `Dictionary` values. Pairs and records
 use generated immutable structs, and finite unions use generated enums.
@@ -34,9 +33,9 @@ serializes `send(_:)` and exposes the same typed state and actions.
 
 ```swift
 let actor = try Counter.Actor()
-let transition = try await actor.send(.advance)
+try await actor.send(.advance)
 let actorState = await actor.state
-assert(actorState == transition.after)
+assert(actorState.count == 1)
 
 let seeded = try Counter.Actor(.init(count: 0))
 let seededState = await seeded.state

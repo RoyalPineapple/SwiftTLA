@@ -81,23 +81,23 @@ public actor Device: Identifiable {
     public var state: PeripheralModel.State { machine.state }
 
     func connected() async throws {
-        _ = try machine.send(.connected)
+        try machine.send(.connected)
     }
 
     public func discoverServices(_ uuids: [CBUUID]? = nil) async throws -> [CBService] {
         guard let peripheral else { throw BleError.notReady }
         guard try machine.isEnabled(.beginDiscovery) else { throw BleError.notReady }
-        _ = try machine.send(.beginDiscovery)
+        try machine.send(.beginDiscovery)
         return try await withCheckedThrowingContinuation { servicesContinuation = $0; peripheral.discoverServices(uuids) }
     }
 
     func finishedDiscoveringServices(_ error: (any Error)?) async {
         do {
             if let error {
-                _ = try machine.send(.discoveryFailed)
+                try machine.send(.discoveryFailed)
                 servicesContinuation?.resume(throwing: error)
             } else {
-                _ = try machine.send(.finishDiscovery)
+                try machine.send(.finishDiscovery)
                 servicesContinuation?.resume(returning: peripheral?.services ?? [])
             }
         } catch {

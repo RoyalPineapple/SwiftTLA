@@ -94,8 +94,8 @@ import Testing
             #expect(try successor.state.value(for: quotient) == .integer(expected), "Runtime \(label)")
             var machine = try SignedDivisionOutputModel.makeMachine()
             #expect(machine.state.quotient == 0)
-            let transition = try machine.send(step)
-            #expect(transition.after.quotient == expected, "Native \(label)")
+            try machine.send(step)
+            #expect(machine.state.quotient == expected, "Native \(label)")
         }
         let failures: [(SignedDivisionOutputModel.Action, String, NativeMachineEvaluationError, EvalError)] = [
             (.zeroDivide, "zeroDivide", .divisionByZero, .divisionByZero),
@@ -214,8 +214,8 @@ import Testing
         let cases: [(SignedModuloOutputModel.Action, String)] = [(.modulo, "modulo"), (.literalModulo, "literalModulo")]
         for (step, label) in cases {
             var machine = try SignedModuloOutputModel.makeMachine()
-            let transition = try machine.send(step)
-            #expect(transition.after.remainder == 1)
+            try machine.send(step)
+            #expect(machine.state.remainder == 1)
             let action = try #require(compilation.layout.testActionID(named: label))
             let successor = try #require(try runtime.successors(for: action, from: initial).first)
             #expect(try successor.state.value(for: remainder) == .integer(1))
@@ -314,7 +314,7 @@ import Testing
                 }
                 #expect(machine.snapshot == before)
             } else {
-                _ = try machine.send(.compute)
+                try machine.send(.compute)
                 #expect(machine.state.result == (attempt ? -1 : 1))
             }
         }
@@ -339,7 +339,7 @@ import Testing
                 }
                 #expect(machine.snapshot == before)
             } else {
-                _ = try machine.send(.compute)
+                try machine.send(.compute)
                 #expect(machine.state.result == 1)
             }
         }
@@ -376,7 +376,7 @@ import Testing
                 }
                 #expect(machine.snapshot == before)
             case -3:
-                _ = try machine.send(.compute)
+                try machine.send(.compute)
                 #expect(machine.state.result == -1)
             default:
                 Issue.record("unexpected initial divisor")

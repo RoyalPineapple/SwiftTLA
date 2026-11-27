@@ -14,7 +14,8 @@ import SwiftTLA
         let count = try #require(TLAStateProjection.Token(validating: "count"))
         let projection = try machine.formalProjection(of: machine.snapshot)
         #expect(projection.value(for: count) == .int(1))
-        #expect(try machine.send(.advance).after.count == 2)
+        try machine.send(.advance)
+        #expect(machine.state.count == 2)
         let before = machine.snapshot
         #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [2, Int.max])) {
             try machine.send(.overflow)

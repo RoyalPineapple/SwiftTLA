@@ -261,12 +261,12 @@ struct IndependentAtomicStepTests {
         #expect(try !machine.isEnabled(.reset))
         #expect(try !machine.isEnabled(.blocked))
         #expect(try !machine.isEnabled(.rollback))
-        _ = try machine.send(.advance)
+        try machine.send(.advance)
         #expect(machine.state.value == 1 && machine.state.copied == 1)
-        _ = try machine.send(.advance)
+        try machine.send(.advance)
         #expect(machine.state.value == 2 && machine.state.copied == 2)
         #expect(try !machine.isEnabled(.advance))
-        _ = try machine.send(.reset)
+        try machine.send(.reset)
         #expect(machine.state.value == 0 && machine.state.copied == 0)
     }
 

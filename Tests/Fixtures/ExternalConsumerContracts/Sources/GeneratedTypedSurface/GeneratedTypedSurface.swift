@@ -42,7 +42,6 @@ private func requireSendable<Value: Sendable>(_: Value.Type) {}
 requireSendable(GeneratedTypedSurface.self)
 requireSendable(GeneratedTypedSurface.State.self)
 requireSendable(GeneratedTypedSurface.Action.self)
-requireSendable(GeneratedTypedSurface.Transition.self)
 requireSendable(GeneratedTypedSurface.Packet.self)
 
 var machine = try GeneratedTypedSurface.makeMachine()
@@ -54,19 +53,19 @@ guard try GeneratedTypedSurface.makeMachine(requested).snapshot == machine.snaps
   throw FixtureError.invalidTransition
 }
 let action: GeneratedTypedSurface.Action = .advance
-let transition = try machine.send(action)
+let transitionBefore = machine.state
+try machine.send(action)
 
-guard transition.action == action,
-      transition.before.value == 0,
-      transition.after.value == 1,
-      transition.before.packet.count == 0 && !transition.before.packet.ready,
-      transition.after.packet.count == 1 && transition.after.packet.ready,
-      transition.before.packet.labels == [.advance],
-      transition.after.packet.labels == [.advance],
-      transition.before.packet.text == "é",
-      transition.after.packet.text == "é",
-      transition.before.archive.map(\.count).sorted() == [0, 1],
-      transition.after.archive.map(\.count).sorted() == [0, 1] else {
+guard transitionBefore.value == 0,
+      machine.state.value == 1,
+      transitionBefore.packet.count == 0 && !transitionBefore.packet.ready,
+      machine.state.packet.count == 1 && machine.state.packet.ready,
+      transitionBefore.packet.labels == [.advance],
+      machine.state.packet.labels == [.advance],
+      transitionBefore.packet.text == "é",
+      machine.state.packet.text == "é",
+      transitionBefore.archive.map(\.count).sorted() == [0, 1],
+      machine.state.archive.map(\.count).sorted() == [0, 1] else {
   throw FixtureError.invalidTransition
 }
 

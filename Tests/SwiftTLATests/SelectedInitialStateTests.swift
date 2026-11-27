@@ -26,7 +26,8 @@ struct SelectedInitialStateTests {
         let initial = SelectedInitialStateModel.State(value: 100_000, copy: 100_001, neighbor: 100_001)
         var machine = try SelectedInitialStateModel.makeMachine(initial)
         #expect(machine.state == initial)
-        #expect(try machine.send(.advance).after.value == 100_001)
+        try machine.send(.advance)
+        #expect(machine.state.value == 100_001)
 
         for invalid in [
             SelectedInitialStateModel.State(value: -1, copy: 0, neighbor: 0),

@@ -80,9 +80,9 @@ struct UpstreamParityTests {
                         continue
                     }
                     try #require(successors.count == 1)
-                    let transition = try next.send(action)
-                    #expect(transition.before == machine.state)
-                    #expect(transition.after == successor.state)
+                    let transitionBefore = next.state
+                    try next.send(action)
+                    #expect(transitionBefore == machine.state)
                     #expect(next.state == successor.state)
                     edges.insert(Edge(source: machine.snapshot, action: action, target: next.snapshot))
                     pending.append(next)
@@ -139,9 +139,10 @@ struct UpstreamParityTests {
                         #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try sent.send(action) }
                         #expect(sent.snapshot == machine.snapshot)
                     case 1:
-                        let transition = try sent.send(action)
-                        #expect(transition.before == machine.state)
-                        #expect(transition.after == candidates[0].state)
+                        let transitionBefore = sent.state
+                        try sent.send(action)
+                        #expect(transitionBefore == machine.state)
+                        #expect(sent.state == candidates[0].state)
                         #expect(sent.snapshot == candidates[0].snapshot)
                     default:
                         #expect(throws: GeneratedMachineError.ambiguousAction) { try sent.send(action) }

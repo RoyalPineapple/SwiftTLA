@@ -81,21 +81,21 @@ struct EWD840AnimationCorpusExecutionTests {
         #expect(machine.state.tpos == 1)
         #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(0), .string("init")]))
 
-        _ = try machine.send(.AnimSendMsg(i: 0))
+        try machine.send(.AnimSendMsg(i: 0))
         #expect(machine.state.active[1] == true)
         #expect(machine.state.color[0] == .black)
         #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(1), .string("SendMsg")]))
 
-        _ = try machine.send(.AnimDeactivate(i: 1))
+        try machine.send(.AnimDeactivate(i: 1))
         #expect(machine.state.active[1] == false)
         #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(1), .string("Deactivate")]))
 
-        _ = try machine.send(.AnimPassToken(i: 1))
+        try machine.send(.AnimPassToken(i: 1))
         #expect(machine.state.tpos == 0)
         #expect(machine.state.history.action == .passToken)
         #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(1), .string("PassToken")]))
 
-        _ = try machine.send(.AnimInitiateProbe)
+        try machine.send(.AnimInitiateProbe)
         #expect(machine.state.tpos == 1)
         #expect(machine.state.history.tlaValue == .tuple([.int(0), .int(1), .string("InitiateProbe")]))
 

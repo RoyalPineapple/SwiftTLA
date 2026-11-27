@@ -320,17 +320,10 @@ package func nativePublicSendBinding(_ source: String, operations: String, check
     let state = try checked(declarations.compactMap { $0.as(VariableDeclSyntax.self) }.filter {
         $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "state" }
     })
-    let transition = try checked(declarations.compactMap { $0.as(StructDeclSyntax.self) }.filter {
-        $0.name.text == "Transition"
-    })
-    guard sameWords(syntaxWords(state), "public var state: State { _execution.state }"),
-          sameWords(syntaxWords(transition), """
-              public struct Transition: Equatable, Sendable {
-                  public let action: Action
-                  public let before: State
-                  public let after: State
-              }
-              """) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+    guard sameWords(syntaxWords(state), "public var state: State { _execution.state }") else {
+        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+    }
+    try require("send", "public mutating func send(_ action: Action) throws { try _applySelected(action) }", in: declarations)
 
     let helpers = try parse(operations)
     try require("_firstNativeEvaluationFailure", """
@@ -384,7 +377,7 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
     func method(_ name: String, arity: Int) throws -> FunctionDeclSyntax {
         try checked(methods.filter {
             $0.name.text == name && $0.signature.parameterClause.parameters.count == arity
-                && (name == "send" || $0.signature.parameterClause.parameters.first?.firstName.text == "for")
+                && (name == "_applySelected" || $0.signature.parameterClause.parameters.first?.firstName.text == "for")
         })
     }
     func instructions(_ method: FunctionDeclSyntax) throws -> [CodeBlockItemSyntax] {
@@ -394,38 +387,29 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
     func string(_ name: String) -> String { TLAValue.string(name).description }
     func tuple(_ names: [String]) -> String { actionTuple(names.map(string)) }
 
-    let send = try method("send", arity: 1)
+    let send = try method("_applySelected", arity: 1)
     let sendSteps = try instructions(send)
-    guard sendSteps.count == 4, let selected = local(sendSteps[0]), let capture = local(sendSteps[1]),
-          let write = value(sendSteps[2])?.as(SequenceExprSyntax.self),
-          let returned = sendSteps[3].item.as(ReturnStmtSyntax.self) else { throw invalid }
+    guard sendSteps.count == 2, let selected = local(sendSteps[0]),
+          let write = value(sendSteps[1])?.as(SequenceExprSyntax.self) else { throw invalid }
     let operands = Array(write.elements)
     let select = selected.initializer?.value.as(TryExprSyntax.self)?.expression.as(FunctionCallExprSyntax.self)
     let selectedCall = select?.calledExpression.as(MemberAccessExprSyntax.self)?.base?.as(FunctionCallExprSyntax.self)
-    let transition = returned.expression?.as(FunctionCallExprSyntax.self)
     guard let select, let selector = member(select.calledExpression), let selectedCall,
-          let selectedName = name(selected), let prior = name(capture), let captureSource = reference(capture.initializer?.value),
+          let selectedName = name(selected),
           let inputAction = send.signature.parameterClause.parameters.first?.secondName?.text,
           let suppliedAction = reference(selectedCall.arguments.first?.expression),
           let selectedCallee = reference(selectedCall.calledExpression),
           operands.count == 3, operands[1].is(AssignmentExprSyntax.self),
           let destination = reference(operands[0]), let writeSource = reference(operands[2]),
-          let transition, let constructor = reference(transition.calledExpression),
           let getter = state.bindings.first?.accessorBlock, case .getter(let projectionBody) = getter.accessors,
           let head = projectionBody.first, let projection = value(head)?.as(MemberAccessExprSyntax.self),
-          let snapshot = reference(projection.base), let snapshotState = member(ExprSyntax(projection)),
-          let getterName = name(state.bindings.first) else { throw invalid }
+          let snapshot = reference(projection.base), let snapshotState = member(ExprSyntax(projection)) else { throw invalid }
 
     let sendOrder = try sendSteps.map { step -> String in
         if let slot = name(local(step)) { return slot }
-        if step.item.is(ReturnStmtSyntax.self) { return constructor }
         if let sequence = value(step)?.as(SequenceExprSyntax.self),
            let slot = reference(sequence.elements.first) { return slot }
         throw invalid
-    }
-    let transitionFields = try transition.arguments.map { argument -> String in
-        guard let label = argument.label?.text, let origin = reference(argument.expression) else { throw invalid }
-        return "\(label) |-> \(string(origin))"
     }
     let errors = try select.arguments.map { argument -> String in
         guard let error = member(argument.expression), let kind = argument.label?.text else { throw invalid }
@@ -497,10 +481,8 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
         ("checking", string("none")),
         ("send", tuple(sendOrder)), ("selected", string(selectedName)), ("selector", string(selector)),
         ("inputAction", string(inputAction)), ("suppliedAction", string(suppliedAction)),
-        ("captured", string(prior)), ("captureSource", string(captureSource)),
         ("writeTarget", string(destination)), ("writeValue", string(writeSource)),
-        ("result", string(constructor)), ("fields", "[\(transitionFields.joined(separator: ", "))]"),
-        ("getter", string(getterName)), ("projection", tuple([snapshot, snapshotState])),
+        ("projection", tuple([snapshot, snapshotState])),
         ("visitorAction", string(visitorAction)), ("visitor", string(visitor)),
         ("callbackOrder", tuple(collectionOrder)), ("visitorResult", string(visitorResult)),
         ("failureGate", string(firstFailure)), ("snapshots", string(snapshots)),
@@ -608,18 +590,13 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
                \(binding).receivers[row].handle = action => \(binding).receivers[row].slot = \(binding).writeTarget
         BY ONLY (action \\in {\(handles)}), <1>receiverIndices, \(binding)Receivers, <1>writeTarget, SMT
     <1>sendOrder.
-        /\\ \(binding).send = <<\(binding).selected, \(binding).captured, \(binding).writeTarget, \(binding).result>>
+        /\\ \(binding).send = <<\(binding).selected, \(binding).writeTarget>>
         /\\ \\A i, j \\in DOMAIN \(binding).send : \(binding).send[i] = \(binding).send[j] => i = j
-        BY ONLY <1>send, <1>selected, <1>captured, <1>writeTarget, <1>result, SMT
+        BY ONLY <1>send, <1>selected, <1>writeTarget, SMT
     <1>callbackSteps.
         /\\ \(binding).callbackOrder = <<\(binding).collector, \(binding).visitorResult, \(binding).failureGate, "return">>
         /\\ \\A i, j \\in DOMAIN \(binding).callbackOrder : \(binding).callbackOrder[i] = \(binding).callbackOrder[j] => i = j
         BY ONLY <1>callbackOrder, <1>collector, <1>visitorResult, <1>failureGate, SMT
-    <1>localNames.
-        \\A i, j \\in DOMAIN <<\(binding).inputAction, \(binding).captured, \(binding).getter>> :
-            <<\(binding).inputAction, \(binding).captured, \(binding).getter>>[i]
-                = <<\(binding).inputAction, \(binding).captured, \(binding).getter>>[j] => i = j
-        BY ONLY <1>inputAction, <1>captured, <1>getter, SMT
     <1>wiring.
         /\\ \(binding).checking = "none" /\\ \(binding).visitor = "_visitSuccessors"
         /\\ \(binding).failureGate = "_firstNativeEvaluationFailure"
@@ -631,15 +608,13 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
         /\\ \(binding).selectorGuards[1].test = "none" /\\ \(binding).selectorGuards[2].test = "many"
         /\\ \(binding).lookupResult = \(binding).lookupBinding
         /\\ \(binding).projection = <<\(binding).writeTarget, "state">>
-        /\\ \(binding).captureSource = \(binding).getter
         /\\ \(binding).writeValue = \(binding).selected
-        /\\ \(binding).fields = [action |-> \(binding).inputAction, before |-> \(binding).captured, after |-> \(binding).getter]
         BY ONLY \(binding)UsesNoChecking, \(binding)SelectorGuards, <1>visitor, <1>failureGate,
             <1>appendOperation, <1>appended, <1>suppliedAction, <1>inputAction, <1>visitorAction,
             <1>collector, <1>appendTarget, <1>snapshots, <1>selector, <1>lookupResult,
-            <1>lookupBinding, <1>projection, <1>writeTarget, <1>captureSource, <1>getter,
-            <1>writeValue, <1>selected, <1>fields, <1>captured, IsaM("simp")
-    <1>. QED BY ONLY <1>route, <1>sendOrder, <1>callbackSteps, <1>localNames, <1>wiring,
+            <1>lookupBinding, <1>projection, <1>writeTarget,
+            <1>writeValue, <1>selected, IsaM("simp")
+    <1>. QED BY ONLY <1>route, <1>sendOrder, <1>callbackSteps, <1>wiring,
         PTL DEF DecodedSendOperands
     ====
 

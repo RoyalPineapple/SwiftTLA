@@ -41,7 +41,7 @@ struct KVsnapCorpusExecutionTests {
         })
         let before = native.state
         do {
-            _ = try native.send(.START(process: .t1))
+            try native.send(.START(process: .t1))
             Issue.record("Distinct read/write key choices must remain ambiguous")
         } catch GeneratedMachineError.ambiguousAction {}
         #expect(native.state == before)

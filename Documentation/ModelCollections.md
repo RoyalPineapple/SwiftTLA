@@ -48,7 +48,7 @@ without storing an app object.
 ```swift
 let configuration = try DeviceContract.Configuration(devices: [.east, .west])
 var machine = try DeviceContract.makeMachine(configuration: configuration)
-_ = try machine.send(.advance(process: .east))
+try machine.send(.advance(process: .east))
 let firstPhase: Int? = machine.state.phase[.east]
 ```
 

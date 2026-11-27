@@ -10,12 +10,12 @@ struct TypedSelectionTests {
             guard machine.state.position < 3 else { break }
             let previous = machine.state.position
             #expect(try machine.enabledActions() == [.advance])
-            _ = try machine.send(.advance)
+            try machine.send(.advance)
             #expect(machine.state.position == previous + 1)
         }
         #expect(machine.state.position == 3)
         let before = machine.snapshot
-        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) { _ = try machine.send(.advance) }
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) { try machine.send(.advance) }
         #expect(machine.snapshot == before)
     }
 
@@ -93,11 +93,11 @@ struct TypedSelectionTests {
         var machine = try BooleanSelection.makeMachine()
         #expect(machine.state.flag)
         #expect(try machine.enabledActions() == [.select])
-        _ = try machine.send(.select)
+        try machine.send(.select)
         #expect(!machine.state.flag)
         #expect(try machine.enabledActions() == [.Terminating])
         let completed = machine.snapshot
-        _ = try machine.send(.Terminating)
+        try machine.send(.Terminating)
         #expect(machine.snapshot == completed)
 
         let module = try BooleanSelection.render().tlaBundle.root.tla
@@ -133,7 +133,7 @@ struct TypedSelectionTests {
 
         var machine = try EnumSelection.makeMachine()
         #expect(machine.state.selected == .zed)
-        _ = try machine.send(.select)
+        try machine.send(.select)
         #expect(machine.state.selected == .alpha)
 
         let module = try EnumSelection.render().tlaBundle.root.tla
@@ -167,7 +167,7 @@ struct TypedSelectionTests {
 
         var machine = try StringSelection.makeMachine()
         #expect(machine.state.selected == "zed")
-        _ = try machine.send(.select)
+        try machine.send(.select)
         #expect(machine.state.selected == "alpha")
 
         let module = try StringSelection.render().tlaBundle.root.tla
@@ -203,7 +203,7 @@ struct TypedSelectionTests {
         #expect(members == Set([.string("z"), .string("é")]))
 
         var machine = try CanonicalUnicodeStringSelection.makeMachine()
-        _ = try machine.send(.select)
+        try machine.send(.select)
         #expect(machine.state.selected == "z")
 
         let module = try CanonicalUnicodeStringSelection.render().tlaBundle.root.tla
@@ -236,7 +236,7 @@ struct TypedSelectionTests {
 
         var machine = try SequenceSelection.makeMachine()
         #expect(machine.state.selected == [2])
-        _ = try machine.send(.select)
+        try machine.send(.select)
         #expect(machine.state.selected == [1])
 
         let module = try SequenceSelection.render().tlaBundle.root.tla
@@ -264,7 +264,7 @@ struct TypedSelectionTests {
         var machine = try ClosedMissingSelection.makeMachine()
         let before = machine.snapshot
         #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
-            _ = try machine.send(.advance)
+            try machine.send(.advance)
         }
         #expect(machine.snapshot == before)
         var observedFailure = false
@@ -285,7 +285,7 @@ struct TypedSelectionTests {
         var machine = try MissingStringSelection.makeMachine()
         let before = machine.snapshot
         #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
-            _ = try machine.send(.select)
+            try machine.send(.select)
         }
         #expect(machine.snapshot == before)
 
@@ -306,7 +306,7 @@ struct TypedSelectionTests {
         var machine = try NestedMissingSelection.makeMachine()
         let before = machine.snapshot
         #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
-            _ = try machine.send(.advance)
+            try machine.send(.advance)
         }
         #expect(machine.snapshot == before)
 
@@ -321,7 +321,7 @@ struct TypedSelectionTests {
         var machine = try AggregateMissingSelection.makeMachine()
         let before = machine.snapshot
         #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
-            _ = try machine.send(.select)
+            try machine.send(.select)
         }
         #expect(machine.snapshot == before)
 
@@ -345,7 +345,7 @@ struct TypedSelectionTests {
         var machine = try NestedOverflowSelection.makeMachine()
         let before = machine.snapshot
         #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
-            _ = try machine.send(.advance)
+            try machine.send(.advance)
         }
         #expect(machine.snapshot == before)
 
@@ -365,11 +365,11 @@ struct TypedSelectionTests {
             let before = machine.snapshot
             if machine.state.attempt {
                 #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
-                    _ = try machine.send(.select)
+                    try machine.send(.select)
                 }
                 #expect(machine.snapshot == before)
             } else {
-                _ = try machine.send(.select)
+                try machine.send(.select)
                 #expect(machine.state.selected == 2)
             }
         }
@@ -392,7 +392,7 @@ struct TypedSelectionTests {
         let before = machine.snapshot
         #expect(machine.state.selected == 0)
         #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
-            _ = try machine.send(.select)
+            try machine.send(.select)
         }
         #expect(machine.snapshot == before)
 
@@ -411,7 +411,7 @@ struct TypedSelectionTests {
     @Test("Selection from a state-held sequence set uses the same lexicographic order")
     func dynamicSequenceSelectionUsesLexicographicOrder() throws {
         var machine = try DynamicSequenceSelection.makeMachine()
-        _ = try machine.send(.select)
+        try machine.send(.select)
         #expect(machine.state.selected == [1])
 
         let rendered = try DynamicSequenceSelection.render()
@@ -429,7 +429,7 @@ struct TypedSelectionTests {
     @Test("Selection from state-held Boolean sequences uses the native lexicographic order")
     func dynamicBooleanSequenceSelectionUsesLexicographicOrder() throws {
         var machine = try DynamicBooleanSequenceSelection.makeMachine()
-        _ = try machine.send(.select)
+        try machine.send(.select)
         #expect(machine.state.selected == [false])
 
         let rendered = try DynamicBooleanSequenceSelection.render()

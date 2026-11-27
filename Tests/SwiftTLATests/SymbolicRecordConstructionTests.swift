@@ -8,15 +8,15 @@ struct SymbolicRecordConstructionTests {
         for input in [1, 2] {
             let argument = RecordActionParameterModel.Packet(count: input, ready: false)
             var constructed = try RecordActionParameterModel.makeMachine()
-            let construction = try constructed.send(.construct(input: argument))
-            #expect(construction.after.packet.count == input && !construction.after.packet.ready)
-            #expect(try constructed.formalCall(for: construction.action).arguments ==
+            try constructed.send(.construct(input: argument))
+            #expect(constructed.state.packet.count == input && !constructed.state.packet.ready)
+            #expect(try constructed.formalCall(for: .construct(input: argument)).arguments ==
                 [.record(["count": .int(input), "ready": .bool(false)])])
 
             var updated = try RecordActionParameterModel.makeMachine()
-            let update = try updated.send(.update(input: argument))
-            #expect(update.after.packet.count == input && !update.after.packet.ready)
-            #expect(try updated.formalCall(for: update.action).arguments ==
+            try updated.send(.update(input: argument))
+            #expect(updated.state.packet.count == input && !updated.state.packet.ready)
+            #expect(try updated.formalCall(for: .update(input: argument)).arguments ==
                 [.record(["count": .int(input), "ready": .bool(false)])])
         }
 
@@ -102,10 +102,10 @@ struct SymbolicRecordConstructionTests {
         let scenario = try #require(try SymbolicRecordConstructionModel.validationScenarios().first)
         var machine = try #require(try scenario.initialMachines().first)
         #expect(machine.state.packet.payload.value == 2 && !machine.state.packet.ready)
-        let first = try machine.send(.advance)
-        #expect(first.after.packet.payload.value == 3 && first.after.packet.ready)
-        let second = try machine.send(.advance)
-        #expect(second.after.packet.payload.value == 4 && second.after.packet.ready)
+        try machine.send(.advance)
+        #expect(machine.state.packet.payload.value == 3 && machine.state.packet.ready)
+        try machine.send(.advance)
+        #expect(machine.state.packet.payload.value == 4 && machine.state.packet.ready)
         #expect(try !machine.isEnabled(.advance))
         let graph = try scenario.explore(maximumStates: 10)
         #expect(graph.transitions.count == 3)

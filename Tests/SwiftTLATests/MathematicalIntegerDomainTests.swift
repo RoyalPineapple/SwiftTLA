@@ -11,7 +11,8 @@ struct MathematicalIntegerDomainTests {
             let input = values.sorted()
             var machine = try MathematicalIntegerDomainModel.makeMachine(
                 .init(value: Int.min, copy: Int.min + 1, sequence: input), configuration: configuration)
-            #expect(try machine.send(.increment).after.value == Int.min + 1)
+            try machine.send(.increment)
+            #expect(machine.state.value == Int.min + 1)
             #expect(machine.state.copy == Int.min + 1)
             #expect(machine.state.sequence == input)
             for value in [Int.min, 0, Int.max - 1] {

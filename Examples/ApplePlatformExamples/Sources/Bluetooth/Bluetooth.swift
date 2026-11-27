@@ -167,7 +167,7 @@ public actor Bluetooth {
     public func scan() async throws -> AsyncStream<Device> {
         if let diagnostic { throw BleError.transitionFailed(diagnostic) }
         guard try machine.isEnabled(.startScan) else { throw BleError.notReady }
-        _ = try machine.send(.startScan)
+        try machine.send(.startScan)
         publishState()
         let stream = AsyncStream<Device>.makeStream()
         scanContinuation = stream.continuation
@@ -177,7 +177,7 @@ public actor Bluetooth {
 
     public func stopScanning() async throws {
         if try machine.isEnabled(.stopScan) {
-            _ = try machine.send(.stopScan)
+            try machine.send(.stopScan)
             publishState()
         }
         central.stopScan()
@@ -189,7 +189,7 @@ public actor Bluetooth {
         if let action = BluetoothModel.Action(managerState: state) {
             do {
                 if try machine.isEnabled(action) {
-                    _ = try machine.send(action)
+                    try machine.send(action)
                     publishState()
                 }
                 diagnostic = nil

@@ -18,7 +18,7 @@ struct SequenceMembershipTests {
                     let expected = Dictionary(uniqueKeysWithValues: entries.enumerated().map { ($0.offset, $0.element) })
                     #expect(machine.state.__zeroBasedSequenceIndex == 0)
                     #expect(machine.state.sequence == expected)
-                    _ = try machine.send(.check)
+                    try machine.send(.check)
                     #expect(machine.state.result == (length <= maximum && entries.allSatisfy { $0 == 0 || $0 == 1 }))
                     #expect(machine.state.result == members.contains(expected))
                 }
@@ -35,7 +35,8 @@ struct SequenceMembershipTests {
     @Test("Sequence membership does not enumerate an exponential function space")
     func largeDomain() throws {
         var machine = try SequenceMembershipModel.makeMachine(configuration: .init(maximum: 100, length: 100, __zeroBasedSequenceIndex_1: 1))
-        #expect(try machine.send(.check).after.result)
+        try machine.send(.check)
+        #expect(machine.state.result)
         let compilation = try SequenceMembershipModel.spec.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "SequenceMembershipModel", program: program))
@@ -56,7 +57,8 @@ struct SequenceMembershipTests {
     @Test("Membership evaluates every selected set branch but retains lazy operator arguments")
     func domainFailure() throws {
         var unused = try SequenceMembershipModel.makeMachine(configuration: .init(maximum: 0, length: 0, __zeroBasedSequenceIndex_1: 0))
-        #expect(try unused.send(.domainFailure).after.result)
+        try unused.send(.domainFailure)
+        #expect(unused.state.result)
         var required = try SequenceMembershipModel.makeMachine(configuration: .init(maximum: 1, length: 0, __zeroBasedSequenceIndex_1: 0))
         let before = required.state
         #expect(throws: NativeMachineEvaluationError.divisionByZero) { try required.send(.domainFailure) }

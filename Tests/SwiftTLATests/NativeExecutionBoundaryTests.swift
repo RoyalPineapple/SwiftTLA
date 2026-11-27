@@ -242,7 +242,8 @@ private struct ReachableInvariantFailure {
         var duplicate = try DuplicateExecutionPaths.makeMachine()
         #expect(try duplicate.enabledActions() == [.advance])
         #expect(try duplicate.successors(for: .advance).count == 1)
-        #expect(try duplicate.send(.advance).after.count == 1)
+        try duplicate.send(.advance)
+        #expect(duplicate.state.count == 1)
 
         var machine = try HiddenControlAlternatives.makeMachine()
         let before = machine.state
@@ -253,7 +254,7 @@ private struct ReachableInvariantFailure {
         #expect(Set(successors.map { $0.machine.state.count }) == [0])
         #expect(try machine.enabledActions() == [.select])
         do {
-            _ = try machine.send(.select)
+            try machine.send(.select)
             Issue.record("Public equality must not merge distinct hidden control states")
         } catch GeneratedMachineError.ambiguousAction {}
         #expect(machine.state == before)
@@ -658,8 +659,9 @@ private struct ReachableInvariantFailure {
         let initial = try CheckedSubtractionOverflow.initialMachines()
         #expect(Set(initial.map(\.state.count)) == [3, Int.max])
         var successful = try CheckedSubtractionOverflow.makeMachine(.init(count: 3))
-        let transition = try successful.send(.advance)
-        #expect(transition.before.count == 3 && transition.after.count == 4)
+        let transitionBefore = successful.state
+        try successful.send(.advance)
+        #expect(transitionBefore.count == 3 && successful.state.count == 4)
         let controlToken = try #require(TLAStateProjection.Token(validating: "pc"))
         #expect(try successful.formalProjection(of: successful.snapshot).value(for: controlToken) == .string("Done"))
 
@@ -724,8 +726,9 @@ private struct ReachableInvariantFailure {
             == Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text))
 
         var successful = try CheckedMultiplicationOverflow.makeMachine(.init(count: 3))
-        let transition = try successful.send(.advance)
-        #expect(transition.before.count == 3 && transition.after.count == 6)
+        let transitionBefore = successful.state
+        try successful.send(.advance)
+        #expect(transitionBefore.count == 3 && successful.state.count == 6)
         let controlToken = try #require(TLAStateProjection.Token(validating: "pc"))
         #expect(try successful.formalProjection(of: successful.snapshot).value(for: controlToken) == .string("Done"))
 
@@ -761,8 +764,9 @@ private struct ReachableInvariantFailure {
     func negationPreservesGeneratedOutcomes() throws {
         #expect(Int.min == -Int.max - 1)
         var successful = try CheckedNestedNegation.makeMachine(.init(count: 3))
-        let transition = try successful.send(.advance)
-        #expect(transition.before.count == 3 && transition.after.count == -2)
+        let transitionBefore = successful.state
+        try successful.send(.advance)
+        #expect(transitionBefore.count == 3 && successful.state.count == -2)
         let controlToken = try #require(TLAStateProjection.Token(validating: "pc"))
         #expect(try successful.formalProjection(of: successful.snapshot).value(for: controlToken) == .string("Done"))
 
@@ -804,8 +808,8 @@ private struct ReachableInvariantFailure {
     @Test("generated Swift retains valid Int results beyond TLC's integer range")
     func arithmeticAboveTLCIntegerRange() throws {
         var machine = try CheckedExecutionBeyondTLCIntegerRange.makeMachine()
-        let transition = try machine.send(.advance)
-        #expect(transition.after.count == 2_147_483_648)
+        try machine.send(.advance)
+        #expect(machine.state.count == 2_147_483_648)
     }
 
     @Test("evidence callback errors do not become model evaluation failures")
@@ -827,7 +831,8 @@ private struct ReachableInvariantFailure {
     func invariantsAreObservations() throws {
         var machine = try ReachableInvariantFailure.makeMachine()
         #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
-        #expect(try machine.send(.advance).after.count == 1)
+        try machine.send(.advance)
+        #expect(machine.state.count == 1)
         #expect(try machine.violatedInvariants(atLevel: 2) == [.Zero])
     }
 }
@@ -884,8 +889,8 @@ extension NativeExecutionBoundaryTests {
     @Test("record narrowing preserves valid fields and rejects out-of-domain values")
     func checkedRecordConversion() throws {
         var machine = try CheckedRecordConversion.makeMachine()
-        _ = try machine.send(.valid)
-        _ = try machine.send(.change)
+        try machine.send(.valid)
+        try machine.send(.change)
         let before = machine.state
         #expect(before.record.count == 1)
         #expect(throws: NativeMachineEvaluationError.noMatchingCase) {

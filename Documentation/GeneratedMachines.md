@@ -2,13 +2,12 @@
 
 `@TLAModel` generates a typed Swift state machine from one resolved program.
 The machine holds its execution state and exposes declared variables through
-an immutable `State`. It accepts typed `Action` values; each successful action
-returns a `Transition` with the visible state before and after it.
+an immutable `State`. Sending a typed action updates the machine in place.
 
 ```swift
 var machine = try BoundedCounter.makeMachine()
-let transition = try machine.send(.advance)
-let state = transition.after
+try machine.send(.advance)
+let state = machine.state
 ```
 
 Application code uses the generated machine. Independent validation uses the
@@ -74,7 +73,6 @@ Each generated machine exposes these value types:
 - `State` is an immutable value with the declared variables and their native Swift types.
 - `Snapshot` retains the complete execution state, including compiler-owned control state.
 - `Action` contains declared actions and their typed parameters.
-- `Transition` contains the action and the state before and after it.
 
 Sets, sequences, and functions use standard Swift `Set`, `Array`, and
 `Dictionary` values. Tuples and structural records use generated immutable
@@ -83,11 +81,11 @@ expose typed fields. Finite unions become generated enums containing
 exactly their declared values. These mappings apply recursively to nested
 values.
 
-Use `try machine.commit(action)` to apply one action. Use `try machine.send(action)`
-when the caller needs the typed transition with its before and after states.
-Both require exactly one successor, report the same first error, and preserve the
-complete machine snapshot if the action fails. A saved state or transition remains
-valid after subsequent commits. The generated actor also supports `try await actor.commit(action)`.
+Use `try machine.send(action)` to apply an action with exactly one successor.
+It returns `Void`. Read `machine.state` after success. Save any fields you need
+before sending. A rejected action preserves the complete snapshot and throws
+the first reached evaluation error, or the selection error for a disabled or
+ambiguous action. Use `try await actor.send(action)` for an actor-owned machine.
 `isEnabled(_:)` reports whether an action is currently permitted.
 
 Generated model expressions evaluate `ENABLED` only when expression evaluation reaches that operand.
@@ -115,12 +113,11 @@ import SwiftTLA
 func runDirectAction() throws {
     var machine = try BoundedCounter.makeMachine()
     let actions = try machine.enabledActions()
-    let transition = try machine.send(.advance)
+    let transitionBefore = machine.state
+    try machine.send(.advance)
 
     assert(actions == [.advance])
-    assert(transition.action == .advance)
-    assert(transition.before.value == 0)
-    assert(transition.after.value == 1)
+    assert(transitionBefore.value == 0)
     assert(machine.state.value == 1)
 }
 ```
@@ -153,7 +150,7 @@ struct CounterView: View {
             Button("Advance") {
                 do {
                     guard var machine else { return }
-                    _ = try machine.send(.advance)
+                    try machine.send(.advance)
                     self.machine = machine
                     diagnostic = ""
                 } catch {
@@ -242,12 +239,12 @@ struct CounterHost {
 
 func runActorAccess() async throws {
     let actor = try CounterHost.Actor()
-    let transition = try await actor.send(.advance)
+    try await actor.send(.advance)
     let seeded = try CounterHost.Actor(.init(value: 0))
 
     let actorState = await actor.state
     let seededState = await seeded.state
-    assert(actorState == transition.after)
+    assert(actorState.value == 1)
     assert(seededState.value == 0)
 }
 ```
@@ -267,17 +264,18 @@ import SwiftTLA
 
 func runGeneratedMachineTesting() throws {
     var machine = try BoundedCounter.makeMachine()
-    let transition = try machine.send(.advance)
+    let transitionBefore = machine.state
+    try machine.send(.advance)
     let beforeFailure = machine.state
 
-    assert(transition.before.value == 0)
+    assert(transitionBefore.value == 0)
     let isEnabled = try machine.isEnabled(.advance)
     assert(isEnabled == false)
-    assert(transition.after.value == 1)
+    assert(machine.state.value == 1)
 
     var rejected = false
     do {
-        _ = try machine.send(.advance)
+        try machine.send(.advance)
     } catch is GeneratedMachineError {
         rejected = true
     }
@@ -429,7 +427,6 @@ compares the native value with its TLA+ output.
 | `GeneratedMachineError` | Reports a rejected or invalid generated-machine operation. |
 | Generated `State` | Holds declared model variables as Swift values. |
 | Generated `Action` | Represents declared actions and their typed parameters. |
-| Generated `Transition` | Records a successful action and its before/after state. |
 | Generated `state` | Reads the complete current generated state. |
 | Generated `send(_:)` | Applies one typed action or throws. |
 | Generated `isEnabled(_:)` | Tests whether one typed action is currently permitted. |

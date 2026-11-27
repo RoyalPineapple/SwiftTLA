@@ -32,11 +32,11 @@ struct CounterHost {
 
 func runActorAccess() async throws {
     let actor = try CounterHost.Actor()
-    let transition = try await actor.send(.advance)
+    try await actor.send(.advance)
     let seeded = try CounterHost.Actor(.init(value: 0))
 
     let actorState = await actor.state
     let seededState = await seeded.state
-    assert(actorState == transition.after)
+    assert(actorState.value == 1)
     assert(seededState.value == 0)
 }

@@ -31,10 +31,11 @@ struct SetConfigurationTests {
         #expect(first.checkNames == ["Members", "Quorum"])
         for scenario in scenarios {
             var machine = try #require(scenario.initialMachines().first)
-            let transition = try machine.send(.adopt)
-            let selected: Set<Int> = transition.after.selected
+            let transitionBefore = machine.state
+            try machine.send(.adopt)
+            let selected: Set<Int> = machine.state.selected
             #expect(selected == scenario.configuration.nodes)
-            #expect(transition.before.selected.isEmpty)
+            #expect(transitionBefore.selected.isEmpty)
             let graph = try scenario.explore(maximumStates: 10)
             #expect(graph.transitions.count == 2)
             #expect(graph.deadlockedStates.count == 1)

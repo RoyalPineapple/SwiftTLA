@@ -35,8 +35,8 @@ In a throwing function, create the machine and send the action.
 
 ```swift
 var counter = try SequentialCounter.makeMachine()
-let change = try counter.send(.advance)
-print(change.after.value)  // 1
+try counter.send(.advance)
+print(counter.state.value)  // 1
 ```
 
 At one, the guard `value < 5` is still true. A second `send(.advance)` throws
@@ -118,8 +118,8 @@ The generated API gives your application typed state and action cases.
 var clock = try ClockModel.makeMachine(
     .init(hour: 16, minute: 19, second: 59)
 )
-let transition = try clock.send(.tick)
-print(transition.after)
+try clock.send(.tick)
+print(clock.state)
 // State(hour: 16, minute: 20, second: 0)
 ```
 
@@ -172,7 +172,7 @@ struct ClockView: View {
                 Button("Tick") {
                     do {
                         var machine = machine
-                        _ = try machine.send(.tick)
+                        try machine.send(.tick)
                         self.machine = machine
                         diagnostic = ""
                     } catch {

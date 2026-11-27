@@ -79,8 +79,10 @@ struct FunctionSpaceMembershipTests {
     @Test("Generated membership accepts large function spaces and preserves failures")
     func generatedMembershipPreservesFailure() throws {
         var machine = try FunctionSpaceMembershipModel.makeMachine()
-        #expect(try machine.send(.accepted).after.result)
-        #expect(try machine.send(.largeAccepted).after.result)
+        try machine.send(.accepted)
+        #expect(machine.state.result)
+        try machine.send(.largeAccepted)
+        #expect(machine.state.result)
         var failing = try FunctionSpaceMembershipModel.makeMachine()
         let before = failing.snapshot
         #expect(throws: NativeMachineEvaluationError.divisionByZero) { try failing.send(.candidateFailure) }
@@ -90,7 +92,9 @@ struct FunctionSpaceMembershipTests {
     @Test("Generated function membership checks an unbounded integer codomain symbolically")
     func generatedUnboundedRangeMembership() throws {
         var machine = try FunctionSpaceMembershipModel.makeMachine()
-        #expect(try machine.send(.integerRangeAccepted).after.result)
-        #expect(try !machine.send(.integerRangeRejected).after.result)
+        try machine.send(.integerRangeAccepted)
+        #expect(machine.state.result)
+        try machine.send(.integerRangeRejected)
+        #expect(!machine.state.result)
     }
 }

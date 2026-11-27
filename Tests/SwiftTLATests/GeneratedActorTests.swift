@@ -38,16 +38,17 @@ struct GeneratedActorTests {
     @Test("A generated machine creates and executes its typed actor")
     func typedActionCommitsTypedState() async throws {
         let actor = try ActorCounter.Actor()
-        let transition = try await actor.send(.advance)
-        #expect(transition.before == .init(count: 0))
-        #expect(transition.after == .init(count: 1))
-        #expect(await actor.state == transition.after)
+        let transitionBefore = await actor.state
+        try await actor.send(.advance)
+        let transitionAfter = await actor.state
+        #expect(transitionBefore == .init(count: 0))
+        #expect(transitionAfter == .init(count: 1))
     }
 
     @Test("A disabled typed action leaves the actor state unchanged")
     func typedRejectionPreservesState() async throws {
         let actor = try ActorCounter.Actor()
-        _ = try await actor.send(.advance)
+        try await actor.send(.advance)
 
         await #expect(throws: GeneratedMachineError.self) {
             try await actor.send(.advance)

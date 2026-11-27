@@ -7,7 +7,8 @@ struct UnboundedSequenceTests {
         for input in [[], [1, 2], Array(repeating: 2, count: 10_000)] {
             var machine = try UnboundedSequenceModel.makeMachine(.init(sequence: input))
             #expect(machine.state.sequence == input)
-            #expect(try machine.send(.append).after.sequence == input + [1])
+            try machine.send(.append)
+            #expect(machine.state.sequence == input + [1])
         }
         #expect(throws: GeneratedMachineError.invalidInitialState) {
             try UnboundedSequenceModel.makeMachine(.init(sequence: [1, 3]))

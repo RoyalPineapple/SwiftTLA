@@ -24,9 +24,9 @@ struct ChoiceEvaluationFailureTests {
         }
         #expect(machine.snapshot == prior)
         #expect(try machine.successors(for: .duplicate).map { $0.state.result } == [7])
-        let transition = try machine.send(.duplicate)
-        #expect(transition.before.result == -1 && transition.after.result == 7)
-        #expect(machine.state == transition.after)
+        let transitionBefore = machine.state
+        try machine.send(.duplicate)
+        #expect(transitionBefore.result == -1 && machine.state.result == 7)
     }
 
     @Test("The first failing Choose candidate determines the reported failure")

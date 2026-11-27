@@ -11,7 +11,7 @@ struct GeneratedPairPatternTests {
     func generatedMachineRejectsAmbiguousPairSelection() throws {
         var machine = try GeneratedPairPattern.makeMachine()
         do {
-            _ = try machine.send(.choose)
+            try machine.send(.choose)
             Issue.record("Expected ambiguous action")
         } catch GeneratedMachineError.ambiguousAction {
         } catch {
@@ -23,8 +23,9 @@ struct GeneratedPairPatternTests {
         for successor in successors {
             #expect(try successor.enabledActions() == [.Terminating])
             var terminal = successor
-            let transition = try terminal.send(.Terminating)
-            #expect(transition.before == transition.after)
+            let transitionBefore = terminal.state
+            try terminal.send(.Terminating)
+            #expect(transitionBefore == terminal.state)
             #expect(terminal.snapshot == successor.snapshot)
             #expect(try successor.successors(for: .choose).isEmpty)
         }

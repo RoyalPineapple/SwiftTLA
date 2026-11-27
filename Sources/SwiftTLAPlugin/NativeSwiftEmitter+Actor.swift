@@ -19,11 +19,7 @@ extension NativeSwiftEmitter {
                     try machine.enabledActions()
                 }
 
-                public func commit(_ action: Action) throws {
-                    try machine.commit(action)
-                }
-
-                public func send(_ action: Action) throws -> Transition {
+                public func send(_ action: Action) throws {
                     try machine.send(action)
                 }
                 """

@@ -72,7 +72,8 @@ struct EnumEncodingTests {
         }
         for var machine in machines {
             for value in EncodedEnumDomain.Datum.allCases {
-                let after = try machine.send(.select(next: value)).after
+                try machine.send(.select(next: value))
+                let after = machine.state
                 #expect(after.value.rawValue.utf8.elementsEqual(value.rawValue.utf8))
                 #expect(try machine.formalProjection(of: machine.snapshot).value(for: token) == value.tlaValue)
                 let reached = try machine.formalProjection(of: machine.snapshot)

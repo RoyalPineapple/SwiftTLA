@@ -11,7 +11,7 @@ struct QuintupleValueTests {
         #expect(try machine.formalProjection(of: machine.snapshot).value(for: token)
             == .tuple([.int(0), .bool(false), .string("open"), .int(1), .bool(true)]))
 
-        _ = try machine.send(.advance)
+        try machine.send(.advance)
         #expect(machine.state.value == Quintuple(
             first: 1, second: false, third: "open", fourth: 2, fifth: true))
         #expect(try machine.formalProjection(of: machine.snapshot).value(for: token)

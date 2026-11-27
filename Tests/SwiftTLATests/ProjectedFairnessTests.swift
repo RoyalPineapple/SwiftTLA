@@ -59,7 +59,7 @@ struct ProjectedFairnessTests {
         let stalled = try MachineValidationGraph(initialMachines: [ProjectedStuttering.makeMachine()], maximumStates: 10)
         let failure = try stalled.refinementFailure(initialMachines: [ProjectedProgress.makeMachine()]) { snapshot in
             var abstract = try ProjectedProgress.makeMachine()
-            if snapshot.state.noise == 1 { _ = try abstract.send(.toggle) }
+            if snapshot.state.noise == 1 { try abstract.send(.toggle) }
             return abstract
         }
         guard case .fairness(_, let witness) = try #require(failure) else {
@@ -70,7 +70,7 @@ struct ProjectedFairnessTests {
         let progressing = try MachineValidationGraph(initialMachines: [ProjectedProgress.makeMachine()], maximumStates: 10)
         let accepted = try progressing.refinementFailure(initialMachines: [ProjectedStuttering.makeMachine()]) { snapshot in
             var abstract = try ProjectedStuttering.makeMachine()
-            if snapshot.state.position.noise == 1 { _ = try abstract.send(.toggle) }
+            if snapshot.state.position.noise == 1 { try abstract.send(.toggle) }
             return abstract
         }
         #expect(accepted == nil)

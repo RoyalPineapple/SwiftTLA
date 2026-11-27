@@ -17,7 +17,7 @@ the bounded symmetric verification population, and the generated-machine ID rout
 ## Camera adoption proof
 
 `av-pipeline-example` is the external generated-machine proof. `CameraWorkflow`
-owns the typed formal `State`, `Action`, and `Transition` values; the SwiftUI
+owns the typed formal `State` and `Action` values; the SwiftUI
 app uses the generated machine for every state change. The focused adoption
 tests exercise the generated actor under concurrent sends. The app never reads or exposes a raw
 TLA state map, compiled storage, or compiler-internal API.

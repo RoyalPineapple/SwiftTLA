@@ -16,17 +16,17 @@ struct ElevatorBoardingTests {
                 && machine.state.ElevatorState[.e1]?.floor == 1
                 && machine.state.ElevatorState[.e2]?.floor == 2
         })
-        _ = try machine.send(.CallElevator(p: .p1))
-        _ = try machine.send(.DispatchElevator(c: .init(floor: 1, direction: "Up")))
-        _ = try machine.send(.OpenElevatorDoors(e: .e1))
-        _ = try machine.send(.EnterElevator(e: .e1))
-        _ = try machine.send(.CallElevator(p: .p2))
-        _ = try machine.send(.DispatchElevator(c: .init(floor: 2, direction: "Down")))
-        _ = try machine.send(.OpenElevatorDoors(e: .e2))
+        try machine.send(.CallElevator(p: .p1))
+        try machine.send(.DispatchElevator(c: .init(floor: 1, direction: "Up")))
+        try machine.send(.OpenElevatorDoors(e: .e1))
+        try machine.send(.EnterElevator(e: .e1))
+        try machine.send(.CallElevator(p: .p2))
+        try machine.send(.DispatchElevator(c: .init(floor: 2, direction: "Down")))
+        try machine.send(.OpenElevatorDoors(e: .e2))
 
         #expect(try machine.isEnabled(.EnterElevator(e: .e2)))
         #expect(try !machine.isEnabled(.CloseElevatorDoors(e: .e2)))
-        _ = try machine.send(.CloseElevatorDoors(e: .e1))
+        try machine.send(.CloseElevatorDoors(e: .e1))
         #expect(machine.state.ElevatorState[.e1]?.doorsOpen == false)
         #expect(machine.state.ElevatorState[.e2]?.doorsOpen == true)
     }
@@ -42,12 +42,12 @@ struct ElevatorBoardingTests {
                 && machine.state.ElevatorState[.e1]?.floor == 1
                 && machine.state.ElevatorState[.e2]?.floor == 2
         })
-        _ = try machine.send(.CallElevator(p: .p1))
-        _ = try machine.send(.CallElevator(p: .p2))
-        _ = try machine.send(.DispatchElevator(c: .init(floor: 1, direction: "Up")))
-        _ = try machine.send(.OpenElevatorDoors(e: .e1))
+        try machine.send(.CallElevator(p: .p1))
+        try machine.send(.CallElevator(p: .p2))
+        try machine.send(.DispatchElevator(c: .init(floor: 1, direction: "Up")))
+        try machine.send(.OpenElevatorDoors(e: .e1))
         #expect(try !machine.isEnabled(.CloseElevatorDoors(e: .e1)))
-        _ = try machine.send(.EnterElevator(e: .e1))
+        try machine.send(.EnterElevator(e: .e1))
         #expect(machine.state.PersonState[.p1]?.location == .second(.e1))
         #expect(machine.state.PersonState[.p2]?.location == .second(.e1))
         #expect(machine.state.ElevatorState[.e1]?.buttonsPressed == [2])

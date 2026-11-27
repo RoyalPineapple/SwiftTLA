@@ -26,11 +26,15 @@ struct GeneratedMachineDocumentationTests {
     @Test("authored field copies read preceding writes and export the same ordered assignments")
     func copiesUseTheWorkingState() throws {
         var machine = try OrderedFieldCopyModel.makeMachine()
-        let after = try machine.send(.copy).after
+        try machine.send(.copy)
+        let after = machine.state
         #expect(after == .init(x: 4, y: 2, z: 2))
-        #expect(try machine.send(.copyThenReset).after == .init(x: 0, y: 7, z: 2))
-        #expect(try machine.send(.resetThenCopy).after == .init(x: 0, y: 0, z: 2))
-        #expect(try machine.send(.accumulate).after == .init(x: 3, y: 3, z: 2))
+        try machine.send(.copyThenReset)
+        #expect(machine.state == .init(x: 0, y: 7, z: 2))
+        try machine.send(.resetThenCopy)
+        #expect(machine.state == .init(x: 0, y: 0, z: 2))
+        try machine.send(.accumulate)
+        #expect(machine.state == .init(x: 3, y: 3, z: 2))
         let beforeOverflow = machine.snapshot
         #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 3])) {
             try machine.send(.overflow)
@@ -79,7 +83,8 @@ struct GeneratedMachineDocumentationTests {
     @Test("integer += runs the same update that explicit assignment exports")
     func integerAdditionAssignment() throws {
         var machine = try SequentialCounter.makeMachine()
-        #expect(try machine.send(.advance).after.value == 1)
+        try machine.send(.advance)
+        #expect(machine.state.value == 1)
         #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try machine.send(.advance) }
 
         let explicit = #spec("SequentialCounter") {
@@ -103,7 +108,8 @@ struct GeneratedMachineDocumentationTests {
     @Test("integer += reads preceding writes and preserves the snapshot on overflow")
     func additionAssignmentEvaluatesTheWholeRightOperand() throws {
         var successful = try AdditionAssignmentModel.makeMachine(.init(value: 0))
-        #expect(try successful.send(.advance).after.value == Int.max)
+        try successful.send(.advance)
+        #expect(successful.state.value == Int.max)
 
         var failing = try AdditionAssignmentModel.makeMachine(.init(value: 1))
         let before = failing.snapshot
@@ -127,10 +133,10 @@ struct GeneratedMachineDocumentationTests {
     func readmeClockRollovers(_ time: (Int, Int, Int, Int, Int, Int)) throws {
         let initial = ClockModel.State(hour: time.0, minute: time.1, second: time.2)
         var machine = try ClockModel.makeMachine(initial)
-        let transition = try machine.send(.tick)
-        #expect(transition.before == initial)
-        #expect(transition.after == .init(hour: time.3, minute: time.4, second: time.5))
-        #expect(machine.state == transition.after)
+        let transitionBefore = machine.state
+        try machine.send(.tick)
+        #expect(transitionBefore == initial)
+        #expect(machine.state == .init(hour: time.3, minute: time.4, second: time.5))
         #expect(try machine.violatedInvariants(checking: [.validTime], atLevel: 1).isEmpty)
     }
 
@@ -156,7 +162,8 @@ struct GeneratedMachineDocumentationTests {
         var clock = try HourRangeFixture.makeMachine()
         #expect(try clock.violatedInvariants(checking: [.ValidHour], atLevel: 1) == [.ValidHour])
         for hour in 0...23 {
-            #expect(try clock.send(.tick).after.hour == hour)
+            try clock.send(.tick)
+            #expect(clock.state.hour == hour)
             #expect(try clock.violatedInvariants(checking: [.ValidHour], atLevel: 1).isEmpty)
         }
         guard case .counterexample(let witness) = try clock.check(
@@ -173,11 +180,13 @@ struct GeneratedMachineDocumentationTests {
     @Test("two tick sends cross midnight and advance one more second")
     func ticksAcrossMidnight() throws {
         var clock = try ClockModel.makeMachine(.init(hour: 23, minute: 59, second: 59))
-        let midnight = try clock.send(.tick)
-        #expect(midnight.after == .init(hour: 0, minute: 0, second: 0))
-        let next = try clock.send(.tick)
-        #expect(next.before == midnight.after)
-        #expect(next.after == .init(hour: 0, minute: 0, second: 1))
+        try clock.send(.tick)
+        let midnightAfter = clock.state
+        #expect(midnightAfter == .init(hour: 0, minute: 0, second: 0))
+        let nextBefore = clock.state
+        try clock.send(.tick)
+        #expect(nextBefore == midnightAfter)
+        #expect(clock.state == .init(hour: 0, minute: 0, second: 1))
     }
 
     @Test("guarded alternatives retain overlapping successors and skip later guards of a disabled alternative")
@@ -196,13 +205,14 @@ struct GeneratedMachineDocumentationTests {
     @Test("bounded machine preserves state when a disabled action is rejected")
     func disabledActionRetainsSnapshot() throws {
         var machine = try BoundedCounter.makeMachine()
-        let transition = try machine.send(.advance)
+        let transitionBefore = machine.state
+        try machine.send(.advance)
         let beforeFailure = machine.state
 
-        #expect(transition.before.value == 0)
+        #expect(transitionBefore.value == 0)
         let isEnabled = try machine.isEnabled(.advance)
         #expect(isEnabled == false)
-        #expect(transition.after.value == 1)
+        #expect(machine.state.value == 1)
         #expect(throws: GeneratedMachineError.self) {
             try machine.send(.advance)
         }
@@ -212,7 +222,7 @@ struct GeneratedMachineDocumentationTests {
     @Test("checking a completed counter explores from its current snapshot")
     func checksFromCurrentSnapshot() throws {
         var counter = try SequentialCounter.makeMachine()
-        _ = try counter.send(.advance)
+        try counter.send(.advance)
         let completed = counter.snapshot
         let result = try counter.check(properties: [], checkDeadlock: false, maximumStates: 1)
         guard case .exhausted(let graph) = result else {
@@ -244,8 +254,7 @@ struct GeneratedMachineDocumentationTests {
     func generatedActorExposesDocumentedBehavior() async throws {
         let actor = try CounterHost.Actor()
 
-        let transition = try await actor.send(.advance)
-        let state = await actor.state
-        #expect(state == transition.after)
+        try await actor.send(.advance)
+        #expect(await actor.state.value == 1)
     }
 }

@@ -12,7 +12,7 @@ readonly lock_wait_seconds="${SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS:-30}"
 usage() {
     cat >&2 <<'EOF'
 usage: scripts/local-validation.sh static
-       scripts/local-validation.sh port-build [1|4]
+       scripts/local-validation.sh port-build [1|4] [debug|release]
        scripts/local-validation.sh swiftpm-test <test-filter> [1|4]
        scripts/local-validation.sh xcode-test <test-identifier>
        scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]]
@@ -51,8 +51,9 @@ parallel_proof=false
 mode="${1:-}"
 case "$mode" in
     port-build)
-        [[ $# -le 2 && "${2-1}" =~ ^(1|4)$ ]] || usage
+        [[ $# -le 3 && "${2-1}" =~ ^(1|4)$ && "${3-debug}" =~ ^(debug|release)$ ]] || usage
         build_jobs="${2-1}"
+        build_configuration="${3-debug}"
         ;;
     static|proof-tools)
         [[ $# -eq 1 ]] || usage
@@ -470,7 +471,7 @@ PYTHON
             ;;
         port-build)
             (
-                options=(-Xswiftc -warnings-as-errors --disable-automatic-resolution -j "$build_jobs" --scratch-path "$build_dir")
+                options=(--configuration "$build_configuration" -Xswiftc -warnings-as-errors --disable-automatic-resolution -j "$build_jobs" --scratch-path "$build_dir")
                 swift build "${options[@]}" --product tlc-validate >&2 || exit $?
                 bin_dir="$(swift build "${options[@]}" --show-bin-path)" || exit $?
                 [[ -x "$bin_dir/tlc-validate" ]] || fail "built tlc-validate missing from $bin_dir"

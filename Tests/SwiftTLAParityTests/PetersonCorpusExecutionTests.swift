@@ -7,14 +7,14 @@ struct PetersonCorpusExecutionTests {
     func turnBreaksContention() throws {
         var machine = try PetersonModel.makeMachine()
         for process in PetersonModel.Process.allCases {
-            _ = try machine.send(.a0(process: process))
-            _ = try machine.send(.a1(process: process))
-            _ = try machine.send(.a2(process: process))
+            try machine.send(.a0(process: process))
+            try machine.send(.a1(process: process))
+            try machine.send(.a2(process: process))
         }
         #expect(machine.state.turn == .one)
         #expect(try machine.isEnabled(.a3(process: .one)))
         #expect(try !machine.isEnabled(.a3(process: .two)))
-        _ = try machine.send(.a3(process: .one))
+        try machine.send(.a3(process: .one))
         #expect(try machine.isEnabled(.cs(process: .one)))
     }
 

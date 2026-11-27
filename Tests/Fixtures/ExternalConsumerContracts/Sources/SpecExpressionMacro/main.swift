@@ -65,10 +65,10 @@ guard compilation.description.algorithms.map(\.name) == ["counterAlgorithm"],
     throw FixtureError.invalidTransition
 }
 var counter = try Counter.makeMachine()
-let transition = try counter.send(.advance)
-guard transition.after.value == 1,
-      transition.after.cars[.one]?.floor == 2,
-      transition.after.cars[.one]?.doorsOpen == false else {
+try counter.send(.advance)
+guard counter.state.value == 1,
+      counter.state.cars[.one]?.floor == 2,
+      counter.state.cars[.one]?.doorsOpen == false else {
     throw FixtureError.invalidTransition
 }
 

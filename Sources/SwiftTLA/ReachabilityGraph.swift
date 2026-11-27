@@ -454,7 +454,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             }
             let machine = currentLayer.removeLast()
             try Task.checkCancellation()
-            let successors = try machine.successors(checking: &context)
+            var successors = try machine.successors(checking: &context)
             // In decisive mode discovery already checked this snapshot at its expansion level.
             var failures: [SafetyViolation<Machine.Property>] = []
             if !stopOnViolation {
@@ -468,20 +468,22 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             try stop(machine.snapshot, failures: failures)
             let (successorLevel, overflow) = context.level.addingReportingOverflow(1)
             guard !overflow else { throw ExplorationError.levelOverflow }
-            let retained = try successors.filter { successor in
+            // Fairness observes all enabled actions, including successors excluded by a constraint.
+            let enabledSuccessors = fairnessFailure == nil && !scopes.isEmpty ? successors : []
+            try successors.removeAll { successor in
                 try checkDiscoveredState(successor.machine, atLevel: successorLevel, from: (machine.snapshot, successor.action))
                 guard try machine.satisfiesActionConstraint(to: successor.machine, checking: &context) else {
                     try recordBoundaryViolations(successor.machine, atLevel: successorLevel,
                         from: (machine.snapshot, successor.action))
-                    return false
+                    return true
                 }
                 guard try successor.machine.satisfiesStateConstraint() else {
                     try recordBoundaryViolations(successor.machine, atLevel: successorLevel, from: (machine.snapshot, successor.action))
-                    return false
+                    return true
                 }
-                return true
+                return false
             }
-            let edges = try retained.map { successor in
+            let edges = try successors.map { successor in
                 (action: successor.action,
                  target: try discover(successor.machine, from: (machine.snapshot, successor.action)))
             }
@@ -489,7 +491,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             if fairnessFailure == nil {
                 do {
                     for (scope, condition) in scopes.enumerated() {
-                        enabledness[scope, default: [:]][machine.snapshot] = try successors.contains {
+                        enabledness[scope, default: [:]][machine.snapshot] = try enabledSuccessors.contains {
                             try condition.matches($0.action) && (condition.changes?(machine.snapshot,
                                 $0.machine.snapshot) ?? (machine.snapshot != $0.machine.snapshot))
                         }

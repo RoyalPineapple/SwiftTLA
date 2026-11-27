@@ -81,7 +81,7 @@ private struct TwoBucketsView: View {
     private func perform(_ action: TwoBuckets.Action) {
         guard var machine else { return }
         do {
-            _ = try machine.send(action)
+            try machine.send(action)
             self.machine = machine
             error = nil
         }
@@ -209,9 +209,9 @@ private struct DuckDuckLeaderView: View {
         defer { isDelivering = false }
         do {
             var nextMachine = machine
-            let transition = try nextMachine.send(action)
+            try nextMachine.send(action)
             guard runID == simulationID else { return false }
-            let forwarded = transition.after.messages.first {
+            let forwarded = nextMachine.state.messages.first {
                 $0.candidate == candidate &&
                     $0.from == node
             }
@@ -319,7 +319,7 @@ private struct ElevatorBankView: View {
     private func operate(_ action: ElevatorBank.Action) {
         guard var machine else { return }
         do {
-            _ = try machine.send(action)
+            try machine.send(action)
             self.machine = machine
             error = nil
         }
@@ -510,7 +510,7 @@ private struct GeneratedSurfaceSummary: View {
             HStack(alignment: .top, spacing: 18) {
                 GeneratedSurfaceItem(
                     title: "Typed machine",
-                    detail: "Each generated machine exposes State, Action, and Transition."
+                    detail: "Each generated machine exposes typed state and actions."
                 )
                 GeneratedSurfaceItem(
                     title: "Native adapters",

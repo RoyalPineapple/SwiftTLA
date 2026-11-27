@@ -127,7 +127,7 @@ struct FormalUnionTests {
         #expect(try machine.isEnabled(.consume))
         #expect(try machine.isEnabled(.hasTokenFields))
         #expect(try !machine.isEnabled(.hasPayloadFields))
-        _ = try machine.send(.consume)
+        try machine.send(.consume)
         #expect(try !machine.isEnabled(.hasTokenFields))
         #expect(try machine.isEnabled(.hasPayloadFields))
         #expect(machine.state.message == .second(.init(type: "pl", src: .first(.init(type: "original", q: 2)))))

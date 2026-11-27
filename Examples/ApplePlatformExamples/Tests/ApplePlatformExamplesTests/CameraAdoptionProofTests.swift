@@ -10,14 +10,13 @@ final class CameraAdoptionProofTests: XCTestCase {
         XCTAssertEqual(state.phase, .starting)
     }
 
-    func testTypedActionReturnsTransitionAndReplacesGeneratedState() throws {
+    func testTypedActionReplacesGeneratedState() throws {
         var machine = try CameraWorkflow.makeMachine()
-        let transition: CameraWorkflow.Transition = try machine.send(.ready)
+        let transitionBefore = machine.state
+        try machine.send(.ready)
 
-        XCTAssertEqual(transition.action, .ready)
-        XCTAssertEqual(transition.before.phase, .starting)
-        XCTAssertEqual(transition.after.phase, .live)
-        XCTAssertEqual(machine.state, transition.after)
+        XCTAssertEqual(transitionBefore.phase, .starting)
+        XCTAssertEqual(machine.state.phase, .live)
     }
 
     func testRejectedTypedActionPreservesGeneratedState() throws {
@@ -37,18 +36,15 @@ final class CameraAdoptionProofTests: XCTestCase {
 
     func testGeneratedActorSerializesConcurrentDuplicateRecords() async throws {
         let actor = try CameraWorkflow.Actor()
-        _ = try await actor.send(.ready)
+        try await actor.send(.ready)
 
         async let first = submitRecord(to: actor)
         async let second = submitRecord(to: actor)
         let submissions = await [first, second]
-        let transitions = submissions.compactMap(\.transition)
+        let accepted = submissions.filter(\.isAccepted)
         let rejections = submissions.filter(\.isNoMatchingSuccessor)
 
-        XCTAssertEqual(transitions.count, 1)
-        XCTAssertEqual(transitions.first?.action, .record)
-        XCTAssertEqual(transitions.first?.before.phase, .live)
-        XCTAssertEqual(transitions.first?.after.phase, .recording)
+        XCTAssertEqual(accepted.count, 1)
         XCTAssertEqual(rejections.count, 1)
         let finalState = await actor.state
         XCTAssertEqual(finalState.phase, .recording)
@@ -61,30 +57,28 @@ final class CameraAdoptionProofTests: XCTestCase {
             .recordingCancelled
         ] {
             var machine = try CameraWorkflow.makeMachine()
-            _ = try machine.send(.ready)
-            _ = try machine.send(.record)
+            try machine.send(.ready)
+            try machine.send(.record)
             if outcome == .recordingSucceeded {
-                _ = try machine.send(.stopRecording)
+                try machine.send(.stopRecording)
             }
 
-            let transition = try machine.send(outcome)
+            try machine.send(outcome)
 
-            XCTAssertEqual(transition.action, outcome)
-            XCTAssertEqual(transition.after.phase, .live)
-            XCTAssertEqual(machine.state, transition.after)
+            XCTAssertEqual(machine.state.phase, .live)
         }
     }
 
     func testGeneratedApplicationValuesAreSendable() throws {
         requireSendable(CameraWorkflow.State.self)
         requireSendable(CameraWorkflow.Action.self)
-        requireSendable(CameraWorkflow.Transition.self)
         requireSendable(CameraWorkflow.Actor.self)
     }
 
     private func submitRecord(to actor: CameraWorkflow.Actor) async -> ActorSubmission {
         do {
-            return .accepted(try await actor.send(.record))
+            try await actor.send(.record)
+            return .accepted
         } catch let error as GeneratedMachineError {
             return .rejected(error)
         } catch {
@@ -95,13 +89,13 @@ final class CameraAdoptionProofTests: XCTestCase {
     private func requireSendable<Value: Sendable>(_: Value.Type) {}
 
     private enum ActorSubmission: Sendable {
-        case accepted(CameraWorkflow.Transition)
+        case accepted
         case rejected(GeneratedMachineError)
         case failed(String)
 
-        var transition: CameraWorkflow.Transition? {
-            guard case .accepted(let transition) = self else { return nil }
-            return transition
+        var isAccepted: Bool {
+            if case .accepted = self { return true }
+            return false
         }
 
         var isNoMatchingSuccessor: Bool {

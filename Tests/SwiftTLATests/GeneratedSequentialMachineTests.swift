@@ -11,7 +11,7 @@ struct GeneratedSequentialMachineTests {
     func generatedSequentialAlgorithmAdvancesTypedState() throws {
 
         var machine = try GeneratedSequentialCounter.makeMachine()
-        let transition = try machine.send(.increment)
-        #expect(transition.after.count == 1)
+        try machine.send(.increment)
+        #expect(machine.state.count == 1)
     }
 }

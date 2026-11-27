@@ -10,7 +10,8 @@ struct ArrayValueTests {
     func searchesInOrder() throws {
         for (input, expected) in [([], false), ([2, 2], false), ([2, 1, 0], true)] {
             var machine = try ArrayPredicateSearchMachine.makeMachine(configuration: .init(input: input))
-            #expect(try machine.send(.search).after.found == expected)
+            try machine.send(.search)
+            #expect(machine.state.found == expected)
             let predicate = input.expr.contains { divisor in 1 % divisor == 0 }
             #expect(try compiledValue(predicate.stateExpr) == .bool(expected))
         }
@@ -86,13 +87,13 @@ struct ArrayValueTests {
             let choices: [ArrayValueMachine.Choice] = machine.state.choices
             #expect(choices == [.one, .two, .one])
             let expected = scenario.configuration.input + [3]
-            _ = try machine.send(.adopt)
+            try machine.send(.adopt)
             #expect(machine.state.row == expected)
             #expect(try machine.formalProjection(of: machine.snapshot).value(for: row)
                 == .tuple(expected.map(TLAValue.int)))
-            _ = try machine.send(.remove)
+            try machine.send(.remove)
             #expect(machine.state.row == Array(expected.dropFirst()))
-            _ = try machine.send(.select)
+            try machine.send(.select)
             #expect(machine.state.row == expected.dropFirst().filter { $0 != 2 })
             let graph = try scenario.explore(maximumStates: 20)
             #expect(graph.safetyViolations.isEmpty)
@@ -106,8 +107,10 @@ struct ArrayValueTests {
         var machine = try ArrayAppendReadMachine.makeMachine()
         #expect(machine.state.sequence.isEmpty)
         #expect(machine.state.result == 0)
-        #expect(try machine.send(.push).after.sequence == [42])
-        #expect(try machine.send(.pop).after.result == 42)
+        try machine.send(.push)
+        #expect(machine.state.sequence == [42])
+        try machine.send(.pop)
+        #expect(machine.state.result == 42)
 
         let graph = try ReachabilityGraph(
             initialMachines: ArrayAppendReadMachine.initialMachines(), maximumStates: 10)

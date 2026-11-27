@@ -11,7 +11,7 @@ import Testing
         var machine = try UpstreamDeclarationNames.makeMachine(configuration: configuration)
         #expect(machine.configuration.writers == [1, 2])
         #expect(machine.state.published == -1)
-        _ = try machine.send(.publish)
+        try machine.send(.publish)
         #expect(machine.state.published == 0)
         #expect(machine.state.nextSequence == 1)
         let projection = try machine.formalProjection(of: machine.snapshot)

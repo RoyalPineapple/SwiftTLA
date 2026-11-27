@@ -7,8 +7,8 @@ struct ActionConstraintCheckingTests {
     func filtersExplorationWithoutChangingExecution() throws {
         var application = try ActionConstrainedCounter.makeMachine()
         #expect(application.state.count == 0)
-        _ = try application.send(.advance)
-        _ = try application.send(.advance)
+        try application.send(.advance)
+        try application.send(.advance)
         #expect(application.state.count == 2)
 
         let initial = try ActionConstrainedCounter.makeMachine()
@@ -61,7 +61,7 @@ struct ActionConstraintCheckingTests {
         #expect(context.registers.inspections == 2)
 
         var application = initial
-        _ = try application.send(.advance)
+        try application.send(.advance)
         #expect(application.state.count == 1)
         let bundle = try ActionConstrainedRegisterCounter.spec.compile().render().plusCalBundle()
         #expect(bundle.root.tla.contains("TLCSet"))
@@ -103,6 +103,16 @@ struct ActionConstraintCheckingTests {
         }
         if case .evaluationFailure(source: 0, action: .pick, reason: .divisionByZero) = events[3] {} else {
             Issue.record("The later branch must still report its evaluation failure")
+        }
+    }
+
+    @Test("A later branch evaluation failure precedes the state limit on an earlier successor")
+    func finishesEnumerationBeforeDiscoveringSuccessors() throws {
+        let initial = try ActionConstrainedMixedOutcomeModel.makeMachine()
+        let failure = MachineActionEvaluationFailure<ActionConstrainedMixedOutcomeModel.Action>(
+            action: .pick, reason: .divisionByZero)
+        #expect(throws: failure) {
+            try ReachabilityGraph(initialMachines: [initial], maximumStates: 1)
         }
     }
 

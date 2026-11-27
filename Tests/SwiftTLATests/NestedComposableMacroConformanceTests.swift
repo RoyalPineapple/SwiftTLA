@@ -43,9 +43,9 @@ struct NestedComposableMacroConformanceTests {
         let actor = try NestedComposedCounter.Actor()
 
         let machineBefore = machine.state
-        _ = try machine.send(.advance)
+        try machine.send(.advance)
         let machineAfter = machine.state
-        _ = try await actor.send(.advance)
+        try await actor.send(.advance)
         #expect(machineBefore.count == 0)
         #expect(machineAfter.count == 1)
         #expect(try machine.enabledActions() == [.advance])
@@ -64,10 +64,9 @@ struct NestedComposableMacroConformanceTests {
         #expect(available.contains(first))
         #expect(available.contains(selected))
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let transition = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
-        #expect(transition.after.value == 222)
-        let acted = try await actor.send(.transfer(source: 2, destination: 20, amount: 200))
-        #expect(acted.action == .transfer(source: 2, destination: 20, amount: 200))
+        try machine.send(.transfer(source: 2, destination: 20, amount: 200))
+        #expect(machine.state.value == 222)
+        try await actor.send(.transfer(source: 2, destination: 20, amount: 200))
     }
 
     @Test("Generated application surfaces are structurally Sendable without unchecked conformance")
@@ -76,7 +75,6 @@ struct NestedComposableMacroConformanceTests {
         requireSendable(NestedComposedCounter.self)
         requireSendable(NestedComposedCounter.Actor.self)
         requireSendable(NestedComposedCounter.Action.self)
-        requireSendable(NestedComposedCounter.Transition.self)
         requireSendable(ConfiguredLocalFamilyModel.self)
 
         for ownedDirectory in ["Sources", "Tests"] {

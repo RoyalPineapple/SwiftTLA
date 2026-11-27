@@ -151,7 +151,7 @@ struct LexicalBindingTests {
     @Test("successive saved values keep distinct identities and types after an assignment")
     func preservesSavedValues() throws {
         var machine = try SavedValuesMachine.makeMachine()
-        _ = try machine.send(.save)
+        try machine.send(.save)
         #expect(machine.state.value == 9)
         #expect(machine.state.result == 123)
         #expect(machine.state.valid)

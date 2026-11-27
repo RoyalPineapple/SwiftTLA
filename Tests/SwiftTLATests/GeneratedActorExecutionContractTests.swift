@@ -15,13 +15,9 @@ struct GeneratedActorExecutionContractTests {
         #expect(await actor.state == machine.state)
 
         for action in schedule {
-            let expected = try machine.send(action)
-            let actual = try await actor.send(action)
-
-            #expect(actual.action == expected.action)
-            #expect(actual.before == expected.before)
-            #expect(actual.after == expected.after)
-            #expect(await actor.state == expected.after)
+            try machine.send(action)
+            try await actor.send(action)
+            #expect(await actor.state == machine.state)
         }
     }
 
@@ -44,45 +40,26 @@ struct GeneratedActorExecutionContractTests {
 
         async let first = submit(actor, action: action)
         async let second = submit(actor, action: action)
-        let submissions = await [first, second]
+        let submissions = try await [first, second]
 
         var machine = try ParameterizedActorModel.makeMachine()
-        let expected = try machine.send(action)
-        let committedTransitions = submissions.compactMap(\.transition)
-        let rejected = submissions.filter(\.isUnexpected)
-
-        #expect(committedTransitions.count == 1)
-        #expect(rejected.count == 1)
-        #expect(committedTransitions[0].action == expected.action)
-        #expect(committedTransitions[0].before == expected.before)
-        #expect(committedTransitions[0].after == expected.after)
-        #expect(await actor.state == expected.after)
+        try machine.send(action)
+        #expect(submissions.filter { $0 == .applied }.count == 1)
+        #expect(submissions.filter { $0 == .disabled }.count == 1)
+        #expect(await actor.state == machine.state)
     }
 
     private func submit(
         _ actor: ParameterizedActorModel.Actor,
         action: ParameterizedActorModel.Action
-    ) async -> Submission {
+    ) async throws -> Submission {
         do {
-            let transition = try await actor.send(action)
-            return .applied(transition)
-        } catch {
-            return .unexpected
+            try await actor.send(action)
+            return .applied
+        } catch GeneratedMachineError.noMatchingSuccessor {
+            return .disabled
         }
     }
 
-    private enum Submission: Sendable {
-        case applied(ParameterizedActorModel.Transition)
-        case unexpected
-
-        var transition: ParameterizedActorModel.Transition? {
-            guard case .applied(let transition) = self else { return nil }
-            return transition
-        }
-
-        var isUnexpected: Bool {
-            if case .unexpected = self { return true }
-            return false
-        }
-    }
+    private enum Submission: Sendable { case applied, disabled }
 }

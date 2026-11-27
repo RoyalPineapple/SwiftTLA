@@ -18,7 +18,8 @@ import SwiftTLA
         #expect(choices.allSatisfy { $0.action == .choose })
         #expect(graph.transitions.count == 4)
         var application = initial
-        #expect(try application.send(.enter).after == entered.state)
+        try application.send(.enter)
+        #expect(application.state == entered.state)
         #expect(application.snapshot == entered.snapshot)
         #expect(throws: GeneratedMachineError.ambiguousAction) { try application.send(.choose) }
         #expect(application.snapshot == entered.snapshot)
@@ -41,9 +42,10 @@ import SwiftTLA
                     #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try dispatched.send(action) }
                     #expect(dispatched.snapshot == machine.snapshot)
                 case 1:
-                    let transition = try dispatched.send(action)
-                    #expect(transition.before == machine.state)
-                    #expect(transition.after == successors[0].state)
+                    let transitionBefore = dispatched.state
+                    try dispatched.send(action)
+                    #expect(transitionBefore == machine.state)
+                    #expect(dispatched.state == successors[0].state)
                     #expect(dispatched.snapshot == successors[0].snapshot)
                 default:
                     #expect(throws: GeneratedMachineError.ambiguousAction) { try dispatched.send(action) }
@@ -91,7 +93,7 @@ import SwiftTLA
         #expect(start.snapshot == before)
 
         var entered = start
-        _ = try entered.send(.enter)
+        try entered.send(.enter)
         #expect(entered.state == start.state)
         #expect(throws: ExplorationError.replayMismatch(step: 0)) { try entered.replay(witness) }
 

@@ -29,14 +29,14 @@ struct DiningPhilosophersCorpusStateGraphTests {
         for (source, edges) in graph.transitions {
             var machine = initial
             for step in try graph.trace(to: source).dropFirst() {
-                _ = try machine.send(#require(step.action))
+                try machine.send(#require(step.action))
                 #expect(machine.snapshot == step.state)
             }
             #expect(machine.snapshot == source)
             #expect(try Set(machine.enabledActions()) == Set(edges.map(\.action)))
             for edge in edges {
                 var successor = machine
-                _ = try successor.send(edge.action)
+                try successor.send(edge.action)
                 #expect(successor.snapshot == edge.target)
             }
         }

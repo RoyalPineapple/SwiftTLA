@@ -55,9 +55,11 @@ struct IntegerRangeDomainEqualityTests {
                 let configuration = try IntegerRangeDomainEqualityModel.Configuration(
                     members: members, lower: lower, upper: upper)
                 var machine = try IntegerRangeDomainEqualityModel.makeMachine(configuration: configuration)
-                #expect(try machine.send(.check).after.result == expected)
+                try machine.send(.check)
+                #expect(machine.state.result == expected)
                 machine = try IntegerRangeDomainEqualityModel.makeMachine(configuration: configuration)
-                #expect(try machine.send(.reversed).after.result == expected)
+                try machine.send(.reversed)
+                #expect(machine.state.result == expected)
                 let compiled = try evaluator(program: program, members: members, lower: lower, upper: upper)
                 for query in queries {
                     #expect(try compiled.evaluate(query) == .boolean(expected))
@@ -164,7 +166,8 @@ struct IntegerRangeDomainEqualityTests {
             members: [], lower: 1, upper: 2))
         let before = machine.snapshot
         do {
-            #expect(try !machine.send(.large).after.result)
+            try machine.send(.large)
+            #expect(!machine.state.result)
             #expect(machine.state.values.isEmpty)
         } catch {
             Issue.record("Native wide equality reported enumeration capability instead of false: \(error)")

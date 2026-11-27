@@ -3,17 +3,15 @@ import Testing
 import SwiftTLA
 
 struct CollectionCheckingTests {
-    @Test("Commit preserves the first failure and rolls back an earlier collection write")
-    func commitFailureOrder() throws {
+    @Test("Send preserves the first failure and rolls back an earlier collection write")
+    func sendFailureOrder() throws {
         for divisor in 0...1 {
             var machine = try OrderedCollectionCommitFailure.makeMachine(configuration: .init(start: divisor))
             let prior = machine.snapshot
-            var sending = machine
             let reason: NativeMachineEvaluationError = divisor == 0
                 ? .divisionByZero : .integerOverflow(.addition, operands: [Int.max, 1])
-            #expect(throws: reason) { try machine.commit(.advance) }
-            #expect(throws: reason) { try sending.send(.advance) }
-            #expect(machine.snapshot == prior && sending.snapshot == prior)
+            #expect(throws: reason) { try machine.send(.advance) }
+            #expect(machine.snapshot == prior)
         }
     }
 
@@ -54,12 +52,12 @@ struct CollectionCheckingTests {
         }
         var committed = try ArrayStepMachine.makeMachine()
         let before = committed.snapshot
-        try committed.commit(.append)
+        try committed.send(.append)
         let first = committed.snapshot
-        try committed.commit(.append)
+        try committed.send(.append)
         let full = committed.snapshot
         #expect(before.state.values == [] && first.state.values == [1] && full.state.values == [1, 1])
-        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try committed.commit(.append) }
+        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try committed.send(.append) }
         #expect(committed.snapshot == full)
         let tla = try ArrayStepMachine.render().tlaBundle.tla
         let proofInput = URL(fileURLWithPath: #filePath)

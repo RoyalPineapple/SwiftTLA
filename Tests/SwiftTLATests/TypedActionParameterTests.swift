@@ -184,7 +184,7 @@ struct TypedActionParameterTests {
         #expect(try machine.actionCandidates() == [.select(member: 1), .select(member: 2)])
         for member in [1, 2] {
             var selected = machine
-            _ = try selected.send(.select(member: member))
+            try selected.send(.select(member: member))
             #expect(selected.state.value == member && selected.state.copied == member)
             #expect(try machine.formalCall(for: .select(member: member)) ==
                 FormalActionCall(name: "select", arguments: [.int(member)]))
@@ -277,7 +277,7 @@ struct TypedActionParameterTests {
         let result = try #require(TLAStateProjection.Token(validating: "result"))
         for selection in [1, 2] {
             var next = machine
-            _ = try next.send(.choose(selection: selection))
+            try next.send(.choose(selection: selection))
             #expect(next.state.result == selection + 1)
             #expect(try machine.formalCall(for: .choose(selection: selection)) ==
                 FormalActionCall(name: "choose", arguments: [.int(selection)]))
@@ -347,7 +347,7 @@ extension TypedActionParameterTests {
         for key in CollectionParameterUpdates.Key.allCases {
             for value in [1, 2] {
                 var next = machine
-                _ = try next.send(.replace(key: key, value: value))
+                try next.send(.replace(key: key, value: value))
                 #expect(next.state.table[key] == value)
                 #expect(next.state.partial == [key: value])
                 #expect(next.state.sequence == [0: value, 1: 0])

@@ -26,7 +26,7 @@ struct GuardedStepExecutionTests {
                 #expect(machine.snapshot == initial.snapshot)
                 continue
             }
-            _ = try machine.send(enter)
+            try machine.send(enter)
             #expect(machine.state.value == 1)
             let prepare = GuardedProcesses.Action.procedure_choose_prepare(process: node)
             let body = GuardedProcesses.Action.procedure_choose_body(process: node)
@@ -34,14 +34,14 @@ struct GuardedStepExecutionTests {
                 #expect(try !machine.isEnabled(.procedure_choose_prepare(process: other)))
             }
             #expect(try machine.violatedInvariants(atLevel: 2).isEmpty)
-            let first = try machine.send(prepare)
-            #expect(first.after.value == (bodyReady == 1 ? 3 : 1))
+            try machine.send(prepare)
+            #expect(machine.state.value == (bodyReady == 1 ? 3 : 1))
             if bodyReady == 1 {
                 #expect(try machine.isEnabled(prepare))
                 #expect(try !machine.isEnabled(body))
                 #expect(try machine.violatedInvariants(atLevel: 3).isEmpty)
-                let exit = try machine.send(prepare)
-                #expect(exit.after.value == 3)
+                try machine.send(prepare)
+                #expect(machine.state.value == 3)
             }
             #expect(try !machine.isEnabled(prepare))
             let before = machine.snapshot
@@ -174,7 +174,7 @@ struct GuardedStepExecutionTests {
             #expect(try !successor.isEnabled(.choose))
             #expect(try successor.isEnabled(.finish))
             let state = successor.state
-            _ = try successor.send(.finish)
+            try successor.send(.finish)
             #expect(successor.state == state)
             #expect(try successor.isEnabled(.Terminating))
         }
@@ -183,8 +183,9 @@ struct GuardedStepExecutionTests {
     @Test("An overflowing step guard reports failure without a successor")
     func guardOverflowMatchesGeneratedFailure() throws {
         var successful = try CheckedGuardOverflow.makeMachine(.init(count: 1))
-        let transition = try successful.send(.advance)
-        #expect(transition.before.count == 1 && transition.after.count == 0)
+        let transitionBefore = successful.state
+        try successful.send(.advance)
+        #expect(transitionBefore.count == 1 && successful.state.count == 0)
 
         let failing = try CheckedGuardOverflow.makeMachine(.init(count: Int.max))
         let before = failing.snapshot

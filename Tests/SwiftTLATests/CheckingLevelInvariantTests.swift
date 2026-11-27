@@ -6,8 +6,8 @@ struct CheckingLevelInvariantTests {
     func rechecksAnInitialSnapshotReachedAtALaterLevel() throws {
         let initial = try CheckingLevelInvariantModel.makeMachine()
         var otherInitial = initial
-        _ = try otherInitial.send(.advance)
-        _ = try otherInitial.send(.advance)
+        try otherInitial.send(.advance)
+        try otherInitial.send(.advance)
 
         let result = try ReachabilityGraph.check(initialMachines: [initial, otherInitial], maximumStates: 3,
             checking: .init(properties: [.BeforeThirdState], checkDeadlock: false))

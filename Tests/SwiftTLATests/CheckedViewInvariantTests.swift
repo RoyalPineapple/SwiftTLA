@@ -8,11 +8,11 @@ struct CheckedViewInvariantTests {
     func firstFailure() throws {
         var machine = try CheckedViewInvariantMachine.makeMachine()
         #expect(try machine.violatedInvariants(atLevel: 0).isEmpty)
-        _ = try machine.send(.zero)
+        try machine.send(.zero)
         #expect(throws: NativeMachineEvaluationError.divisionByZero) {
             try machine.violatedInvariants(checking: [.EarlierFailure], atLevel: 1)
         }
-        _ = try machine.send(.replace)
+        try machine.send(.replace)
         #expect(try machine.violatedInvariants(checking: [.ShortCircuit], atLevel: 2).isEmpty)
         #expect(throws: NativeMachineEvaluationError.noMatchingCase) {
             try machine.violatedInvariants(checking: [.WithinLimit], atLevel: 2)

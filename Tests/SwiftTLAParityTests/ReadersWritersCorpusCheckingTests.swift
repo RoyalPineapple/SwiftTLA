@@ -7,7 +7,7 @@ struct ReadersWritersCorpusCheckingTests {
     func typedRequest() throws {
         let scenario = try #require(try ReadersWritersModel.validationScenarios().first)
         var machine = try #require(try scenario.initialMachines().first)
-        _ = try machine.send(.TryRead(actor: 1))
+        try machine.send(.TryRead(actor: 1))
         let request: ReadersWritersModel.Request = try #require(machine.state.requestQueue.first)
         #expect(request.actor == 1 && request.kind == "read")
         #expect(request.tlaValue == .tuple([.string("read"), .int(1)]))

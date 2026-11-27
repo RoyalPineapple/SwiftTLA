@@ -356,10 +356,10 @@ private struct FoldGeneratedModel {
     @Test("Native collection access uses contextual enum keys and values")
     func contextualCollectionAccessExecutesNatively() throws {
         var machine = try ContextualCollectionModel.makeMachine()
-        _ = try machine.send(.update)
+        try machine.send(.update)
         #expect(machine.state.table[.first] == .second)
         #expect(machine.state.table[.second] == .first)
-        _ = try machine.send(.read)
+        try machine.send(.read)
         #expect(machine.state.selected == .second)
     }
 
@@ -541,10 +541,11 @@ private struct FoldGeneratedModel {
     func generatedMachineUsesTypedCollectionOperators() throws {
 
         var machine = try TypedCollectionGeneratedModel.makeMachine()
-        let transition = try machine.send(.keepEvenSquares)
+        let transitionBefore = machine.state
+        try machine.send(.keepEvenSquares)
 
-        #expect(transition.before.values == [1, 2, 3, 4])
-        #expect(transition.after.values == [4, 16])
+        #expect(transitionBefore.values == [1, 2, 3, 4])
+        #expect(machine.state.values == [4, 16])
         #expect(throws: NativeMachineEvaluationError.divisionByZero) { try machine.send(.emptyMembership) }
         #expect(try TypedCollectionGeneratedModel.spec.compile().render().tlaBundle.tla.contains("keepEvenSquares"))
     }
@@ -638,10 +639,10 @@ private struct FoldGeneratedModel {
     @Test("generated machines preserve formal fold behavior")
     func generatedMachineUsesFormalFold() throws {
         var machine = try FoldGeneratedModel.makeMachine()
-        let transition = try machine.send(.sum)
+        try machine.send(.sum)
         let compilation = try FoldGeneratedModel.spec.compile()
 
-        #expect(transition.after.total == 6)
+        #expect(machine.state.total == 6)
         #expect(try compilation.render().tlaBundle.tla.contains("FoldFunction(LAMBDA"))
         #expect(try compilation.render().plusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
         #expect(try compilation.render().tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
@@ -653,8 +654,9 @@ private struct FoldGeneratedModel {
         let bundle = try FoldGeneratedModel.spec.compile().render().tlaBundle
         #expect(bundle.tla.contains("SumFunctionOnSet("))
         #expect(bundle.imports.map(\.name) == ["Folds", "Functions"])
-        _ = try machine.send(.sum)
-        #expect(try machine.send(.sumFunction).after.functionTotal == 3)
+        try machine.send(.sum)
+        try machine.send(.sumFunction)
+        #expect(machine.state.functionTotal == 3)
     }
 
     @Test("the bundled KeyValueStore Util module preserves its upstream imports")
@@ -724,9 +726,9 @@ private struct FoldGeneratedModel {
         var machine = try ZeroBasedSequenceGeneratedModel.makeMachine(
             .init(input: input, table: table)
         )
-        let transition = try machine.send(.writeFirst)
-        let tableValue = try #require(transition.after.table[0])
-        let inputValue = try #require(transition.after.input[0])
+        try machine.send(.writeFirst)
+        let tableValue = try #require(machine.state.table[0])
+        let inputValue = try #require(machine.state.input[0])
         #expect(tableValue == inputValue)
         #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().render().tlaBundle.tla.contains("0.."))
     }
@@ -771,12 +773,18 @@ private struct FoldGeneratedModel {
         #expect(nativeCount == 2)
 
         var machine = try TypedQuantifierGeneratedModel.makeMachine()
-        #expect(try machine.send(.findEven).after.result)
-        #expect(try machine.send(.allPositive).after.result)
-        #expect(try machine.send(.emptyAll).after.result)
-        #expect(try !machine.send(.emptyAny).after.result)
-        #expect(try machine.send(.updateMembers).after.result)
-        #expect(try !machine.send(.falseBeforeError).after.result)
+        try machine.send(.findEven)
+        #expect(machine.state.result)
+        try machine.send(.allPositive)
+        #expect(machine.state.result)
+        try machine.send(.emptyAll)
+        #expect(machine.state.result)
+        try machine.send(.emptyAny)
+        #expect(!machine.state.result)
+        try machine.send(.updateMembers)
+        #expect(machine.state.result)
+        try machine.send(.falseBeforeError)
+        #expect(!machine.state.result)
         let beforeFailure = machine.state
         #expect(throws: NativeMachineEvaluationError.divisionByZero) { try machine.send(.firstError) }
         #expect(machine.state == beforeFailure)

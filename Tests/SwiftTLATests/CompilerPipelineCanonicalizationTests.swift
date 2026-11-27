@@ -1170,12 +1170,13 @@ struct CompilerPipelineCanonicalizationTests {
         let rendered = try compilation.render().tlaBundle.tla
         let repeatedRendered = try repeated.render().tlaBundle.tla
         var machine = try CompilerPipelineAlgorithmModel.makeMachine()
-        let transition = try machine.send(.increment)
+        let transitionBefore = machine.state
+        try machine.send(.increment)
 
         #expect(repeated.identity == compilation.identity)
         #expect(rendered == repeatedRendered)
-        #expect(transition.before.count == 0)
-        #expect(transition.after.count == 1)
+        #expect(transitionBefore.count == 0)
+        #expect(machine.state.count == 1)
     }
 
     @Test("duplicate declarations fail with an actionable typed diagnostic")

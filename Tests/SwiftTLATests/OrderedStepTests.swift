@@ -232,7 +232,7 @@ import SwiftSyntax
             #expect(diagnostic.path == "native.action.candidateSource")
         }
         let sendIndex = try #require(members.firstIndex {
-            $0.as(FunctionDeclSyntax.self)?.name.text == "send"
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_applySelected"
         })
         let wrongSend = members[sendIndex].description.replacingOccurrences(
             of: "_execution = next", with: "_execution = _execution")
@@ -243,7 +243,7 @@ import SwiftSyntax
         do {
             try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
                 candidates: candidatePlans, configurationArguments: "")
-            Issue.record("Generated send returned a transition without applying its successor")
+            Issue.record("Generated send succeeded without applying its successor")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.send")
         }
@@ -289,16 +289,19 @@ import SwiftSyntax
     func orderedReadsAndRepeatedWrites() throws {
         var machine = try OrderedCopyModel.makeMachine()
         let initial = machine.snapshot
-        let transition = try machine.send(.copy)
-        #expect(transition.before.x == 1)
-        #expect(transition.before.y == 0)
-        #expect(transition.after.x == 2)
-        #expect(transition.after.y == 2)
+        let transitionBefore = machine.state
+        try machine.send(.copy)
+        let transitionAfter = machine.state
+        #expect(transitionBefore.x == 1)
+        #expect(transitionBefore.y == 0)
+        #expect(transitionAfter.x == 2)
+        #expect(transitionAfter.y == 2)
         let afterCopy = machine.snapshot
-        let repeated = try machine.send(.repeatWrites)
-        #expect(repeated.before == transition.after)
-        #expect(repeated.after.x == 4)
-        #expect(repeated.after.y == 2)
+        let repeatedBefore = machine.state
+        try machine.send(.repeatWrites)
+        #expect(repeatedBefore == transitionAfter)
+        #expect(machine.state.x == 4)
+        #expect(machine.state.y == 2)
         let afterRepeat = machine.snapshot
         let initialMachines = try OrderedCopyModel.initialMachines()
         #expect(initialMachines.count == 1)
@@ -614,9 +617,9 @@ import SwiftSyntax
     @Test("Ordinary let captures at its declaration and preserves shadowed values")
     func savedValuesAreStable() throws {
         var machine = try SavedStepValueModel.makeMachine()
-        let result = try machine.send(.advance)
-        #expect(result.after.count == 4)
-        #expect(result.after.copied == 3)
+        try machine.send(.advance)
+        #expect(machine.state.count == 4)
+        #expect(machine.state.copied == 3)
         let graph = try ReachabilityGraph(
             initialMachines: SavedStepValueModel.initialMachines(), maximumStates: 4)
         #expect(graph.safetyViolations.isEmpty)

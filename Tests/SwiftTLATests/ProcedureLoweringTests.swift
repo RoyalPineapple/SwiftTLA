@@ -184,9 +184,9 @@ struct ProcedureLoweringTests {
         var machine = try ScopedControlProjectionMachine.makeMachine()
         let pc = try #require(TLAStateProjection.Token(validating: "pc"))
 
-        _ = try machine.send(.start)
+        try machine.send(.start)
         let outer = try #require(machine.formalProjection(of: machine.snapshot).value(for: pc))
-        _ = try machine.send(.procedure_outer_enter)
+        try machine.send(.procedure_outer_enter)
         let inner = try #require(machine.formalProjection(of: machine.snapshot).value(for: pc))
 
         #expect(outer == .string(try formalName(ofProcedure: "outer")))

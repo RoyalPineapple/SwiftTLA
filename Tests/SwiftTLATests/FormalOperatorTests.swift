@@ -69,8 +69,8 @@ struct FormalOperatorTests {
   func generatedHigherOrderFormalDefinitionPreservesParserFidelity() throws {
 
     var machine = try GeneratedHigherOrderFormalModel.makeMachine()
-    let transition = try machine.send(.advance)
-    #expect(transition.after.counter == 1)
+    try machine.send(.advance)
+    #expect(machine.state.counter == 1)
   }
 
   @Test("a formal lambda is applied by the evaluator, not by Swift")

@@ -90,7 +90,7 @@ struct GeneratedMachineDocumentationTests {
             encoding: .utf8
         )
 
-        for term in ["Transition", "Action", "State", "send(_:)", "isEnabled(_:)"] {
+        for term in ["Action", "State", "send(_:)", "isEnabled(_:)"] {
             #expect(guide.contains(term), "Markdown guide is missing typed term: \(term)")
             #expect(docc.contains(term), "SwiftTLA DocC is missing typed term: \(term)")
         }
@@ -139,7 +139,6 @@ struct GeneratedMachineDocumentationTests {
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
             ("`GeneratedMachineError`", "Sources/SwiftTLA/GeneratedMachineError.swift", "public enum GeneratedMachineError"),
             ("Generated `Action`", "Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift", "public enum Action"),
-            ("Generated `Transition`", "Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift", "public struct Transition"),
             ("Generated `Actor`", "Sources/SwiftTLAPlugin/NativeSwiftEmitter+Actor.swift", "public actor Actor"),
         ]
     }

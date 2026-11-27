@@ -46,9 +46,10 @@ struct QueensCorpusStateGraphTests {
                 #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try sent.send(.PlaceQueen) }
                 #expect(sent.snapshot == machine.snapshot)
             } else if successors.count == 1 {
-                let transition = try sent.send(.PlaceQueen)
-                #expect(transition.before == machine.state)
-                #expect(transition.after == successors[0].state)
+                let transitionBefore = sent.state
+                try sent.send(.PlaceQueen)
+                #expect(transitionBefore == machine.state)
+                #expect(sent.state == successors[0].state)
                 #expect(sent.snapshot == successors[0].snapshot)
             } else {
                 #expect(throws: GeneratedMachineError.ambiguousAction) { try sent.send(.PlaceQueen) }

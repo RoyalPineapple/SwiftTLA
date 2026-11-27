@@ -68,7 +68,7 @@ public enum GeneratedDemoTestSuite {
             }),
             check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Typed delivery", action: { () throws -> Void in
                 var machine = try ChangRoberts.makeMachine()
-                _ = try machine.send(.deliver(process: .six))
+                try machine.send(.deliver(process: .six))
                 guard machine.state.messages.contains(where: {
                     $0.candidate == 12 &&
                     $0.from == .six &&

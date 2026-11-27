@@ -17,14 +17,14 @@ struct GeneratedStateMachineTests {
     @Test("@TLAModel generates a parameterized action")
     func modelParameterizedAction() throws {
         var machine = try SingleParameterActionMachine.makeMachine()
-        _ = try machine.send(.select(choice: 1))
+        try machine.send(.select(choice: 1))
         #expect(machine.state.value == 1)
     }
 
     @Test("Generated actions retain every declared parameter")
     func generatedActionsRetainEveryDeclaredParameter() throws {
         var enabled = try ThreeParameterActionMachine.makeMachine()
-        _ = try enabled.send(.transfer(source: 2, destination: 20, amount: 200))
+        try enabled.send(.transfer(source: 2, destination: 20, amount: 200))
         #expect(enabled.state.value == 1)
         #expect(ThreeParameterActionMachine.spec.actions[0].bindings.map(\.name) == [
             "source", "destination", "amount"
@@ -112,9 +112,8 @@ struct GeneratedStateMachineTests {
 
         var generatedMachine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = generatedMachine.state
-        let transition = try generatedMachine.send(.transfer(source: 2, destination: 20, amount: 200))
-        #expect(transition.action == .transfer(source: 2, destination: 20, amount: 200))
-        #expect(transition.after.value == 222)
+        try generatedMachine.send(.transfer(source: 2, destination: 20, amount: 200))
+        #expect(generatedMachine.state.value == 222)
         #expect(throws: GeneratedMachineError.self) {
             try generatedMachine.send(.transfer(source: 2, destination: 30, amount: 200))
         }
@@ -126,11 +125,11 @@ struct GeneratedStateMachineTests {
     func generatedMachineUsesCheckedThreeArgumentActions() throws {
         var machine = try ThreeParameterActionMachine.makeMachine()
         let action = ThreeParameterActionMachine.Action.transfer(source: 2, destination: 20, amount: 200)
-        let transition = try machine.send(action)
+        let transitionBefore = machine.state
+        try machine.send(action)
 
-        #expect(transition.action == action)
-        #expect(transition.before.value == 0)
-        #expect(transition.after.value == 1)
+        #expect(transitionBefore.value == 0)
+        #expect(machine.state.value == 1)
 
         let before = machine.state
         #expect(throws: GeneratedMachineError.self) {
@@ -139,32 +138,34 @@ struct GeneratedStateMachineTests {
         #expect(machine.state == before)
     }
 
-    @Test("Generated execution publishes complete parameterized transitions")
+    @Test("Sending a parameterized action updates the generated state")
     func generatedExecutionPreservesParameterizedTransition() throws {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = machine.state
 
-        let transition = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
+        let transitionBefore = machine.state
+        try machine.send(.transfer(source: 2, destination: 20, amount: 200))
         let after = machine.state
 
-        #expect(transition.action == .transfer(source: 2, destination: 20, amount: 200))
-        #expect(transition.before.value == 0)
-        #expect(transition.after.value == 222)
+        #expect(transitionBefore.value == 0)
+        #expect(machine.state.value == 222)
         #expect(before.value == 0)
         #expect(after.value == 222)
     }
 
-    @Test("Actor returns the generated machine's three-argument transition")
+    @Test("Actor applies the same three-argument action as the machine")
     func actorMatchesGeneratedMachineThreeArgumentTransition() async throws {
         var machine = try ThreeParameterActionMachine.makeMachine()
-        let expected = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
+        let expectedBefore = machine.state
+        try machine.send(.transfer(source: 2, destination: 20, amount: 200))
 
         let actor = try ThreeParameterActionMachine.Actor()
-        let acted = try await actor.send(.transfer(source: 2, destination: 20, amount: 200))
+        let actedBefore = await actor.state
+        try await actor.send(.transfer(source: 2, destination: 20, amount: 200))
+        let actedAfter = await actor.state
 
-        #expect(acted.action == expected.action)
-        #expect(acted.before.value == expected.before.value)
-        #expect(acted.after.value == expected.after.value)
+        #expect(actedBefore.value == expectedBefore.value)
+        #expect(actedAfter.value == machine.state.value)
     }
 
     @Test("Rejected generated actions preserve machine and actor state")
@@ -172,7 +173,7 @@ struct GeneratedStateMachineTests {
         var machine = try ThreeParameterActionMachine.makeMachine()
         let machineBefore = machine.state
         do {
-            _ = try machine.send(.transfer(source: 2, destination: 30, amount: 200))
+            try machine.send(.transfer(source: 2, destination: 30, amount: 200))
             Issue.record("Expected rejected machine action")
         } catch {
             #expect(error is GeneratedMachineError)
@@ -211,7 +212,8 @@ struct GeneratedStateMachineTests {
         #expect(projection.entries.count == 2)
         #expect(projection.value(for: user) == .int(1))
         #expect(projection.value(for: control) == .string("tick"))
-        #expect(try machine.send(.tick).after.pc == 2)
+        try machine.send(.tick)
+        #expect(machine.state.pc == 2)
         let graph = try ReachabilityGraph(initialMachines: GeneratedAlgorithmMachine.initialMachines(), maximumStates: 100)
         #expect(graph.initialStates.count == 1)
         #expect(graph.transitions.count == 2)

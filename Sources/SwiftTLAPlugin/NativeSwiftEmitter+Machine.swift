@@ -147,11 +147,6 @@ extension NativeSwiftEmitter {
         }
         public var state: State { _execution.state }
         public var snapshot: Snapshot { _execution }
-        public struct Transition: Equatable, Sendable {
-            public let action: Action
-            public let before: State
-            public let after: State
-        }
         """)
         try addStructuralIdentity(to: &stateDeclarations, fields: api.variables.map {
             (name: $0.swiftIdentifier, type: program.variableTypes[$0.id]!)
@@ -217,9 +212,9 @@ extension NativeSwiftEmitter {
                 """
             }
             let entry = DeclSyntax(stringLiteral: """
-            public mutating func commit(_ action: Action) throws {
+            public mutating func send(_ action: Action) throws {
                 \(routes.joined(separator: "\n"))
-                _ = try send(action)
+                try _applySelected(action)
             }
             """)
             try verifyGeneratedCommitOutput(entry, helpers: commitHelpers, routes: collectionActions, configurationArguments: appendedArguments)
@@ -1577,11 +1572,9 @@ extension NativeSwiftEmitter {
             if let failure = SwiftTLA._firstNativeEvaluationFailure(failures) { throw failure }
             return result
         }
-        public mutating func send(_ action: Action) throws -> Transition {
+        private mutating func _applySelected(_ action: Action) throws {
             let next = try _sendOutcome(for: action).selected(missing: .noMatchingSuccessor, ambiguous: .ambiguousAction)
-            let before = state
             _execution = next
-            return Transition(action: action, before: before, after: state)
         }
         """)
         let directRoutes = model.api.actions.compactMap { api -> (name: String, id: Int, formalName: String)? in

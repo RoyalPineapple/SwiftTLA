@@ -31,7 +31,7 @@ struct SetChoiceTests {
             var machine = try #require(scenario.initialMachines().first)
             let before = machine.snapshot
             if members.count == 1 {
-                _ = try machine.send(.pick)
+                try machine.send(.pick)
                 #expect(machine.state.selected == 1)
             } else {
                 #expect(throws: GeneratedMachineError.self) { try machine.send(.pick) }

@@ -123,7 +123,7 @@ struct NativeMachineExecutionTests {
         let initialLiteral: Swift.Int = machine.state.literal
         #expect(initialLiteral == 1)
         #expect(try machine.formalProjection(of: machine.snapshot).value(for: rank) == .int(1))
-        _ = try machine.send(.advance)
+        try machine.send(.advance)
         #expect(machine.state.rank == .high)
         let nextLiteral: Swift.Int = machine.state.literal
         #expect(nextLiteral == 2)
@@ -142,14 +142,14 @@ struct NativeMachineExecutionTests {
             #expect(try machine.enabledActions() == (expected < 3 ? [.advance] : []))
             if expected < 3 {
                 let before = machine.state
-                let transition = try machine.send(.advance)
-                #expect(transition.before == before)
-                #expect(transition.after == machine.state)
+                let transitionBefore = machine.state
+                try machine.send(.advance)
+                #expect(transitionBefore == before)
             }
         }
         let before = machine.state
         do {
-            _ = try machine.send(.advance)
+            try machine.send(.advance)
             Issue.record("A disabled action must fail")
         } catch GeneratedMachineError.noMatchingSuccessor {}
         #expect(machine.state == before)
@@ -174,7 +174,7 @@ struct NativeMachineExecutionTests {
         var machine = try SavedValueExecutionSwap.makeMachine()
         for _ in 0..<2 {
             let before = machine.state
-            _ = try machine.send(.swap)
+            try machine.send(.swap)
             #expect(machine.state.left == before.right)
             #expect(machine.state.right == before.left)
         }
@@ -188,11 +188,11 @@ struct NativeMachineExecutionTests {
         #expect(try machine.enabledActions() == [.select])
         #expect(try Set(machine.successors(for: .select).map { $0.state.selected }) == [1, 2, 3])
         do {
-            _ = try machine.send(.select)
+            try machine.send(.select)
             Issue.record("All three executable choices must remain ambiguous")
         } catch GeneratedMachineError.ambiguousAction {}
         let prior = machine.snapshot
-        #expect(throws: GeneratedMachineError.ambiguousAction) { try machine.commit(.select) }
+        #expect(throws: GeneratedMachineError.ambiguousAction) { try machine.send(.select) }
         #expect(machine.snapshot == prior && machine.state.selected == 0)
         let graph = try ReachabilityGraph(initialMachines: ConstrainedExecutionChoice.initialMachines(), maximumStates: 4)
         #expect(Set(graph.transitions.keys.map { $0.state.selected }) == [0, 1])
@@ -227,13 +227,13 @@ struct NativeMachineExecutionTests {
             if nativeNext.isEmpty {
                 disabled.insert(source)
                 do {
-                    _ = try sending.send(.select)
+                    try sending.send(.select)
                     Issue.record("A disabled action must fail")
                 } catch GeneratedMachineError.noMatchingSuccessor {}
                 #expect(sending.state == machine.state)
             } else {
                 do {
-                    _ = try sending.send(.select)
+                    try sending.send(.select)
                     Issue.record("An ambiguous action must fail")
                 } catch GeneratedMachineError.ambiguousAction {}
                 #expect(sending.state == machine.state)
