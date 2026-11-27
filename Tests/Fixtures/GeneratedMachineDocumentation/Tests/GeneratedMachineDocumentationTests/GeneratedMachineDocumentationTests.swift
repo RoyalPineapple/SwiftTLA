@@ -4,6 +4,25 @@ import SwiftTLA
 import SwiftTLAMacros
 
 struct GeneratedMachineDocumentationTests {
+
+    @Test("an independent write beside an algorithm can compile and render its frame")
+    func independentWriteBesideAlgorithm() throws {
+        let spec = #spec("IndependentWrite") { scope in
+            let value = scope.sharedVar(initial: 0)
+            Do(OrderedFieldCopyModel.Step.copy) { Assign(value, to: 3) }
+            let control = Algorithm {
+                Do(OrderedFieldCopyModel.Step.resetThenCopy) { Assign(value, to: 4) }
+            }
+            control
+        }
+        let compiled = try spec.compile()
+        let rendered = try compiled.render()
+        let copy = try #require(rendered.actions.first { $0.sourceName == "copy" })
+        let clause = try #require(rendered.tlaBundle.tla.split(separator: "\n").first {
+            $0.hasPrefix("\(copy.renderedName) == ")
+        })
+        #expect(clause.contains("UNCHANGED pc"))
+    }
     @Test("authored field copies read preceding writes and export the same ordered assignments")
     func copiesUseTheWorkingState() throws {
         var machine = try OrderedFieldCopyModel.makeMachine()

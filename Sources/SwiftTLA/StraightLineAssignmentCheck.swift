@@ -441,8 +441,13 @@ package enum StraightLineAssignmentCheck {
                             return nil
                         }
                         results.append([.init(writes: [name: term])])
-                    case .unchanged(.named(let name)):
-                        guard stateRoots.contains(name) else { return nil }
+                    case .unchanged(let target):
+                        let name: String? = switch target {
+                        case .named(let name): name
+                        case .programCounter: variables.first { $0.origin == .programCounter }?.name
+                        case .procedureStack: variables.first { $0.origin == .procedureStack }?.name
+                        }
+                        guard let name, stateRoots.contains(name) else { return nil }
                         results.append([.init(writes: [name: .prior(name)])])
                     case .guard_(let predicate):
                         guard let term = boolean(predicate, bindings: bindings) else { return nil }
