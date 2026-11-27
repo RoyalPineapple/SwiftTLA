@@ -146,7 +146,7 @@ struct GeneratedAtomicUpdateProofTests {
                         let transitionBefore = attempted.state
                         try attempted.send(.choose)
                         guard transitionBefore == machine.state,
-                              attempted.state == attempted.state, attempted.state.left == 4,
+                              attempted.state.left == 4,
                               attempted.state.right == 4, !attempted.state.selected
                         else { fatalError("The false arm did not commit its updates") }
                         continue
@@ -245,12 +245,11 @@ struct GeneratedAtomicUpdateProofTests {
                 for var machine in ordered {
                     let before = machine.state
                     if machine.state.left < machine.state.right && machine.state.increment == 0 {
-                        let transitionBefore = machine.state
                         try machine.send(.choose)
                         let expected = GeneratedScalarConditionalOverflowProofModel.State(
                             left: Int.max, right: Int.max, selected: true, increment: 0)
                         let label = try machine.formalCall(for: .choose)
-                        print("success \(label.name == "choose" && label.arguments.isEmpty && transitionBefore == before && machine.state == expected)")
+                        print("success \(label.name == "choose" && label.arguments.isEmpty && machine.state == expected)")
                         continue
                     }
                     let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
@@ -276,12 +275,10 @@ struct GeneratedAtomicUpdateProofTests {
 
                 let renamed = try GeneratedScalarConditionalProofModel.initialMachines()
                 if var machine = renamed.first(where: { $0.state.left < $0.state.right }) {
-                    let before = machine.state
-                    let transitionBefore = machine.state
                     try machine.send(.action_rawValue)
                     let label = try machine.formalCall(for: .action_rawValue)
                     let expected = GeneratedScalarConditionalProofModel.State(left: 2, right: 3, selected: true)
-                    print("renamed label \(label.name == "rawValue" && label.arguments.isEmpty && transitionBefore == before && machine.state == expected)")
+                    print("renamed label \(label.name == "rawValue" && label.arguments.isEmpty && machine.state == expected)")
                 } else {
                     print("renamed label false")
                 }
