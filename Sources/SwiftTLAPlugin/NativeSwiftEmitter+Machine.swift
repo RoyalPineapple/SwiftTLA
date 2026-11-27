@@ -1280,7 +1280,13 @@ extension NativeSwiftEmitter {
                 let name = binder(binding.binder)
                 let domain = try actionDomain(binding, state: "state.")
                 loops += "for \(name) in \(domain) {\n"
-                if unary { loops += "if let selected, selected != \(name) { continue }\n" }
+                if unary {
+                    let type = program.bindingTypes[binding.binder]!
+                    let mismatch = typeDeclarations.identityElements.firstIndex(of: type).map {
+                        "!_SetIdentity\($0).equal(selected, \(name))"
+                    } ?? "selected != \(name)"
+                    loops += "if let selected, \(mismatch) { continue }\n"
+                }
                 closing += "}\n"
                 arguments.append("\(name): \(name)")
             }

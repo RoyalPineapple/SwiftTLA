@@ -1216,6 +1216,40 @@ struct NativeSwiftEmitter {
         return declarations.isEmpty ? body : (declarations + ["return \(body)"]).joined(separator: "\n")
     }
 
+    private mutating func setAlgebraExpression(
+        _ root: CompiledExpression, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<ResolvedFunctionID>
+    ) throws -> String {
+        func method(_ node: CompiledExpression) -> String? {
+            switch node.operation {
+            case .union: "union"
+            case .intersection: "intersection"
+            case .setDifference: "subtracting"
+            default: nil
+            }
+        }
+        var statements: [String] = []
+        let nested = root.children.contains { method($0) != nil }
+        func operand(_ node: CompiledExpression) throws -> String {
+            let value: String
+            if let operation = method(node), expressionValues[node] == nil {
+                let left = try operand(node.children[0])
+                let right = try operand(node.children[1])
+                value = "(\(left).\(operation)(\(right)))"
+            } else {
+                value = try expression(node, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            }
+            guard nested else { return value }
+            let name = "_setOperand\(statements.count)"
+            statements.append("let \(name): \(try swiftType(node.resultType)) = \(value)")
+            return name
+        }
+        // Keep source grouping and left-to-right evaluation without nesting the generated Swift.
+        let result = try operand(root)
+        guard nested else { return result }
+        return "(try { () throws -> \(try swiftType(root.resultType)) in\n\(statements.joined(separator: "\n"))\nreturn \(result)\n}())"
+    }
+
     private mutating func collectionExpression(
         _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
@@ -1296,12 +1330,8 @@ struct NativeSwiftEmitter {
                     activeFunctions: activeFunctions)
             }
             return "(\(try emit(0)).isSubset(of: \(try emit(1))))"
-        case .union:
-            return "(\(try emit(0)).union(\(try emit(1))))"
-        case .intersection:
-            return "(\(try emit(0)).intersection(\(try emit(1))))"
-        case .setDifference:
-            return "(\(try emit(0)).subtracting(\(try emit(1))))"
+        case .union, .intersection, .setDifference:
+            return try setAlgebraExpression(node, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .cardinality: return "(\(try members(0)).count)"
         case .integerRange: return "(try SwiftTLA._NativeMachineOperations.integerRange(\(try emit(0)), \(try emit(1))))"
         case .setFilter(let binding):
