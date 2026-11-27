@@ -420,7 +420,8 @@ struct NativeSwiftEmitter {
             (try { () throws -> [\(try swiftType(element))] in
                 \(order)
                 \(prelude)
-                return [\(try swiftType(element))](SwiftTLA._NativeSet<_SetIdentity\(identity)>(\(members)))
+                let _recordMembers: [\(try swiftType(element))] = \(members)
+                return [\(try swiftType(element))](SwiftTLA._NativeSet<_SetIdentity\(identity)>(_recordMembers))
             }())
             """
         }
