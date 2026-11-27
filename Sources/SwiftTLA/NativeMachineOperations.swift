@@ -735,6 +735,16 @@ public enum _NativeMachineOperations: Sendable {
         return updated
     }
 
+    @inlinable
+    public static func functionUpdatedIfChanged<Key: Hashable & Sendable, Value: Equatable & Sendable>(
+        _ function: [Key: Value], at key: Key, to value: Value
+    ) -> [Key: Value] {
+        var updated = function
+        guard let index = updated.index(forKey: key), updated.values[index] != value else { return function }
+        updated.values[index] = value
+        return updated
+    }
+
     public static func functionUpdated<KeyIdentity: _NativeSetIdentity, ValueIdentity: _NativeSetIdentity>(
         _ function: _NativeDictionary<KeyIdentity, ValueIdentity>, at key: KeyIdentity.Element,
         to value: ValueIdentity.Element

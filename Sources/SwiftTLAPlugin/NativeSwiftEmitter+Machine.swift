@@ -3845,6 +3845,20 @@ func verifyGeneratedActionWriteOutput(
                 throw invalid("native.action.write.\(part.id)",
                     "the compiled assignment target", "a different generated state slot")
             }
+            if assignment.value.operation == .except,
+               assignment.value.resultType == .dictionary(.string, .controlLocation) {
+                let expression = Parser.parse(source: part.value).statements.first?.item.as(TupleExprSyntax.self)
+                let call = expression?.elements.first?.expression.as(TryExprSyntax.self)?.expression.as(FunctionCallExprSyntax.self)
+                let statements = call?.calledExpression.as(ClosureExprSyntax.self)?.statements.map {
+                    $0.tokens(viewMode: .sourceAccurate).map(\.text)
+                } ?? []
+                let operands = ["_replacementValue", "_originalValue", "_updatedKey"]
+                guard statements.count == 4,
+                      zip(statements, operands).allSatisfy({ $0.starts(with: ["let", $1, "="]) }),
+                      statements.last == envelopeTokens("return SwiftTLA._NativeMachineOperations.functionUpdatedIfChanged(_originalValue, at: _updatedKey, to: _replacementValue)") else {
+                    throw invalid("native.action.write.\(part.id)", "ordered operands and a control-location update", name)
+                }
+            }
             try requireParsedIntegerScalar(assignment.value, id: part.id, parameters: bindings,
                 at: "native.action.write.\(part.id)")
             let checkedValue = checkedValueTokens(assignment.value, parameters: bindings, actual: actualBody)

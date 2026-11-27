@@ -1732,7 +1732,9 @@ struct NativeSwiftEmitter {
             var evaluatesKey = true
             switch originalType {
             case .dictionary:
-                update = "return SwiftTLA._NativeMachineOperations.functionUpdated(_originalValue, at: _updatedKey, to: _replacementValue)"
+                let helper = originalType == .dictionary(.string, .controlLocation)
+                    ? "functionUpdatedIfChanged" : "functionUpdated"
+                update = "return SwiftTLA._NativeMachineOperations.\(helper)(_originalValue, at: _updatedKey, to: _replacementValue)"
             case .array:
                 update = "return SwiftTLA._NativeMachineOperations.sequenceUpdated(_originalValue, at: _updatedKey, to: _replacementValue)"
             case .tuple(let slots):
