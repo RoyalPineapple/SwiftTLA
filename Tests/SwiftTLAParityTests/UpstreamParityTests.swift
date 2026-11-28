@@ -307,8 +307,9 @@ struct UpstreamParityTests {
 
     @Test("Parallel Reachable bounded source port checks its generated machine")
     func parallelReachableBoundedPort() throws {
+        let scenario = try #require(ParallelReachableModel.validationScenarios().first)
         let graph = try ReachabilityGraph(
-            initialMachines: ParallelReachableModel.initialMachines(),
+            initialMachines: scenario.initialMachines(),
             maximumStates: Example.parallelReachable.maximumStateLimit
         )
         #expect(graph.transitions.count == Example.parallelReachable.expectedDistinct)

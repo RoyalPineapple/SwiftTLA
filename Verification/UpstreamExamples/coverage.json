@@ -7926,7 +7926,7 @@
       "path": "specifications/MisraReachability",
       "name": "Misra Reachability Algorithm",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "MCReachable and APParReach have complete local graph comparisons. Other configurations and hosted parity remain open.",
+      "gap": "MCReachable, MCParReach and APParReach have complete local graph comparisons. Other configurations and hosted parity remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -7949,8 +7949,10 @@
           "path": "specifications/MisraReachability/MCParReach.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/ParallelReachable.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/MisraReachability/MCReachabilityTest.tla",
@@ -7973,7 +7975,8 @@
           "role": "behavior dependency",
           "reason": "The configured root imports the state machine defined in this module.",
           "implementations": [
-            "Sources/UpstreamParity/Examples/APParallelReachability.swift"
+            "Sources/UpstreamParity/Examples/APParallelReachability.swift",
+            "Sources/UpstreamParity/Examples/ParallelReachable.swift"
           ],
           "dispositionComplete": true
         },
@@ -8045,10 +8048,16 @@
           "module": "specifications/MisraReachability/MCParReach.tla",
           "configuration": "specifications/MisraReachability/MCParReach.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ParallelReachable.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-par-reach"
+            }
+          ],
           "evidence": []
         },
         {
@@ -9591,7 +9600,7 @@
       "path": "specifications/SpanningTree",
       "name": "Span Tree Exercise",
       "audit": "SpanTree and SpanTreeTest4Nodes matched their pinned originals locally on initial states, reachable states, labeled transitions, TypeOK, Safety and Liveness.",
-      "gap": "The symbolic APSpanTree configuration matched its pinned original locally using TLC on its four reachable states and TypeOK. SpanTreeRandom and SpanTreeTest5Nodes remain open. Hosted parity for these ports is pending.",
+      "gap": "The symbolic APSpanTree configuration matched its pinned original locally using TLC on its four reachable states and TypeOK. The five-node scenario uses the same all-graphs model. Its exhaustive upstream comparison and SpanTreeRandom remain open. Hosted parity for these ports is pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -9632,7 +9641,7 @@
           "role": "configured root",
           "reason": "Published configuration binding.",
           "implementations": [
-            "Sources/UpstreamParity/Examples/AllFourNodeSpanTrees.swift"
+            "Sources/UpstreamParity/Examples/AllGraphSpanTrees.swift"
           ],
           "dispositionComplete": false
         }
@@ -9689,7 +9698,7 @@
           "upstreamExpectedResult": "success",
           "implementations": [
             {
-              "file": "Sources/UpstreamParity/Examples/AllFourNodeSpanTrees.swift",
+              "file": "Sources/UpstreamParity/Examples/AllGraphSpanTrees.swift",
               "scenario": "Upstream",
               "caseID": "span-tree-four"
             }
@@ -9700,10 +9709,16 @@
           "module": "specifications/SpanningTree/SpanTreeTest.tla",
           "configuration": "specifications/SpanningTree/SpanTreeTest5Nodes.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "unknown",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/AllGraphSpanTrees.swift",
+              "scenario": "FiveNodes",
+              "caseID": "span-tree-five"
+            }
+          ],
           "evidence": []
         }
       ],

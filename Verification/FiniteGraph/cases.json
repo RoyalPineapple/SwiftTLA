@@ -2614,7 +2614,7 @@
     },
     {
       "id": "span-tree-four",
-      "sourceModel": "span-tree-four",
+      "sourceModel": "span-tree-test",
       "scenario": "Upstream",
       "module": "span-tree-four/SpanTreeTest.tla",
       "configuration": "span-tree-four/SpanTreeTest4Nodes.cfg",
@@ -2631,6 +2631,26 @@
       "moduleSHA256": "474ae020a81dc380a89b829366db79698eaaca6afb9cafb6579748d2838c6e5c",
       "cfgSHA256": "c60475ed3e88944ebf8e17d9b13eae3e49bf8cc8311ef4fee88938b48ad6047a",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "span-tree-five",
+      "sourceModel": "span-tree-test",
+      "scenario": "FiveNodes",
+      "module": "span-tree-four/SpanTreeTest.tla",
+      "configuration": "span-tree-four/SpanTreeTest5Nodes.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/SpanTreeTest.tla",
+        "sha256": "474ae020a81dc380a89b829366db79698eaaca6afb9cafb6579748d2838c6e5c"
+      },
+      "exploration": {
+        "maximumStateLimit": 2000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "474ae020a81dc380a89b829366db79698eaaca6afb9cafb6579748d2838c6e5c",
+      "cfgSHA256": "32452f3bb5419e3259deab683ca0dfd3138445137f4fb9c04c3ca4ee2143c9a9",
+      "timeoutSeconds": 3600
     },
     {
       "id": "ab-correctness",
@@ -4235,6 +4255,47 @@
       "moduleSHA256": "de29fa4029bb0f678ce5b325faa273397a18b91f867d72cf20f3b6dd9925beee",
       "cfgSHA256": "0cc59be82d3e1e06f850ca272582b6982a06f75fe6f8d14ad36d1c207d50e24b",
       "timeoutSeconds": 28800
+    },
+    {
+      "id": "mc-par-reach",
+      "sourceModel": "misra-parallel-reachable",
+      "scenario": "Upstream",
+      "module": "misra-reachability/MCParReach.tla",
+      "configuration": "misra-reachability/MCParReach.cfg",
+      "imports": [
+        "misra-reachability/ParReach.tla",
+        "misra-reachability/Reachability.tla",
+        "misra-reachability/Reachable.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCParReach",
+          "importedModule": "ParReach"
+        },
+        {
+          "importingModule": "ParReach",
+          "importedModule": "Reachable"
+        },
+        {
+          "importingModule": "ParReach",
+          "importedModule": "Reachability"
+        },
+        {
+          "importingModule": "Reachable",
+          "importedModule": "Reachability"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MisraReachability/MCParReach.tla",
+        "sha256": "8669e2c4bd80d5be177e8331a0c5415c605ef3bb5d7f7ec0651a7194b7f67f81"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "8669e2c4bd80d5be177e8331a0c5415c605ef3bb5d7f7ec0651a7194b7f67f81",
+      "cfgSHA256": "31cff92508be2d2b8bb092759108e276cbc459a6d7e4a9a73a10dbc3d3b7767f",
+      "timeoutSeconds": 1800
     }
   ]
 }

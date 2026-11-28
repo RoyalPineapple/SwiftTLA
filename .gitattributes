@@ -61,3 +61,5 @@ Verification/FiniteGraph/fixtures/bosco/bosco.cfg whitespace=-blank-at-eof
 Verification/FiniteGraph/fixtures/bosco/bosco.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/misra-reachability/ParReach.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/multipaxos-smr/* whitespace=-blank-at-eol
+Verification/FiniteGraph/fixtures/misra-reachability/MCParReach.cfg whitespace=-blank-at-eof
+Verification/FiniteGraph/fixtures/misra-reachability/MCParReach.tla whitespace=-blank-at-eof

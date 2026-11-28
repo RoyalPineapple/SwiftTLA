@@ -1,14 +1,13 @@
-// The model chooses a graph on four nodes, then updates parent pointers and distances toward the
-// root.
+// Choose any undirected graph on the configured nodes, then update parent pointers and distances toward the root.
 // https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/SpanTreeTest.tla
 
 import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-package struct AllFourNodeSpanTreesModel: Sendable {
+package struct AllGraphSpanTreesModel: Sendable {
     package enum Node: String, CaseIterable, FiniteTLAValueDomain {
-        case n1, n2, n3, n4
+        case n1, n2, n3, n4, n5
         package static var defaultValue: Self { .n1 }
         package static let finiteValues = allCases
         package var tlaValue: TLAValue { .constant(rawValue) }
@@ -19,7 +18,7 @@ package struct AllFourNodeSpanTreesModel: Sendable {
     package static var spec: TLASpec {
         #spec("SpanTreeTest") { scope in
             Extends(.integers, .finiteSets)
-            let nodes = scope.parameter(tlaName: "Nodes", as: Set<Node>.self, in: Subsets(of: Set<Node>([Node.n1, Node.n2, Node.n3, Node.n4])))
+            let nodes = scope.parameter(tlaName: "Nodes", as: Set<Node>.self, in: Subsets(of: Set<Node>([Node.n1, Node.n2, Node.n3, Node.n4, Node.n5])))
             let root = scope.parameter(tlaName: "Root", as: Node.self, in: nodes)
             let maxCardinality = scope.parameter(tlaName: "MaxCardinality", as: Int.self, in: 5...5)
             Assume(nodes.contains(root) && maxCardinality >= 0 && maxCardinality >= nodes.count)
@@ -61,6 +60,11 @@ package struct AllFourNodeSpanTreesModel: Sendable {
             Liveness(.eventually(postCondition))
             Validation("Upstream") {
                 Bind(nodes, to: Set<Node>([Node.n1, Node.n2, Node.n3, Node.n4]))
+                Bind(root, to: Node.n1)
+                Bind(maxCardinality, to: 5)
+            }.checkingDeadlock(false)
+            Validation("FiveNodes") {
+                Bind(nodes, to: Set<Node>([Node.n1, Node.n2, Node.n3, Node.n4, Node.n5]))
                 Bind(root, to: Node.n1)
                 Bind(maxCardinality, to: 5)
             }.checkingDeadlock(false)
