@@ -1515,7 +1515,7 @@ package enum StraightLineRenderedActionCheck {
 
     static func verifyFiniteInvocations(_ behavior: CompiledBehavior,
                                         layout: CompiledLayout, binders: [BinderID: String],
-                                        module: String) throws {
+                                        module: String, renderState: ((CompiledExpression) throws -> String)? = nil) throws {
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(code: .unsupportedGeneratedValueShape,
                 stage: .validation, path: "tla.Next.finiteInvocations",
@@ -1539,7 +1539,12 @@ package enum StraightLineRenderedActionCheck {
         // shortcut: projected and bound fairness tails still need independent constructor rules.
         for (name, fairness) in specifications {
             let prefix = ["\(name) ==", "  /\\ Init", "  /\\ [][Next]_\(frame)"]
-            let clauses = fairness.compactMap { condition -> String? in
+            let clauses = try fairness.compactMap { condition -> String? in
+                if let value = condition.preserved {
+                    guard case .next = condition.scope, let renderState else { throw mismatch() }
+                    let subscriptFrame = try condition.projection.map { "(\(try renderState($0)))" } ?? frame
+                    return "  /\\ WF_\(subscriptFrame)(Next /\\ UNCHANGED (\(try renderState(value))))"
+                }
                 guard condition.projection == nil else { return nil }
                 let action: String
                 switch condition.scope {
@@ -1558,7 +1563,8 @@ package enum StraightLineRenderedActionCheck {
             let complete = clauses.count == fairness.count
             let expected = prefix + clauses
             guard let definition = definitionBlock(name, in: lines),
-                  definition.starts(with: prefix), !complete || definition == expected else {
+                  definition.starts(with: prefix),
+                  (complete ? definition == expected : clauses.allSatisfy(definition.contains)) else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
                     path: "tla.\(name)", expected: "the compiled Init, stuttering Next, complete state frame and checked fairness clauses",
                     actual: "the emitted \(name) changes its behavior or a checked fairness clause",

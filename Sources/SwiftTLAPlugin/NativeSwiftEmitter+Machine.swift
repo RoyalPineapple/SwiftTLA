@@ -1793,11 +1793,17 @@ extension NativeSwiftEmitter {
             let name: String
             let matcher: String
             let changes: String
-            if let projection = condition.projection {
+            if condition.projection != nil || condition.preserved != nil {
+                let changed = try condition.projection.map {
+                    "\(try expression($0)) != \(try expression($0, state: "nextState."))"
+                } ?? "state != nextState"
+                let preserved = try condition.preserved.map {
+                    "\(try expression($0)) == \(try expression($0, state: "nextState."))"
+                }
                 let function = "_fairnessChanges\(suffix)_\(index)"
                 declarations += try nativeDeclarations("""
                 private static func \(function)(in state: Snapshot, nextState: Snapshot\(configurationParameters)) throws -> \(nativeBoolType) {
-                    \(try expression(projection)) != \(try expression(projection, state: "nextState."))
+                    \(preserved.map { "guard \(changed) else { return false }\nreturn \($0)" } ?? changed)
                 }
                 """)
                 changes = "{ \(captureList)state, nextState in try Self.\(function)(in: state, nextState: nextState\(arguments)) }"

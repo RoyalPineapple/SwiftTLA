@@ -3448,6 +3448,12 @@ extension ParserSession {
             return name == "WeakFairness" ? .weakFairnessActionGroup(names)
                 : .strongFairnessActionGroup(names)
         }
+        if name == "WeakFairnessNext", arguments.count == 2,
+           arguments[0].label?.text == "on", arguments[1].label?.text == "preserving",
+           let projection = decodeTypedFacadeValue(arguments[0].expression, scope: scope),
+           let preserved = decodeTypedFacadeValue(arguments[1].expression, scope: scope) {
+            return .projected(.weakFairnessNextPreserving(preserved), projection)
+        }
         let offset = hasAction ? 1 : 0
         guard arguments.count == offset || arguments.count == offset + 1 else { return nil }
         let eachAction = hasAction && arguments.first?.label?.text == "each"
@@ -3469,6 +3475,10 @@ extension ParserSession {
         }
         if eachAction, arguments.count > offset { return nil }
         guard arguments.count > offset else { return condition }
+        if name == "WeakFairnessNext", arguments[offset].label?.text == "preserving",
+           let value = decodeTypedFacadeValue(arguments[offset].expression, scope: scope) {
+            return .weakFairnessNextPreserving(value)
+        }
         guard arguments[offset].label?.text == "on",
               let projection = decodeTypedFacadeValue(arguments[offset].expression, scope: scope) else { return nil }
         return .projected(condition, projection)

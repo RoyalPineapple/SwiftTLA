@@ -4296,6 +4296,480 @@
       "moduleSHA256": "8669e2c4bd80d5be177e8331a0c5415c605ef3bb5d7f7ec0651a7194b7f67f81",
       "cfgSHA256": "31cff92508be2d2b8bb092759108e276cbc459a6d7e4a9a73a10dbc3d3b7767f",
       "timeoutSeconds": 1800
+    },
+    {
+      "id": "bcastbyz-bcastbyz",
+      "sourceModel": "byzantine-broadcast",
+      "scenario": "Broadcast",
+      "module": "bcastbyz/bcastByz.tla",
+      "configuration": "bcastbyz/bcastByz.cfg",
+      "imports": [
+        "kvsnap/Functions.tla",
+        "bcastbyz/FunctionTheorems.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "loop-invariance/SequenceTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Folds.tla",
+        "loop-invariance/WellFoundedInduction.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FunctionTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "FunctionTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "SequenceTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bcastByz/bcastByz.tla",
+        "sha256": "c0238947351cce5debb0543f11cde2b0ed7e84fb7b3339651cd0750e639e6a7d"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c0238947351cce5debb0543f11cde2b0ed7e84fb7b3339651cd0750e639e6a7d",
+      "cfgSHA256": "90ac6bd18e6915719b2cc425544ed3fb8a01ef91887f8901d2709eaaa75e0fea",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "bcastbyz-bcastbyznobcast",
+      "sourceModel": "byzantine-broadcast",
+      "scenario": "NoBroadcast",
+      "module": "bcastbyz/bcastByz.tla",
+      "configuration": "bcastbyz/bcastByzNoBcast.cfg",
+      "imports": [
+        "kvsnap/Functions.tla",
+        "bcastbyz/FunctionTheorems.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "loop-invariance/SequenceTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Folds.tla",
+        "loop-invariance/WellFoundedInduction.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FunctionTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "FunctionTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "SequenceTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bcastByz/bcastByz.tla",
+        "sha256": "c0238947351cce5debb0543f11cde2b0ed7e84fb7b3339651cd0750e639e6a7d"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c0238947351cce5debb0543f11cde2b0ed7e84fb7b3339651cd0750e639e6a7d",
+      "cfgSHA256": "a46b651b082cbe4b6f47d24c7f596944a17124d889bd227ba5aff3c90180e793",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "yoyo-mcyoyonopruning",
+      "sourceModel": "yoyo-no-pruning",
+      "scenario": "Upstream",
+      "module": "yoyo/MCYoYoNoPruning.tla",
+      "configuration": "yoyo/MCYoYoNoPruning.cfg",
+      "imports": [
+        "yoyo/YoYoNoPruning.tla",
+        "yoyo/UndirectedGraphs.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Folds.tla",
+        "kvsnap/Functions.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "YoYoNoPruning",
+          "importedModule": "UndirectedGraphs"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "MCYoYoNoPruning",
+          "importedModule": "YoYoNoPruning"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/YoYo/MCYoYoNoPruning.tla",
+        "sha256": "fe7df0862a86e31dc9d5dd783fd88ac442c8b5bd7e07550741c85fadda857a38"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "fe7df0862a86e31dc9d5dd783fd88ac442c8b5bd7e07550741c85fadda857a38",
+      "cfgSHA256": "86e031979880f25bf4cc1130c7d17e2f1e4b4b1771125708330a527e90c0ba12",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "yoyo-mcyoyopruning",
+      "sourceModel": "yoyo-pruning",
+      "scenario": "Upstream",
+      "module": "yoyo/MCYoYoPruning.tla",
+      "configuration": "yoyo/MCYoYoPruning.cfg",
+      "imports": [
+        "yoyo/YoYoPruning.tla",
+        "yoyo/UndirectedGraphs.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Folds.tla",
+        "kvsnap/Functions.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "YoYoPruning",
+          "importedModule": "UndirectedGraphs"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "MCYoYoPruning",
+          "importedModule": "YoYoPruning"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/YoYo/MCYoYoPruning.tla",
+        "sha256": "f34a24d781f9a0580f2377678e38b2084e13d29f5acc3066b97b579097ffe85e"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f34a24d781f9a0580f2377678e38b2084e13d29f5acc3066b97b579097ffe85e",
+      "cfgSHA256": "5c43728261d1a6902b5e4b1fc4ba65d99a0c08c73902919c79d995cb9e11efa2",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "cf1s-folklore-cf1s-folklore",
+      "sourceModel": "one-step-byzantine-consensus",
+      "scenario": "Upstream",
+      "module": "cf1s-folklore/cf1s_folklore.tla",
+      "configuration": "cf1s-folklore/cf1s_folklore.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/cf1s-folklore/cf1s_folklore.tla",
+        "sha256": "50dec6842e4af32c020bf0d72dd2c7b11cc89b574218aa206c23c04ad3d1e7e2"
+      },
+      "exploration": {
+        "maximumStateLimit": 2500000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "50dec6842e4af32c020bf0d72dd2c7b11cc89b574218aa206c23c04ad3d1e7e2",
+      "cfgSHA256": "7d0a10cbdee6feff4759fdbfd28f08ff3aefae05d665a03177486d787bcf8af8",
+      "timeoutSeconds": 7200
+    },
+    {
+      "id": "mc-lamport-mutex",
+      "sourceModel": "lamport-distributed-mutex",
+      "scenario": "Upstream",
+      "module": "lamport-mutex/MCLamportMutex.tla",
+      "configuration": "lamport-mutex/MCLamportMutex.cfg",
+      "imports": [
+        "lamport-mutex/LamportMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCLamportMutex",
+          "importedModule": "LamportMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/lamport_mutex/MCLamportMutex.tla",
+        "sha256": "2ebf6f863f504f76cfcb4a3bc8228aae1c5a896e7f2f8d046f8ab763656ccca8"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "2ebf6f863f504f76cfcb4a3bc8228aae1c5a896e7f2f8d046f8ab763656ccca8",
+      "cfgSHA256": "b91d46fb0a2f3af22fa65147c4c971d5cb9e42d141f63ad9035aa30cad51d118",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "ewd998-ewd998small",
+      "sourceModel": "safra-termination",
+      "scenario": "Small",
+      "module": "ewd998/EWD998.tla",
+      "configuration": "ewd998/EWD998Small.cfg",
+      "imports": [
+        "kvsnap/Functions.tla",
+        "ewd998/AsyncTerminationDetection.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "EWD998",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "EWD998",
+          "importedModule": "AsyncTerminationDetection"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998.tla",
+        "sha256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8"
+      },
+      "exploration": {
+        "maximumStateLimit": 2000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8",
+      "cfgSHA256": "f0869ebeddcdec5b0208014218a946532c01fdb34130579acff081ed6e883f2a",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "keyvaluestore-mckvssafetysmall",
+      "sourceModel": "transactional-key-value-store",
+      "scenario": "Small",
+      "module": "transactional-key-value-store/MCKVS.tla",
+      "configuration": "transactional-key-value-store/MCKVSSafetySmall.cfg",
+      "imports": [
+        "transactional-key-value-store/KeyValueStore.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCKVS",
+          "importedModule": "KeyValueStore"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/KeyValueStore/MCKVS.tla",
+        "sha256": "4d66a40abeb29558b473770b736dc1bd16c841d9ac847b4644b36cd47d8c8962"
+      },
+      "exploration": {
+        "maximumStateLimit": 4000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "4d66a40abeb29558b473770b736dc1bd16c841d9ac847b4644b36cd47d8c8962",
+      "cfgSHA256": "2360ddff6cac82d84a7077e35cd5e77e7acf81a5d37fc37bc10f335082854103",
+      "timeoutSeconds": 7200
+    },
+    {
+      "id": "nbacg-guer01-nbacg-guer01",
+      "sourceModel": "guerraoui-atomic-commit",
+      "scenario": "Upstream",
+      "module": "guerraoui-atomic-commit/nbacg_guer01.tla",
+      "configuration": "guerraoui-atomic-commit/nbacg_guer01.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/nbacg_guer01/nbacg_guer01.tla",
+        "sha256": "01beedb7aa321e51e626d11fd71298113c56995173569a9814be599f5943703d"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "01beedb7aa321e51e626d11fd71298113c56995173569a9814be599f5943703d",
+      "cfgSHA256": "b1199492ce23f3cbbd4d06d3df6461c52df20de86808a4335747867c8968d717",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "ap-nbacg-guer01",
+      "sourceModel": "guerraoui-atomic-commit",
+      "scenario": "AP",
+      "module": "guerraoui-atomic-commit/APnbacg_guer01.tla",
+      "configuration": "guerraoui-atomic-commit/APnbacg_guer01.cfg",
+      "imports": [
+        "guerraoui-atomic-commit/nbacg_guer01.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APnbacg_guer01",
+          "importedModule": "nbacg_guer01"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/nbacg_guer01/APnbacg_guer01.tla",
+        "sha256": "0e7528e77217c97ad63ad2387cee2044f307d9becc20ecd5d46ff7887ba55c4a"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0e7528e77217c97ad63ad2387cee2044f307d9becc20ecd5d46ff7887ba55c4a",
+      "cfgSHA256": "90dfb8e21116b74fe50c9de3c0420cb5c50fefba28dd2ee5ce2637ae8da68a65",
+      "timeoutSeconds": 600
     }
   ]
 }

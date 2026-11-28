@@ -54,11 +54,13 @@ extension CompiledSpecification {
             return [condition]
         }
         let runtime = CompiledRuntime(compilation: self)
-        let projections: [[StateGraph.StateID: CompiledValue]?] = try fairness.map { condition in
-            guard let expression = condition.projection else { return nil }
+        func values(_ expression: CompiledExpression?, for condition: CompiledFairnessCondition) throws -> [StateGraph.StateID: CompiledValue]? {
+            guard let expression else { return nil }
             let query = CompiledStateQuery(expression: expression, enabledActions: condition.enabledActions)
             return try states.mapValues { try runtime.evaluate([query], in: $0)[0] }
         }
+        let projections = try fairness.map { try values($0.projection, for: $0) }
+        let preserved = try fairness.map { try values($0.preserved, for: $0) }
         let checker = LivenessChecker<StateGraph.StateID, CompiledActionCall, Int>(
             states: Set(graph.states.keys),
             transitions: Dictionary(uniqueKeysWithValues: graph.transitions.map { source, successors in
@@ -82,6 +84,7 @@ extension CompiledSpecification {
                 }
             },
             changes: { source, target, scope in
+                if let values = preserved[scope], values[source] != values[target] { return false }
                 guard let values = projections[scope] else { return source != target }
                 return values[source] != values[target]
             },

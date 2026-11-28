@@ -16,6 +16,7 @@ struct ProjectedProgress {
             Do(Step.advance, when: position.progress == 0) { Assign(position.progress, to: 1) }
             WeakFairnessNext(on: position.progress)
             StrongFairnessNext(on: position.progress)
+            WeakFairnessNext(preserving: position.noise)
             let Complete = Temporal()
             Complete(.eventually(position.progress == 1))
         }

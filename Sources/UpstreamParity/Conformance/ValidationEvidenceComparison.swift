@@ -51,7 +51,7 @@ package enum ValidationEvidenceComparison {
         defer { try? fm.removeItem(at: tlcRoot) }
         let swift = try readNative(native.appendingPathComponent("machine.bin.gz"), caseID: caseID,
             expectedComplete: true, actions: actions, in: swiftRoot)
-        let tlc = try readTLC(reference, caseID: caseID, actions: actions, in: tlcRoot)
+        let tlc = try readTLC(reference, caseID: caseID, actions: actions, includeSourceNames: true, in: tlcRoot)
         guard swift.stateCount > 0, swift.stateCount == tlc.stateCount else { return "complete state set" }
         return try compareGraph(swiftGraph: swift, tlcGraph: tlc, swiftRoot: swiftRoot, tlcRoot: tlcRoot)
     }
@@ -74,7 +74,7 @@ package enum ValidationEvidenceComparison {
         }
         let referenceGraph = try measured("reference TLC spool") {
             try spoolTLC(reference, caseID: caseID, actions: actions,
-                in: referenceRoot, executable: spoolExecutable, kind: "upstream")
+                in: referenceRoot, executable: spoolExecutable, kind: "reference")
         }
         var generatedRanks = [UInt32](repeating: .max, count: generatedGraph.stateCount)
         var referenceRanks = [UInt32](repeating: .max, count: referenceGraph.stateCount)
@@ -346,8 +346,8 @@ package enum ValidationEvidenceComparison {
     }
 
     package static func writeTLCSpool(_ input: URL, caseID: String,
-        actions: [RenderedAction], in directory: URL) throws {
-        let spool = try readTLC(input, caseID: caseID, actions: actions, in: directory)
+        actions: [RenderedAction], includeSourceNames: Bool = false, in directory: URL) throws {
+        let spool = try readTLC(input, caseID: caseID, actions: actions, includeSourceNames: includeSourceNames, in: directory)
         try writeManifest(spool, in: directory)
     }
 
@@ -391,7 +391,7 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func readBinary(_ url: URL, caseID: String, actions: [RenderedAction],
-        producer: UInt8, expectedComplete: Bool, in directory: URL) throws -> Spool {
+        producer: UInt8, expectedComplete: Bool, includeSourceNames: Bool = false, in directory: URL) throws -> Spool {
         let states = stateBucketURLs(in: directory)
         let initial = directory.appendingPathComponent("initial.raw")
         let edges = directory.appendingPathComponent("edges.raw")
@@ -418,10 +418,15 @@ package enum ValidationEvidenceComparison {
         let declaredNative = Dictionary(uniqueKeysWithValues: actions.map {
             ($0.emittedInvocationName, $0.renderedName)
         })
-        let declaredTLC = Dictionary(uniqueKeysWithValues: actions.map {
-            (tlaInvocationLocationIdentity(action: $0.emittedBaseName,
-                arguments: $0.arguments.map(\.description)), $0.renderedName)
-        })
+        var declaredTLC: [String: Set<String>] = [:]
+        for action in actions {
+            let arguments = action.arguments.map(\.description)
+            let names = includeSourceNames ? [action.emittedBaseName, action.sourceName] : [action.emittedBaseName]
+            for name in names {
+                let key = tlaInvocationLocationIdentity(action: name, arguments: arguments)
+                declaredTLC[key, default: []].insert(action.renderedName)
+            }
+        }
         let labels = Array(Set(actions.map(\.renderedName))).sorted()
         let labelIDs = Dictionary(uniqueKeysWithValues: labels.enumerated().map {
             ($0.element, UInt32($0.offset))
@@ -668,7 +673,7 @@ package enum ValidationEvidenceComparison {
     private static func spoolTLC(_ input: URL, caseID: String, actions: [RenderedAction],
         in directory: URL, executable: URL?, kind: String) throws -> Spool {
         guard let executable else {
-            return try readTLC(input, caseID: caseID, actions: actions, in: directory)
+            return try readTLC(input, caseID: caseID, actions: actions, includeSourceNames: kind == "reference", in: directory)
         }
         try runSpool(executable, arguments: ["compare", "spool-tlc", "--kind", kind,
             "--case", caseID, "--input", input.path, "--output", directory.path])
@@ -718,18 +723,25 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func readTLC(_ url: URL, caseID: String, actions: [RenderedAction],
-        in directory: URL) throws -> Spool {
+        includeSourceNames: Bool, in directory: URL) throws -> Spool {
         guard url.pathExtension == "bin" || url.lastPathComponent.hasSuffix(".bin.gz") else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC binary evidence required")
         }
         return try readBinary(url, caseID: caseID, actions: actions,
-            producer: 1, expectedComplete: true, in: directory)
+            producer: 1, expectedComplete: true, includeSourceNames: includeSourceNames, in: directory)
     }
     private static func resolvedAction(name: String, location: String,
-        declared: [String: String]) throws -> String {
+        declared: [String: Set<String>]) throws -> String {
         let direct = tlaInvocationLocationIdentity(action: name, arguments: [])
+        func declaredLabel(_ key: String) throws -> String? {
+            guard let labels = declared[key] else { return nil }
+            guard labels.count == 1 else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("ambiguous TLC action \(key)")
+            }
+            return labels.first
+        }
         if location.isEmpty {
-            guard let label = declared[direct] else {
+            guard let label = try declaredLabel(direct) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action \(direct)")
             }
             return label
@@ -760,8 +772,8 @@ package enum ValidationEvidenceComparison {
             }
             identity = tlaInvocationLocationIdentity(action: invocation, arguments: [])
         }
-        let outer = declared[direct]
-        let inner = declared[identity]
+        let outer = try declaredLabel(direct)
+        let inner = try declaredLabel(identity)
         if let outer, let inner, outer != inner {
             throw ValidationEvidenceComparisonError.invalidEvidence("ambiguous TLC action \(direct) or \(identity)")
         }

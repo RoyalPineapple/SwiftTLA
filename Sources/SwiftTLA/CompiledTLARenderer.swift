@@ -1352,7 +1352,11 @@ struct CompiledTLARenderer {
         let vars = try condition.projection.map { "(\(try state($0)))" } ?? vars
         switch condition.scope {
         case .next:
-            action = "Next"
+            if let value = condition.preserved {
+                action = "Next /\\ UNCHANGED (\(try state(value)))"
+            } else {
+                action = "Next"
+            }
         case .action(let id):
             action = try actionReference(id)
         case .actionGroup(let ids):

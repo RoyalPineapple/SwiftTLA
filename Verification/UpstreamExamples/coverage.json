@@ -3430,15 +3430,17 @@
     {
       "path": "specifications/bcastByz",
       "name": "Asynchronous Reliable Broadcast",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Registered bcastByz.cfg, bcastByzNoBcast.cfg with pinned upstream inputs.",
+      "gap": "Hosted comparison is pending for the newly registered configurations.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/bcastByz/bcastByz.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/ByzantineBroadcast.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -3447,20 +3449,32 @@
           "module": "specifications/bcastByz/bcastByz.tla",
           "configuration": "specifications/bcastByz/bcastByz.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ByzantineBroadcast.swift",
+              "scenario": "Broadcast",
+              "caseID": "bcastbyz-bcastbyz"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/bcastByz/bcastByz.tla",
           "configuration": "specifications/bcastByz/bcastByzNoBcast.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ByzantineBroadcast.swift",
+              "scenario": "NoBroadcast",
+              "caseID": "bcastbyz-bcastbyznobcast"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -4103,8 +4117,8 @@
     {
       "path": "specifications/cf1s-folklore",
       "name": "One-Step Consensus with Zero-Degradation",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Registered cf1s_folklore.cfg with pinned upstream inputs.",
+      "gap": "Hosted comparison is pending for the newly registered configurations.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -4118,7 +4132,9 @@
           "path": "specifications/cf1s-folklore/cf1s_folklore.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/OneStepByzantineConsensus.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -4127,10 +4143,16 @@
           "module": "specifications/cf1s-folklore/cf1s_folklore.tla",
           "configuration": "specifications/cf1s-folklore/cf1s_folklore.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/OneStepByzantineConsensus.swift",
+              "scenario": "Upstream",
+              "caseID": "cf1s-folklore-cf1s-folklore"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -6130,7 +6152,7 @@
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
       "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, EWD998ChanID, EWD998PCal, ChanID export/ShiViz, ChanTrace, the source-defined opts variants and orchestration harness, and the Folds/Utils helpers inspected; remaining source-defined variants still need disposition audits",
-      "gap": "AsyncTerminationDetection has a typed #spec scenario and historical complete hosted parity. The broader EWD998 family is deferred to a family-specific PR. The N=4 EWD998 TLC oracle timed out after three hours on PR #394 SHA a7500dc2 with 119,465,720 distinct states and no complete graph; no parity or capacity claim follows. Other configurations and source-defined variants remain open.",
+      "gap": "AsyncTerminationDetection has a typed #spec scenario and historical complete hosted parity. EWD998Small is registered for N=3 and awaits hosted comparison. The N=4 EWD998 TLC oracle timed out after three hours on PR #394 SHA a7500dc2 with 119,465,720 distinct states and no complete graph; no parity or capacity claim follows. Other configurations and source-defined variants remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -6180,8 +6202,10 @@
         {
           "path": "specifications/ewd998/EWD998.tla",
           "role": "configured root",
-          "reason": "Deferred to the EWD998 family-specific PR. Earlier focused runs are historical diagnostics, not implementation or admission evidence for this revision.",
-          "implementations": [],
+          "reason": "EWD998Small uses the published Safra token and process actions. The other configurations of this module remain open.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SafraTerminationDetection.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -6318,10 +6342,16 @@
           "module": "specifications/ewd998/EWD998.tla",
           "configuration": "specifications/ewd998/EWD998Small.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SafraTerminationDetection.swift",
+              "scenario": "Small",
+              "caseID": "ewd998-ewd998small"
+            }
+          ],
           "evidence": [],
           "gap": "Deferred to the EWD998 family-specific PR; prior focused results and the incomplete N=4 run do not qualify this revision."
         },
@@ -7088,7 +7118,7 @@
       "path": "specifications/KeyValueStore",
       "name": "Snapshot Key-Value Store",
       "audit": "reference inputs audited",
-      "gap": "The MCKVsnap fixture removes upstream TxIdSymmetric symmetry. Three MCKVS safety configurations lack exact cases. Small declares no symmetry, unlike Medium and Large. APKeyValueStore has no configuration at the pin. Ordinary operation records have complete hosted evidence for the no-symmetry fixture, but the exact upstream configuration, helper coverage, and duplicate configuration remain unresolved. The newer resolved generated export still needs its own hosted comparison.",
+      "gap": "The MCKVsnap fixture removes upstream TxIdSymmetric symmetry. MCKVSSafetySmall is registered with its published unsymmetrized configuration. Medium and Large still need exact cases with TxIdSymmetric. APKeyValueStore has no configuration at the pin. Ordinary operation records have complete hosted evidence for the no-symmetry fixture, but the exact upstream configuration, helper coverage, and duplicate configuration remain unresolved. The newer resolved generated export still needs its own hosted comparison.",
       "recordMigrationPrerequisite": {
         "configuration": "specifications/KeyValueStore/MCKVsnap.cfg",
         "criteria": ["AC-13", "AC-17", "AC-19"],
@@ -7152,7 +7182,9 @@
           "path": "specifications/KeyValueStore/MCKVS.tla",
           "role": "configured root",
           "reason": "All three configurations select TypeInvariant and TxLifecycle. Key/Val/TxId counts are Small 2/2/3, Medium 3/3/2, and Large 3/2/3. Only Medium and Large select TxIdSymmetric.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/TransactionalKeyValueStore.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -7197,10 +7229,16 @@
           "module": "specifications/KeyValueStore/MCKVS.tla",
           "configuration": "specifications/KeyValueStore/MCKVSSafetySmall.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/TransactionalKeyValueStore.swift",
+              "scenario": "Small",
+              "caseID": "keyvaluestore-mckvssafetysmall"
+            }
+          ],
           "evidence": []
         },
         {
@@ -7285,8 +7323,8 @@
     {
       "path": "specifications/lamport_mutex",
       "name": "Distributed Mutual Exclusion",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Registered MCLamportMutex.cfg with pinned upstream inputs.",
+      "gap": "Hosted comparison is pending for the newly registered configurations. Other configurations remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -7314,7 +7352,9 @@
           "path": "specifications/lamport_mutex/MCLamportMutex.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/LamportDistributedMutex.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -7333,10 +7373,16 @@
           "module": "specifications/lamport_mutex/MCLamportMutex.tla",
           "configuration": "specifications/lamport_mutex/MCLamportMutex.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/LamportDistributedMutex.swift",
+              "scenario": "Upstream",
+              "caseID": "mc-lamport-mutex"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -8690,22 +8736,26 @@
     {
       "path": "specifications/nbacg_guer01",
       "name": "Asynchronous Non-Blocking Atomic Commitment with Failure Detectors",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Registered APnbacg_guer01.cfg, nbacg_guer01.cfg with pinned upstream inputs.",
+      "gap": "Hosted comparison is pending for the newly registered configurations.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/nbacg_guer01/APnbacg_guer01.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GuerraouiAtomicCommit.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/nbacg_guer01/nbacg_guer01.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GuerraouiAtomicCommit.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -8714,20 +8764,32 @@
           "module": "specifications/nbacg_guer01/APnbacg_guer01.tla",
           "configuration": "specifications/nbacg_guer01/APnbacg_guer01.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GuerraouiAtomicCommit.swift",
+              "scenario": "AP",
+              "caseID": "ap-nbacg-guer01"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/nbacg_guer01/nbacg_guer01.tla",
           "configuration": "specifications/nbacg_guer01/nbacg_guer01.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GuerraouiAtomicCommit.swift",
+              "scenario": "Upstream",
+              "caseID": "nbacg-guer01-nbacg-guer01"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -11819,22 +11881,26 @@
     {
       "path": "specifications/YoYo",
       "name": "Yo-Yo Leader Election",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Registered MCYoYoNoPruning.cfg, MCYoYoPruning.cfg with pinned upstream inputs.",
+      "gap": "Hosted comparison is pending for the newly registered configurations. Other configurations remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/YoYo/MCYoYoNoPruning.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/YoYoNoPruning.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/YoYo/MCYoYoPruning.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/YoYoPruning.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -11864,20 +11930,32 @@
           "module": "specifications/YoYo/MCYoYoNoPruning.tla",
           "configuration": "specifications/YoYo/MCYoYoNoPruning.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/YoYoNoPruning.swift",
+              "scenario": "Upstream",
+              "caseID": "yoyo-mcyoyonopruning"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/YoYo/MCYoYoPruning.tla",
           "configuration": "specifications/YoYo/MCYoYoPruning.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/YoYoPruning.swift",
+              "scenario": "Upstream",
+              "caseID": "yoyo-mcyoyopruning"
+            }
+          ],
           "evidence": []
         },
         {

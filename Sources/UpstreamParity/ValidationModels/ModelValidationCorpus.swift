@@ -36,6 +36,14 @@ private let fixtureModelRegistrations: [ModelRegistration] = [
 ]
 
 private let upstreamModelRegistrations: [ModelRegistration] = [
+    .init(id: "byzantine-broadcast", scenarios: { try ByzantineBroadcastModel.validationScenarios() }),
+    .init(id: "yoyo-no-pruning", scenarios: { try YoYoNoPruningModel.validationScenarios() }),
+    .init(id: "yoyo-pruning", scenarios: { try YoYoPruningModel.validationScenarios() }),
+    .init(id: "guerraoui-atomic-commit", scenarios: { try GuerraouiAtomicCommitModel.validationScenarios() }),
+    .init(id: "lamport-distributed-mutex", scenarios: { try LamportDistributedMutexModel.validationScenarios() }),
+    .init(id: "safra-termination", scenarios: { try SafraTerminationDetectionModel.validationScenarios() }),
+    .init(id: "one-step-byzantine-consensus", scenarios: { try OneStepByzantineConsensusModel.validationScenarios() }),
+    .init(id: "transactional-key-value-store", scenarios: { try TransactionalKeyValueStoreModel.validationScenarios() }),
     .init(id: "dining-philosophers", scenarios: { try DiningPhilosophersModel.validationScenarios() }),
     .init(id: "dijkstra-mutex", scenarios: { try DijkstraMutexModel.validationScenarios() }),
     .init(id: "ewd840", scenarios: { try EWD840Model.validationScenarios() }),

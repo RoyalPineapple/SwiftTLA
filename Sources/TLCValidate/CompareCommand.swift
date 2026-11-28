@@ -22,11 +22,11 @@ func runCompare(arguments: [String]) -> Never {
         if arguments.count == 9, arguments[0] == "spool-tlc",
            arguments[1] == "--kind", arguments[3] == "--case",
            arguments[5] == "--input", arguments[7] == "--output",
-           ["native", "upstream"].contains(arguments[2]) {
+           ["native", "upstream", "reference"].contains(arguments[2]) {
             let actions = try spoolActions(caseID: arguments[4], kind: arguments[2])
             try ValidationEvidenceComparison.writeTLCSpool(
                 URL(fileURLWithPath: arguments[6]).standardizedFileURL,
-                caseID: arguments[4], actions: actions,
+                caseID: arguments[4], actions: actions, includeSourceNames: arguments[2] == "reference",
                 in: URL(fileURLWithPath: arguments[8]).standardizedFileURL)
             exit(0)
         }

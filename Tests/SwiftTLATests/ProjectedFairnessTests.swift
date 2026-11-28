@@ -13,7 +13,26 @@ struct ProjectedFairnessTests {
         let tla = try ProjectedProgress.render().tlaBundle.tla
         #expect(tla.contains("WF_((position).progress)(Next)"))
         #expect(tla.contains("SF_((position).progress)(Next)"))
+        let preserved = "Next /\\ UNCHANGED ((position).noise)"
+        let compilation = try ProjectedProgress.spec.compile()
+        func checkSpec(_ module: String) throws {
+            try StraightLineRenderedActionCheck.verifyFiniteInvocations(compilation.semantics.behavior,
+                layout: compilation.layout, binders: compilation.bindings.binders, module: module,
+                renderState: { _ in "(position).noise" })
+        }
+        try checkSpec(tla)
+        try #require(tla.components(separatedBy: preserved).count == 2)
+        for wrong in ["Next", "Next /\\ UNCHANGED ((position).progress)"] {
+            #expect(throws: CompilationDiagnostic.self) {
+                try checkSpec(tla.replacingOccurrences(of: preserved, with: wrong))
+            }
+        }
         let obligations = try machine.fairnessConditions()
+        #expect(obligations.count == 3)
+        for obligation in obligations {
+            let qualifies = try #require(obligation.changes)
+            #expect(try !qualifies(machine.snapshot, machine.snapshot))
+        }
         for successor in try machine.successors() {
             for obligation in obligations {
                 let changes = try #require(obligation.changes)

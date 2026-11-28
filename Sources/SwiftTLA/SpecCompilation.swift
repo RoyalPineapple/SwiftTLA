@@ -2358,6 +2358,7 @@ private struct CanonicalSpecificationEncoder {
             return node("projectedFairness", [canonicalFairness(condition), alphaKey(projection)])
         case .weakFairness(let action): return node("weakFairness", [action])
         case .strongFairness(let action): return node("strongFairness", [action])
+        case .weakFairnessNextPreserving(let value): return node("weakFairnessNextPreserving", [alphaKey(value)])
         case .weakFairnessNext: return node("weakFairnessNext", [])
         case .strongFairnessNext: return node("strongFairnessNext", [])
         case .weakFairnessActionCall(let action): return node("weakFairnessActionCall", [canonicalActionCall(action)])
@@ -2790,7 +2791,8 @@ private extension CompiledModuleMetadata {
                 required: orderedIntProofActionNames.contains(rendered.sourceName), enums: renderer.enums)
         }
         try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
-            layout: layout, binders: renderer.bindings.binders, module: directOutput.source)
+            layout: layout, binders: renderer.bindings.binders, module: directOutput.source,
+            renderState: { try renderer.state($0) })
         let renderedConfiguration = configuration.includingIntrinsicInvariant(directOutput.evaluationInvariant)
         try StraightLineRenderedActionCheck.verifyCheckingConfiguration(renderedConfiguration,
             rendered: renderedConfiguration.render(usesSymmetryReduction: false),

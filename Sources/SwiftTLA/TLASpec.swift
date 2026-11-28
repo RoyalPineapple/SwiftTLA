@@ -968,6 +968,14 @@ public func WeakFairness(_ step: AtomicStep, on projection: some TypedExpression
 public func StrongFairness(_ step: AtomicStep, on projection: some TypedExpression) -> FairnessDecl {
   FairnessDecl(.projected(.strongFairness(step.model.label.name), projection.stateExpr))
 }
+/// Requires weak fairness only for nonstuttering steps that preserve this value.
+public func WeakFairnessNext(preserving value: some TypedExpression) -> FairnessDecl {
+  FairnessDecl(.weakFairnessNextPreserving(value.stateExpr))
+}
+/// Counts steps that change the projection and leave the preserved value unchanged.
+public func WeakFairnessNext(on projection: some TypedExpression, preserving value: some TypedExpression) -> FairnessDecl {
+  FairnessDecl(.projected(.weakFairnessNextPreserving(value.stateExpr), projection.stateExpr))
+}
 public func WeakFairnessNext(on projection: some TypedExpression) -> FairnessDecl {
   FairnessDecl(.projected(.weakFairnessNext, projection.stateExpr))
 }

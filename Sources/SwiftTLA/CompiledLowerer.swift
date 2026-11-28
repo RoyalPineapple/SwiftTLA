@@ -402,7 +402,8 @@ struct CompiledLowerer {
         }
         let compiledFairness: [CompiledFairnessCondition] = fairness.map { condition in
             .init(scope: condition.scope, isStrong: condition.isStrong, projection: condition.projection,
-                enabledActions: condition.projection.map { predicate($0).enabledActions } ?? [])
+                preserved: condition.preserved, enabledActions: [condition.projection, condition.preserved]
+                    .compactMap { $0 }.reduce(into: Set<ActionID>()) { $0.formUnion(predicate($1).enabledActions) })
         }
         let fairnessProfiles = try lowerFairnessProfiles(spec.fairnessProfiles, base: compiledFairness)
         let stateProperties = statePropertyBodies.map { property in
@@ -1170,7 +1171,9 @@ struct CompiledLowerer {
         case .projected(let condition, let projection):
             let base = try lower(condition, actions: actions, sourceActions: sourceActions, at: path)
             let value = try lower(projection, at: "\(path).projection", scope: rootScope)
-            return .init(scope: base.scope, isStrong: base.isStrong, projection: value)
+            return .init(scope: base.scope, isStrong: base.isStrong, projection: value, preserved: base.preserved)
+        case .weakFairnessNextPreserving(let value):
+            return .init(scope: .next, isStrong: false, preserved: try lower(value, at: "\(path).preserving", scope: rootScope))
         case .weakFairnessNext:
             return .init(scope: .next, isStrong: false)
         case .strongFairnessNext:

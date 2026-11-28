@@ -522,17 +522,21 @@ package struct CompiledFairnessCondition: Sendable {
     package let scope: Scope
     package let isStrong: Bool
     package let projection: CompiledExpression?
+    package let preserved: CompiledExpression?
     package let enabledActions: Set<ActionID>
 
-    package init(scope: Scope, isStrong: Bool, projection: CompiledExpression? = nil, enabledActions: Set<ActionID> = []) {
+    package init(scope: Scope, isStrong: Bool, projection: CompiledExpression? = nil,
+                 preserved: CompiledExpression? = nil, enabledActions: Set<ActionID> = []) {
         self.scope = scope
         self.isStrong = isStrong
         self.projection = projection
+        self.preserved = preserved
         self.enabledActions = enabledActions
     }
 
     package func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
-        try .init(scope: scope, isStrong: isStrong, projection: projection.map(transform), enabledActions: enabledActions)
+        try .init(scope: scope, isStrong: isStrong, projection: projection.map(transform),
+                  preserved: preserved.map(transform), enabledActions: enabledActions)
     }
 }
 

@@ -3,6 +3,7 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
     case weakFairness(String)
     case strongFairness(String)
     case weakFairnessNext
+    case weakFairnessNextPreserving(StateExpr)
     case strongFairnessNext
     /// Fairness for one concrete finite parameterization of an action.
     case weakFairnessActionCall(FormalActionCall)
@@ -23,6 +24,7 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         case .weakFairness(let a): return "WF(\(a))"
         case .strongFairness(let a): return "SF(\(a))"
         case .weakFairnessNext: return "WF(Next)"
+        case .weakFairnessNextPreserving(let value): return "WF(Next preserving \(value))"
         case .strongFairnessNext: return "SF(Next)"
         case .weakFairnessActionCall(let action): return "WF(\(action))"
         case .strongFairnessActionCall(let action): return "SF(\(action))"
@@ -40,7 +42,7 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         case .projected(let condition, _): condition.isStrong
         case .strongFairness, .strongFairnessNext, .strongFairnessActionCall, .strongFairnessEachAction,
              .strongFairnessActionGroup, .strongFairnessEachActionGroup: true
-        case .weakFairness, .weakFairnessNext, .weakFairnessActionCall, .weakFairnessEachAction,
+        case .weakFairness, .weakFairnessNext, .weakFairnessNextPreserving, .weakFairnessActionCall, .weakFairnessEachAction,
              .weakFairnessActionGroup, .weakFairnessEachActionGroup: false
         }
     }

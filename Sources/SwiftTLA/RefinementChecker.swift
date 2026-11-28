@@ -145,6 +145,9 @@ extension TLASpec {
             if case .projected(let base, let projection) = condition {
                 return .projected(fairness(base), state(projection))
             }
+            if case .weakFairnessNextPreserving(let value) = condition {
+                return .weakFairnessNextPreserving(state(value))
+            }
             return condition
         }
         specialized.fairness = self.fairness.map(fairness)
