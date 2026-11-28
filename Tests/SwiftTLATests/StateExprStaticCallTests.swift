@@ -112,9 +112,11 @@ import SwiftTLAMacros
         }
     }
 
-    @Test func parseStaticFirstMatchWithFallback() throws {
+    @Test(arguments: ["", "Expr<Int>", "SwiftTLA.Expr<Int>", "Expr", "SwiftTLA.Expr"])
+    func parseStaticFirstMatchWithFallback(_ constructor: String) throws {
+        let values = ["10", "20", "99"].map { constructor.isEmpty ? $0 : "\(constructor)(\($0)).stateExpr" }
         let decodedExpression = SpecParser.decodeStateExpr(
-            try parseSpecTestExpression("StateExpr.firstMatch((when: x == 0, then: 10), (when: x == 1, then: 20), fallback: 99)")
+            try parseSpecTestExpression("StateExpr.firstMatch((when: x == 0, then: \(values[0])), (when: x == 1, then: \(values[1])), fallback: \(values[2]))")
         )
         #expect(decodedExpression == StateExpr.caseExpr(
             [
@@ -125,9 +127,11 @@ import SwiftTLAMacros
         ))
     }
 
-    @Test func parseStaticFirstMatchNoFallback() throws {
+    @Test(arguments: ["", "Expr<Int>", "SwiftTLA.Expr<Int>", "Expr", "SwiftTLA.Expr"])
+    func parseStaticFirstMatchNoFallback(_ constructor: String) throws {
+        let value = constructor.isEmpty ? "-1" : "\(constructor)(-1).stateExpr"
         let decodedExpression = SpecParser.decodeStateExpr(
-            try parseSpecTestExpression("StateExpr.firstMatch((when: x < 0, then: -1))")
+            try parseSpecTestExpression("StateExpr.firstMatch((when: x < 0, then: \(value)))")
         )
         #expect(decodedExpression == StateExpr.caseExpr(
             [StateExpr.lessThan(.variable("x"), .value(.int(0))), StateExpr.value(.int(-1))],

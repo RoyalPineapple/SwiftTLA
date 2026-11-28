@@ -25,6 +25,10 @@ public struct InvariantHandle: ModelProperty {
     }
 }
 
+public func Invariant(_ name: String) -> InvariantHandle {
+    .init(name: name)
+}
+
 public func Invariant(label: String? = nil, _name: String = "") -> InvariantHandle {
     .init(name: _name, label: label)
 }
@@ -112,25 +116,54 @@ public protocol ModelValidationScenario: Sendable {
     func render() throws -> RenderedSpecification
     var formalPropertyNames: [Property: String] { get }
     var usesView: Bool { get }
+    /// Custom implementations must forward the supplied fairness scopes to native traversal.
     func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
         stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
     func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
         checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
+    func captureValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
+        observe: (MachineValidationObservation<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
     func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
         atLevel level: Int) throws -> TLAStateProjection
     func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> Bool?
 }
 
+/// One call to TLC PrintT or Print, in evaluation order.
+public enum AssumptionPrint<Value: Sendable>: Sendable {
+    case value(Value)
+    case returning(Value, Value)
+}
+
+extension AssumptionPrint: Equatable where Value: Equatable {}
+
 /// The product result for a configured module with no state machine.
 public struct AssumptionEvaluation: Sendable {
     public let satisfied: Bool
-    public let evaluatedValues: [TLAValue]
+    public let prints: [AssumptionPrint<TLAValue>]
+
+    public var evaluatedValues: [TLAValue] {
+        prints.flatMap { event in
+            switch event {
+            case .value(let value): [value]
+            case .returning(let value, let result): [value, result]
+            }
+        }
+    }
 
     public init(satisfied: Bool, evaluatedValues: [TLAValue]) {
         self.satisfied = satisfied
-        self.evaluatedValues = evaluatedValues
+        self.prints = evaluatedValues.map(AssumptionPrint.value)
+    }
+
+    public init(satisfied: Bool, prints: [AssumptionPrint<TLAValue>]) {
+        self.satisfied = satisfied
+        self.prints = prints
     }
 }
 
@@ -144,7 +177,7 @@ public protocol AssumptionValidationScenario: Sendable {
 
 extension ModelValidationScenario {
     public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
-        try .init(states: initialMachines(), firstFailure: nil)
+        try .init(states: initialMachines(), failures: [])
     }
 
     public var checkingMode: ValidationCheckingMode { .exhaustive }
@@ -156,32 +189,66 @@ extension ModelValidationScenario {
 
     public func runValidation(maximumStates: Int, checking: ModelChecks<Property>,
         stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
         try runValidation(initialOutcomes: initialOutcomes(), maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
     }
 
     public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
         checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
         if initialOutcomes.firstFailure == nil {
             return try runValidation(initialMachines: initialOutcomes.states, maximumStates: maximumStates,
                 checking: checking, stopOnViolation: stopOnViolation,
-                stopOnReachability: stopOnReachability, emit: emit)
+                stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
         }
         guard !usesView else { throw ExplorationError.viewRequiresStreamingValidation }
         return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
     }
 
     public func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
         stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
         try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
+    }
+
+    /// Custom scenarios may implement only the event stream. Keep their traversal and recover
+    /// the discovery level at this boundary. Generated captures get the level from the checker.
+    public func captureValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
+        observe: (MachineValidationObservation<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+        var levels: [Int] = []
+        func level(after predecessor: Int?) throws -> Int {
+            guard let predecessor else { return 1 }
+            guard levels.indices.contains(predecessor) else { throw ExplorationError.configurationMismatch }
+            let (level, overflow) = levels[predecessor].addingReportingOverflow(1)
+            guard !overflow else { throw ExplorationError.levelOverflow }
+            return level
+        }
+        return try runValidation(initialMachines: initialMachines, maximumStates: maximumStates, checking: checking,
+            stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, fairness: fairness) { event in
+            let observedLevel: Int?
+            switch event {
+            case .state(let id, _, let initial, let predecessor, _):
+                guard id == levels.count, initial == (predecessor == nil) else { throw ExplorationError.configurationMismatch }
+                let discovered = try level(after: predecessor)
+                levels.append(discovered)
+                observedLevel = discovered
+            case .invariantFailure(_, _, let predecessor, _), .reachability(_, _, let predecessor, _):
+                observedLevel = try level(after: predecessor)
+            default: observedLevel = nil
+            }
+            try observe(.init(event: event, checkingLevel: observedLevel, identity: nil))
+        }
     }
 
     public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
@@ -250,6 +317,12 @@ public struct ValidationBinding: Sendable {
 
 public func Bind<Value: TLAValueType>(
     _ parameter: ModelParameter<Value>, to value: some TypedExpression<Value>
+) -> ValidationBinding {
+    .init(parameter: parameter.reference, value: value.stateExpr)
+}
+
+public func Bind<Element: TLAValueType>(
+    _ parameter: ModelParameter<Set<Element>>, to value: Set<Element>
 ) -> ValidationBinding {
     .init(parameter: parameter.reference, value: value.stateExpr)
 }
@@ -348,7 +421,8 @@ public struct ValidationDeclaration: SpecComponent {
     }
 }
 
-package func Validation(_ name: String, label: String? = nil,
+/// Declares a validation scenario with an explicit identity in a specification builder.
+public func Validation(_ name: String, label: String? = nil,
                        @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
     .init(name: name, displayLabel: label, bindings: bindings())
 }

@@ -34,6 +34,21 @@ The authoring API must make three questions easy to answer:
 2. What should be true of its states and executions?
 3. Under which finite configurations should we validate those claims?
 
+Use a Swift reader's prediction as the readability check for a corpus example.
+Can they identify the possible starting states, predict one enabled action,
+and give an example of a state that violates a rule? In HourClock, any hour
+from 1 through 12 is a valid start, a tick at 12 produces 1, and 0 violates
+the clock invariant. Keep the upstream names available for traces and use
+Swift names in the expressions people read. Explain a modeling choice where
+it matters, such as whether several assignments happen in one action.
+
+Use familiar Swift vocabulary when it conveys the behavior. Use `count` for the
+number of members, `filter` to keep matching members, and `contains` to ask
+whether a match exists. When a concept needs a new name, explain it with a
+consequence the reader can predict. An invariant is a rule that must hold in
+every reachable state. A guard determines whether an action can run. A false
+guard disables that action. A broken invariant reports a failure.
+
 ## 2. Architecture
 
 ```mermaid
@@ -48,6 +63,13 @@ flowchart TD
     F --> I[Compare graphs and property outcomes]
     H --> I
 ```
+
+Prefer Swift spellings that lower to existing typed operations. For example,
+`marked.insert(node)` lowers to one assignment of the union of `marked` and
+the singleton set containing `node`. The statement reads the current value
+of `marked` at that point in the step. To reuse a preservation proof, establish
+that the builder and parser produce that assignment with the same target and
+operand bindings.
 
 Applications select transitions. Model checking explores transitions. Both use
 the same generated Swift implementations. Do not add an expression interpreter
@@ -119,11 +141,25 @@ Generate valid, unambiguous TLA+ identifiers from declaration identities and
 source names. A display label containing spaces or punctuation must not become
 an unchecked formal identifier.
 
-`Algorithm` and `Validation` require immutable `let` bindings inside `#spec`.
-The binding is their stable identity; the builder expression is registered by
-referencing that binding. For example,
-`let protocolAlgorithm = Algorithm(label: "Protocol") { ... }; protocolAlgorithm`
-and `let exhaustive = Validation(label: "Exhaustive check") { ... }; exhaustive`.
+When matching a published module, use `tlaName:` on a model parameter or shared
+state declaration to request its exact TLA+ spelling.
+
+```swift
+let writers = scope.parameter(tlaName: "Writers", as: Set<ThreadID>.self, in: writerSets)
+let nextSequence = scope.sharedVar(tlaName: "next_sequence", initial: 0)
+```
+
+Use `writers` in `Bind` and `Configuration.writers`, and `nextSequence` in
+assignments and `State.nextSequence`. The CFG binds `Writers`, and formal
+states and traces use `next_sequence`. Compilation diagnoses an invalid,
+reserved, or conflicting request. Omit the argument for automatic naming.
+Process and procedure locals keep their existing scope-qualified naming.
+
+Write a validation scenario directly inside `#spec`, for example
+`Validation("exhaustive", label: "Exhaustive check") {}.checkingDeadlock(false)`.
+The first string literal names the scenario. Write `Algorithm("protocolAlgorithm") { ... }`
+when the algorithm needs only a formal name. Bind a component to `let` when another
+rule uses it. The declaration registers the component once.
 The nonempty literal `label:` is optional and only for presentation;
 interpolation is rejected.
 Duplicate labels are allowed; generated scenario `name` remains the identity
@@ -131,10 +167,13 @@ and `displayName` uses the label or falls back to that name. Compiled algorithm
 descriptions expose the same `name`/`displayName` distinction. Named state,
 parameter, property, and refinement declarations follow their binding and
 registration rules below. Inline control constructs such as `Each`, `Do`,
-`While`, `If`, and `With` are structural statements, not declarations that
-need an additional Swift binding or compiler-invented identity. `Do` and
+`Loop`, `While`, `If`, and `With` are structural statements, not declarations that
+need an additional Swift binding or compiler-invented identity. `Do`, `Loop`, and
 `While` use their typed control labels; `Procedure` uses its typed enum case
 as its formal name. Those names affect behavior and are not display labels.
+Use `Loop(Step.tick) { … }` for an unconditional loop. It has the same labeled
+transition as `While(Step.tick, true) { … }`. Use `While` when control should
+advance to the following step once a condition becomes false.
 An anonymous declaration that requires a binding fails at its source location;
 an inline structural statement remains valid without one.
 
@@ -142,7 +181,7 @@ Inside `#spec`, scoped state declarations derive their names from immutable Swif
 
 ```swift
 let count = scope.sharedVar(initial: 0)
-let hour = scope.sharedVar(in: 1...12)
+let hour = scope.sharedVar(initiallyIn: 1...12)
 let visited = process.localVar(initial: false)
 let publicCount = process.localVar(initial: 0, exposed: true)
 let readable = scope.sharedVar(label: "Current value", initial: 0)
@@ -181,7 +220,7 @@ The whole-step guard syntax is:
 
 ```swift
 Do(Step.increment, when: count < limit) {
-    Assign(count, to: count + 1)
+    count += 1
     Goto(Step.increment)
 }
 ```
@@ -197,7 +236,7 @@ Keep a nested guard where it needs a value bound inside the body:
 Do(Step.select) {
     Choose(1...3) { candidate in
         When(candidate != selected)
-        Assign(selected, to: candidate)
+        selected.set(candidate)
     }
 }
 ```
@@ -221,13 +260,12 @@ No program counter, source-order scheduling, or termination action is added.
 #spec("IndependentCounter") { scope in
     let count = scope.sharedVar(initial: 0)
     Do(Step.increment, when: count < 2) {
-        Assign(count, to: count + 1)
+        count += 1
     }
     Do(Step.reset, when: count == 2) {
-        Assign(count, to: 0)
+        count.set(0)
     }
-    let complete = Validation {}
-    complete
+    Validation("complete") {}
 }
 ```
 
@@ -246,18 +284,17 @@ Acceptance requires generated execution, complete native graphs, TLA+ export wit
 The direct model must not acquire an authored PlusCal algorithm.
 
 An immutable binding can retain an independent `Do` step for later references.
-The binding does not register the step. A separate expression registers it once:
+The declaration registers the step once. Later expressions can refer to the same step by name.
 
 ```swift
 let finish = Do(Step.finish, when: count == 0) { Skip() }
-finish
 let Finished = Temporal()
 Finished(.eventually(finish.enabled))
 WeakFairness(finish)
 ```
 
 `step.enabled` tests whether the step has a successor, including its guards and local choices.
-Parameterized steps quantify over their configured arguments. An empty argument domain makes the step disabled.
+On a parameterized step, `step.enabled` tests whether any configured argument enables it. For a step with one parameter, `enterElevator.isEnabled(for: car)` checks just that car. A value outside the configured domain returns `false`.
 `WeakFairness(step)` and `StrongFairness(step)` refer to that same registered action.
 For a parameterized independent step, these forms apply to the action as a whole.
 `WeakFairness(each: step)` and `StrongFairness(each: step)` instead apply separately
@@ -268,9 +305,8 @@ not change the generated scheduler or transitions. A mutable domain is rejected.
 
 ```swift
 let visit = Do(Step.visit, over: members) { member in
-    Assign(seen[member], to: true)
+    seen[member].set(true)
 }
-visit
 WeakFairness(each: visit)
 ```
 
@@ -292,8 +328,8 @@ The compiler retains each argument type and binding identity through native gene
 Do(Step.pour, over: jugs, jugs) { source, destination in
     When(source != destination)
     let amount = contents[source]
-    Assign(contents[source], to: 0)
-    Assign(contents[destination], to: contents[destination] + amount)
+    contents[source].set(0)
+    contents[destination] += amount
 }
 ```
 
@@ -314,7 +350,7 @@ An immutable `Macro` binding at specification scope defines reusable statements 
 Each call expands inside its enclosing atomic step. It does not add an action, process, or program counter.
 
 ```swift
-let advance = Macro { Assign(count, to: count + 1) }
+let advance = Macro { count += 1 }
 Do(Step.once) { advance() }
 Do(Step.twice) { advance(); advance() }
 ```
@@ -323,7 +359,7 @@ Later calls observe assignments from earlier calls in the same step.
 Parameterized independent steps and nested algorithms can use these macros.
 An algorithm can declare a local macro with the same name.
 An `Each` body can also declare a bound macro after its local state and use it
-inside its `Do` or `While` steps. Such a macro can capture that process's typed
+inside its `Do`, `Loop`, or `While` steps. Such a macro can capture that process's typed
 state; expansion remains inside the caller's atomic step.
 Specification macros require unique immutable bindings.
 Control transfers inside a macro still require an enclosing algorithm.
@@ -340,14 +376,65 @@ transition: other processes cannot observe or act on intermediate values.
 ```swift
 // With x initially 1, the resulting state has x == 2 and y == 2.
 Do(Step.copy) {
-    Assign(x, to: x + 1)
-    Assign(y, to: x)
+    x += 1
+    y.set(x)
 }
 ```
+
+`x += amount` inside a step adds to a writable integer location. It has the
+same ordered reads and overflow behavior as `Assign(x, to: x + amount)`.
+Use `second.set(0)` to replace a value or `y.set(x)` to copy the current value
+of another field. Keep the variable handle declared with `let`.
+
+For a writable sequence, `waiting.append(request)` puts the request at the back of the queue. It lowers to `waiting.set(waiting.appending(request))` at the same point in the step.
+
+For writable sets, use `marked.insert(node)` to add a member,
+`frontier.remove(node)` to remove one, and `frontier.formUnion(successors)`
+to add a set of members in one assignment.
+
+A finite string-backed enum expression exposes its Swift `rawValue`. For example,
+a model value `d1` has the raw string `"d1"`. Comparing the enum cases directly
+keeps their formal identities. In a validation binding, the parameter type
+determines the collection. `Bind(Prisoner, to: ["Alice", "Bob"])` supplies a set
+when `Prisoner` has type `Set<String>`.
+
+For an upstream model that encodes an empty slot as the formal string `"none"`,
+conform the wrapped string enum to `NoneEncodedOptionalElement`. The elevator
+declares `Car.rider: PersonID?`, assigns with `rider.set(person)`, and clears
+with `rider.set(nil)`. The generated Swift state exposes the optional. The formal
+state retains the upstream strings. The model declaration rejects a wrapped
+case that would also encode as `"none"`.
+
+Within a scoped `Algorithm`, declare a shared field by key path when you only
+need its state member. In a `Do` with `in: State.self`, copy another field of
+the same type or assign an integer literal to an `Int` field.
+
+```swift
+scope.sharedVar(\State.count, initial: 7)
+scope.sharedVar(\State.previous, initial: 0)
+Do(Step.reset, in: State.self) { state in
+    state.previous = state.count
+    state.count = 0
+}
+```
+
+After the reset, `previous` is 7 and `count` is 0. Reverse the two assignments
+and both fields become 0. You can also write `state.count += 1` or
+`state.count += state.batch` when both fields are integers. The addition reads
+their values at that line. If it overflows, the step reports the operands and
+commits none of its writes. Use the ordinary `Do` body for compound right-hand
+expressions, choices, and control statements.
 
 Repeated assignments are allowed and execute in order. Conditions, nested
 `When` guards, and choice domains read the values available at their position in
 the block. The `when:` condition on `Do` reads the entry state.
+
+Inside `Either`, write each guarded alternative as a sibling `When` block.
+For example, the clock uses `When(second == 59, minute < 59)` for a minute
+rollover. The guards run from left to right. A false guard skips the remaining
+guards and updates in that alternative. If two alternatives are enabled, both
+can produce successors. If they produce different snapshots, `send` reports
+an ambiguous action. Use `If` when the rule should choose one branch by priority.
 
 A failed nested guard disables that candidate transition entirely. Earlier
 assignments in that candidate must not leak into the machine state. Evaluation
@@ -380,8 +467,8 @@ uses the same saved-value semantics.
 ```swift
 Do(Step.swap) {
     let originalLeft = left
-    Assign(left, to: right)
-    Assign(right, to: originalLeft)
+    left.set(right)
+    right.set(originalLeft)
 }
 ```
 
@@ -427,6 +514,15 @@ Additional property-handle forms need a named corpus case and an explicit
 contract. Retain the temporal composition capabilities needed by the corpus;
 these four forms do not limit expressiveness.
 
+### Name a property in Swift and in the model
+
+Inside `#spec`, `let validTime = Invariant { … }` uses the binding as its model name.
+When matching a published specification, write `let solution = Invariant("Solution") { … }`.
+Register it with `solution`, then use that value in `.checking(only:)` or `.expect`.
+The TLA+ operator and the name in the configuration are both `Solution`.
+For an action label, use a Swift enum raw value such as `case produce = "ProducerStep"`
+and write `Do(Step.produce)`. The exported transition still carries `ProducerStep`.
+
 ### Invariant handles across scopes
 
 The invariant forward-declaration syntax is `let safe = Invariant()` inside `#spec`.
@@ -439,20 +535,18 @@ The predicate retains its inner scope and any process-member quantification.
 
 ```swift
 let safe = Invariant()
-let worker = Algorithm(scoped: { scope in
+Algorithm("worker") { scope in
     let value = scope.sharedVar(initial: 0)
     Do(Step.wait) { Goto(Step.wait) }
     safe { value == 0 }
-})
-worker
-let safety = Validation {}.checking(only: [safe])
-safety
+}
+Validation("safety") {}.checking(only: [safe])
 ```
 
 A bare forward handle is not a builder component. A scenario reference without a registered predicate fails compilation.
 Two predicate registrations for the same handle also fail compilation, even when their bodies agree.
 For example, `safe { true }` followed by `safe { false }` is invalid.
-An unused handle registers no claim, like an unused bound predicate declaration.
+A forward handle registers its claim when the author supplies the predicate.
 An unbound forward constructor such as `Invariant()` is rejected at its source
 location; authors bind the handle with `let` and call it to register the claim.
 
@@ -466,7 +560,7 @@ An omitted label uses the Swift declaration name for display.
 
 Refinements use the same naming and label rules.
 For example, `let refines = Refinement(instance: target, mappings: mappings, label: "Abstract behavior")` keeps `refines` as its formal name.
-The separate `refines` builder expression registers this declaration.
+The `refines` declaration registers the refinement.
 The macro supplies the internal `_name` argument from the Swift binding.
 The former `Refinement(name: ...)` spelling is not supported.
 
@@ -529,18 +623,16 @@ For example, the existing `RecurringPopulation` declarations supply `members`, `
 
 ```swift
 let EachRecurs = AlwaysEventually()
-let toggle = Algorithm {
+Algorithm("toggle") {
     Each(members, fairness: .weak) { member in
-        While(Step.toggle, true) {
-            Assign(value, to: 1 - value)
+        Loop(Step.toggle) {
+            value.set(1 - value)
         }
         EachRecurs(value == member)
     }
 }
-toggle
-let outsideCycle = Validation(label: "Outside cycle") { Bind(members, to: Set<Int>([2])) }
+Validation("outsideCycle", label: "Outside cycle") { Bind(members, to: Set<Int>([2])) }
     .expect(EachRecurs, .violated)
-outsideCycle
 ```
 
 Acceptance requires the expected violation and actionable native and TLC lassos for member `2`.
@@ -666,11 +758,8 @@ the author registers that binding once:
 
 ```swift
 let memberSymmetry = Symmetry(Set(Member.all))
-memberSymmetry
-let ordinary = Validation {}
-ordinary
-let reduced = Validation {}.usingSymmetry(memberSymmetry)
-reduced
+Validation("ordinary") {}
+Validation("reduced") {}.usingSymmetry(memberSymmetry)
 ```
 
 A typed set parameter can supply the members for different configurations:
@@ -679,7 +768,6 @@ A typed set parameter can supply the members for different configurations:
 let members = scope.parameter(as: Set<Member>.self,
     in: NonEmptySubsets(of: Set(Member.all)))
 let memberSymmetry = Symmetry(members)
-memberSymmetry
 ```
 
 The current finite-domain implementation accepts enumerated nonempty member
@@ -734,13 +822,12 @@ each member one weak-fairness obligation over its eligible steps other than
 `ncs`:
 
 ```swift
-let algorithm = Algorithm {
+Algorithm("algorithm") {
     Each(members, fairness: .weak(excluding: [Step.ncs])) { _ in
         Do(Step.ncs) { Goto(Step.pass) }
         Do(Step.pass) { Goto(Step.ncs) }
     }
 }
-algorithm
 ```
 
 Putting `WeakFairness(Step.pass)` inside that `Each` is invalid. An inner `Do`
@@ -763,9 +850,7 @@ binding registers it, and `Validation.usingFairness(_:)` selects it for one scen
 
 ```swift
 let NonCriticalMayStutter = FairnessProfile(excluding: [Step.ncs])
-NonCriticalMayStutter
-let liveness = Validation {}.usingFairness(NonCriticalMayStutter)
-liveness
+Validation("liveness") {}.usingFairness(NonCriticalMayStutter)
 ```
 
 Without a selection, the algorithm's declared process fairness is unchanged.
@@ -780,6 +865,12 @@ translated `Spec`. Both exports come from the compiled algorithm, not a
 post-render text rewrite. Dijkstra's three-process `LSpec` configuration uses
 this form, while its four-process safety configuration keeps the default `Spec`.
 
+A direct-action model can require a temporal condition separately for each member
+of an immutable finite domain, without declaring a process. In ReadersWriters,
+`Liveness(forEach: actors) { actor in .alwaysEventually(readers.contains(actor)) }`
+requires every actor to read repeatedly. The observations for different actors
+can occur at different times. An empty domain satisfies the universal condition.
+
 ### Temporal claims for each process member
 
 A temporal declaration inside `Each` applies separately to every member of that
@@ -789,8 +880,8 @@ The population must depend only on constants or immutable model parameters.
 ```swift
 let EachRecurs = AlwaysEventually()
 Each(members, fairness: .weak) { member in
-    While(Step.toggle, true) {
-        Assign(value, to: 1 - value)
+    Loop(Step.toggle) {
+        value.set(1 - value)
     }
     EachRecurs(value == member)
 }
@@ -873,12 +964,11 @@ retains. An action constraint selects successors using a typed before/after
 value beside the algorithm it bounds:
 
 ```swift
-let counter = Algorithm(scoped: { scope in
+Algorithm("counter") { scope in
     let count = scope.sharedVar(initial: 0)
-    While(Step.advance, true) { Assign(count, to: count + 1) }
+    Loop(Step.advance) { count += 1 }
     ActionConstraint(on: count) { before, after in after <= 2 }
-})
-counter
+}
 ```
 
 Neither constraint changes the executable transition relation. Deadlock checks
@@ -905,12 +995,11 @@ verdict. Neither choice permits a truncated graph to pass equivalence validation
 The check-selection syntax is:
 
 ```swift
-let upstreamSelection = Validation(label: "Upstream selection") {
+Validation("upstreamSelection", label: "Upstream selection") {
     Bind(processCount, to: 3)
 }
 .checking(only: [exclusion])
 .checkingDeadlock(false)
-upstreamSelection
 ```
 
 `Bind` accepts a typed value or a closed typed expression, such as
@@ -963,16 +1052,23 @@ checks. For example, EWD998ChanID excludes vector clocks while retaining the
 active flags, colors, counters, clock-free inbox, and pass count:
 
 ```swift
-let published = Validation { Bind(Node, to: fiveNodes) }
+Validation("published") { Bind(Node, to: fiveNodes) }
     .viewing(Quintuple.literal(active, color, counter, viewInbox, passes))
     .checking(only: [EWD998Safe, Max3TokenRounds, EWD998ChanSpec, EWD998Live])
     .checkingDeadlock(false)
-published
 ```
 
 View-based exploration records complete representative states for diagnostics,
 but graph equality compares the complete, typed view values and labeled edges.
 Representatives chosen by the two independent checkers need not be identical.
+During native capture the checker supplies the event's snapshot and search level.
+The generated scenario supplies the identity already evaluated for an admitted
+state. For a VIEW made of direct field reads in a tuple, the writer can assemble
+the key from the same encoded fields it writes in the full representative.
+A failed check on an excluded successor retains that successor's snapshot and
+level even when an admitted state has the same VIEW. Ordinary checking can run
+without producing formal projections or graph bytes.
+
 The view may include `scope.checkingLevel` when a trace must distinguish a
 revisited model state at a later breadth-first depth. Initial states have level
 1, and each successor is evaluated at its source level plus 1 in native checking
@@ -992,9 +1088,8 @@ view-identified search. For example:
 Inside `#spec { scope in ... }`, a scenario can declare:
 
 ```swift
-let trace = Validation {}.postcondition(scope.checkingDiameter == 3,
+Validation("trace") {}.postcondition(scope.checkingDiameter == 3,
     name: "TraceAccepted")
-trace
 ```
 
 The condition is a check of the completed run, not a state invariant. It must
@@ -1078,11 +1173,10 @@ let nodes = scope.parameter(as: Set<Int>.self,
 let quorum = scope.parameter(as: Int.self, in: IntRange(1, through: nodes.cardinality))
 let selected = scope.sharedVar(initial: Set<Int>([]))
 
-let threeNodes = Validation(label: "Three nodes") {
+Validation("threeNodes", label: "Three nodes") {
     Bind(nodes, to: Set<Int>([1, 2, 3]))
     Bind(quorum, to: 2)
 }
-threeNodes
 ```
 
 The generated configuration stores `Set<Int>`. Its initializer checks both the
@@ -1116,8 +1210,9 @@ let input = scope.parameter(as: [Int].self,
 let row = scope.sharedVar(initial: [Int]())
 ```
 
+Use `row.isEmpty` to check whether a sequence has zero elements and `row.count` for its length.
 Array expressions support append, concatenation, indexed reads, indexed removal,
-selection, length, head, and folds through the shared sequence operations.
+selection, head, and folds through the shared sequence operations.
 These operations retain the array type. They do not require a `TupleExpr` value.
 When a TLA+ state value is a heterogeneous fixed-length tuple rather than a
 sequence, `Pair<A, B>`, `Triple<A, B, C>`, and five-position `Quintuple` retain
@@ -1142,9 +1237,9 @@ The bounded sequence builders accept typed set expressions for their elements an
 Both domains can depend on parameters:
 
 ```swift
-let row = scope.sharedVar(in: Sequences(of: members, lengths: IntRange(0, through: limit)))
-let sorted = scope.sharedVar(in: SortedSequences(of: members, lengths: lengths))
-let zeroBased = scope.sharedVar(in: ZeroBasedSequences(of: members, lengths: lengths))
+let row = scope.sharedVar(initiallyIn: Sequences(of: members, lengths: IntRange(0, through: limit)))
+let sorted = scope.sharedVar(initiallyIn: SortedSequences(of: members, lengths: lengths))
+let zeroBased = scope.sharedVar(initiallyIn: ZeroBasedSequences(of: members, lengths: lengths))
 ```
 
 `SortedSequences` requires integer elements and retains only nondecreasing sequences.
@@ -1173,7 +1268,7 @@ Generated Swift stores these values as typed dictionaries.
 Function-space membership rejects missing keys, extra keys, and values outside the supplied range.
 
 ```swift
-let values = algorithm.sharedVar(in: Functions(
+let values = algorithm.sharedVar(initiallyIn: Functions(
     from: IntRange(0, through: size - 1), to: Set<Int>([0, 1])))
 ```
 
@@ -1186,13 +1281,14 @@ Dictionary expressions expose `.keys` as a typed set. An empty dictionary has an
 Native generation and TLA+ export preserve the key type and domain expression.
 `IntRange` produces `Expr<Set<Int>>`. A set's `.mapping` expression produces a Swift `Set` of its result type, which must be `Hashable`.
 Both operations retain formal expressions until evaluation. They do not enumerate their members during source construction.
-`ForAll(in:)` and `Exists(in:)` accept typed Swift sets and retain their element types.
+Use `members.allSatisfy { member in … }` to check every member of a typed set. Use `members.contains { member in … }` to check whether any member satisfies the predicate. On an empty set, these return true and false respectively. Both bind the element with its model type. Use `members.contains(member)` to check membership and `members.count` to count distinct members.
+A query such as `members.filter { member in ready[member] }.count` counts the ready members. The filtered value is itself a set. Use it in another expression or pass it to `formUnion` in a step.
 Their predicate closures can use immutable `let` bindings before one final `return` expression.
 Each binding retains references to the quantified members, earlier bindings, and enclosing model values.
 Nested quantifiers retain their own scope. Mutable bindings and statements after `return` are invalid.
 
 ```swift
-ForAll(in: members) { member in
+members.allSatisfy { member in
     let expected = member + 10
     let matches = family[member] == expected
     return matches
@@ -1221,11 +1317,10 @@ Ordinary dictionary literals can bind function-valued model parameters:
 ```swift
 let capacity = scope.parameter(as: [String: Int].self,
     in: Functions(from: jugs, to: Set<Int>([3, 5])))
-let twoJugs = Validation(label: "Two jugs") {
+Validation("twoJugs", label: "Two jugs") {
     Bind(jugs, to: Set<String>(["small", "big"]))
     Bind(capacity, to: ["small": 3, "big": 5])
 }
-twoJugs
 ```
 
 The parameter type supplies the key and value types, including for `[:]`.
@@ -1241,16 +1336,16 @@ identifier type. Both existing closure forms retain their meaning:
 ```swift
 Each(nodes) { member in
     Do(Step.visit) {
-        Assign(selected, to: selected.inserting(member))
+        selected.set(selected.inserting(member))
     }
 }
 
-Each(nodes, scoped: { member, process in
+Each(nodes) { member, process in
     let visited = process.localVar(initial: false)
     Do(Step.visit) {
-        Assign(visited, to: true)
+        visited.set(true)
     }
-})
+}
 ```
 
 When the process action needs a stable formal name, pass a typed String-backed
@@ -1291,17 +1386,15 @@ let devices = scope.parameter(as: Set<DeviceID>.self,
 let phase = scope.sharedVar(initial:
     Dictionary<DeviceID, Int>.mapping(over: devices) { _ in 0 })
 
-let protocolAlgorithm = Algorithm(scoped: { _ in
+Algorithm("protocolAlgorithm") { _ in
     Each(devices) { member in
-        Do(Step.advance) { Assign(phase[member], to: phase[member] + 1) }
+        Do(Step.advance) { phase[member] += 1 }
     }
-})
-protocolAlgorithm
+}
 
-let pair = Validation(label: "Pair") {
+Validation("pair", label: "Pair") {
     Bind(devices, to: Set<DeviceID>([.east, .west]))
 }
-pair
 ```
 
 `DeviceID` values identify the same members in configuration, actions, state,
@@ -1326,18 +1419,16 @@ exclusion {
     criticalSection.count <= 1
 }
 
-let correctProtocol = Validation(label: "Correct protocol") {
+Validation("correctProtocol", label: "Correct protocol") {
     Bind(processCount, to: 3)
     Bind(lockEnabled, to: true)
 }
-correctProtocol
 
-let missingLock = Validation(label: "Missing lock") {
+Validation("missingLock", label: "Missing lock") {
     Bind(processCount, to: 3)
     Bind(lockEnabled, to: false)
 }
 .expect(exclusion, .violated)
-missingLock
 ```
 
 The `exclusion { ... }` expression registers the predicate in the builder.
@@ -1354,7 +1445,7 @@ Fixed `ModelCollection` replacement follows the member-ID parameter contract
 above; the legacy API has been deleted locally and awaits hosted parity.
 
 Registered refinements have model-owned property handles and participate in every scenario by default.
-A `let` binding alone does not register a refinement. Its handle must also appear as a specification builder expression.
+Declaring the refinement registers it. Use the binding to refer to it in a validation scenario.
 `.expect(refinement, .violated)` changes the expected outcome without disabling the refinement or other checks.
 A distinct handle with the same name does not resolve to the registered refinement.
 Generated native checking and TLA+ export use the same resolved refinement identity and mappings.
@@ -1374,12 +1465,10 @@ followed by a bound, registered refinement:
 let TD = Instance(of: SyncTerminationDetectionModel.self) {
     Bind(\.N, to: N)
 }
-TD
 let TDSpec = Refinement(instance: TD) {
     Map(\.active, from: active)
     Map(\.terminationDetected, from: terminationDetected)
 }
-TDSpec
 ```
 
 The key paths address generated `Configuration` and `State` members of the abstract
@@ -1397,6 +1486,13 @@ The abstract model's compiled generated transitions supply native refinement
 checking; its compiled TLA+ module supplies export. The concrete model's one
 resolved mapping supplies both paths. Neither path compiles the abstract model
 again at runtime, copies its declarations, or evaluates it through an interpreter.
+LockHS refines two machines with no parameters. Each target declares
+`ParameterlessGeneratedModel` and the instance has an empty binding block.
+For a process algorithm, the refinement also maps the program counter. For
+example, `Map(\.pc, projecting: translatedPC)` maps each process to a label
+in the target. The native checker constructs the target snapshot from these
+labels and the mapped fields. The app still reads its ordinary typed `State`.
+
 EWD840's selected `TDSpec` must include the abstract model's fairness obligation.
 `Refinement(instance: TD, behavior: .initialAndNext)` instead checks the
 abstract initial predicate and next-state relation without its fairness; this
@@ -1720,7 +1816,7 @@ Hosted equivalence is separate from settling the syntax and semantics.
 | ID | Decision |
 | --- | --- |
 | B-01 | Settled: typed parameter-dependent domains and model-owned finite scenario bindings use the same resolved parameter identities and generated `Configuration`; `Each` and dictionary state use stable member IDs, not application objects. Runner limits stop validation and never constrain the model. The fixed `ModelCollection` authoring API is removed. Acceptance still requires source-aligned tests and hosted parity for applicable configurations |
-| B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` and `Validation` require explicit registration by bound reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
+| B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm("name")` and `Validation("name")` register inline. Declaring a named component also registers it. Inline control statements need no extra identity. Optional `label:` is presentation-only |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Settled for this DSL surface: only the explicit bound-step, `Next`, process-member, and projected fairness forms above declare obligations; inner process steps have no independent handles. Finite symmetry is opt-in for a registered, immutable binding, and only a safety-only TLC scenario may select it. Native checking remains unreduced. Unsupported scopes and reductions fail rather than silently changing meaning; independent parity evidence is still required |
 | B-05 | Bounded current contract: ordinary supported Swift values and the typed operations above retain their types; immutable local expressions and bound `Macro` statements are the supported reuse forms, not arbitrary Swift function bodies. Inference must resolve completely before emission; checked `Int` arithmetic and other specified evaluation failures must agree in generated Swift and TLA+, including failure identity and evaluation order. Reachable overflow is a checking failure, not a compile-time rejection. One-based DSL sequence indices apply. Additional value or helper forms require a named case and a new native/formal contract |
@@ -1743,18 +1839,20 @@ Algorithm.init(label: String? = nil, fairness: SequentialAlgorithmFairness = .no
     @AlgorithmBuilder _ body: () -> [AlgorithmElement])
 Algorithm.init(label: String? = nil, fairness: SequentialAlgorithmFairness = .none,
     @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement])
+Validation(_ name: String, label: String? = nil,
+    @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration
 Validation(label: String? = nil,
     @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration
 ```
 
-The macro supplies their internal `_name` from an immutable `let` binding. The
-author registers each by referencing that binding.
-`let algorithm = Algorithm { Do(Step.start) { Stop() } }; algorithm`
-and `let exhaustive = Validation {}; exhaustive` are positive examples.
+An inline call such as `Validation("exhaustive") {}` declares and registers
+the scenario. For declarations that use an immutable `let` binding, the macro
+supplies the name and registers the component. Prefer `Algorithm("algorithm") { Do(Step.start) { Stop() } }`
+and `Validation("exhaustive") {}` when the component needs only a name.
 `Algorithm { Do(Step.start) { Stop() } }` without a binding, and
 `var exhaustive = Validation {}` with a mutable binding, fail at their source
 locations. A named property handle likewise needs its declared binding and
-predicate registration. `Each`, `Do`, and `While` remain inline statements;
+predicate registration. `Each`, `Do`, `Loop`, and `While` remain inline statements;
 `Procedure(ProcedureName.scan) { ... }` uses a typed enum case, not another
 required Swift `let`. Existing formal-core constructors with explicit names
 are not a parallel application-authoring style.
@@ -1763,7 +1861,7 @@ For B-03, the public modifiers `expect(_ property: some ModelProperty, _ expecte
 and `expectDeadlock(_ expected: ValidationExpectation)` accept `.satisfied` or
 `.violated`. All declared properties and deadlock are
 selected by default. An expected unfinished stuck state is written as
-`let expectedStuck = Validation(label: "Expected stuck") {}.expectDeadlock(.violated); expectedStuck`;
+`Validation("expectedStuck", label: "Expected stuck") {}.expectDeadlock(.violated)`;
 the same check
 remains enabled and must return a replayable deadlock witness. Normal completion
 must satisfy the default deadlock check. An expectation for a disabled check,

@@ -13,7 +13,26 @@ struct ProjectedFairnessTests {
         let tla = try ProjectedProgress.render().tlaBundle.tla
         #expect(tla.contains("WF_((position).progress)(Next)"))
         #expect(tla.contains("SF_((position).progress)(Next)"))
+        let preserved = "Next /\\ UNCHANGED ((position).noise)"
+        let compilation = try ProjectedProgress.spec.compile()
+        func checkSpec(_ module: String) throws {
+            try StraightLineRenderedActionCheck.verifyFiniteInvocations(compilation.semantics.behavior,
+                layout: compilation.layout, binders: compilation.bindings.binders, module: module,
+                renderState: { _ in "(position).noise" })
+        }
+        try checkSpec(tla)
+        try #require(tla.components(separatedBy: preserved).count == 2)
+        for wrong in ["Next", "Next /\\ UNCHANGED ((position).progress)"] {
+            #expect(throws: CompilationDiagnostic.self) {
+                try checkSpec(tla.replacingOccurrences(of: preserved, with: wrong))
+            }
+        }
         let obligations = try machine.fairnessConditions()
+        #expect(obligations.count == 3)
+        for obligation in obligations {
+            let qualifies = try #require(obligation.changes)
+            #expect(try !qualifies(machine.snapshot, machine.snapshot))
+        }
         for successor in try machine.successors() {
             for obligation in obligations {
                 let changes = try #require(obligation.changes)
@@ -59,7 +78,7 @@ struct ProjectedFairnessTests {
         let stalled = try MachineValidationGraph(initialMachines: [ProjectedStuttering.makeMachine()], maximumStates: 10)
         let failure = try stalled.refinementFailure(initialMachines: [ProjectedProgress.makeMachine()]) { snapshot in
             var abstract = try ProjectedProgress.makeMachine()
-            if snapshot.state.noise == 1 { _ = try abstract.send(.toggle) }
+            if snapshot.state.noise == 1 { try abstract.send(.toggle) }
             return abstract
         }
         guard case .fairness(_, let witness) = try #require(failure) else {
@@ -70,7 +89,7 @@ struct ProjectedFairnessTests {
         let progressing = try MachineValidationGraph(initialMachines: [ProjectedProgress.makeMachine()], maximumStates: 10)
         let accepted = try progressing.refinementFailure(initialMachines: [ProjectedStuttering.makeMachine()]) { snapshot in
             var abstract = try ProjectedStuttering.makeMachine()
-            if snapshot.state.position.noise == 1 { _ = try abstract.send(.toggle) }
+            if snapshot.state.position.noise == 1 { try abstract.send(.toggle) }
             return abstract
         }
         #expect(accepted == nil)

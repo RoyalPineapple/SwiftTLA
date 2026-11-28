@@ -9,7 +9,7 @@ struct InvariantInitialStatesModel: Sendable {
         #spec("InvariantInitialStates") {
             let AllowedInitial = Invariant()
             let invariantInitialStates = Algorithm(label: "InvariantInitialStates", scoped: { scope in
-                let value = scope.sharedVar(in: 0...1)
+                let value = scope.sharedVar(initiallyIn: 0...1)
                 Each(Set<Int>([1, 2]), scoped: { (_: ProcessIdentifier<Int>, scope: ProcessScope) in
                     let choice = scope.localVar(in: Set<Int>([0, 1]))
                     Do(Step.idle) { Assign(choice, to: choice) }

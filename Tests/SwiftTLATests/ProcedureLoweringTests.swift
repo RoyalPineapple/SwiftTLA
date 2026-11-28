@@ -1,5 +1,7 @@
+import Foundation
 @testable import SwiftTLA
 import Testing
+import UpstreamParity
 import SwiftTLAMacros
 
 @Suite("Procedure Lowering")
@@ -59,15 +61,15 @@ struct ProcedureLoweringTests {
         #expect(try compilation(assigning: 1).identity != compilation(assigning: 2).identity)
     }
 
-    @Test("call and return restore the caller environment after one atomic procedure step")
-    func callReturnRestoresFrame() throws {
+    @Test("call and return restore the caller environment after one atomic procedure step", arguments: [false, true])
+    func callReturnRestoresFrame(inWhile: Bool) throws {
         let model = AlgorithmModel(
             name: "ProcedureFrame",
             components: [
                 .shared(.init(root: "output", initialization: .value(.int(0)))),
                 .step(.init(label: .init(name: "start"), statements: [
                     .call(target: "work", arguments: [.int(7)])
-                ])),
+                ], loopCondition: inWhile ? .equal(.variable("output"), .int(0)) : nil)),
                 .step(.init(label: .init(name: "finished"), statements: [.stop])),
                 .procedure(.init(
                     name: "work",
@@ -84,14 +86,17 @@ struct ProcedureLoweringTests {
         )
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
-        let spec = try loweredSpecification(model)
-        let (compilation, initial) = try initialState(of: spec)
+        let spec = TLASpec(model.name) { Algorithm(model: model) }
+        let proof = inWhile ? try SequentialControlOutputEvidence.callWhileProof(specification: spec) : nil
+        try #require(!inWhile || proof != nil)
+        let (compilation, initial) = try initialState(of: spec, using: proof?.compilation)
         let afterCall = try apply("start", in: compilation, to: initial)
         #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("enter"))
         #expect(try value(named: "workValue", in: afterCall, compilation: compilation) == .int(7))
         #expect(try value(named: "workOffset", in: afterCall, compilation: compilation) == .int(1))
         #expect(try value(named: "stack", in: afterCall, compilation: compilation) != .tuple([]))
-        let rendered = try compilation.render().tlaBundle.tla
+        let output = try proof?.output ?? compilation.render()
+        let rendered = output.tlaBundle.root.tla
         #expect(rendered.contains("pc' = \"enter\""))
         #expect(rendered.contains("pc' = \"procedure.work.enter\"") == false)
         #expect(rendered.contains("[procedure |-> \"work\", pc |->"))
@@ -101,7 +106,19 @@ struct ProcedureLoweringTests {
         #expect(try value(named: "workValue", in: afterReturn, compilation: compilation) == .int(0))
         #expect(try value(named: "workOffset", in: afterReturn, compilation: compilation) == .int(1))
         #expect(try value(named: "stack", in: afterReturn, compilation: compilation) == .tuple([]))
-        #expect(try value(named: "pc", in: afterReturn, compilation: compilation) == .string("finished"))
+        #expect(try value(named: "pc", in: afterReturn, compilation: compilation)
+            == .string(inWhile ? "start" : "finished"))
+        if inWhile {
+            let exited = try apply("start", in: compilation, to: afterReturn)
+            #expect(try value(named: "pc", in: exited, compilation: compilation) == .string("finished"))
+            #expect(try value(named: "output", in: exited, compilation: compilation) == .int(8))
+#if compiler(>=6.2)
+            let proof = try #require(proof)
+            try recordCallWhileProof(output.tlaBundle.root, name: proof.name, bytes: proof.bytes)
+            let source = URL(fileURLWithPath: #filePath)
+            Attachment.record(Array(try Data(contentsOf: source)), named: source.lastPathComponent)
+#endif
+        }
     }
 
     @Test("cross-procedure tail call keeps the original continuation and restores every frame slot")
@@ -167,17 +184,17 @@ struct ProcedureLoweringTests {
         var machine = try ScopedControlProjectionMachine.makeMachine()
         let pc = try #require(TLAStateProjection.Token(validating: "pc"))
 
-        _ = try machine.send(.start)
+        try machine.send(.start)
         let outer = try #require(machine.formalProjection(of: machine.snapshot).value(for: pc))
-        _ = try machine.send(.procedure_outer_enter)
+        try machine.send(.procedure_outer_enter)
         let inner = try #require(machine.formalProjection(of: machine.snapshot).value(for: pc))
 
         #expect(outer == .string(try formalName(ofProcedure: "outer")))
         #expect(inner == .string(try formalName(ofProcedure: "inner")))
     }
 
-    @Test("Each processes keep recursive procedure frames and parameter slots independent")
-    func eachProcessesIsolateProcedureFrames() throws {
+    @Test("Each processes keep recursive procedure frames and parameter slots independent", arguments: [false, true])
+    func eachProcessesIsolateProcedureFrames(inWhile: Bool) throws {
         let workers: [TLAValue] = [.int(1), .int(2)]
         let model = AlgorithmModel(
             name: "ProcessProcedureFrame",
@@ -188,12 +205,12 @@ struct ProcedureLoweringTests {
                 ])), swiftTypeName: "Function<Worker, Int>")),
                 .process(.init(
                     typeName: "Worker",
-                    domain: .setLiteral(workers.map(StateExpr.value)),
+                    population: .family(.setLiteral(workers.map(StateExpr.value))),
                     fairness: .none,
                     components: [
                         .step(.init(label: .init(name: "start"), statements: [
                             .call(target: "outer", arguments: [.currentProcess])
-                        ])),
+                        ], loopCondition: inWhile ? .equal(.functionApply(.variable("seen"), .currentProcess), .int(0)) : nil)),
                         .step(.init(label: .init(name: "finished"), statements: [.stop]))
                     ]
                 )),
@@ -217,9 +234,15 @@ struct ProcedureLoweringTests {
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
         let spec = try loweredSpecification(model)
+        let proof = inWhile
+            ? try SequentialControlOutputEvidence.callWhileProof(
+                specification: TLASpec(model.name) { Algorithm(model: model) }
+            )
+            : nil
+        try #require(!inWhile || proof != nil)
         let procedureAction = try #require(spec.actions.first { $0.name == "procedure.outer.enter" })
         #expect(procedureAction.bindings.map(\.generatedSwiftType) == ["Worker"])
-        let (compilation, initial) = try initialState(of: spec)
+        let (compilation, initial) = try initialState(of: spec, using: proof?.compilation)
         let oneInOuter = try apply("start", process: .int(1), in: compilation, to: initial)
         let bothInOuter = try apply("start", process: .int(2), in: compilation, to: oneInOuter)
         #expect(try functionValue("outerValue", key: .int(1), in: bothInOuter, compilation: compilation) == .int(1))
@@ -240,14 +263,35 @@ struct ProcedureLoweringTests {
         #expect(try functionValue("outerValue", key: .int(2), in: oneReturned, compilation: compilation) == .int(2))
         #expect(try functionValue("pc", key: .int(1), in: oneReturned, compilation: compilation) == .string("resume"))
 
-        let oneFinished = try apply("procedure.outer.resume", process: .int(1), in: compilation, to: oneReturned)
+        let afterOuterReturn = try apply("procedure.outer.resume", process: .int(1), in: compilation, to: oneReturned)
+        #expect(try functionValue("pc", key: .int(1), in: afterOuterReturn, compilation: compilation)
+            == .string(inWhile ? "start" : "finished"))
+        let oneFinished = inWhile
+            ? try apply("start", process: .int(1), in: compilation, to: afterOuterReturn)
+            : afterOuterReturn
         #expect(try functionValue("pc", key: .int(1), in: oneFinished, compilation: compilation) == .string("finished"))
         #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation)
             == functionValue("pc", key: .int(2), in: bothInOuter, compilation: compilation))
+#if compiler(>=6.2)
+        if let proof {
+            try recordCallWhileProof(proof.output.tlaBundle.root, name: proof.name, bytes: proof.bytes)
+        }
+#endif
     }
 
-    private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, CompiledState) {
-        let compilation = try spec.compile()
+#if compiler(>=6.2)
+    private func recordCallWhileProof(_ module: TLAModuleFile, name: String, bytes: Data) throws {
+        let cfg = try #require(module.cfg)
+        Attachment.record(Array(module.tla.utf8), named: "\(module.name).tla")
+        Attachment.record(Array(cfg.utf8), named: "\(module.name).cfg")
+        Attachment.record(Array(bytes), named: "\(name).tla")
+    }
+#endif
+
+    private func initialState(
+        of spec: TLASpec, using compiled: CompiledSpecification? = nil
+    ) throws -> (CompiledSpecification, CompiledState) {
+        let compilation = try compiled ?? spec.compile()
         let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         return (compilation, state)
     }

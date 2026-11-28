@@ -1,5 +1,6 @@
 import Foundation
 import SwiftDiagnostics
+import SwiftTLA
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -42,6 +43,34 @@ public struct SpecExpressionMacro: ExpressionMacro {
             return specCall(named: StringLiteralExprSyntax(content: "InvalidSpec"), body: closure)
         }
 
+        var hasInvariantBinding = false
+        for statement in closure.statements {
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               variable.bindings.contains(where: {
+                   $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName == "Invariant"
+               }) {
+                hasInvariantBinding = true
+            }
+            guard case .expr(let expression) = statement.item,
+                  var call = expression.as(FunctionCallExprSyntax.self) else { continue }
+            while let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+                  let base = member.base?.as(FunctionCallExprSyntax.self) {
+                call = base
+            }
+            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self)
+            let member = call.calledExpression.as(MemberAccessExprSyntax.self)
+            let constructor = reference?.baseName.sourceIdentifierName
+                ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
+                    ? member?.declName.baseName.sourceIdentifierName : nil)
+            if (constructor == "Algorithm" && ParserSession.inlineAlgorithmName(call) == nil) || (constructor == "Validation" && inlineValidationName(in: call) == nil) {
+                context.diagnose(Diagnostic(node: Syntax(statement.item), message: BuilderBindingDiagnostic()))
+            } else if constructor == "Invariant", call.arguments.isEmpty, call.trailingClosure != nil,
+                      member != nil || !hasInvariantBinding {
+                context.diagnose(Diagnostic(node: Syntax(statement.item), message: PropertyBindingDiagnostic()))
+            }
+        }
+
         let parameterScope: String?
         switch closure.signature?.parameterClause {
         case .simpleInput(let list): parameterScope = list.first?.name.sourceIdentifierName
@@ -49,14 +78,24 @@ public struct SpecExpressionMacro: ExpressionMacro {
         case nil: parameterScope = nil
         }
         let rewriter = DSLRewriter(context: context, parameterScope: parameterScope)
-        let rewritten = rewriter.rewrite(closure).as(ClosureExprSyntax.self) ?? closure
-        return specCall(named: name, body: rewritten)
+        var rewritten = rewriter.rewrite(closure).as(ClosureExprSyntax.self) ?? closure
+        try OrderedIntSourceSyntaxCheck.verifyRewrite(closure, rewritten: rewritten)
+        let items = specBuilderItems(in: closure)
+        if items.count != closure.statements.count {
+            var originals = rewritten.statements.makeIterator()
+            rewritten.statements = CodeBlockItemListSyntax(items.map { item in
+                item.binding == nil ? originals.next()! : item.syntax
+            })
+        }
+        return try OrderedIntSourceSyntaxCheck.checkingBuilderOutput(closure,
+            built: specCall(named: name, body: rewritten))
     }
 
     private static func specCall(
         named name: some ExprSyntaxProtocol,
         body: ClosureExprSyntax
     ) -> ExprSyntax {
+        // Use the macro's result type so caller declarations cannot capture its constructor.
         let arguments: LabeledExprListSyntax
         if body.signature == nil {
             arguments = [
@@ -64,7 +103,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
                 LabeledExprSyntax(expression: ExprSyntax(body))
             ]
             return ExprSyntax(FunctionCallExprSyntax(
-                calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
+                calledExpression: ExprSyntax(stringLiteral: ".init"),
                 leftParen: .leftParenToken(),
                 arguments: arguments,
                 rightParen: .rightParenToken()
@@ -79,7 +118,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
             )
         ]
         return ExprSyntax(FunctionCallExprSyntax(
-            calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
+            calledExpression: ExprSyntax(stringLiteral: ".init"),
             leftParen: .leftParenToken(),
             arguments: arguments,
             rightParen: .rightParenToken()
@@ -88,13 +127,41 @@ public struct SpecExpressionMacro: ExpressionMacro {
 
 }
 
+/// Expand completed top-level declarations into result-builder components. Keep the original
+/// binding token for diagnostics and lexical receipts. An explicit registration keeps its position.
+func specBuilderItems(in closure: ClosureExprSyntax) -> [(syntax: CodeBlockItemSyntax, binding: TokenSyntax?)] {
+    let explicit = Set(closure.statements.compactMap { item -> String? in
+        item.item.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
+    })
+    let parser = ParserSession()
+    var items: [(CodeBlockItemSyntax, TokenSyntax?)] = []
+    for item in closure.statements {
+        items.append((item, nil))
+        guard let declaration = item.item.as(VariableDeclSyntax.self), declaration.bindingSpecifier.text == "let" else { continue }
+        for binding in declaration.bindings {
+            guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier,
+                  !explicit.contains(identifier.sourceIdentifierName),
+                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { continue }
+            switch parser.compilerGrammarName(in: call.calledExpression) {
+            case "Do", "Algorithm", "Refinement", "Instance", "FairnessProfile", "Symmetry": break
+            case "Invariant" where call.trailingClosure != nil: break
+            default: guard parser.validationRoot(call) != nil else { continue }
+            }
+            let reference = DeclReferenceExprSyntax(baseName: identifier.trimmed)
+            items.append((CodeBlockItemSyntax(leadingTrivia: .newline, item: .expr(ExprSyntax(reference)),
+                trailingTrivia: .newline), identifier))
+        }
+    }
+    return items
+}
+
 private final class DSLRewriter: SyntaxRewriter {
     private let context: any MacroExpansionContext
     private let parameterScope: String?
     private static let helperNames: Set<String> = [
         "Choose", "Exists", "Fold", "ForAll", "Let", "LetRec", "Select", "Where", "With"
     ]
-    private static let stepBuilders: Set<String> = ["Do", "While", "Macro", "If", "Either", "Choose", "With", "Let"]
+    private static let stepBuilders: Set<String> = ["Do", "While", "Loop", "Macro", "If", "Either", "When", "Choose", "With", "Let"]
     private static let memberHelperNames: Set<String> = ["filtering", "forAll", "mapping", "selecting"]
 
     init(context: some MacroExpansionContext, parameterScope: String?) {
@@ -109,6 +176,13 @@ private final class DSLRewriter: SyntaxRewriter {
             guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                   var call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { return binding }
             let member = call.calledExpression.as(MemberAccessExprSyntax.self)
+            if let member, ["sharedVar", "parameter"].contains(member.declName.baseName.sourceIdentifierName) {
+                do throws(SourceParseDiagnostic) { _ = try requestedTLAName(call, declaration: name) }
+                catch {
+                    context.diagnose(Diagnostic(node: Syntax(binding), message: SpecExpressionDiagnostic(actual: error.message)))
+                    return binding
+                }
+            }
             if let member, ["sharedVar", "localVar"].contains(member.declName.baseName.sourceIdentifierName) {
                 let labels = call.arguments.filter { $0.label?.text == "label" }
                 guard labels.isEmpty || (labels.count == 1
@@ -169,6 +243,17 @@ private final class DSLRewriter: SyntaxRewriter {
                     return binding
                 }
                 binding.initializer?.value = ExprSyntax(boundCall)
+                return binding
+            }
+            if constructor == "Invariant", call.arguments.isEmpty, call.trailingClosure != nil {
+                guard node.bindingSpecifier.text == "let" else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: PropertyBindingDiagnostic()))
+                    return binding
+                }
+                call.leftParen = .leftParenToken()
+                call.arguments = [LabeledExprSyntax(expression: StringLiteralExprSyntax(content: name))]
+                call.rightParen = .rightParenToken()
+                binding.initializer?.value = ExprSyntax(call)
                 return binding
             }
             if constructor == "Refinement" {
@@ -245,6 +330,21 @@ private final class DSLRewriter: SyntaxRewriter {
     }
 
     override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
+        if StateCopySyntax.matches(node) {
+            do throws(StateCopySyntax.Problem) {
+                let model = context.lexicalContext.compactMap { $0.as(StructDeclSyntax.self) }.first
+                guard model?.attributes.contains(where: {
+                    guard let type = $0.as(AttributeSyntax.self)?.attributeName else { return false }
+                    return type.as(IdentifierTypeSyntax.self)?.name.text == "TLAModel"
+                        || type.as(MemberTypeSyntax.self)?.name.text == "TLAModel"
+                }) == true else {
+                    throw StateCopySyntax.Problem(node: Syntax(node), message: "A field-copy step needs the State generated by its enclosing @TLAModel.")
+                }
+                _ = try StateCopySyntax.fields(in: node)
+            } catch {
+                context.diagnose(Diagnostic(node: error.node, message: error))
+            }
+        }
         var visited = super.visit(node).as(FunctionCallExprSyntax.self) ?? node
         if let name = helperName(in: node), name == "Bind" || name == "Map",
            visited.arguments.contains(where: { $0.label?.text == "_fieldName" }) == false,
@@ -366,9 +466,15 @@ private final class DSLRewriter: SyntaxRewriter {
     }
 
     private func addingBuilderBindingName(to call: FunctionCallExprSyntax, name: String) -> FunctionCallExprSyntax? {
-        if let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
+        let path = ParserSession.sourceTypePath(call.calledExpression)
+        if let constructor = path?.last, path == [constructor] || path == ["SwiftTLA", constructor],
            constructor == "Algorithm" || constructor == "Validation" {
-            guard call.arguments.first?.label != nil || call.arguments.isEmpty else { return nil }
+            guard call.arguments.first?.label != nil || call.arguments.isEmpty else {
+                if constructor == "Validation" {
+                    context.diagnose(Diagnostic(node: Syntax(call), message: BuilderBindingDiagnostic()))
+                }
+                return nil
+            }
             let labels = call.arguments.filter { $0.label?.text == "label" }
             if labels.count > 1 || (labels.first != nil
                 && labels.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue?.isEmpty != false) {
@@ -452,13 +558,13 @@ private struct ParameterLabelDiagnostic: DiagnosticMessage {
 private struct PropertyBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-property-binding")
     let severity: DiagnosticSeverity = .error
-    let message = "A property handle must be an immutable named let binding."
+    let message = "A property with an inferred name requires an immutable named let binding."
 }
 
 private struct BuilderBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-builder-binding")
     let severity: DiagnosticSeverity = .error
-    let message = "Algorithm and Validation require an immutable named let binding inside #spec."
+    let message = "Use an immutable let binding for Algorithm or Validation, or supply a literal name directly inside #spec."
 }
 
 private struct InstanceBindingDiagnostic: DiagnosticMessage {

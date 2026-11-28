@@ -1,10 +1,13 @@
+// The direct TLA+ model searches for placements of queens that do not attack one another.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/N-Queens/Queens.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
 /// The upstream direct-TLA Queens model with its published FourQueens scenario.
 @TLAModel
 package struct QueensModel: Sendable {
-    package enum Step: String, CaseIterable { case PlaceQueen }
+    package enum Step: String, CaseIterable { case placeQueen = "PlaceQueen" }
 
     package static var spec: TLASpec {
         #spec("Queens") { scope in
@@ -13,16 +16,13 @@ package struct QueensModel: Sendable {
             Assume(N > 0)
             let todo = scope.sharedVar(initial: Set<[Int]>([Array<Int>([])]))
             let sols = scope.sharedVar(initial: Set<[Int]>([]))
-            let TypeInvariant = Invariant()
-            let NoSolutions = Invariant()
-            let Invariant = Invariant()
             let Termination = Temporal()
 
-            Do(Step.PlaceQueen) {
+            Do(Step.placeQueen) {
                 With(todo) { queens in
                     let nextQueen = queens.count + 1
-                    let columns = IntRange(1, through: N).filtering { column in
-                        !Exists(in: IntRange(1, through: queens.count)) { row in
+                    let columns = IntRange(1, through: N).filter { column in
+                        !IntRange(1, through: queens.count).contains { row in
                             queens.appending(column).at(row.expr) == queens.appending(column).at(nextQueen)
                                 || queens.appending(column).at(row.expr) - queens.appending(column).at(nextQueen)
                                     == row.expr - nextQueen
@@ -32,44 +32,53 @@ package struct QueensModel: Sendable {
                     }
                     let extensions = columns.mapping { column in queens.appending(column) }
                     If(nextQueen == N) {
-                        Assign(todo, to: todo.removing(queens))
-                        Assign(sols, to: sols.union(extensions))
+                        todo.remove(queens)
+                        sols.formUnion(extensions)
                     } else: {
-                        Assign(todo, to: todo.removing(queens).union(extensions))
+                        todo.set(todo.removing(queens).union(extensions))
                     }
                 }
             }
             WeakFairnessNext()
 
             let solutions = Sequences(of: IntRange(1, through: N), lengths: IntRange(N, through: N))
-                .filtering { placement in
-                    ForAll(in: IntRange(1, through: N - 1)) { row in
-                        ForAll(in: IntRange(row.expr + 1, through: N)) { other in
-                            placement[row.expr] != placement[other.expr]
-                                && placement[row.expr] - placement[other.expr] != row.expr - other.expr
-                                && placement[other.expr] - placement[row.expr] != row.expr - other.expr
+                .filter { placement in
+                    IntRange(1, through: N - 1).allSatisfy { row in
+                        IntRange(row + 1, through: N).allSatisfy { other in
+                            let column = placement[row]
+                            let otherColumn = placement[other]
+                            let rowDifference = row - other
+                            return column != otherColumn
+                                && column - otherColumn != rowDifference
+                                && otherColumn - column != rowDifference
                         }
                     }
                 }
-            TypeInvariant {
-                ForAll(in: todo) { placement in
-                    placement.count < N && ForAll(in: IntRange(1, through: placement.count)) { row in
-                        IntRange(1, through: N).contains(placement[row.expr])
+            let typeInvariant = Invariant("TypeInvariant")
+            typeInvariant {
+                todo.allSatisfy { placement in
+                    placement.count < N && IntRange(1, through: placement.count).allSatisfy { row in
+                        IntRange(1, through: N).contains(placement[row])
                     }
-                } && ForAll(in: sols) { placement in
-                    placement.count == N && ForAll(in: IntRange(1, through: placement.count)) { row in
-                        IntRange(1, through: N).contains(placement[row.expr])
+                }
+                sols.allSatisfy { placement in
+                    placement.count == N && IntRange(1, through: placement.count).allSatisfy { row in
+                        IntRange(1, through: N).contains(placement[row])
                     }
                 }
             }
-            Invariant { sols.isSubset(of: solutions) && (!todo.isEmpty || solutions.isSubset(of: sols)) }
-            NoSolutions { sols.isEmpty }
+            let invariant = Invariant("Invariant")
+            invariant {
+                sols.isSubset(of: solutions)
+                !todo.isEmpty || solutions.isSubset(of: sols)
+            }
+            let noSolutions = Invariant("NoSolutions")
+            noSolutions { sols.isEmpty }
             Termination(.eventually(todo.isEmpty))
-            let FourQueens = Validation { Bind(N, to: 4) }
-                .checking(only: [TypeInvariant, Invariant, NoSolutions])
+            Validation("FourQueens") { Bind(N, to: 4) }
+                .checking(only: [typeInvariant, invariant, noSolutions])
                 .checkingDeadlock(false)
-                .expect(NoSolutions, .violated)
-            FourQueens
+                .expect(noSolutions, .violated)
         }
     }
 }

@@ -2,13 +2,12 @@
 
 `@TLAModel` generates a typed Swift state machine from one resolved program.
 The machine holds its execution state and exposes declared variables through
-an immutable `State`. It accepts typed `Action` values; each successful action
-returns a `Transition` with the visible state before and after it.
+an immutable `State`. Sending a typed action updates the machine in place.
 
 ```swift
-var machine = try Counter.makeMachine()
-let transition = try machine.send(.advance)
-let state = transition.after
+var machine = try BoundedCounter.makeMachine()
+try machine.send(.advance)
+let state = machine.state
 ```
 
 Application code uses the generated machine. Independent validation uses the
@@ -41,20 +40,31 @@ struct BoundedCounter {
 
     static var spec: TLASpec {
         #spec {
-            let boundedCounter = Algorithm(scoped: { scope in
+            Algorithm("boundedCounter") { scope in
                 let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in
                     Do(Step.advance, when: value < 1) {
-                        Assign(value, to: value + 1)
+                        value += 1
                         Stop()
                     }
                 }
-            })
-            boundedCounter
+            }
         }
     }
 }
 ```
+
+This counter advances once. `when:` decides whether the step can start.
+`Stop()` finishes the process after that step. Raising the guard to
+`value < 5` still permits just one increment.
+
+Choose the form that matches the rule you want to write.
+
+- **Run once.** Put `Do` and `Stop()` directly inside a sequential algorithm.
+  See the [first counter](../README.md#write-and-run-your-first-action).
+- **Run whenever the guard holds.** Put `Do` directly inside `#spec`.
+  A counter starting at zero with guard `value < 5` can advance five times.
+  See [independent atomic steps](DSLDesign.md#independent-atomic-steps).
 
 ## State, actions, and transitions
 
@@ -63,7 +73,6 @@ Each generated machine exposes these value types:
 - `State` is an immutable value with the declared variables and their native Swift types.
 - `Snapshot` retains the complete execution state, including compiler-owned control state.
 - `Action` contains declared actions and their typed parameters.
-- `Transition` contains the action and the state before and after it.
 
 Sets, sequences, and functions use standard Swift `Set`, `Array`, and
 `Dictionary` values. Tuples and structural records use generated immutable
@@ -72,9 +81,12 @@ expose typed fields. Finite unions become generated enums containing
 exactly their declared values. These mappings apply recursively to nested
 values.
 
-`send(_:)` applies one action. `isEnabled(_:)` reports whether that action is
-currently permitted. Both operations can throw a generated-machine diagnostic.
-A rejected action leaves `state` unchanged.
+Use `try machine.send(action)` to apply an action with exactly one successor.
+It returns `Void`. Read `machine.state` after success. Save any fields you need
+before sending. A rejected action preserves the complete snapshot and throws
+the first reached evaluation error, or the selection error for a disabled or
+ambiguous action. Use `try await actor.send(action)` for an actor-owned machine.
+`isEnabled(_:)` reports whether an action is currently permitted.
 
 Generated model expressions evaluate `ENABLED` only when expression evaluation reaches that operand.
 A false guard or a satisfied alternative can skip the reference and its dependencies.
@@ -101,12 +113,11 @@ import SwiftTLA
 func runDirectAction() throws {
     var machine = try BoundedCounter.makeMachine()
     let actions = try machine.enabledActions()
-    let transition = try machine.send(.advance)
+    let transitionBefore = machine.state
+    try machine.send(.advance)
 
     assert(actions == [.advance])
-    assert(transition.action == .advance)
-    assert(transition.before.value == 0)
-    assert(transition.after.value == 1)
+    assert(transitionBefore.value == 0)
     assert(machine.state.value == 1)
 }
 ```
@@ -139,7 +150,7 @@ struct CounterView: View {
             Button("Advance") {
                 do {
                     guard var machine else { return }
-                    _ = try machine.send(.advance)
+                    try machine.send(.advance)
                     self.machine = machine
                     diagnostic = ""
                 } catch {
@@ -188,8 +199,9 @@ to the same machine.
 
 `Actor` owns one generated machine. Actor isolation serializes `send(_:)`,
 and it exposes the same generated `State` and `Action`
-values. Its initializer accepts the same typed initial state as
-`makeMachine(_:)`.
+values. A separate `await actor.state` reads the state when that call runs.
+Other callers can send actions between the two calls. Its initializer accepts
+the same typed initial state as `makeMachine(_:)`.
 
 **Example ID:** `generated-machine-actor`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
@@ -212,16 +224,15 @@ struct CounterHost {
 
     static var spec: TLASpec {
         #spec {
-            let counterHost = Algorithm(scoped: { scope in
+            Algorithm("counterHost") { scope in
                 let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in
                     Do(Step.advance, when: value < 1) {
-                        Assign(value, to: value + 1)
+                        value += 1
                         Stop()
                     }
                 }
-            })
-            counterHost
+            }
         }
     }
 
@@ -229,12 +240,12 @@ struct CounterHost {
 
 func runActorAccess() async throws {
     let actor = try CounterHost.Actor()
-    let transition = try await actor.send(.advance)
+    try await actor.send(.advance)
     let seeded = try CounterHost.Actor(.init(value: 0))
 
     let actorState = await actor.state
     let seededState = await seeded.state
-    assert(actorState == transition.after)
+    assert(actorState.value == 1)
     assert(seededState.value == 0)
 }
 ```
@@ -254,17 +265,18 @@ import SwiftTLA
 
 func runGeneratedMachineTesting() throws {
     var machine = try BoundedCounter.makeMachine()
-    let transition = try machine.send(.advance)
+    let transitionBefore = machine.state
+    try machine.send(.advance)
     let beforeFailure = machine.state
 
-    assert(transition.before.value == 0)
+    assert(transitionBefore.value == 0)
     let isEnabled = try machine.isEnabled(.advance)
     assert(isEnabled == false)
-    assert(transition.after.value == 1)
+    assert(machine.state.value == 1)
 
     var rejected = false
     do {
-        _ = try machine.send(.advance)
+        try machine.send(.advance)
     } catch is GeneratedMachineError {
         rejected = true
     }
@@ -309,6 +321,36 @@ not a deadlock. `trace(to:)` reconstructs a
 shortest native execution from the discovery predecessors. False assumptions and
 evaluation errors throw. Temporal checking and independent equivalence validation
 remain separate; empty safety results do not establish liveness or equivalence.
+
+For a worked safety check, see [check and replay a midnight tick](../README.md#check-and-replay-a-midnight-tick).
+Use `machine.check(properties:checkDeadlock:maximumStates:)` to explore from the
+machine's current snapshot, including its control state. To explore from several
+starts together, pass them to `ReachabilityGraph.check(initialMachines:maximumStates:checking:)`.
+If the model already declares
+a safety scenario, `scenario.check(maximumStates:)` uses that scenario's
+initial machines and selected checks.
+
+`start.replay(witness)` returns the generated machine at the last recorded
+snapshot. Step zero checks the starting snapshot and configuration. Each later
+step follows the recorded action to its recorded snapshot. A mismatch throws
+`ExplorationError.replayMismatch(step:)` with the first differing index.
+Errors evaluating an action propagate. Replay checks that the machine can
+follow the path. The original check supplies the property verdict.
+
+| What happened? | What can the caller conclude? |
+|---|---|
+| Sending an action found zero successors | The action was disabled at this snapshot. The machine kept its previous state. |
+| Sending an action found several distinct successors | The action was ambiguous. Use `start.replay(witness)` to follow the recorded action and full snapshot at each step, including hidden control. |
+| Evaluating an action threw a model error | Report the operation and its available error detail. A partial assignment inside the action is not a committed transition. |
+| A selected invariant failed | The witness includes a reached snapshot that violates that property. An initial violation can have zero actions. |
+| The search exhausted its frontier | The safety check covered the reachable graph for its supplied starts, configuration, constraints and selection. |
+| Exploration threw `stateLimitExceeded` | The state budget stopped the search. A passing verdict for the unexplored states is unavailable. |
+| Simulation ended without a violation | Report the sampled scope and the stop reason. Other choices may lead to other outcomes. |
+
+When presenting a result, keep the start, selected checks, bounds and
+completion reason alongside it. Keep any captured failure history in order.
+A first-error report or an early witness cannot tell you how many later
+branches would fail.
 
 For independent validation, `machine.formalProjection(of: snapshot)` converts the
 complete native snapshot to a validated `TLAStateProjection`. The macro emits
@@ -386,7 +428,6 @@ compares the native value with its TLA+ output.
 | `GeneratedMachineError` | Reports a rejected or invalid generated-machine operation. |
 | Generated `State` | Holds declared model variables as Swift values. |
 | Generated `Action` | Represents declared actions and their typed parameters. |
-| Generated `Transition` | Records a successful action and its before/after state. |
 | Generated `state` | Reads the complete current generated state. |
 | Generated `send(_:)` | Applies one typed action or throws. |
 | Generated `isEnabled(_:)` | Tests whether one typed action is currently permitted. |

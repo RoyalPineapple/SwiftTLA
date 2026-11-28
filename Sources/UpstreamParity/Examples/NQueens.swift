@@ -1,3 +1,6 @@
+// The PlusCal search places queens on a board while avoiding attacks between them.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/N-Queens/QueensPluscal.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -13,11 +16,9 @@ package struct NQueensModel: Sendable {
             Extends(.naturals)
             let N = model.parameter(as: Int.self, in: 1...4)
             Assume(N > 0)
-            let TypeInvariant = Invariant()
             let NoSolutions = Invariant()
-            let Invariant = Invariant()
             let Termination = Temporal()
-            let Queens = Algorithm(fairness: .weak, scoped: { scope in
+            Algorithm("Queens", fairness: .weak) { scope in
                 let todo = scope.sharedVar(initial: Set<[Int]>([Array<Int>([])]))
                 let sols = scope.sharedVar(initial: Set<[Int]>([]))
 
@@ -25,16 +26,15 @@ package struct NQueensModel: Sendable {
                     With(todo) { queens in
                         Let(queens.expr.count + 1) { nextQueen in
                             Let(
-                                IntRange(1, through: N).filtering { column in
-                                    !Exists(in: IntRange(1, through: queens.expr.count)) { row in
-                                        queens.expr.appending(column.expr).at(row.expr)
-                                            == queens.expr.appending(column.expr).at(nextQueen.expr)
-                                            || queens.expr.appending(column.expr).at(row.expr)
-                                                - queens.expr.appending(column.expr).at(nextQueen.expr)
-                                                == row.expr - nextQueen.expr
-                                            || queens.expr.appending(column.expr).at(nextQueen.expr)
-                                                - queens.expr.appending(column.expr).at(row.expr)
-                                                == row.expr - nextQueen.expr
+                                IntRange(1, through: N).filter { column in
+                                    !IntRange(1, through: queens.expr.count).contains { row in
+                                        let placement = queens.expr.appending(column.expr)
+                                        let priorColumn = placement[row]
+                                        let newColumn = placement[nextQueen]
+                                        let rowDifference = row.expr - nextQueen.expr
+                                        return priorColumn == newColumn
+                                            || priorColumn - newColumn == rowDifference
+                                            || newColumn - priorColumn == rowDifference
                                     }
                                 }
                             ) { columns in
@@ -42,10 +42,10 @@ package struct NQueensModel: Sendable {
                                     queens.expr.appending(column.expr)
                                 }) { extensions in
                                     If(nextQueen.expr == N) {
-                                        Assign(todo, to: todo.expr.removing(queens))
-                                        Assign(sols, to: sols.expr.union(extensions.expr))
+                                        todo.remove(queens)
+                                        sols.formUnion(extensions.expr)
                                     } else: {
-                                        Assign(todo, to: todo.expr.removing(queens).union(extensions.expr))
+                                        todo.set(todo.expr.removing(queens).union(extensions.expr))
                                     }
                                 }
                             }
@@ -55,40 +55,39 @@ package struct NQueensModel: Sendable {
 
                 let validSolutions = Sequences(
                     of: IntRange(1, through: N), lengths: IntRange(N, through: N)
-                ).filtering { placement in
-                    ForAll(in: IntRange(1, through: N - 1)) { row in
-                        ForAll(in: IntRange(row.expr + 1, through: N)) { other in
-                            placement.expr[row.expr] != placement.expr[other.expr]
-                                && placement.expr[row.expr] - placement.expr[other.expr] != row.expr - other.expr
-                                && placement.expr[other.expr] - placement.expr[row.expr] != row.expr - other.expr
+                ).filter { placement in
+                    IntRange(1, through: N - 1).allSatisfy { row in
+                        IntRange(row + 1, through: N).allSatisfy { other in
+                            let column = placement[row]
+                            let otherColumn = placement[other]
+                            let rowDifference = row - other
+                            return column != otherColumn
+                                && column - otherColumn != rowDifference
+                                && otherColumn - column != rowDifference
                         }
                     }
                 }
-                Invariant {
+                Invariant("Invariant") {
                     sols.expr.isSubset(of: validSolutions)
                         && (!todo.expr.isEmpty || validSolutions.isSubset(of: sols.expr))
                 }
                 NoSolutions { sols.expr.isEmpty }
                 Termination(.eventually(Finished()))
 
-                TypeInvariant {
-                    ForAll(in: todo.expr) { placement in
-                        placement.expr.count < N
-                            && ForAll(in: IntRange(1, through: placement.expr.count)) { row in
-                                IntRange(1, through: N).contains(placement.expr[row.expr])
-                            }
+                Invariant("TypeInvariant") {
+                    todo.allSatisfy { placement in
+                        placement.count < N && IntRange(1, through: placement.count).allSatisfy { row in
+                            IntRange(1, through: N).contains(placement[row])
+                        }
                     }
-                    && ForAll(in: sols.expr) { placement in
-                        placement.expr.count == N
-                            && ForAll(in: IntRange(1, through: placement.expr.count)) { row in
-                                IntRange(1, through: N).contains(placement.expr[row.expr])
-                            }
+                    sols.allSatisfy { placement in
+                        placement.count == N && IntRange(1, through: placement.count).allSatisfy { row in
+                            IntRange(1, through: N).contains(placement[row])
+                        }
                     }
                 }
-            })
-            Queens
-            let FourQueens = Validation { Bind(N, to: 4) }.expect(NoSolutions, .violated)
-            FourQueens
+            }
+            Validation("FourQueens") { Bind(N, to: 4) }.expect(NoSolutions, .violated)
         }
     }
 }

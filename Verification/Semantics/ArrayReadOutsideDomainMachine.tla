@@ -14,6 +14,7 @@ __SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)
 Init ==
   /\ sequence = <<>>
   /\ result = 0
+  /\ (IF (result >= (-2 * 1000000000 - 147483648) /\ result <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE result \in ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)..((9 * 1000000000 + 223372036) * 1000000000 + 854775807))
 
 Next == read
 

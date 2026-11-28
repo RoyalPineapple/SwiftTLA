@@ -1,7 +1,46 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 
 struct ActionFrameConditionTests {
+    @Test("Nested frames retain source identities through lowering and TLA+ emission")
+    func nestedFramesRetainVariableIdentity() throws {
+        let source = ActionExpr.existsAction("selected", .setLiteral([.int(0)]),
+            .and(.unchanged(.named("left")), .unchanged(.named("right"))))
+        let spec = canonicalTestSpec(
+            variables: [("left", .value(.int(0))), ("right", .value(.int(0)))],
+            actions: [("stay", source, [])])
+        let compiled = try spec.compile()
+        let action = try #require(compiled.semantics.behavior.actions.first)
+        guard case .existsAction(let binder, let domain,
+                .and(.unchanged(let left), .unchanged(let right))) = action.body else {
+            Issue.record("The source frames must survive inside the compiled selection")
+            return
+        }
+        try StraightLineAssignmentCheck.verifyCompiled(spec.actions[0], bindings: action.bindings,
+            body: action.body, layout: compiled.layout)
+        #expect(left != right)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(spec.actions[0], bindings: action.bindings,
+                body: .existsAction(binder, domain,
+                    .and(.unchanged(right), .unchanged(left))), layout: compiled.layout)
+        }
+
+        let renderer = CompiledTLARenderer(moduleName: spec.name, reservedNames: [],
+            layout: compiled.layout, bindings: compiled.bindings,
+            operators: compiled.semantics.operators,
+            actions: compiled.semantics.behavior.actions, functions: [])
+        let rendered = try renderer.action(action.body)
+        let wrongFrame = rendered.replacingOccurrences(of: "UNCHANGED left", with: "UNCHANGED right")
+        #expect(wrongFrame != rendered)
+        try StraightLineRenderedActionCheck.verifyStructure(action.body,
+            rendered: rendered, renderer: renderer)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyStructure(action.body,
+                rendered: wrongFrame, renderer: renderer)
+        }
+    }
+
     @Test("every enabled branch must account for every model variable")
     func enabledBranchesRequireCompleteFrames() throws {
         let variables = [
@@ -26,6 +65,24 @@ struct ActionFrameConditionTests {
         )
         try ActionNormalization.verifyComplete(disabledAlternative, variables: variables,
             at: "actions.step.body")
+    }
+
+    @Test("Terminal normalization retains the hidden program-counter frame")
+    func terminalRequiresHiddenControlFrame() throws {
+        let variables = [
+            NamedVar(name: "pc", initialization: .expression(.controlLocation(.init(
+                owner: .sequential(algorithm: "Frame"), sourceName: "done"))),
+                origin: .programCounter),
+            NamedVar(name: "value", initial: .int(0)),
+        ]
+        let source = ActionExpr.and(.unchanged(.named("pc")), .unchanged(.named("value")))
+        #expect(throws: CompilationDiagnostic.self) {
+            try ActionNormalization.verifyComplete(source, variables: variables,
+                at: "actions.Terminating.body")
+        }
+        try ActionNormalization.verifyComplete(
+            ActionNormalization.complete(source, variables: variables),
+            variables: variables, at: "actions.Terminating.body")
     }
 
     @Test("Frame completion preserves shared effects and short-circuited continuations")

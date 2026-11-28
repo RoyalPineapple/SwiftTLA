@@ -102,7 +102,8 @@ struct NativeSampledValidationTests {
         try forged.write(to: url, options: .atomic)
         let retained = NativeValidationReport(schema: report.schema, scenario: report.scenario,
             maximumStates: report.maximumStates, graphComplete: false,
-            initialStates: 2, states: 2, edges: 0, properties: report.properties,
+            initialStates: 2, states: 2, edges: 0,
+            initialEvaluationFailure: nil, properties: report.properties,
             deadlock: report.deadlock, deadlockSelected: report.deadlockSelected,
             postconditionName: report.postconditionName, postcondition: report.postcondition)
         #expect(throws: NativeValidationRunnerError.self) {
@@ -134,6 +135,7 @@ struct NativeSampledValidationTests {
             scenario: scenario.name, maximumStates: 10, graphComplete: false,
             graphInputSHA256: try GeneratedTLCOracle.inputIdentity(
                 bundle: bundle, pin: pin, arguments: arguments, invocation: .propertyCheck),
+            initialEvaluationFailure: nil,
             properties: ["BelowThree": .violated], deadlock: nil, deadlockSelected: false,
             postconditionName: nil, postcondition: nil)
         try JSONEncoder().encode(report).write(to: oracle.appendingPathComponent("oracle.json"))

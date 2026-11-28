@@ -1,3 +1,6 @@
+// Processes flood a graph and collect replies along parent links to build an echo tree.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/echo/Echo.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -44,71 +47,75 @@ package struct EchoModel: Sendable {
             }
             let R = spec.parameter(as: Set<Pair<NodeID, NodeID>>.self, in: Subsets(of: pairs))
             Assume(Node.contains(initiator))
-            Assume(ForAll(in: Node) { node in !R.contains(Pair<NodeID, NodeID>.literal(node, node)) })
-            Assume(ForAll(in: pairs) { edge in
+            Assume(Node.allSatisfy { node in !R.contains(Pair<NodeID, NodeID>.literal(node, node)) })
+            Assume(pairs.allSatisfy { edge in
                 R.contains(edge) == R.contains(Pair<NodeID, NodeID>.literal(edge.second(), edge.first()))
             })
             Assume(LetRec("echoConnectedPath", taking: Triple<NodeID, NodeID, Int>.self,
                 { (path: LocalRecursion<Triple<NodeID, NodeID, Int>, Bool>,
                    endpoints: WithValue<Triple<NodeID, NodeID, Int>>) in
                     endpoints.first() == endpoints.second()
-                        || (endpoints.third() > 0 && Exists(in: Node) { next in
+                        || (endpoints.third() > 0 && Node.contains { next in
                             R.contains(Pair<NodeID, NodeID>.literal(endpoints.first(), next))
                                 && path(Triple<NodeID, NodeID, Int>.literal(
                                     next, endpoints.second(), endpoints.third() - 1))
                         })
                 }, in: { path in
-                    ForAll(in: Node) { from in
-                        ForAll(in: Node) { to in
-                            path(Triple<NodeID, NodeID, Int>.literal(from, to, Node.cardinality))
+                    Node.allSatisfy { from in
+                        Node.allSatisfy { to in
+                            path(Triple<NodeID, NodeID, Int>.literal(from, to, Node.count))
                         }
                     }
                 }))
             let TypeOK = Invariant()
             let AncestorProperties = Invariant()
-            let Echo = Algorithm(scoped: { (scope: AlgorithmScope) in
+            Algorithm("Echo") { (scope: AlgorithmScope) in
                 let inbox: SharedVariable<[NodeID: Set<Message>]> = scope.sharedVar(initial:
                     Dictionary<NodeID, Set<Message>>.mapping(over: Node) { _ in Set<Message>() })
 
-                Each(Node, scoped: { (selfID: ProcessIdentifier<NodeID>, scope: ProcessScope) in
+                Each(Node) { (selfID: ProcessIdentifier<NodeID>, scope: ProcessScope) in
                     let parent: LocalVariable<OneOf<NodeID, NoNode>> = scope.localVar(
                         initial: OneOf<NodeID, NoNode>.second(NoNode.value)
                     )
                     let children: LocalVariable<Set<NodeID>> = scope.localVar(initial: Set<NodeID>())
                     let rcvd: LocalVariable<Int> = scope.localVar(initial: 0)
                     let nbrs: LocalVariable<Set<NodeID>> = scope.localVar(
-                        initial: Node.filtering { neighbor in
+                        initial: Node.filter { neighbor in
                             R.contains(Pair<NodeID, NodeID>.literal(neighbor, selfID))
                         }
                     )
 
                     Do(Step.n0) {
                         If(selfID == initiator) {
-                            Assign(inbox, to: Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
-                                If(nbrs.expr.contains(destination),
-                                   then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
-                                   else: inbox[destination])
-                            })
+                            inbox.set(
+                                Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
+                                    If(nbrs.expr.contains(destination),
+                                       then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
+                                       else: inbox[destination])
+                                }
+                            )
                         }
                     }
 
-                    While(Step.n1, rcvd.expr < nbrs.expr.cardinality) {
+                    While(Step.n1, rcvd.expr < nbrs.expr.count) {
                         With(inbox[selfID]) { (message: WithValue<Message>) in
                             Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { (networkAfterReceive: WithValue<[NodeID: Set<Message>]>) in
                                 If(selfID != initiator && rcvd.expr == 0) {
                                     Assert(message.kind == .message)
-                                    Assign(parent, to: OneOf<NodeID, NoNode>.first(message.sndr))
-                                    Assign(inbox, to: Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
-                                        If(nbrs.expr.removing(message.sndr).contains(destination),
-                                           then: networkAfterReceive[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
-                                           else: networkAfterReceive[destination])
-                                    })
+                                    parent.set(OneOf<NodeID, NoNode>.first(message.sndr))
+                                    inbox.set(
+                                        Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
+                                            If(nbrs.expr.removing(message.sndr).contains(destination),
+                                               then: networkAfterReceive[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
+                                               else: networkAfterReceive[destination])
+                                        }
+                                    )
                                 } else: {
-                                    Assign(inbox, to: networkAfterReceive.expr)
+                                    inbox.set(networkAfterReceive.expr)
                                 }
-                                Assign(rcvd, to: rcvd.expr + 1)
+                                rcvd += 1
                                 If(message.kind == .acknowledgement) {
-                                    Assign(children, to: children.expr.inserting(message.sndr))
+                                    children.insert(message.sndr)
                                 }
                             }
                         }
@@ -118,7 +125,7 @@ package struct EchoModel: Sendable {
                         If(selfID != initiator) {
                             let destination = parent.expr.assuming(NodeID.self)
                             Assert(nbrs.expr.contains(destination))
-                            Assign(inbox, to: inbox.updating(destination, to: inbox[destination].inserting(
+                            inbox.set(inbox.updating(destination, to: inbox[destination].inserting(
                                 Message.expression(kind: MessageKind.acknowledgement, sndr: selfID)
                             )))
                         }
@@ -126,16 +133,16 @@ package struct EchoModel: Sendable {
 
                     TypeOK {
                         parent == OneOf<NodeID, NoNode>.second(NoNode.value)
-                            || Exists(in: Node) { node in
+                            || Node.contains { node in
                                 parent == OneOf<NodeID, NoNode>.first(node)
                             }
                         children.isSubset(of: Node)
-                        rcvd >= 0 && rcvd <= nbrs.cardinality
-                        nbrs == Node.filtering { neighbor in
+                        rcvd >= 0 && rcvd <= nbrs.count
+                        nbrs == Node.filter { neighbor in
                             R.contains(Pair<NodeID, NodeID>.literal(neighbor, selfID))
                         }
                         inbox.keys == Node.assuming(Set<NodeID>.self)
-                        ForAll(in: inbox[selfID]) { message in
+                        inbox[selfID].allSatisfy { message in
                             (message.kind == .message || message.kind == .acknowledgement)
                                 && Node.contains(message.sndr)
                                 && nbrs.contains(message.sndr)
@@ -144,32 +151,31 @@ package struct EchoModel: Sendable {
 
                     let parents = parent.family(for: NodeID.self)
                     AncestorProperties {
-                        !ForAll(in: Node) { node in Finished(node) }
+                        !Node.allSatisfy { node in Finished(node) }
                             || LetRec("ancestor", taking: Triple<NodeID, NodeID, Int>.self,
                                 { (ancestor: LocalRecursion<Triple<NodeID, NodeID, Int>, Bool>,
                                    path: WithValue<Triple<NodeID, NodeID, Int>>) in
                                     If(path.third() == 0, then: false, else:
                                         parents[path.first()] == OneOf<NodeID, NoNode>.first(path.second())
-                                            || Exists(in: Node) { next in
+                                            || Node.contains { next in
                                                 parents[path.first()] == OneOf<NodeID, NoNode>.first(next)
                                                     && ancestor(Triple<NodeID, NodeID, Int>.literal(
                                                         next, path.second(), path.third() - 1))
                                             })
                                 }, in: { ancestor in
-                                    ForAll(in: Node) { node in
+                                    Node.allSatisfy { node in
                                         node == initiator || ancestor(Triple<NodeID, NodeID, Int>.literal(
-                                            node, initiator, Node.cardinality))
+                                            node, initiator, Node.count))
                                     }
-                                        && ForAll(in: Node) { node in
+                                        && Node.allSatisfy { node in
                                             !ancestor(Triple<NodeID, NodeID, Int>.literal(
-                                                node, node, Node.cardinality))
+                                                node, node, Node.count))
                                         }
                                 })
                     }
-                })
-            })
-            Echo
-            let MCEcho = Validation {
+                }
+            }
+            Validation("MCEcho") {
                 Bind(Node, to: Set<NodeID>([.a, .b, .c]))
                 Bind(initiator, to: NodeID.a)
                 Bind(R, to: Set<Pair<NodeID, NodeID>>([
@@ -181,7 +187,6 @@ package struct EchoModel: Sendable {
                 .expect(TypeOK, .satisfied)
                 .expect(AncestorProperties, .satisfied)
                 .expectDeadlock(.satisfied)
-            MCEcho
         }
     }
 }

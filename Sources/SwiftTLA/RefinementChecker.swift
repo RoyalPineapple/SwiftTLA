@@ -136,7 +136,7 @@ extension TLASpec {
         }
         var specialized = self
         specialized.formalParameters.removeAll { parameters[$0.name] != nil }
-        specialized.variables = variables.map { .init(name: $0.name, initialization: initialization($0.initialization), displayLabel: $0.displayLabel, generatedSwiftType: $0.generatedSwiftType, resolvedValueType: $0.resolvedValueType, origin: $0.origin) }
+        specialized.variables = variables.map { .init(name: $0.name, initialization: initialization($0.initialization), tlaName: $0.tlaName, displayLabel: $0.displayLabel, generatedSwiftType: $0.generatedSwiftType, resolvedValueType: $0.resolvedValueType, origin: $0.origin) }
         specialized.actions = actions.map { $0.substitutingVariables(parameters) }
         specialized.invariants = invariants.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }
         specialized.reachabilityProperties = reachabilityProperties.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }
@@ -144,6 +144,9 @@ extension TLASpec {
         func fairness(_ condition: FairnessCondition) -> FairnessCondition {
             if case .projected(let base, let projection) = condition {
                 return .projected(fairness(base), state(projection))
+            }
+            if case .weakFairnessNextPreserving(let value) = condition {
+                return .weakFairnessNextPreserving(state(value))
             }
             return condition
         }

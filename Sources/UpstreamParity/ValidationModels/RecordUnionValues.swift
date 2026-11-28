@@ -16,7 +16,7 @@ package struct RecordUnionSentinelModel {
 
     package static var spec: TLASpec {
         #spec("RecordUnionSentinel") { scope in
-            let value = scope.sharedVar(in: Set<Value>([
+            let value = scope.sharedVar(initiallyIn: Set<Value>([
                 Value.second(Sentinel.noBlock),
                 Value.first(SignedBlock(block: Block(account: "NoBlock", balance: 0), signature: "NoBlock")),
                 Value.first(SignedBlock(block: Block(account: "account", balance: 3), signature: "signature"))
@@ -53,7 +53,7 @@ package struct RecordUnionOrderingModel {
 
     package static var spec: TLASpec {
         #spec("RecordUnionOrdering") { scope in
-            let value = scope.sharedVar(in: Set<Value>([
+            let value = scope.sharedVar(initiallyIn: Set<Value>([
                 Value.first(First(a: 2, z: 0)),
                 Value.second(Tail.first(Second(a: 2, b: -1))),
                 Value.second(Tail.second(Third(a: [1], c: true))),
@@ -80,7 +80,7 @@ package struct RecordUnionFieldDomainModel {
 
     package static var spec: TLASpec {
         #spec("RecordUnionFieldDomain") { scope in
-            let value = scope.sharedVar(in: Set<Value>([
+            let value = scope.sharedVar(initiallyIn: Set<Value>([
                 Value.second(Flag(value: true)), Value.first(Count(value: 0)),
                 Value.second(Flag(value: false)), Value.first(Count(value: -1))
             ]))
@@ -128,7 +128,7 @@ package struct SignedBlockAlternativesModel {
 
     package static var spec: TLASpec {
         #spec("SignedBlockAlternatives") { scope in
-            let value = scope.sharedVar(in: Set<Value>([
+            let value = scope.sharedVar(initiallyIn: Set<Value>([
                 .first(SignedBlock(
                     block: .first(Genesis(type: "genesis", account: "public", balance: 2)),
                     signature: Signature(data: "hash", signedWith: "private"))),

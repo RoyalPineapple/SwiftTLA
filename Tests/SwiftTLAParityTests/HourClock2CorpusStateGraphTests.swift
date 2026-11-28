@@ -20,7 +20,7 @@ struct HourClock2CorpusStateGraphTests {
             #expect(edge.action == .HCnxt2)
             #expect(edge.target.state.hr == machine.state.hr % 12 + 1)
             var dispatched = machine
-            _ = try dispatched.send(edge.action)
+            try dispatched.send(edge.action)
             #expect(dispatched.snapshot == edge.target)
         }
         #expect(throws: ExplorationError.stateLimitExceeded(11)) {

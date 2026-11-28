@@ -1,3 +1,6 @@
+// Boyer–Moore majority voting scans a sequence while updating a candidate and a count.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Majority/Majority.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -10,7 +13,7 @@ package struct MajorityModel: Sendable {
         package static let finiteValues = allCases
         package var tlaValue: TLAValue { .constant(rawValue) }
     }
-    package enum Step: String, CaseIterable { case Next }
+    package enum Step: String, CaseIterable { case next = "Next" }
 
     package static var spec: TLASpec {
         #spec("Majority") { scope in
@@ -18,59 +21,54 @@ package struct MajorityModel: Sendable {
             let Value = scope.parameter(as: Set<Element>.self,
                 in: Set<Set<Element>>([Set<Element>([Element.A, Element.B, Element.C])]))
             let bound = scope.parameter(as: Int.self, in: 0...5)
-            Assume(Value.cardinality > 0 && bound >= 0)
-            let seq = scope.sharedVar(in: Sequences(of: Value, lengths: IntRange(0, through: bound)))
+            Assume(Value.count > 0 && bound >= 0)
+            let seq = scope.sharedVar(initiallyIn: Sequences(of: Value, lengths: IntRange(0, through: bound)))
             let i = scope.sharedVar(initial: 1)
-            let cand = scope.sharedVar(in: Value)
+            let cand = scope.sharedVar(initiallyIn: Value)
             let cnt = scope.sharedVar(initial: 0)
 
-            let TypeOK = Invariant()
-            let Correct = Invariant()
-            let Inv = Invariant()
-            Do(Step.Next) {
-                When(i <= seq.count)
+            Do(Step.next, when: i <= seq.count) {
                 If(cnt == 0) {
-                    Assign(cand, to: seq[i])
-                    Assign(cnt, to: 1)
+                    cand.set(seq[i])
+                    cnt.set(1)
                 } else: {
-                    If(cand == seq[i]) { Assign(cnt, to: cnt + 1) }
-                    else: { Assign(cnt, to: cnt - 1) }
+                    If(cand == seq[i]) { cnt += 1 }
+                    else: { cnt.set(cnt - 1) }
                 }
-                Assign(i, to: i + 1)
+                i += 1
             }
             WeakFairnessNext()
 
-            TypeOK {
+            Invariant("TypeOK") {
                 seq.count <= bound && i >= 1 && i <= seq.count + 1 && cnt >= 0
                     && Value.contains(cand)
-                    && ForAll(in: IntRange(1, through: seq.count)) { index in
+                    && IntRange(1, through: seq.count).allSatisfy { index in
                         Value.contains(seq[index.expr])
                     }
             }
-            Correct {
-                i <= seq.count || ForAll(in: Value) { value in
-                    2 * IntRange(1, through: seq.count).filtering { index in
+            Invariant("Correct") {
+                i <= seq.count || Value.allSatisfy { value in
+                    2 * IntRange(1, through: seq.count).filter { index in
                         seq[index.expr] == value
-                    }.cardinality <= seq.count || value == cand
+                    }.count <= seq.count || value == cand
                 }
             }
-            let candidateOccurrences = IntRange(1, through: i - 1).filtering { index in
+            let candidateOccurrences = IntRange(1, through: i - 1).filter { index in
                 seq[index.expr] == cand
-            }.cardinality
-            Inv {
+            }.count
+            Invariant("Inv") {
                 cnt <= candidateOccurrences
                     && 2 * (candidateOccurrences - cnt) <= i - 1 - cnt
-                    && ForAll(in: Value) { value in
-                        value == cand || 2 * IntRange(1, through: i - 1).filtering { index in
+                    && Value.allSatisfy { value in
+                        value == cand || 2 * IntRange(1, through: i - 1).filter { index in
                             seq[index.expr] == value
-                        }.cardinality <= i - 1 - cnt
+                        }.count <= i - 1 - cnt
                     }
             }
-            let MCMajority = Validation {
+            Validation("MCMajority") {
                 Bind(Value, to: Set<Element>([Element.A, Element.B, Element.C]))
                 Bind(bound, to: 5)
             }.checkingDeadlock(false)
-            MCMajority
         }
     }
 }

@@ -1,0 +1,41 @@
+---- MODULE AtomicSchedulerEntrySource ----
+EXTENDS TLAPS, Sequences, CompilerInputPageBlock35, CompilerInputPageBlock36, CompilerInputPageBlock39
+\* CompilerInputPage2185 CompilerInputPage2186 CompilerInputPage2187 CompilerInputPage2188 CompilerInputPage2189 CompilerInputPage2214 CompilerInputPage2215 CompilerInputPage2216 CompilerInputPage2217 CompilerInputPage2218 CompilerInputPage2219 CompilerInputPage2220 CompilerInputPage2236 CompilerInputPage2237 CompilerInputPage2238 CompilerInputPage2239 CompilerInputPage2240 CompilerInputPage2241 CompilerInputPage2242 CompilerInputPage2243 CompilerInputPage2244 CompilerInputPage2245 CompilerInputPage2246 CompilerInputPage2247 CompilerInputPage2248 CompilerInputPage2249 CompilerInputPage2283 CompilerInputPage2284 CompilerInputPage2285 CompilerInputPage2286 CompilerInputPage2287 CompilerInputPage2466 CompilerInputPage2467 CompilerInputPage2468
+SchedulerDeclAndEntry ==
+    /\ \A j \in 1..16 : CompilerInputByte[34944+j-1] = <<125, 10, 10, 102, 117, 110, 99, 32, 115, 99, 104, 101, 100, 117, 108, 101>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[34960+j-1] = <<65, 116, 111, 109, 105, 99, 83, 116, 97, 116, 101, 109, 101, 110, 116, 115>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[34976+j-1] = <<40, 10, 32, 32, 32, 32, 95, 32, 115, 116, 97, 116, 101, 109, 101, 110>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[34992+j-1] = <<116, 115, 58, 32, 91, 65, 108, 103, 111, 114, 105, 116, 104, 109, 83, 116>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35008+j-1] = <<97, 116, 101, 109, 101, 110, 116, 77, 111, 100, 101, 108, 93, 44, 32, 98>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35408+j-1] = <<101, 110, 116, 115, 32, 123, 10, 32, 32, 32, 32, 32, 32, 32, 32, 118>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35424+j-1] = <<97, 114, 32, 98, 105, 110, 100, 105, 110, 103, 115, 58, 32, 91, 83, 116>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35440+j-1] = <<114, 105, 110, 103, 58, 32, 83, 116, 97, 116, 101, 69, 120, 112, 114, 93>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35456+j-1] = <<32, 61, 32, 91, 58, 93, 10, 32, 32, 32, 32, 32, 32, 32, 32, 118>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35472+j-1] = <<97, 114, 32, 108, 97, 115, 116, 87, 114, 105, 116, 101, 58, 32, 83, 99>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35488+j-1] = <<104, 101, 100, 117, 108, 101, 100, 65, 116, 111, 109, 105, 99, 66, 105, 110>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35504+j-1] = <<100, 105, 110, 103, 87, 114, 105, 116, 101, 63, 10, 10, 32, 32, 32, 32>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35760+j-1] = <<32, 125, 10, 32, 32, 32, 32, 125, 10, 10, 32, 32, 32, 32, 102, 117>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35776+j-1] = <<110, 99, 32, 115, 99, 104, 101, 100, 117, 108, 101, 40, 10, 32, 32, 32>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35792+j-1] = <<32, 32, 32, 32, 32, 95, 32, 118, 97, 108, 117, 101, 115, 58, 32, 91>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35808+j-1] = <<65, 108, 103, 111, 114, 105, 116, 104, 109, 83, 116, 97, 116, 101, 109, 101>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35824+j-1] = <<110, 116, 77, 111, 100, 101, 108, 93, 44, 10, 32, 32, 32, 32, 32, 32>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35840+j-1] = <<32, 32, 97, 115, 115, 105, 103, 110, 109, 101, 110, 116, 115, 58, 32, 91>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35856+j-1] = <<65, 108, 103, 111, 114, 105, 116, 104, 109, 65, 115, 115, 105, 103, 110, 109>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35872+j-1] = <<101, 110, 116, 77, 111, 100, 101, 108, 93, 32, 61, 32, 91, 93, 44, 10>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35888+j-1] = <<32, 32, 32, 32, 32, 32, 32, 32, 114, 101, 112, 108, 97, 99, 101, 109>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35904+j-1] = <<101, 110, 116, 115, 58, 32, 82, 101, 112, 108, 97, 99, 101, 109, 101, 110>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35920+j-1] = <<116, 115, 32, 61, 32, 46, 105, 110, 105, 116, 40, 41, 10, 32, 32, 32>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35936+j-1] = <<32, 41, 32, 45, 62, 32, 91, 65, 108, 103, 111, 114, 105, 116, 104, 109>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35952+j-1] = <<83, 116, 97, 116, 101, 109, 101, 110, 116, 77, 111, 100, 101, 108, 93, 32>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[35968+j-1] = <<123, 10, 32, 32, 32, 32, 32, 32, 32, 32, 108, 101, 116, 32, 102, 105>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[36512+j-1] = <<10, 32, 32, 32, 32, 32, 32, 32, 32, 125, 10, 32, 32, 32, 32, 32>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[36528+j-1] = <<32, 32, 32, 115, 119, 105, 116, 99, 104, 32, 115, 116, 97, 116, 101, 109>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[36544+j-1] = <<101, 110, 116, 32, 123, 10, 32, 32, 32, 32, 32, 32, 32, 32, 99, 97>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[36560+j-1] = <<115, 101, 32, 46, 115, 101, 116, 40, 108, 101, 116, 32, 116, 97, 114, 103>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[36576+j-1] = <<101, 116, 44, 32, 108, 101, 116, 32, 118, 97, 108, 117, 101, 41, 58, 10>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[39440+j-1] = <<10, 32, 32, 32, 32, 125, 10, 32, 32, 32, 32, 114, 101, 116, 117, 114>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[39456+j-1] = <<110, 32, 115, 99, 104, 101, 100, 117, 108, 101, 40, 115, 116, 97, 116, 101>>[j]
+    /\ \A j \in 1..16 : CompilerInputByte[39472+j-1] = <<109, 101, 110, 116, 115, 41, 10, 125, 10, 0, 0, 0, 0, 0, 0, 0>>[j]
+THEOREM TheSchedulerInvokesItsLocalFunctionOnStatements == SchedulerDeclAndEntry
+    BY ONLY CompilerInputPageBlock35AtFileOffsets, CompilerInputPageBlock36AtFileOffsets, CompilerInputPageBlock39AtFileOffsets, PTL DEF SchedulerDeclAndEntry
+====

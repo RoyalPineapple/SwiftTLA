@@ -1,34 +1,52 @@
 # SwiftTLA
 
-**SwiftTLA turns typed state rules into a typed Swift machine.**
+Write a state machine once in Swift. Your app sends it typed actions, and the
+native checker explores the same generated transitions. SwiftTLA also exports
+the model to TLA+ for independent checking.
 
-Write one Swift source model for state, actions, and invariants. At build time,
-`@TLAModel` compiles that model and generates typed `State`, `Action`, and
-`Transition` values together with native Swift initialization, guards, and
-updates. The generated machine executes this Swift code directly. SwiftUI
-stores the machine as a value; the generated `Actor` serializes access to it.
-The native checker explores those same generated transitions. The compiler also
-exports equivalent TLA+ for independent TLC validation; application execution
-and native checking do not invoke TLC or a formal expression interpreter.
+## Write and run your first action
 
-**One source model. Typed application state. Bounded formal evidence.**
+This counter starts at zero. The `.advance` action adds one and then stops.
 
-```text
-Swift source model → validated, resolved compiler representation
- ├── @TLAModel → native Swift State, Action, Transition, and machine
- │               └── native checking of generated transitions
- └── formal export → TLA+ bundle and, for one authored Algorithm, PlusCal bundle
-                     └── independent TLC validation
+<!-- **Example ID:** `readme-sequential-counter` -->
 
-Generated machine
- ├── value stored in SwiftUI @State
- └── generated Actor around the same value
+```swift
+import SwiftTLA
+import SwiftTLAMacros
+
+@TLAModel
+struct SequentialCounter {
+    enum Step: String, CaseIterable { case advance }
+    static var spec: TLASpec {
+        #spec {
+            Algorithm("counter") { scope in
+                let value = scope.sharedVar(initial: 0)
+                Do(Step.advance, when: value < 5) {
+                    value += 1
+                    Stop()
+                }
+            }
+        }
+    }
+}
 ```
+
+In a throwing function, create the machine and send the action.
+
+```swift
+var counter = try SequentialCounter.makeMachine()
+try counter.send(.advance)
+print(counter.state.value)  // 1
+```
+
+At one, the guard `value < 5` is still true. A second `send(.advance)` throws
+because `Stop()` ended the algorithm. The counter stays at one.
 
 ## Write the system rules
 
-Use `#spec` and `Algorithm` to define the behavior that matters. The DSL
-expresses data, transitions, procedures, invariants, and temporal properties.
+For a rule that repeats, consider a clock. Each tick adds a second. At
+23:59:59 it rolls over to midnight. Select `validTime` to check the hour,
+minute, and second in the starting state and in each state the checker reaches.
 
 **Example ID:** `readme-clock-model`
 
@@ -44,54 +62,53 @@ public struct ClockModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("Clock") {
-            let ValidTime = Invariant()
-            let clock = Algorithm(label: "Clock", scoped: { scope in
-                let hour = scope.sharedVar(in: 0...23)
-                let minute = scope.sharedVar(in: 0...59)
-                let second = scope.sharedVar(in: 0...59)
+        #spec("Clock") { scope in
+            let hour = scope.sharedVar(initiallyIn: 0...23)
+            let minute = scope.sharedVar(initiallyIn: 0...59)
+            let second = scope.sharedVar(initiallyIn: 0...59)
 
-                While(Step.tick, true) {
+            Algorithm("clock", label: "Clock") {
+                Loop(Step.tick) {
                     Either {
-                        When(second < 59)
-                        Assign(second, to: second + 1)
-                    } or: {
-                        Either {
-                            When(second == 59)
-                            When(minute < 59)
-                            Assign(second, to: 0)
-                            Assign(minute, to: minute + 1)
-                        } or: {
-                            Either {
-                                When(second == 59)
-                                When(minute == 59)
-                                When(hour < 23)
-                                Assign(second, to: 0)
-                                Assign(minute, to: 0)
-                                Assign(hour, to: hour + 1)
-                            } or: {
-                                When(second == 59)
-                                When(minute == 59)
-                                When(hour == 23)
-                                Assign(second, to: 0)
-                                Assign(minute, to: 0)
-                                Assign(hour, to: 0)
-                            }
+                        When(second < 59) {
+                            second += 1
+                        }
+                        When(second == 59, minute < 59) {
+                            second.set(0)
+                            minute += 1
+                        }
+                        When(second == 59, minute == 59, hour < 23) {
+                            second.set(0)
+                            minute.set(0)
+                            hour += 1
+                        }
+                        When(second == 59, minute == 59, hour == 23) {
+                            second.set(0)
+                            minute.set(0)
+                            hour.set(0)
                         }
                     }
                 }
+            }
 
-                ValidTime {
-                    hour >= 0 && hour <= 23 &&
-                    minute >= 0 && minute <= 59 &&
-                    second >= 0 && second <= 59
-                }
-            })
-            clock
+            Invariant("validTime") {
+                (0...23).contains(hour)
+                (0...59).contains(minute)
+                (0...59).contains(second)
+            }
         }
     }
 }
 ```
+
+Each successful `send(.tick)` runs the loop body once. The next tick needs another send.
+
+Select `.validTime` to check that the hour, minute, and second are all in range at startup and after every tick the checker explores.
+
+The ranges in `sharedVar(initiallyIn:)` describe the allowed **starting values**.
+`validTime` asks a separate question about **reached values**. For example,
+an incorrect midnight update can write hour 24 even though the author allowed
+only hours 0 through 23 at startup.
 
 ## Run the generated machine
 
@@ -101,10 +118,38 @@ The generated API gives your application typed state and action cases.
 var clock = try ClockModel.makeMachine(
     .init(hour: 16, minute: 19, second: 59)
 )
-let transition = try clock.send(.tick)
-print(transition.after)
+try clock.send(.tick)
+print(clock.state)
 // State(hour: 16, minute: 20, second: 0)
 ```
+
+## Check and replay a midnight tick
+
+Start the clock at 23:59:59 and select its `validTime` invariant. This check
+explores up to ten states from that one start. A counterexample contains the
+initial snapshot and the action and snapshot for each step that follows.
+Replay follows those steps and returns a clock at the failure. The starting clock stays at 23:59:59.
+
+```swift
+let start = try ClockModel.makeMachine(.init(hour: 23, minute: 59, second: 59))
+do {
+    let result = try start.check(properties: [.validTime], checkDeadlock: false, maximumStates: 10)
+    switch result {
+    case .counterexample(let witness):
+        let failedClock = try start.replay(witness)
+        print(failedClock.state)
+    case .exhausted:
+        print("validTime held in every reachable state from this start.")
+    }
+} catch ExplorationError.stateLimitExceeded(let limit) {
+    print("Reached the limit of \(limit) states. The check is incomplete.")
+}
+```
+
+To see a failure, change the midnight branch's `hour.set(0)` to
+`hour += 1`. One `.tick` now takes the clock to hour 24,
+minute 0, second 0. Restore the reset and the same tick reaches 00:00:00.
+The fixed clock continues ticking, so the ten-state check reaches its limit.
 
 ## Use the machine in SwiftUI
 
@@ -127,7 +172,7 @@ struct ClockView: View {
                 Button("Tick") {
                     do {
                         var machine = machine
-                        _ = try machine.send(.tick)
+                        try machine.send(.tick)
                         self.machine = machine
                         diagnostic = ""
                     } catch {
@@ -189,5 +234,5 @@ running state, use the generated `Actor`. See
 
 ## Requirements
 
-- macOS 14+
-- Xcode 16.4
+- Deployment target: macOS 14 or later
+- CI toolchain: Xcode 26.3 on macOS 15

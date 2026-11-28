@@ -201,7 +201,7 @@ struct ConditionalSelectionFailure {
     static var spec: TLASpec {
         #spec {
             let conditionalSelectionFailure = Algorithm(scoped: { scope in
-                let attempt = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+                let attempt = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
                 let selected = scope.sharedVar(initial: 0)
                 Do(Step.select) {
                     If(attempt) {

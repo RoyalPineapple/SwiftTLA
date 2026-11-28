@@ -37,11 +37,12 @@ struct RecordFieldAssignmentTests {
     @Test("nested record writes compose in order without changing saved values or sibling fields")
     func updatesNestedFields() throws {
         var machine = try RecordFieldAssignmentModel.makeMachine()
-        let transition = try machine.send(.advance)
-        #expect(transition.before.envelope.packet == .init(count: 0, ready: false))
-        #expect(transition.after.envelope.packet == .init(count: 2, ready: true))
-        #expect(transition.after.envelope.untouched == 7)
-        #expect(transition.after.savedCount == 0)
+        let transitionBefore = machine.state
+        try machine.send(.advance)
+        #expect(transitionBefore.envelope.packet == .init(count: 0, ready: false))
+        #expect(machine.state.envelope.packet == .init(count: 2, ready: true))
+        #expect(machine.state.envelope.untouched == 7)
+        #expect(machine.state.savedCount == 0)
 
         let graph = try ReachabilityGraph(initialMachines: RecordFieldAssignmentModel.initialMachines(), maximumStates: 2)
         #expect(graph.transitions.count == 2)

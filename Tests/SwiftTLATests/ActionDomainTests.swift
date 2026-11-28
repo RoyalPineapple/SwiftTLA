@@ -3,6 +3,57 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct ActionDomainTests {
+    @Test("Selected record enabledness agrees with dispatch even when Swift equality ignores a field")
+    func selectsByFormalRecordIdentity() throws {
+        var machine = try SelectedRecordAction.makeMachine()
+        let allowed = SelectedRecordAction.Packet(count: 1, ready: false)
+        let outside = machine.state.query
+        #expect(outside == allowed)
+        let compilation = try SelectedRecordAction.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let predicate = try #require(compilation.semantics.behavior.invariants.first)
+        #expect(try !runtime.invariantHolds(predicate, in: initial))
+        #expect(try !machine.isEnabled(.write(packet: outside)))
+        #expect(try !machine.isEnabled(.probe))
+        let before = machine.snapshot
+        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try machine.send(.probe) }
+        #expect(machine.snapshot == before)
+        try machine.send(.write(packet: allowed))
+        try machine.send(.probe)
+        #expect(machine.state.seen)
+    }
+
+    @Test("Deep set operations preserve argument membership, grouping and the following action")
+    func dispatchesNestedSetDomain() throws {
+        var machine = try NestedSetActionDomain.makeMachine(configuration: .init(limit: 3))
+        #expect(Set(try machine.actionCandidates()) == [.select(item: 2), .select(item: 3), .reset])
+        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try machine.send(.select(item: 1)) }
+        try machine.send(.select(item: 2))
+        #expect(machine.state.value == 2)
+        try machine.send(.reset)
+        #expect(machine.state.value == 0)
+    }
+
+    @Test("a bound enabledness query checks its domain and only executes the requested action argument")
+    func checksOnlyRequestedArgument() throws {
+        let spec = TLASpec(name: "BoundEnabledness", variables: [.init(name: "value", initial: .int(0))],
+            actions: [.init(name: "divide", body: .assign(.named("value"), .integerDivide(.int(1), .variable("by"))),
+                bindings: [.init(name: "by", values: [.int(0), .int(1)])])],
+            invariants: [
+                .init(name: "Valid", body: .enabledAction("divide", argument: .int(1))),
+                .init(name: "Outside", body: .enabledAction("divide", argument: .int(2))),
+                .init(name: "Fails", body: .enabledAction("divide", argument: .int(0)))
+            ])
+        let compilation = try spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let state = try #require(try runtime.initialStates().first)
+        let checks = compilation.semantics.behavior.invariants
+        #expect(try runtime.invariantHolds(checks[0], in: state))
+        #expect(try !runtime.invariantHolds(checks[1], in: state))
+        #expect(throws: EvalError.divisionByZero) { try runtime.invariantHolds(checks[2], in: state) }
+    }
+
     @Test("enabled-action dependencies in domains determine evaluation order")
     func ordersDomainDependencies() throws {
         let spec = canonicalTestSpec(variables: [("value", .value(.int(0)))], actions: [

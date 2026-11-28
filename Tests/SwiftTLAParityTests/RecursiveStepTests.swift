@@ -8,7 +8,8 @@ struct RecursiveStepTests {
         let scenario = try #require(RecursiveStep.validationScenarios().first)
         var machine = try #require(scenario.initialMachines().first)
         #expect(machine.state.total == 0)
-        #expect(try machine.send(.compute).after.total == 10)
+        try machine.send(.compute)
+        #expect(machine.state.total == 10)
         #expect(try machine.enabledActions().isEmpty)
 
         let graph = try scenario.explore(maximumStates: 3)

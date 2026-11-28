@@ -45,53 +45,46 @@ public struct BluetoothModel {
 
     public static var spec: TLASpec {
         #spec {
-            let knownCentralPhase = Invariant()
-            let bluetoothModel = Algorithm(scoped: { scope in
+            Algorithm("bluetoothModel") { scope in
                 let phase = scope.sharedVar(initial: Phase.unknown)
                 Each(PoweredOnProcess.all) { _ in
-                    Do(Step.poweredOn) {
-                        When(phase == .unknown || phase == .resetting || phase == .poweredOff)
-                        Assign(phase, to: Phase.poweredOn)
+                    Do(Step.poweredOn, when: phase == .unknown || phase == .resetting || phase == .poweredOff) {
+                        phase.set(Phase.poweredOn)
                         Goto(Step.poweredOn)
                     }
                 }
                 Each(PoweredOffProcess.all) { _ in
-                    Do(Step.poweredOff) {
-                        When(phase == .unknown || phase == .resetting || phase == .poweredOn || phase == .scanning)
-                        Assign(phase, to: Phase.poweredOff)
+                    Do(Step.poweredOff, when: phase == .unknown || phase == .resetting || phase == .poweredOn || phase == .scanning) {
+                        phase.set(Phase.poweredOff)
                         Goto(Step.poweredOff)
                     }
                 }
                 Each(ResettingProcess.all) { _ in
-                    Do(Step.resetting) {
-                        When(phase != .resetting)
-                        Assign(phase, to: Phase.resetting)
+                    Do(Step.resetting, when: phase != .resetting) {
+                        phase.set(Phase.resetting)
                         Goto(Step.resetting)
                     }
                 }
                 Each(UnsupportedProcess.all) { _ in
-                    Do(Step.unsupported) {
-                        When(phase != .unsupported)
-                        Assign(phase, to: Phase.unsupported)
+                    Do(Step.unsupported, when: phase != .unsupported) {
+                        phase.set(Phase.unsupported)
                         Goto(Step.unsupported)
                     }
                 }
                 Each(UnauthorizedProcess.all) { _ in
-                    Do(Step.unauthorized) {
-                        When(phase != .unauthorized)
-                        Assign(phase, to: Phase.unauthorized)
+                    Do(Step.unauthorized, when: phase != .unauthorized) {
+                        phase.set(Phase.unauthorized)
                         Goto(Step.unauthorized)
                     }
                 }
                 Each(StartScanProcess.all) { _ in
-                    Do(Step.startScan) { When(phase == .poweredOn); Assign(phase, to: Phase.scanning); Goto(Step.startScan) }
+                    Do(Step.startScan, when: phase == .poweredOn) { phase.set(Phase.scanning); Goto(Step.startScan) }
                 }
                 Each(StopScanProcess.all) { _ in
-                    Do(Step.stopScan) { When(phase == .scanning); Assign(phase, to: Phase.poweredOn); Goto(Step.stopScan) }
+                    Do(Step.stopScan, when: phase == .scanning) { phase.set(Phase.poweredOn); Goto(Step.stopScan) }
                 }
-                knownCentralPhase { phase == .unknown || phase == .resetting || phase == .unsupported || phase == .unauthorized || phase == .poweredOff || phase == .poweredOn || phase == .scanning }
-            })
-            bluetoothModel
+                Invariant("knownCentralPhase") { phase == .unknown || phase == .resetting || phase == .unsupported || phase == .unauthorized || phase == .poweredOff || phase == .poweredOn || phase == .scanning }
+            }
         }
     }
 
@@ -174,7 +167,7 @@ public actor Bluetooth {
     public func scan() async throws -> AsyncStream<Device> {
         if let diagnostic { throw BleError.transitionFailed(diagnostic) }
         guard try machine.isEnabled(.startScan) else { throw BleError.notReady }
-        _ = try machine.send(.startScan)
+        try machine.send(.startScan)
         publishState()
         let stream = AsyncStream<Device>.makeStream()
         scanContinuation = stream.continuation
@@ -184,7 +177,7 @@ public actor Bluetooth {
 
     public func stopScanning() async throws {
         if try machine.isEnabled(.stopScan) {
-            _ = try machine.send(.stopScan)
+            try machine.send(.stopScan)
             publishState()
         }
         central.stopScan()
@@ -196,7 +189,7 @@ public actor Bluetooth {
         if let action = BluetoothModel.Action(managerState: state) {
             do {
                 if try machine.isEnabled(action) {
-                    _ = try machine.send(action)
+                    try machine.send(action)
                     publishState()
                 }
                 diagnostic = nil

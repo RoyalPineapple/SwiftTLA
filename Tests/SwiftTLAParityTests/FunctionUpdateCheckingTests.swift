@@ -15,16 +15,16 @@ struct FunctionUpdateCheckingTests {
         let bothDone: Phases = [.first: .done, .second: .done]
 
         let machine = try FunctionUpdateMachine.makeMachine()
-        #expect(machine.state.phases == initial)
-        #expect(try machine.successors(for: .advance(process: .first)).map(\.state.phases) == [firstDone])
-        #expect(try machine.successors(for: .advance(process: .second)).map(\.state.phases) == [secondDone])
+        #expect(machine.state.phases == .init(uniqueKeysWithValues: initial.map { ($0.key, $0.value) }))
+        #expect(try machine.successors(for: .advance(process: .first)).map(\.state.phases) == [.init(uniqueKeysWithValues: firstDone.map { ($0.key, $0.value) })])
+        #expect(try machine.successors(for: .advance(process: .second)).map(\.state.phases) == [.init(uniqueKeysWithValues: secondDone.map { ($0.key, $0.value) })])
 
         let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 10)
         #expect(graph.initialStates.count == 1)
         let states = graph.transitions.keys.map(\.state.phases)
         #expect(states.count == 4)
         for expected in [initial, firstDone, secondDone, bothDone] {
-            #expect(states.contains(expected))
+            #expect(states.contains(.init(uniqueKeysWithValues: expected.map { ($0.key, $0.value) })))
         }
         let expectedEdges: [(Phases, Action, Phases)] = [
             (initial, .advance(process: .first), firstDone),
@@ -34,11 +34,11 @@ struct FunctionUpdateCheckingTests {
         ]
         #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == expectedEdges.count)
         for (source, action, target) in expectedEdges {
-            let outgoing = try #require(graph.transitions.first { $0.key.state.phases == source }?.value)
-            #expect(outgoing.contains { $0.action == action && $0.target.state.phases == target })
+            let outgoing = try #require(graph.transitions.first { $0.key.state.phases == .init(uniqueKeysWithValues: source.map { ($0.key, $0.value) }) }?.value)
+            #expect(outgoing.contains { $0.action == action && $0.target.state.phases == .init(uniqueKeysWithValues: target.map { ($0.key, $0.value) }) })
         }
         #expect(graph.safetyViolations.count == 1)
-        #expect(graph.safetyViolations.first?.key.state.phases == bothDone)
+        #expect(graph.safetyViolations.first?.key.state.phases == .init(uniqueKeysWithValues: bothDone.map { ($0.key, $0.value) }))
         #expect(graph.safetyViolations.first?.value == [.deadlock])
     }
 }

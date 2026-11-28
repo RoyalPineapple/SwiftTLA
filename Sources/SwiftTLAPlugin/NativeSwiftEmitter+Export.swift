@@ -1,3 +1,4 @@
+import Foundation
 import SwiftSyntax
 import SwiftTLA
 
@@ -60,12 +61,12 @@ extension NativeSwiftEmitter {
                 }
                 let name = String(reflecting: program.layout.actions[id.ordinal].renderedName)
                 actionMetadata += "\n" + loops.joined(separator: "\n") + "\n" + """
-                let _arguments: [TLAValue] = [\(arguments.joined(separator: ", "))]
+                let _arguments: [SwiftTLA.TLAValue] = [\(arguments.joined(separator: ", "))]
                 _actions.append(RenderedAction(sourceName: \(name), arguments: _arguments,
                     renderedName: FormalActionCall(name: \(name), arguments: _arguments).description))
                 """ + String(repeating: "\n}", count: loops.count)
             }
-            var obligationMetadata = "var _obligations: [String: [_RenderedTemporalObligation]] = [:]"
+            var obligationMetadata = "var _obligations: [\(nativeStringType): [_RenderedTemporalObligation]] = [:]"
             for property in program.behavior.temporalProperties {
                 guard let obligations = module.temporalObligations[property.id] else { continue }
                 var loops: [String] = []
@@ -93,13 +94,11 @@ extension NativeSwiftEmitter {
                 obligationMetadata += String(repeating: "\n}", count: loops.count)
             }
             if module.temporalObligations.isEmpty {
-                obligationMetadata = "let _obligations: [String: [_RenderedTemporalObligation]] = [:]"
+                obligationMetadata = "let _obligations: [\(nativeStringType): [_RenderedTemporalObligation]] = [:]"
             }
             let generatedLinks = try program.generatedRefinements.map { refinement in
                 let target = refinement.targetModelType
-                let configuration = try refinement.parameters.map { binding in
-                    "\(binding.fieldName): \(try expression(binding.value.expression, state: ""))"
-                }.joined(separator: ", ")
+                let configuration = try generatedRefinementParameters(refinement)
                 func renderedBindings(_ bindings: [CompiledGeneratedModelBinding]) throws -> String {
                     try bindings.map { binding in
                         let value = try program.renderGeneratedModelValue(binding.value)
@@ -110,7 +109,7 @@ extension NativeSwiftEmitter {
                 _rendered = try _rendered.addingGeneratedRefinement(
                     \(String(reflecting: refinement.name)),
                     instance: \(String(reflecting: refinement.instanceName)), of: \(target).self,
-                    configuration: try \(target).Configuration(\(configuration)),
+                    configuration: \(configuration.isEmpty ? "" : "try ")\(target).Configuration(\(configuration)),
                     behavior: .\(refinement.behavior.rawValue),
                     parameters: [\(try renderedBindings(refinement.parameters))],
                     state: [\(try renderedBindings(refinement.state))])
@@ -119,10 +118,11 @@ extension NativeSwiftEmitter {
             body = """
             \(actionMetadata)
             \(obligationMetadata)
-            \(generatedLinks.isEmpty ? "let" : "var") _rendered = try RenderedSpecification(_generatedModule: \(String(reflecting: program.moduleName)),
+            \(generatedLinks.isEmpty ? "let" : "var") _rendered = try RenderedSpecification(_generatedModule: \(String(reflecting: module.moduleName)),
                 source: \(String(reflecting: module.renderedModuleSource)),
                 compilationIdentity: \(String(reflecting: program.identity.value)),
                 declarations: [\(declarations.joined(separator: ", "))],
+                _generatedConstants: [\(module.constantValues.map { "ConstantDecl(\(String(reflecting: $0.name)), \(renderedLiteral($0.value)))" }.joined(separator: ", "))],
                 checkDeadlock: \(module.configuration.checkDeadlock),
                 _generatedIntegerBitWidth: \(Int.bitWidth),
                 _generatedIntrinsicInvariants: \(String(reflecting: module.configuration.intrinsicInvariants)),
@@ -136,11 +136,14 @@ extension NativeSwiftEmitter {
                 actions: _actions, _generatedPlusCal: \(plusCal),
                 _generatedPlusCalProfiles: \(plusCalProfiles.isEmpty ? "[:]" : "[" + plusCalProfiles.joined(separator: ", ") + "]"),
                 _assumptionsOnly: \(module.configuration.assumptionsOnly),
+                _behaviorSpecificationName: \(String(reflecting: module.configuration.specificationName)),
                 _generatedParameters: [\(parameterBindings.joined(separator: ", "))],
                 _generatedImports: [\(imports)], _generatedDependencies: [\(dependencies)],
                 _generatedFairnessProfileOperators: \(program.behavior.fairnessProfiles.isEmpty ? "[:]" : "[" + program.behavior.fairnessProfiles.map {
                     "\(String(reflecting: $0.name)): \(String(reflecting: $0.operatorName))"
                 }.joined(separator: ", ") + "]"),
+                _generatedInitialEvaluationFailure: \(module.initialEvaluationFailure.map { String(reflecting: $0) } ?? "nil"),
+                _generatedInitialEvaluationFailureRecord: \(module.initialEvaluationFailureRecord.map { String(reflecting: $0) } ?? "nil"),
                 _generatedTemporalObligations: _obligations)
             \(generatedLinks.joined(separator: "\n"))
             return _rendered
@@ -150,11 +153,21 @@ extension NativeSwiftEmitter {
             throw \(exportDiagnostic(diagnostic))
             """
         }
-        return try nativeDeclarations("""
+        var declarations = try nativeDeclarations("""
         public static func render(\(parameters)) throws -> RenderedSpecification {
             \(body)
         }
         """)
+        if let stackSeed = model.stackSeedSource {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let encoded = try encoder.encode(stackSeed).base64EncodedString()
+            let receipt = Trivia(pieces: [.lineComment("// SwiftTLA.OrderedIntStackSeedSource.v1 " + encoded), .newlines(1)])
+            declarations[0].leadingTrivia = receipt + declarations[0].leadingTrivia
+        }
+        try verifyGeneratedExportDefaultDeadlock(declarations.first,
+            required: program.requiresSourceDefaultDeadlockOutput)
+        return declarations
     }
 
     private func exportDiagnostic(_ diagnostic: CompilationDiagnostic) -> String {
@@ -163,5 +176,31 @@ extension NativeSwiftEmitter {
             path: \(String(reflecting: diagnostic.path)), expected: \(String(reflecting: diagnostic.expected)),
             actual: \(String(reflecting: diagnostic.actual)), nextSafeAction: \(String(reflecting: diagnostic.nextSafeAction)))
         """
+    }
+}
+
+func verifyGeneratedExportDefaultDeadlock(_ declaration: DeclSyntax?, required: Bool) throws {
+    guard required else { return }
+    let function = declaration?.as(FunctionDeclSyntax.self)
+    let calls = function?.body?.statements.compactMap { statement -> FunctionCallExprSyntax? in
+        guard let binding = statement.item.as(VariableDeclSyntax.self)?.bindings.first,
+              binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "_rendered",
+              let attempt = binding.initializer?.value.as(TryExprSyntax.self) else { return nil }
+        return attempt.expression.as(FunctionCallExprSyntax.self)
+    } ?? []
+    let selections = calls.first?.arguments.filter { $0.label?.text == "checkDeadlock" } ?? []
+    let returned = function?.body?.statements.compactMap { $0.item.as(ReturnStmtSyntax.self) } ?? []
+    guard function?.name.text == "render", calls.count == 1,
+          calls[0].calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "RenderedSpecification",
+          selections.count == 1,
+          selections[0].expression.as(BooleanLiteralExprSyntax.self)?.literal.text == "true",
+          returned.count == 1,
+          function?.body?.statements.last?.item.as(ReturnStmtSyntax.self)?
+            .expression?.as(DeclReferenceExprSyntax.self)?.baseName.text == "_rendered" else {
+        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.export.defaultDeadlock",
+            expected: "one authored #spec default checkDeadlock: true argument returned by the generated TLA export",
+            actual: "the generated TLA export changes or omits the default deadlock check",
+            nextSafeAction: "Report this generated TLA export failure.")
     }
 }

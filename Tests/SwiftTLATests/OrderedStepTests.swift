@@ -82,22 +82,22 @@ import SwiftSyntax
         let witness = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/OrderedCopySwiftVisitors.txt")
             .standardizedFileURL
-        let expected = try String(contentsOf: witness, encoding: .utf8)
+        let expected = nativeWitnessSource(try String(contentsOf: witness, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
         let actual = (visitors + [dispatch, formalCall]).map(\.description).joined(separator: "\n")
         #expect(tokens(actual) == tokens(expected))
         let wrongSecondRead = visitors[1].description.replacingOccurrences(
-            of: "let _arithmetic0: Int = ___atomic_2_2",
-            with: "let _arithmetic0: Int = state.state.x")
+            of: "let _arithmetic0: \(nativeIntType) = ___atomic_2_2",
+            with: "let _arithmetic0: \(nativeIntType) = state.state.x")
         #expect(wrongSecondRead != visitors[1].description)
         #expect(tokens(([
             visitors[0].description, wrongSecondRead, visitors[2].description,
             dispatch.description, formalCall.description
         ]).joined(separator: "\n")) != tokens(expected))
         let secondAction = actions[1]
-        let emittedWrites = try emitter.actionFunctions(secondAction.body).writes
+        let emittedWrites = try emitter.actionFunctions(secondAction).writes
         try verifyGeneratedActionWriteOutput(visitors[1], action: secondAction.body,
             program: compiled.program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
         let wrongSecondVisitor = try #require(Parser.parse(source: wrongSecondRead)
@@ -113,24 +113,195 @@ import SwiftSyntax
         let wrongRoute = dispatch.description.replacingOccurrences(
             of: "Self._visitSuccessors1", with: "Self._visitSuccessors0")
         #expect(wrongRoute != dispatch.description)
-        #expect(tokens((visitors.map(\.description) + [wrongRoute, formalCall.description])
-            .joined(separator: "\n")) != tokens(expected))
+        let routes = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+             formalName: compiled.program.layout.actions[api.compiledAction.ordinal].renderedName)
+        }
+        let allActions = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+             formalName: compiled.program.layout.actions[api.compiledAction.ordinal].renderedName,
+             publicBindings: api.bindings.filter(\.isPublic).count)
+        }
+        let candidatePlans = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier,
+             labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
+        }
+        try verifyGeneratedActionRoutingOutput(members, routes: routes, allActions: allActions,
+            candidates: candidatePlans, configurationArguments: "")
+        let wrongDispatch = try #require(Parser.parse(source: wrongRoute)
+            .statements.first?.item.as(DeclSyntax.self))
+        var wrongMembers = members
+        let dispatchIndex = try #require(wrongMembers.firstIndex {
+            $0.description.contains("private func _visitSuccessors(for action: Action,")
+        })
+        wrongMembers[dispatchIndex] = wrongDispatch
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans,
+                configurationArguments: "")
+            Issue.record("A generated action routed to the wrong compiled visitor")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.route."))
+        }
+        let support = packageRoot().appendingPathComponent("Sources/SwiftTLA")
+        let operations = try String(contentsOf: support.appendingPathComponent("NativeMachineOperations.swift"), encoding: .utf8)
+        let checking = try String(contentsOf: support.appendingPathComponent("CheckingContext.swift"), encoding: .utf8)
+        func sendBinding(_ declarations: [DeclSyntax]) throws -> Data {
+            try nativePublicSendBinding(declarations.map(\.description).joined(separator: "\n"),
+                operations: operations, checking: checking,
+                module: "SwiftTLAOrderedAssignmentCatalogOrderedCopySendBinding", binding: "CatalogSendBinding")
+        }
+        #expect(try !sendBinding(members).isEmpty)
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try sendBinding(wrongMembers)
+        }
+        let wrongSubject = dispatch.description.replacingOccurrences(of: "switch action", with: "switch Action.copy")
+        #expect(wrongSubject != dispatch.description)
+        wrongMembers[dispatchIndex] = try #require(Parser.parse(source: wrongSubject).statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try sendBinding(wrongMembers)
+        }
+        let wrongLabel = formalCall.description.replacingOccurrences(
+            of: "name: \"copy\"", with: "name: \"wrong\"")
+        #expect(wrongLabel != formalCall.description)
+        let wrongFormalCall = try #require(Parser.parse(source: wrongLabel)
+            .statements.first?.item.as(DeclSyntax.self))
+        let formalIndex = try #require(wrongMembers.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "formalCall"
+        })
+        wrongMembers = members
+        wrongMembers[formalIndex] = wrongFormalCall
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans,
+                configurationArguments: "")
+            Issue.record("A generated action used the wrong formal label")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.label.copy")
+        }
+        let candidateIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_actions"
+        })
+        let wrongCandidates = members[candidateIndex].description.replacingOccurrences(
+            of: "try _visitActionCandidates { result.append($0) }",
+            with: "try _visitActionCandidates { _ in }")
+        #expect(wrongCandidates != members[candidateIndex].description)
+        wrongMembers = members
+        wrongMembers[candidateIndex] = try #require(Parser.parse(source: wrongCandidates)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("A generated candidate list discarded every action")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.candidates")
+        }
+        let visitorIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitSuccessors"
+                && $0.as(FunctionDeclSyntax.self)?.signature.parameterClause.parameters.last?.firstName.text
+                    == "onEvaluationFailure"
+        })
+        let wrongEnumeration = members[visitorIndex].description.replacingOccurrences(
+            of: "try _visitActionCandidates(_visitAction)",
+            with: "try _visitActionCandidates { _ in }")
+        #expect(wrongEnumeration != members[visitorIndex].description)
+        wrongMembers = members
+        wrongMembers[visitorIndex] = try #require(Parser.parse(source: wrongEnumeration)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated checking ignored every action candidate")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.failureRouting")
+        }
+        let sourceIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitActionCandidates"
+        })
+        let wrongSource = members[sourceIndex].description.replacingOccurrences(
+            of: "try visit(.repeatWrites)", with: "try visit(.copy)")
+        #expect(wrongSource != members[sourceIndex].description)
+        wrongMembers = members
+        wrongMembers[sourceIndex] = try #require(Parser.parse(source: wrongSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated candidate traversal duplicated one action")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.candidateSource")
+        }
+        let sendIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_applySelected"
+        })
+        let wrongSend = members[sendIndex].description.replacingOccurrences(
+            of: "_execution = next", with: "_execution = _execution")
+        #expect(wrongSend != members[sendIndex].description)
+        wrongMembers = members
+        wrongMembers[sendIndex] = try #require(Parser.parse(source: wrongSend)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated send succeeded without applying its successor")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.send")
+        }
+        let collectorIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_sendOutcome"
+        })
+        let original = members[collectorIndex].description
+        try #require(original.components(separatedBy: "result.record($0)").count == 2)
+        let discarded = original.replacingOccurrences(of: "result.record($0)", with: "_ = $0")
+        try #require(discarded != original)
+        wrongMembers = members
+        wrongMembers[collectorIndex] = try #require(Parser.parse(source: discarded)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated send discarded its callback")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.sendCollector")
+        }
+        let successorIndex = try #require(members.firstIndex {
+            guard let method = $0.as(FunctionDeclSyntax.self) else { return false }
+            return method.name.text == "_successors"
+                && method.signature.parameterClause.parameters.first?.firstName.text == "for"
+                && method.signature.parameterClause.parameters.count == 2
+        })
+        let wrongSuccessors = members[successorIndex].description.replacingOccurrences(
+            of: "{ SwiftTLA._appendNativeOutcome(&result, $0) }", with: "{ _ in }")
+        #expect(wrongSuccessors != members[successorIndex].description)
+        wrongMembers = members
+        wrongMembers[successorIndex] = try #require(Parser.parse(source: wrongSuccessors)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated successors discarded the complete visited relation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.successorRoute")
+        }
     }
 
     @Test("Later reads observe earlier writes in one atomic transition")
     func orderedReadsAndRepeatedWrites() throws {
         var machine = try OrderedCopyModel.makeMachine()
         let initial = machine.snapshot
-        let transition = try machine.send(.copy)
-        #expect(transition.before.x == 1)
-        #expect(transition.before.y == 0)
-        #expect(transition.after.x == 2)
-        #expect(transition.after.y == 2)
+        let transitionBefore = machine.state
+        try machine.send(.copy)
+        let transitionAfter = machine.state
+        #expect(transitionBefore.x == 1)
+        #expect(transitionBefore.y == 0)
+        #expect(transitionAfter.x == 2)
+        #expect(transitionAfter.y == 2)
         let afterCopy = machine.snapshot
-        let repeated = try machine.send(.repeatWrites)
-        #expect(repeated.before == transition.after)
-        #expect(repeated.after.x == 4)
-        #expect(repeated.after.y == 2)
+        let repeatedBefore = machine.state
+        try machine.send(.repeatWrites)
+        #expect(repeatedBefore == transitionAfter)
+        #expect(machine.state.x == 4)
+        #expect(machine.state.y == 2)
         let afterRepeat = machine.snapshot
         let initialMachines = try OrderedCopyModel.initialMachines()
         #expect(initialMachines.count == 1)
@@ -153,6 +324,65 @@ import SwiftSyntax
         #expect(terminatingEdges.first?.target == afterRepeat)
     }
 
+    @Test("Each authored ordered action supplies proof for its own control transfer")
+    func orderedActionsSupplySelectedProofs() throws {
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().appendingPathComponent("OrderedStepFixtures.swift")
+        let authored = try Data(contentsOf: fixture)
+        let spec = OrderedCopyModel.spec
+        let rendered = try OrderedCopyModel.render()
+        let proofs = try OrderedCopyModel.Step.allCases.map { step in
+            try ArithmeticAssignmentEvidence.translation(authoredSource: authored,
+                modelName: String(describing: OrderedCopyModel.self), spec: spec, rendered: rendered,
+                sourceAction: step.rawValue)
+        }
+
+        let body = String(decoding: authored, as: UTF8.self)
+        let increment = "state.x += 1"
+        #expect(body.components(separatedBy: increment).count == 3)
+        let replacement = try #require(body.range(of: increment))
+        let wrong = body.replacingCharacters(in: replacement, with: "state.x = 1")
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try ArithmeticAssignmentEvidence.translation(authoredSource: Data(wrong.utf8),
+                modelName: String(describing: OrderedCopyModel.self), spec: spec, rendered: rendered,
+                sourceAction: OrderedCopyModel.Step.repeatWrites.rawValue)
+        }
+
+        #expect(proofs.map(\.actionOrdinal) == [0, 1])
+        #expect(proofs.map(\.sourceContinuation) == ["repeatWrites", nil])
+        #expect(Set(proofs.map { $0.source.name }).count == proofs.count)
+        #expect(Set(proofs.map { $0.output.name }).count == proofs.count)
+        let syntax = Parser.parse(source: String(decoding: authored, as: UTF8.self))
+        let model = try #require(syntax.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == String(describing: OrderedCopyModel.self) })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(model))
+        let native = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+        let catalog = try ArithmeticAssignmentEvidence.catalogProof(for: rendered, translations: proofs, nativeSource: native)
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try ArithmeticAssignmentEvidence.catalogProof(for: rendered, translations: Array(proofs.dropLast()))
+        }
+#if compiler(>=6.2)
+        let actual = rendered.tlaBundle.root
+        Attachment.record(Array(authored), named: fixture.lastPathComponent)
+        let cfg = try #require(actual.cfg)
+        let configured = try #require(catalog.configured)
+        Attachment.record(Array(actual.tla.utf8), named: "\(actual.name).tla")
+        Attachment.record(Array(cfg.utf8), named: "\(actual.name).cfg")
+        Attachment.record(Array(catalog.bytes), named: "\(catalog.name).tla")
+        Attachment.record(Array(configured.bytes), named: "\(configured.name).tla")
+        for dependency in catalog.dependencies {
+            Attachment.record(Array(dependency.bytes), named: "\(dependency.name).tla")
+        }
+        Attachment.record(Array(native.utf8), named: "OrderedCopyNativeMembers.swift")
+        for proof in proofs {
+            Attachment.record(Array(proof.source.bytes), named: "\(proof.source.name).tla")
+            Attachment.record(Array(proof.output.bytes), named: "\(proof.output.name).tla")
+        }
+#else
+        _ = catalog
+#endif
+    }
+
     @Test("The checked repeated-write module matches normalized generated TLA")
     func renderedRepeatedWriteProofInput() throws {
         let rendered = try OrderedCopyModel.render().tlaBundle.root.tla
@@ -172,10 +402,38 @@ import SwiftSyntax
 
     @Test("A later checked addition reports the failing operands")
     func laterAdditionFailure() throws {
-        let machine = try OrderedOverflowModel.makeMachine()
-        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+        var machine = try OrderedOverflowModel.makeMachine()
+        let before = machine.snapshot
+        let reason = NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])
+        #expect(throws: reason) {
             try machine.successors(for: .advance)
         }
+        #expect(throws: reason) {
+            try machine.successor(for: .advance, matching: before)
+        }
+        #expect(throws: reason) {
+            try machine.send(.advance)
+        }
+        #expect(machine.snapshot == before)
+
+        var context = CheckingContext(registers: try machine.initialCheckingRegisters())
+        context.startRecordingOrderedIntAssignmentFailures()
+        var failures: [NativeMachineEvaluationError] = []
+        let found = try machine.visitValidationOutcomes(checking: &context, { _, _ in true },
+            onEvaluationFailure: { action, reason in
+                #expect(action == .advance)
+                failures.append(reason)
+                return true
+            })
+        #expect(!found)
+        #expect(failures == [reason])
+        let observations = try #require(context.orderedIntAssignmentFailures)
+        #expect(observations.count == 1)
+        let observation = try #require(observations.first)
+        #expect(observation.actionOrdinal == 0)
+        #expect(observation.assignmentOrdinal == 2)
+        #expect(observation.preceding == [Int.max])
+        #expect(observation.reason == reason)
 
         let rendered = try OrderedOverflowModel.render()
         let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
@@ -184,9 +442,50 @@ import SwiftSyntax
         #expect(laterFailure.contains("LET __atomic_0 == (count + 1)"))
         #expect(operands.contains("<<__atomic_0, 1>>"))
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: OrderedOverflowModel.spec.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let output = try program.renderModule()
+        let name = try #require(program.layout.actions.first?.renderedName)
+        let header = "\(name) == "
+        let body = try #require(output.renderedModuleSource.split(separator: "\n")
+            .first { $0.hasPrefix(header) }?.dropFirst(header.count))
+        try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+            body: String(body), module: output.renderedModuleSource,
+            layout: program.layout, binders: program.binderNames,
+            failureDeclarations: output.evaluationFailureDeclarations)
+        for prefix in ["__SwiftTLAOverflowFailure0 == ",
+                       "__SwiftTLAOverflowFailure0_1 == ",
+                       "__SwiftTLAOverflowOperands0_1 == ",
+                       "__SwiftTLAAnyEvaluationFailure0 == "] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix(prefix)
+            })
+            let changed = "\(prefix)FALSE"
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+                    body: String(body),
+                    module: output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
+                    layout: program.layout, binders: program.binderNames,
+                    failureDeclarations: output.evaluationFailureDeclarations.map {
+                        $0 == original ? changed : $0
+                    })
+            }
+        }
+        let omitted = try #require(output.evaluationFailureDeclarations.first {
+            $0.hasPrefix("__SwiftTLAOverflowFailure0_1 == ")
+        })
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+                body: String(body),
+                module: output.renderedModuleSource.replacingOccurrences(of: "\(omitted)\n", with: ""),
+                layout: program.layout, binders: program.binderNames,
+                failureDeclarations: output.evaluationFailureDeclarations.filter { $0 != omitted })
+        }
     }
 
-    @Test("Nested checked additions retain the failing operation in both outputs")
+    @Test("Nested checked additions retain the selected failure in both outputs")
     func nestedAdditionFailure() throws {
         let machine = try NestedAdditionOverflowModel.makeMachine()
         #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
@@ -198,6 +497,58 @@ import SwiftSyntax
         #expect(definitions.filter { $0.hasPrefix("__SwiftTLAOverflowFailure") }.count == 2)
         #expect(definitions.contains { $0.hasPrefix("__SwiftTLAOverflowOperands0_1 ==") && $0.contains("count + 1") })
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: NestedAdditionOverflowModel.spec.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        let name = try #require(program.layout.actions.first?.renderedName)
+        let header = "\(name) == "
+        let body = try #require(output.renderedModuleSource.split(separator: "\n")
+            .first { $0.hasPrefix(header) }?.dropFirst(header.count))
+        try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+            body: String(body), module: output.renderedModuleSource,
+            layout: program.layout, binders: program.binderNames,
+            failureDeclarations: output.evaluationFailureDeclarations)
+        for prefix in ["__SwiftTLAOverflowFailure0_1 == ",
+                       "__SwiftTLAAnyEvaluationFailure0 == "] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix(prefix)
+            })
+            let changed = "\(prefix)FALSE"
+            let wrongModule = output.renderedModuleSource.replacingOccurrences(of: original, with: changed)
+            let wrongDeclarations = output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 }
+            #expect(wrongModule != output.renderedModuleSource)
+            #expect(wrongDeclarations != output.evaluationFailureDeclarations)
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+                    body: String(body), module: wrongModule, layout: program.layout,
+                    binders: program.binderNames, failureDeclarations: wrongDeclarations)
+            }
+        }
+        try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+            module: output.renderedModuleSource,
+            failureDeclarations: output.evaluationFailureDeclarations,
+            evaluationInvariant: "__SwiftTLAEvaluationOK",
+            configuration: output.configuration, renderer: renderer)
+        let selection = try #require(output.evaluationFailureDeclarations.first {
+            $0.hasPrefix("__SwiftTLAEvaluationOK == ")
+        })
+        let omittedFailure = "__SwiftTLAEvaluationOK == TRUE"
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                module: output.renderedModuleSource.replacingOccurrences(of: selection, with: omittedFailure),
+                failureDeclarations: output.evaluationFailureDeclarations.map {
+                    $0 == selection ? omittedFailure : $0
+                },
+                evaluationInvariant: "__SwiftTLAEvaluationOK",
+                configuration: output.configuration, renderer: renderer)
+        }
     }
 
     @Test("Choices and following statements read their current branch values")
@@ -266,9 +617,9 @@ import SwiftSyntax
     @Test("Ordinary let captures at its declaration and preserves shadowed values")
     func savedValuesAreStable() throws {
         var machine = try SavedStepValueModel.makeMachine()
-        let result = try machine.send(.advance)
-        #expect(result.after.count == 4)
-        #expect(result.after.copied == 3)
+        try machine.send(.advance)
+        #expect(machine.state.count == 4)
+        #expect(machine.state.copied == 3)
         let graph = try ReachabilityGraph(
             initialMachines: SavedStepValueModel.initialMachines(), maximumStates: 4)
         #expect(graph.safetyViolations.isEmpty)

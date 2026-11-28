@@ -19,7 +19,7 @@ struct BoulangerCorpusExecutionTests {
 
         let successors = try machine.successors().filter { $0.action == .ncs(process: 1) }
         #expect(successors.count == 1)
-        _ = try machine.send(.ncs(process: 1))
+        try machine.send(.ncs(process: 1))
         #expect(machine.snapshot == successors.first?.machine.snapshot)
         #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
         #expect(try Set(machine.enabledActions()) == [
@@ -41,7 +41,7 @@ struct BoulangerCorpusExecutionTests {
         }
         let before = machine.snapshot
         do {
-            _ = try machine.send(.e1(process: 1))
+            try machine.send(.e1(process: 1))
             Issue.record("Distinct control successors must remain ambiguous")
         } catch GeneratedMachineError.ambiguousAction {}
         #expect(machine.snapshot == before)

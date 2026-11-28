@@ -35,7 +35,7 @@ struct PositiveReachabilityTests {
                 configuration: .init(target: target, exploredThrough: 2))
             #expect(trace.first?.state == application.snapshot)
             for step in trace.dropFirst() {
-                _ = try application.send(#require(step.action))
+                try application.send(#require(step.action))
                 #expect(application.snapshot == step.state)
             }
             #expect(application.snapshot == state)

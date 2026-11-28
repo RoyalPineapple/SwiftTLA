@@ -47,9 +47,9 @@ struct MajorityCorpusStateGraphTests {
                 #expect(next.snapshot == machine.snapshot)
             } else {
                 #expect(try machine.enabledActions() == [.Next])
-                let transition = try next.send(.Next)
-                #expect(transition.before == machine.state)
-                #expect(transition.after == next.state)
+                let transitionBefore = next.state
+                try next.send(.Next)
+                #expect(transitionBefore == machine.state)
                 edges.insert(Edge(source: machine.snapshot, action: .Next, target: next.snapshot))
                 pending.append(next)
             }

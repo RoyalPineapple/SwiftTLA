@@ -23,7 +23,9 @@ enum AlgorithmLowerer {
     }
     private static let processBinding = CompilerBindingSymbol.process
 
-    static func lowerAtomicStep(_ step: AtomicStep) throws -> (action: ActionExpr, assertions: [StateExpr]) {
+    static func lowerAtomicStep(_ step: AtomicStep,
+                                recordScheduledAssignment: ((String, ScheduledAtomicAssignment) -> Void)? = nil) throws
+        -> (action: ActionExpr, assertions: [StateExpr], displacedAssignmentTargets: [String: String]) {
         try step.requireIndependentStep()
         var usedBindings = step.model.statements.algorithmScopeNames
         var ordinal = 0
@@ -34,8 +36,13 @@ enum AlgorithmLowerer {
                 if usedBindings.insert(name).inserted { return name }
             }
         }
-        return lower(scheduleAtomicStatements(step.model.statements, binding: binding),
-            processLocalRoots: nil, procedures: [], owner: nil, nextLabel: nil, control: nil)
+        var displacedTargets: [String: String] = [:]
+        let scheduled = scheduleAtomicStatements(step.model.statements, binding: binding,
+            recordAssignment: recordScheduledAssignment) {
+            displacedTargets[$0] = $1
+        }
+        let lowered = lower(scheduled, processLocalRoots: nil, procedures: [], owner: nil, nextLabel: nil, control: nil)
+        return (lowered.action, lowered.assertions, displacedTargets)
     }
 
     private static func lowered(_ specification: TLASpec) -> TLASpec {
@@ -168,7 +175,7 @@ enum AlgorithmLowerer {
             NamedVar(
                 name: state.root,
                 initialization: state.initialization,
-                displayLabel: state.displayLabel,
+                tlaName: state.tlaName, displayLabel: state.displayLabel,
                 generatedSwiftType: state.swiftTypeName,
                 resolvedValueType: state.resolvedValueType,
                 origin: .source
@@ -260,7 +267,8 @@ enum AlgorithmLowerer {
                     .caseExpr(controlCases, nil)))
             }
             variables.insert(NamedVar(
-                name: CompilerControlSymbol.programCounter.rawValue,
+                name: StateExpr.freshBoundName(CompilerControlSymbol.programCounter.rawValue,
+                    avoiding: Set(variables.map(\.name) + procedureSlots(procedures).map(\.root))),
                 initialization: initialControl,
                 origin: .programCounter
             ), at: 0)
@@ -301,8 +309,8 @@ enum AlgorithmLowerer {
         let localRoots = Set(localStates.map(\.root) + procedureSlots(procedures).map(\.root))
         var generatedAssertionInvariants: [NamedStatePredicate] = []
         var fairness: [FairnessCondition] = []
-        var actions = processes.enumerated().flatMap { processIndex, process in
-            process.steps.enumerated().map { index, atomic in
+        var actions = try processes.enumerated().flatMap { processIndex, process in
+            try process.steps.enumerated().map { index, atomic in
                 let controlOwner = ControlOwner.process(
                     algorithm: algorithm.name,
                     ordinal: processIndex,
@@ -315,45 +323,47 @@ enum AlgorithmLowerer {
                         owner: .generated(algorithm: algorithm.name, purpose: CompilerControlSymbol.done.rawValue),
                         sourceName: CompilerControlSymbol.done.rawValue
                     ))
+                let continuation = atomic.loopCondition == nil ? nextLabel : control.location(atomic.label.name)
                 let loweredStatements = lower(
                     atomic.statements,
                     processLocalRoots: localRoots,
                     procedures: procedures,
                     owner: nil,
-                    nextLabel: nextLabel,
-                    control: control
+                    nextLabel: continuation,
+                    control: control,
+                    completion: requiresProgramCounter ? transfer(to: continuation) : nil
                 )
                 let body: ActionExpr
-                if !requiresProgramCounter {
-                    body = loweredStatements.action
-                } else if let loopCondition = atomic.loopCondition {
+                if requiresProgramCounter, let loopCondition = atomic.loopCondition {
                     body = .ifElse(
                         rewrite(loopCondition, localRoots: localRoots),
-                        completingControl(loweredStatements.action, fallthrough: control.location(atomic.label.name)),
+                        loweredStatements.action,
                         transfer(to: nextLabel)
                     )
                 } else {
-                    body = completingControl(loweredStatements.action, fallthrough: nextLabel)
+                    body = loweredStatements.action
+                }
+                let guarded = requiresProgramCounter
+                    ? ActionExpr.and(.guard_(.equal(
+                        .functionApply(.programCounter, .variable(processBinding.rawValue)),
+                        control.location(atomic.label.name))), body)
+                    : body
+                let bindings: [ActionBinding]
+                let action: ActionExpr
+                switch process.population {
+                case .fixed(let id):
+                    bindings = []
+                    action = guarded.substitutingVariable(processBinding.rawValue, with: id)
+                case .family(let domain):
+                    bindings = [ActionBinding(name: processBinding.rawValue, domain: domain,
+                        generatedSwiftType: process.typeName)]
+                    action = guarded
                 }
                 let generatedAction = NamedAction(
                     name: requiresProgramCounter ? atomic.label.name : processNames[processIndex],
-                    body: ActionNormalization.complete(
-                        requiresProgramCounter
-                            ? .and(
-                                .guard_(.equal(
-                                .functionApply(.programCounter, .variable(processBinding.rawValue)),
-                                    control.location(atomic.label.name)
-                                )),
-                                body
-                            )
-                            : body,
-                        variables: variables
-                    ),
-                    bindings: [ActionBinding(
-                        name: processBinding.rawValue,
-                        domain: process.domain,
-                        generatedSwiftType: process.typeName
-                    )]
+                    body: try ActionNormalization.checkedComplete(action, variables: variables,
+                        at: "actions.\(atomic.label.name).normalization"),
+                    bindings: bindings
                 )
                 if requiresProgramCounter {
                     let atStep = StateExpr.equal(
@@ -378,8 +388,8 @@ enum AlgorithmLowerer {
             actionOffset += process.steps.count
         }
 
-        let procedureActions = procedures.flatMap { procedure in
-            procedure.steps.enumerated().map { index, atomic in
+        let procedureActions = try procedures.flatMap { procedure in
+            try procedure.steps.enumerated().map { index, atomic in
                 let control = ControlFlow(
                     algorithm: algorithm.name,
                     owner: .procedure(algorithm: algorithm.name, name: procedure.name)
@@ -391,24 +401,32 @@ enum AlgorithmLowerer {
                         owner: .generated(algorithm: algorithm.name, purpose: CompilerControlSymbol.done.rawValue),
                         sourceName: CompilerControlSymbol.done.rawValue
                     ))
+                let entry = control.location(atomic.label.name)
                 let guardExpression = StateExpr.equal(
                     .functionApply(.programCounter, .variable(processBinding.rawValue)),
-                    control.location(atomic.label.name)
+                    entry
                 )
+                let loopCondition = atomic.loopCondition.map { rewrite($0, localRoots: localRoots) }
+                let continuation = loopCondition == nil ? nextLabel : entry
                 let loweredStatements = lower(
                     atomic.statements,
                     processLocalRoots: localRoots,
                     procedures: procedures,
                     owner: procedure,
-                    nextLabel: nextLabel,
-                    control: control
+                    nextLabel: continuation,
+                    control: control,
+                    completion: transfer(to: continuation)
                 )
-                let body = completingControl(loweredStatements.action, fallthrough: nextLabel)
+                let body = loopCondition.map {
+                    ActionExpr.ifElse($0, loweredStatements.action, transfer(to: nextLabel))
+                } ?? loweredStatements.action
+                let enabled = loopCondition.map { StateExpr.and(guardExpression, $0) } ?? guardExpression
                 generatedAssertionInvariants += assertionInvariants(loweredStatements.assertions,
-                    enabled: guardExpression, domain: controlDomain(processes))
+                    enabled: enabled, domain: controlDomain(processes))
                 return NamedAction(
                     name: label,
-                    body: ActionNormalization.complete(.and(.guard_(guardExpression), body), variables: variables),
+                    body: try ActionNormalization.checkedComplete(.and(.guard_(guardExpression), body),
+                        variables: variables, at: "actions.\(label).normalization"),
                     bindings: [ActionBinding(
                         name: processBinding.rawValue,
                         domain: controlDomain(processes),
@@ -502,9 +520,8 @@ enum AlgorithmLowerer {
 
     /// A nonempty literal or range-domain process with one control-free loop has no `pc`.
     private static func requiresProgramCounter(for algorithm: AlgorithmModel) -> Bool {
-        guard !algorithm.processes.isEmpty, algorithm.procedures.isEmpty else {
-            return true
-        }
+        guard !algorithm.processes.isEmpty else { return !algorithm.procedures.isEmpty }
+        guard algorithm.procedures.isEmpty else { return true }
         return !algorithm.processes.allSatisfy { process in
             let hasRangeDomain: Bool
             if case .integerRange = process.domain {
@@ -582,7 +599,7 @@ enum AlgorithmLowerer {
             NamedVar(
                 name: state.root,
                 initialization: state.initialization,
-                displayLabel: state.displayLabel,
+                tlaName: state.tlaName, displayLabel: state.displayLabel,
                 generatedSwiftType: state.swiftTypeName,
                 resolvedValueType: state.resolvedValueType,
                 origin: .source
@@ -636,7 +653,8 @@ enum AlgorithmLowerer {
         )
         let needsProgramCounter = !procedures.isEmpty || !isControlFreeLoop(steps)
         var variables = (needsProgramCounter ? [NamedVar(
-            name: CompilerControlSymbol.programCounter.rawValue,
+            name: StateExpr.freshBoundName(CompilerControlSymbol.programCounter.rawValue,
+                avoiding: Set((sharedVariables + procedureVariables).map(\.name))),
             initialization: enumerateInitialControl
                 ? .memberOf(.setLiteral(steps.map { sequentialControl.location($0.label.name) }))
                 : .expression(sequentialControl.location(first.label.name)),
@@ -671,35 +689,28 @@ enum AlgorithmLowerer {
                     sourceName: CompilerControlSymbol.done.rawValue
                 ))
             let label = emittedLabel(atomic.label.name, owner: owner)
+            let continuation = atomic.loopCondition == nil ? nextLabel : control.location(atomic.label.name)
             let statements = lower(
                 atomic.statements,
                 processLocalRoots: nil,
                 procedures: procedures,
                 owner: owner,
-                nextLabel: nextLabel,
-                control: control
+                nextLabel: continuation,
+                control: control,
+                completion: needsProgramCounter ? sequentialTransfer(to: continuation) : nil
             )
             let body: ActionExpr
-            if !needsProgramCounter {
-                body = statements.action
-            } else if let condition = atomic.loopCondition {
-                body = .ifElse(
-                    condition,
-                    completingSequentialControl(statements.action, fallthrough: control.location(atomic.label.name)),
-                    sequentialTransfer(to: nextLabel)
-                )
+            if needsProgramCounter, let condition = atomic.loopCondition {
+                body = .ifElse(condition, statements.action, sequentialTransfer(to: nextLabel))
             } else {
-                body = completingSequentialControl(statements.action, fallthrough: nextLabel)
+                body = statements.action
             }
-            actions.append(NamedAction(
-                name: label,
-                body: ActionNormalization.complete(
-                    needsProgramCounter
-                        ? .and(.guard_(.equal(.programCounter, control.location(atomic.label.name))), body)
-                        : body,
-                    variables: variables
-                )
-            ))
+            let guarded = needsProgramCounter
+                ? .and(.guard_(.equal(.programCounter, control.location(atomic.label.name))), body)
+                : body
+            actions.append(try NamedAction(name: label, body: guarded, isTermination: false,
+                displacedAssignmentTargets: atomic.displacedAssignmentTargets)
+                .completingFrame(variables: variables, preservingOuterDomain: false))
             let atStep = StateExpr.equal(.programCounter, control.location(atomic.label.name))
             let enabled = atomic.loopCondition.map { StateExpr.and(atStep, $0) } ?? atStep
             generatedAssertionInvariants += statements.assertions.map {
@@ -772,16 +783,6 @@ enum AlgorithmLowerer {
     private static func emittedLabel(_ label: String, owner: AlgorithmProcedureModel?) -> String {
         guard let owner else { return label }
         return "procedure.\(owner.name).\(label)"
-    }
-
-    private static func completingSequentialControl(_ action: ActionExpr, fallthrough location: StateExpr) -> ActionExpr {
-        let branches = ActionNormalization.branches(of: action)
-        let completed = branches.map { branch in
-            assignedVars(branch).contains(.programCounter)
-                ? branch
-                : .and(branch, sequentialTransfer(to: location))
-        }
-        return completed.dropFirst().reduce(completed.first ?? sequentialTransfer(to: location), ActionExpr.or)
     }
 
     private static func callAction(
@@ -933,7 +934,8 @@ enum AlgorithmLowerer {
         procedures: [AlgorithmProcedureModel],
         owner: AlgorithmProcedureModel?,
         nextLabel: StateExpr?,
-        control: ControlFlow?
+        control: ControlFlow?,
+        completion: ActionExpr? = nil
     ) -> (action: ActionExpr, assertions: [StateExpr]) {
         typealias Result = (action: ActionExpr, assertions: [StateExpr])
         func scoped(_ value: StateExpr) -> StateExpr {
@@ -956,7 +958,11 @@ enum AlgorithmLowerer {
             (.and(.guard_(condition), body.action), body.assertions.map { .or(.not(condition), $0) })
         }
         func run(_ remaining: ArraySlice<AlgorithmStatementModel>, _ values: [String: StateExpr]) -> Result {
-            guard let statement = remaining.first else { return (assignments(values), []) }
+            guard let statement = remaining.first else {
+                let writes = assignments(values)
+                // Add the default transfer at the ordinary exit, preserving reached guards and bindings.
+                return (completion.map { .and(writes, $0) } ?? writes, [])
+            }
             let rest = remaining.dropFirst()
             func continueWith(_ body: [AlgorithmStatementModel], _ values: [String: StateExpr]) -> Result {
                 run((body + rest)[...], values)
@@ -1042,18 +1048,6 @@ enum AlgorithmLowerer {
                 label))
     }
 
-    /// An `Each` machine falls through to its next `Do`; its final `Do` reaches
-    /// the builder-owned `Done` state.
-    private static func completingControl(_ action: ActionExpr, fallthrough location: StateExpr) -> ActionExpr {
-        let branches = ActionNormalization.branches(of: action)
-        let completed = branches.map { branch in
-            assignedVars(branch).contains(.programCounter)
-                ? branch
-                : .and(branch, transfer(to: location))
-        }
-        return completed.dropFirst().reduce(completed.first ?? transfer(to: location), ActionExpr.or)
-    }
-
     private static func lower(
         _ statement: AlgorithmStatementModel,
         processLocalRoots: Set<String>?,
@@ -1096,8 +1090,8 @@ enum AlgorithmLowerer {
         let names = actions.map(\.name)
         return switch policy {
         case .none: []
-        case .weak: [.weakFairnessEachActionGroup(names)]
-        case .strong: [.strongFairnessEachActionGroup(names)]
+        case .weak: [actions[0].bindings.isEmpty ? .weakFairnessActionGroup(names) : .weakFairnessEachActionGroup(names)]
+        case .strong: [actions[0].bindings.isEmpty ? .strongFairnessActionGroup(names) : .strongFairnessEachActionGroup(names)]
         }
     }
 
@@ -1198,11 +1192,12 @@ enum AlgorithmLowerer {
             case .choose(let set, let variable, let predicate, let preferredType):
                 return .choose(rewritten(set, localRoots: localRoots), variable,
                     rewritten(predicate, localRoots: localRoots.subtracting([variable])), preferredType: preferredType)
-            case .enabledAction:
-                return expression
+            case .enabledAction(let name, let argument):
+                return .enabledAction(name, argument: argument.map { rewritten($0, localRoots: localRoots) })
             case .sequenceFromSet(let set): return .sequenceFromSet(rewritten(set, localRoots: localRoots))
             case .sequenceFromFunction(let function): return .sequenceFromFunction(rewritten(function, localRoots: localRoots))
             case .printT(let value): return .printT(rewritten(value, localRoots: localRoots))
+            case .printReturning(let value, let result): return .printReturning(rewritten(value, localRoots: localRoots), rewritten(result, localRoots: localRoots))
             case .setSum(let function, let set): return .setSum(rewritten(function, localRoots: localRoots), rewritten(set, localRoots: localRoots))
             case .functionSet(let domain, let range): return .functionSet(rewritten(domain, localRoots: localRoots), rewritten(range, localRoots: localRoots))
             case .randomSubset(let count, let domain): return .randomSubset(rewritten(count, localRoots: localRoots), rewritten(domain, localRoots: localRoots))

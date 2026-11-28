@@ -1,3 +1,6 @@
+// Vehicles enter, cross, and leave a bridge where opposing traffic shares one lane.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SingleLaneBridge/SingleLaneBridge.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -16,7 +19,9 @@ package struct SingleLaneBridgeModel: Sendable {
     }
 
     private enum Step: String, CaseIterable {
-        case MoveOutsideBridge, MoveInsideBridge, EnterBridge
+        case moveOutsideBridge = "MoveOutsideBridge"
+        case moveInsideBridge = "MoveInsideBridge"
+        case enterBridge = "EnterBridge"
     }
 
     package static var spec: TLASpec {
@@ -32,16 +37,16 @@ package struct SingleLaneBridgeModel: Sendable {
                 in: Set<Set<Int>>([Set([1, 2, 3, 4, 5, 6, 7, 8])]))
             let Cars = CarsRight.union(CarsLeft)
             let StartPos = Select(from: Positions) { candidate in
-                ForAll(in: Positions) { position in candidate <= position }
+                Positions.allSatisfy { position in candidate <= position }
             }
             let EndPos = Select(from: Positions) { candidate in
-                ForAll(in: Positions) { position in candidate >= position }
+                Positions.allSatisfy { position in candidate >= position }
             }
             let StartBridge = Select(from: Bridge) { candidate in
-                ForAll(in: Bridge) { position in candidate <= position }
+                Bridge.allSatisfy { position in candidate <= position }
             }
             let EndBridge = Select(from: Bridge) { candidate in
-                ForAll(in: Bridge) { position in candidate >= position }
+                Bridge.allSatisfy { position in candidate >= position }
             }
 
             let Location = scope.sharedVar(initial:
@@ -49,77 +54,72 @@ package struct SingleLaneBridgeModel: Sendable {
                     If(CarsRight.contains(car), then: EndPos, else: StartPos)
                 })
             let WaitingBeforeBridge = scope.sharedVar(initial: Array<Car>([]))
-            let CarsInBridge = Cars.filtering { car in Bridge.contains(Location[car]) }
-            let Invariants = Invariant()
-            let TypeOK = Invariant()
+            let CarsInBridge = Cars.filter { car in Bridge.contains(Location[car]) }
             let CarsInBridgeExitBridge = Temporal()
             let CarsEnterBridge = Temporal()
 
-            let moveOutside = Do(Step.MoveOutsideBridge, over: Cars) { car in
+            let moveOutside = Do(Step.moveOutsideBridge, over: Cars) { car in
                 let next = If(CarsRight.contains(car),
                     then: If(Location[car] > StartPos, then: Location[car] - 1, else: EndPos),
                     else: If(Location[car] < EndPos, then: Location[car] + 1, else: StartPos))
                 When(!Bridge.contains(next))
                 If(CarsRight.contains(car) && next == EndBridge + 1
                     || CarsLeft.contains(car) && next == StartBridge - 1) {
-                    Assign(WaitingBeforeBridge, to: WaitingBeforeBridge.appending(car))
+                    WaitingBeforeBridge.append(car)
                 }
-                Assign(Location[car], to: next)
+                Location[car].set(next)
             }
-            moveOutside
 
-            let moveInside = Do(Step.MoveInsideBridge, over: Cars) { car in
+            let moveInside = Do(Step.moveInsideBridge, over: Cars) { car in
                 let next = If(CarsRight.contains(car),
                     then: If(Location[car] > StartPos, then: Location[car] - 1, else: EndPos),
                     else: If(Location[car] < EndPos, then: Location[car] + 1, else: StartPos))
                 When(CarsInBridge.contains(car)
-                    && ForAll(in: Cars) { other in Location[other] != next })
+                    && Cars.allSatisfy { other in Location[other] != next })
                 If(CarsRight.contains(car) && next == EndBridge + 1
                     || CarsLeft.contains(car) && next == StartBridge - 1) {
-                    Assign(WaitingBeforeBridge, to: WaitingBeforeBridge.appending(car))
+                    WaitingBeforeBridge.append(car)
                 }
-                Assign(Location[car], to: next)
+                Location[car].set(next)
             }
-            moveInside
 
-            let enterBridge = Do(Step.EnterBridge) {
-                When(WaitingBeforeBridge.count > 0)
+            let enterBridge = Do(Step.enterBridge, when: WaitingBeforeBridge.count > 0) {
                 let car = WaitingBeforeBridge.head()
                 let next = If(CarsRight.contains(car),
                     then: If(Location[car] > StartPos, then: Location[car] - 1, else: EndPos),
                     else: If(Location[car] < EndPos, then: Location[car] + 1, else: StartPos))
                 let canFollow = !CarsInBridge.contains(car)
-                    && ForAll(in: CarsInBridge) { other in
+                    && CarsInBridge.allSatisfy { other in
                         CarsRight.contains(other) == CarsRight.contains(car)
                     }
-                    && ForAll(in: Cars) { other in Location[other] != next }
+                    && Cars.allSatisfy { other in Location[other] != next }
                 When(CarsInBridge.isEmpty || canFollow)
-                Assign(Location[car], to: next)
-                Assign(WaitingBeforeBridge, to: WaitingBeforeBridge.tail())
+                Location[car].set(next)
+                WaitingBeforeBridge.set(WaitingBeforeBridge.tail())
             }
-            enterBridge
 
             WeakFairness(each: moveOutside)
             WeakFairness(each: moveInside)
             WeakFairness(enterBridge)
 
-            Invariants {
-                ForAll(in: Cars) { first in
-                    ForAll(in: Cars) { second in
+            let invariants = Invariant("Invariants")
+            invariants {
+                Cars.allSatisfy { first in
+                    Cars.allSatisfy { second in
                         !(Bridge.contains(Location[first])
                             && Location[first] == Location[second]) || first == second
                     }
                 }
-                CarsInBridge.cardinality < Bridge.cardinality + 1
-                ForAll(in: CarsRight) { right in
-                    ForAll(in: CarsLeft) { left in
+                CarsInBridge.count < Bridge.count + 1
+                CarsRight.allSatisfy { right in
+                    CarsLeft.allSatisfy { left in
                         !(Bridge.contains(Location[right]) && Bridge.contains(Location[left]))
                     }
                 }
             }
-            TypeOK {
+            Invariant("TypeOK") {
                 Functions(from: Cars, to: Positions).contains(Location)
-                    && WaitingBeforeBridge.count <= Cars.cardinality
+                    && WaitingBeforeBridge.count <= Cars.count
             }
 
             CarsInBridgeExitBridge(.all([
@@ -135,13 +135,12 @@ package struct SingleLaneBridgeModel: Sendable {
                 (!Bridge.contains(Location[Car.leftTwo])).leadsTo(Bridge.contains(Location[Car.leftTwo])),
             ]))
 
-            let MC = Validation {
+            Validation("MC") {
                 Bind(CarsRight, to: Set<Car>([.rightOne, .rightTwo]))
                 Bind(CarsLeft, to: Set<Car>([.leftOne, .leftTwo]))
                 Bind(Bridge, to: Set<Int>([4, 5]))
                 Bind(Positions, to: Set<Int>([1, 2, 3, 4, 5, 6, 7, 8]))
-            }.checking(only: [Invariants, CarsInBridgeExitBridge, CarsEnterBridge])
-            MC
+            }.checking(only: [invariants, CarsInBridgeExitBridge, CarsEnterBridge])
         }
     }
 }

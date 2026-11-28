@@ -4,12 +4,14 @@ import Foundation
 public struct ParameterReference: Hashable, Sendable {
     private let identity: UUID
     package let name: String
+    package let tlaName: String?
     package let displayLabel: String?
     package let sourceSpan: CompilerSourceSpan
 
-    package init(name: String, displayLabel: String? = nil, sourceOffset: Int? = nil, sourceLength: Int = 0) {
+    package init(name: String, tlaName: String? = nil, displayLabel: String? = nil, sourceOffset: Int? = nil, sourceLength: Int = 0) {
         identity = UUID()
         self.name = name
+        self.tlaName = tlaName
         self.displayLabel = displayLabel
         sourceSpan = .init(location: sourceOffset.map(CompilerSourceSpan.Location.utf8Offset) ?? .unavailable,
             utf8Length: sourceLength)

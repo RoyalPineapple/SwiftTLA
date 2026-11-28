@@ -9,11 +9,11 @@ struct SetConfigurationTests {
     func acceptsSharedVariableDomains() throws {
         for values: Set<Int> in [[], [1], [1, 2]] {
             let specification = SpecificationScope()
-            let variable: SharedVariable<Int> = specification.sharedVar(_name: "member", in: values)
+            let variable: SharedVariable<Int> = specification.sharedVar(_name: "member", initiallyIn: values)
             #expect(variable.stateExpr == .variable("member"))
             #expect(specification.declarations[0].initialization == .memberOf(values.stateExpr))
             let algorithm = AlgorithmScope()
-            let shared: SharedVariable<Int> = algorithm.sharedVar(_name: "member", in: values)
+            let shared: SharedVariable<Int> = algorithm.sharedVar(_name: "member", initiallyIn: values)
             #expect(shared.stateExpr == variable.stateExpr)
         }
     }
@@ -31,10 +31,11 @@ struct SetConfigurationTests {
         #expect(first.checkNames == ["Members", "Quorum"])
         for scenario in scenarios {
             var machine = try #require(scenario.initialMachines().first)
-            let transition = try machine.send(.adopt)
-            let selected: Set<Int> = transition.after.selected
+            let transitionBefore = machine.state
+            try machine.send(.adopt)
+            let selected: Set<Int> = machine.state.selected
             #expect(selected == scenario.configuration.nodes)
-            #expect(transition.before.selected.isEmpty)
+            #expect(transitionBefore.selected.isEmpty)
             let graph = try scenario.explore(maximumStates: 10)
             #expect(graph.transitions.count == 2)
             #expect(graph.deadlockedStates.count == 1)

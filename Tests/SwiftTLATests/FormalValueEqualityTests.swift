@@ -53,6 +53,11 @@ struct FormalValueEqualityTests {
         #expect(Set([compiledComposed, compiledDecomposed]).count == 2)
         #expect([compiledComposed, compiledDecomposed].sorted() == [compiledDecomposed, compiledComposed])
 
+        let composedFailure = EvalError.recordFieldUnavailable(compiledComposed).nativeFailure
+        let decomposedFailure = EvalError.recordFieldUnavailable(compiledDecomposed).nativeFailure
+        #expect(composedFailure != decomposedFailure)
+        #expect(decomposedFailure?.compiledFailure == .recordFieldUnavailable(compiledDecomposed))
+
         let composedField = TLARecord([.init("\u{00E9}", .int(1))])
         let decomposedField = TLARecord([.init("e\u{301}", .int(1))])
         #expect(composedField != decomposedField)

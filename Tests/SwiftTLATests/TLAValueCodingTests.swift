@@ -27,5 +27,16 @@ struct TLAValueCodingTests {
         #expect(throws: TLAValueCodingError.malformedValue("set")) {
             _ = try JSONDecoder().decode(TLAValue.self, from: duplicateSet)
         }
+
+        let duplicateRecord = TLAValue.record(TLARecord([
+            .init("\u{00E9}", .int(1)), .init("\u{00E9}", .int(2))
+        ]))
+        #expect(throws: TLAValueCodingError.malformedValue("record")) {
+            _ = try JSONDecoder().decode(TLAValue.self, from: JSONEncoder().encode(duplicateRecord))
+        }
+        let distinctRecord = TLAValue.record(TLARecord([
+            .init("\u{00E9}", .int(1)), .init("e\u{301}", .int(2))
+        ]))
+        #expect(try JSONDecoder().decode(TLAValue.self, from: JSONEncoder().encode(distinctRecord)) == distinctRecord)
     }
 }

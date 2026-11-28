@@ -4,6 +4,7 @@ import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
+import SwiftTLACompilerSupport
 import SwiftTLAMacros
 
 @TLAModel
@@ -12,8 +13,8 @@ private struct CartesianInitialSelection {
     static var spec: TLASpec {
         #spec("CartesianInitialSelection") {
             let cartesianInitialSelection = Algorithm(label: "CartesianInitialSelection", scoped: { scope in
-                let left = scope.sharedVar(_name: "left", in: Where(Set<Int>([0, 1, 2])) { value in value > 0 })
-                let right = scope.sharedVar(_name: "right", in: 3...4)
+                let left = scope.sharedVar(_name: "left", initiallyIn: Where(Set<Int>([0, 1, 2])) { value in value > 0 })
+                let right = scope.sharedVar(_name: "right", initiallyIn: 3...4)
                 Do(Step.advance) { Assign(left, to: left + right) }
             })
             cartesianInitialSelection
@@ -27,7 +28,7 @@ private struct EmptyInitialSelection {
     static var spec: TLASpec {
         #spec("EmptyInitialSelection") {
             let emptyInitialSelection = Algorithm(label: "EmptyInitialSelection", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", in: Where(Set<Int>([1])) { value in value < 0 })
+                let count = scope.sharedVar(_name: "count", initiallyIn: Where(Set<Int>([1])) { value in value < 0 })
                 Do(Step.advance) { Assign(count, to: count + 1) }
             })
             emptyInitialSelection
@@ -111,7 +112,7 @@ private struct CheckedSubtractionOverflow {
     static var spec: TLASpec {
         #spec("CheckedSubtractionOverflow") {
             let algorithm = Algorithm(label: "CheckedSubtractionOverflow", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", in: Set<Int>([3, 9_223_372_036_854_775_807]))
+                let count = scope.sharedVar(_name: "count", initiallyIn: Set<Int>([3, 9_223_372_036_854_775_807]))
                 Do(Step.advance) { Assign(count, to: count - (-1)) }
             })
             algorithm
@@ -139,7 +140,7 @@ private struct CheckedNestedNegation {
     static var spec: TLASpec {
         #spec("CheckedNestedNegation") {
             let algorithm = Algorithm(label: "CheckedNestedNegation", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", in: Set<Int>([3, -9_223_372_036_854_775_807]))
+                let count = scope.sharedVar(_name: "count", initiallyIn: Set<Int>([3, -9_223_372_036_854_775_807]))
                 Do(Step.advance) { Assign(count, to: -(count - 1)) }
             })
             algorithm
@@ -196,6 +197,31 @@ private struct ReachableInvariantFailure {
             _ = try CartesianInitialSelection.makeMachine(.init(left: 9, right: 3))
             Issue.record("A selection outside the formal initial domain must fail")
         } catch GeneratedMachineError.invalidInitialState {}
+
+        let records = try GeneratedSwiftRecord.initialMachines()
+        #expect(records.count == 1)
+        let original = try #require(records.first)
+        let state = original.state
+        #expect(try GeneratedSwiftRecord.makeMachine(state).snapshot == original.snapshot)
+        let reordered = GeneratedSwiftRecord.State(packet: state.packet, previousCount: state.previousCount,
+            history: state.history, archive: [.init(count: 1, ready: false), .init(count: 0, ready: false)], lookup: state.lookup)
+        #expect(reordered == state)
+        #expect(try GeneratedSwiftRecord.makeMachine(reordered).snapshot == original.snapshot)
+        let wrongPacket = GeneratedSwiftRecord.State(packet: .init(count: 9, ready: false),
+            previousCount: state.previousCount, history: state.history, archive: state.archive, lookup: state.lookup)
+        let wrongHistory = GeneratedSwiftRecord.State(packet: state.packet, previousCount: state.previousCount,
+            history: [.init(count: 9, ready: false)], archive: state.archive, lookup: state.lookup)
+        let wrongArchive = GeneratedSwiftRecord.State(packet: state.packet, previousCount: state.previousCount,
+            history: state.history, archive: [.init(count: 9, ready: false), .init(count: 1, ready: false)], lookup: state.lookup)
+        #expect(wrongPacket.packet == state.packet)
+        #expect(wrongHistory.history == state.history)
+        #expect(wrongArchive.archive != state.archive)
+        for requested in [wrongPacket, wrongHistory, wrongArchive] {
+            #expect(requested != state)
+            #expect(throws: GeneratedMachineError.invalidInitialState) {
+                try GeneratedSwiftRecord.makeMachine(requested)
+            }
+        }
     }
 
     @Test("empty initial domains reject both implicit and explicit construction")
@@ -216,7 +242,8 @@ private struct ReachableInvariantFailure {
         var duplicate = try DuplicateExecutionPaths.makeMachine()
         #expect(try duplicate.enabledActions() == [.advance])
         #expect(try duplicate.successors(for: .advance).count == 1)
-        #expect(try duplicate.send(.advance).after.count == 1)
+        try duplicate.send(.advance)
+        #expect(duplicate.state.count == 1)
 
         var machine = try HiddenControlAlternatives.makeMachine()
         let before = machine.state
@@ -227,7 +254,7 @@ private struct ReachableInvariantFailure {
         #expect(Set(successors.map { $0.machine.state.count }) == [0])
         #expect(try machine.enabledActions() == [.select])
         do {
-            _ = try machine.send(.select)
+            try machine.send(.select)
             Issue.record("Public equality must not merge distinct hidden control states")
         } catch GeneratedMachineError.ambiguousAction {}
         #expect(machine.state == before)
@@ -339,9 +366,92 @@ private struct ReachableInvariantFailure {
 
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let generatedAction = try #require(program.behavior.actions.first)
+        let sourceAction = try #require(CheckedExecutionOverflow.spec.loweredSourceModel().actions.first)
+        try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+            bindings: generatedAction.bindings, body: generatedAction.body, layout: program.layout)
+        guard case .and(.guard_(let compiledControlGuard), let compiledTail) = generatedAction.body,
+              compiledControlGuard.children.count == 2 else {
+            Issue.record("The compiled action lost its sequential control guard")
+            return
+        }
+        let wrongControlGuard = CompiledExpression(operation: .equal,
+            resultType: compiledControlGuard.resultType,
+            children: [compiledControlGuard.children[0], .controlLocation(done.id)])
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+                bindings: generatedAction.bindings,
+                body: .and(.guard_(wrongControlGuard), compiledTail), layout: program.layout)
+        }
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "CheckedExecutionOverflow", program: program))
         let members = try emitter.machineMembers()
+        let initialDeclaration = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        let countBinding = emitter.variable(count.id)
+        let originalLiteral = "let \(countBinding): \(nativeIntType) = \(Int.max)"
+        let wrongInitialSource = initialDeclaration.description.replacingOccurrences(
+            of: originalLiteral, with: "let \(countBinding): \(nativeIntType) = 0")
+        #expect(wrongInitialSource != initialDeclaration.description)
+        let wrongInitial = try #require(Parser.parse(source: wrongInitialSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        let initialBindings = program.behavior.initializations.map { initialization in
+            "let \(emitter.variable(initialization.variable))"
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedInitialBindings(wrongInitial, expected: initialBindings,
+                expectedLoops: [:], expectedCandidateSources: [:],
+                expectedIntLiterals: [countBinding: Int.max])
+        }
+        let failureVisitor = try #require(members.first { declaration in
+            guard let function = declaration.as(FunctionDeclSyntax.self) else { return false }
+            return function.name.text == "_visitSuccessors"
+                && function.signature.parameterClause.parameters.last?.firstName.text == "onEvaluationFailure"
+        })
+        let lostFailure = failureVisitor.description.replacingOccurrences(
+            of: "onEvaluationFailure(action, reason)",
+            with: "onEvaluationFailure(action, .noSatisfyingChoice)")
+        #expect(lostFailure != failureVisitor.description)
+        let wrongFailureVisitor = try #require(Parser.parse(source: lostFailure)
+            .statements.first?.item.as(DeclSyntax.self))
+        let wrongMembers = members.map { $0.id == failureVisitor.id ? wrongFailureVisitor : $0 }
+        let actions = emitter.model.api.actions
+        #expect(actions.allSatisfy { $0.bindings.isEmpty })
+        let routes = actions.map { api in
+            (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+             formalName: program.layout.actions[api.compiledAction.ordinal].renderedName)
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+                allActions: routes.map { ($0.name, $0.id, $0.formalName, 0) },
+                candidates: routes.map { ($0.name, []) }, configurationArguments: "")
+        }
+        let successor = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitSuccessors\(generatedAction.id.ordinal)"
+        })
+        try verifyGeneratedSuccessorOutput(successor, body: generatedAction.body, actionID: generatedAction.id.ordinal,
+            parameters: "", arguments: "", configurationParameters: "", configurationArguments: "")
+        let droppedUpdate = successor.description.replacingOccurrences(
+            of: "updates.applying(to: state)", with: "state")
+        #expect(droppedUpdate != successor.description)
+        let wrongSuccessor = try #require(Parser.parse(source: droppedUpdate)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedSuccessorOutput(wrongSuccessor, body: generatedAction.body, actionID: generatedAction.id.ordinal,
+                parameters: "", arguments: "", configurationParameters: "", configurationArguments: "")
+        }
+        let validationEntry = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "visitValidationOutcomes"
+        })
+        try verifyGeneratedValidationDelegationOutput(validationEntry)
+        let droppedFailureHandler = validationEntry.description.replacingOccurrences(
+            of: ", onEvaluationFailure: onEvaluationFailure", with: "")
+        #expect(droppedFailureHandler != validationEntry.description)
+        let wrongEntry = try #require(Parser.parse(source: droppedFailureHandler)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedValidationDelegationOutput(wrongEntry)
+        }
         let swiftAction = try #require(members.first {
             $0.description.contains("private static func _visitUpdates0(")
         }?.description)
@@ -349,18 +459,33 @@ private struct ReachableInvariantFailure {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
             .standardizedFileURL
-        let expectedSwift = try String(contentsOf: swiftWitness, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftWitness, encoding: .utf8))
         let emittedTokens = Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
         let witnessTokens = Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text)
         #expect(emittedTokens == witnessTokens)
         let emittedUpdate = try #require(members.first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let emittedWrites = try emitter.actionFunctions(generatedAction.body).writes
+        let emittedWrites = try emitter.actionFunctions(generatedAction).writes
         try verifyGeneratedActionWriteOutput(emittedUpdate, action: generatedAction.body,
             program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+        let boundAddition = "SwiftTLA._nativeIntAdd"
+        try #require(swiftAction.components(separatedBy: boundAddition).count == 2)
+        for replacement in ["_nativeIntAdd", "SwiftTLA._NativeMachineOperations.add"] {
+            let rebound = swiftAction.replacingOccurrences(of: boundAddition, with: replacement)
+            try #require(rebound != swiftAction)
+            let reboundUpdate = try #require(Parser.parse(source: rebound)
+                .statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyGeneratedActionWriteOutput(reboundUpdate, action: generatedAction.body,
+                    program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+                Issue.record("A generated addition can bind a caller's helper instead of the library")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native.action.binding.1")
+            }
+        }
         let wrongOperation = swiftAction.replacingOccurrences(
-            of: "_NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
+            of: "_nativeIntAdd(_arithmetic0, _arithmetic1)",
             with: "_NativeMachineOperations.subtract(_arithmetic0, _arithmetic1)")
         #expect(wrongOperation != swiftAction)
         let wrongUpdate = try #require(Parser.parse(source: wrongOperation)
@@ -373,8 +498,8 @@ private struct ReachableInvariantFailure {
             #expect(diagnostic.path == "native.action.binding.1")
         }
         let reversedOperands = swiftAction.replacingOccurrences(
-            of: "_NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
-            with: "_NativeMachineOperations.add(_arithmetic1, _arithmetic0)")
+            of: "_nativeIntAdd(_arithmetic0, _arithmetic1)",
+            with: "_nativeIntAdd(_arithmetic1, _arithmetic0)")
         #expect(reversedOperands != swiftAction)
         let reversedUpdate = try #require(Parser.parse(source: reversedOperands)
             .statements.first?.item.as(DeclSyntax.self))
@@ -387,6 +512,21 @@ private struct ReachableInvariantFailure {
         }
 
         let rendered = try CheckedExecutionOverflow.render()
+        let initialPredicates = ["pc = \"advance\"", "count = \(TLAValue.int(Int.max).description)",
+            StraightLineRenderedActionCheck.initialIntStatePredicate(named: "count")]
+        try verifyRenderedInitialConjunction(rendered.tlaBundle.root.tla, predicates: initialPredicates,
+            expectedIntLiterals: ["count": Int.max], expectedControlLocations: ["pc": "advance"],
+            expectedIntStateNames: ["count"], expectedPredicateCount: 3, requireCompleteSimpleInitials: true)
+        let initialPredicate = "  /\\ count = \(TLAValue.int(Int.max).description)"
+        let wrongInitialModule = rendered.tlaBundle.root.tla.replacingOccurrences(
+            of: initialPredicate, with: "  /\\ count = 0")
+        #expect(wrongInitialModule != rendered.tlaBundle.root.tla)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyRenderedInitialConjunction(wrongInitialModule,
+                predicates: initialPredicates.map { $0.hasPrefix("count = ") ? "count = 0" : $0 },
+                expectedIntLiterals: ["count": Int.max], expectedIntStateNames: ["count"],
+                expectedPredicateCount: 3)
+        }
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflow.tla")
@@ -419,6 +559,18 @@ private struct ReachableInvariantFailure {
         let operands = try #require(direct.first { $0.hasPrefix("__SwiftTLAOverflowOperands0 ==") })
         let operation = try #require(direct.first { $0.hasPrefix("__SwiftTLAOverflowOperation0 ==") })
         let evaluation = try #require(direct.first { $0.hasPrefix("__SwiftTLAEvaluationOK ==") })
+        let output = try program.renderModule()
+        let renderedAction = try #require(direct.first { $0.hasPrefix("advance == ") })
+            .dropFirst("advance == ".count)
+        let missingFailure = output.renderedModuleSource.replacingOccurrences(
+            of: "\(failure)\n", with: "")
+        #expect(missingFailure != output.renderedModuleSource)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyDeclaration(generatedAction, named: "advance",
+                body: String(renderedAction), module: missingFailure,
+                layout: program.layout, binders: program.binderNames,
+                failureDeclarations: output.evaluationFailureDeclarations)
+        }
         #expect(operands == "__SwiftTLAOverflowOperands0 == <<count, 1>>")
         #expect(operation == "__SwiftTLAOverflowOperation0 == \"addition\"")
         #expect(direct.contains { $0.hasPrefix("__SwiftTLAAnyEvaluationFailure0 ==") })
@@ -460,7 +612,7 @@ private struct ReachableInvariantFailure {
         let visitor = try #require(members.first {
             $0.description.contains("private static func _visitUpdates0(")
         }?.description)
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         func check(_ source: String) throws {
             let declaration = try #require(Parser.parse(source: source)
                 .statements.first?.item.as(DeclSyntax.self))
@@ -469,12 +621,12 @@ private struct ReachableInvariantFailure {
         }
         try check(visitor)
         let wrongOperation = visitor.replacingOccurrences(
-            of: "_NativeMachineOperations.divide(_arithmetic", with: "_NativeMachineOperations.add(_arithmetic")
+            of: "_NativeMachineOperations.divide(_arithmetic", with: "_nativeIntAdd(_arithmetic")
         #expect(wrongOperation != visitor)
         #expect(throws: CompilationDiagnostic.self) { try check(wrongOperation) }
         let reversedOperands = visitor.replacingOccurrences(
-            of: "_NativeMachineOperations.add(_arithmetic3, _arithmetic4)",
-            with: "_NativeMachineOperations.add(_arithmetic4, _arithmetic3)")
+            of: "_nativeIntAdd(_arithmetic3, _arithmetic4)",
+            with: "_nativeIntAdd(_arithmetic4, _arithmetic3)")
         #expect(reversedOperands != visitor)
         #expect(throws: CompilationDiagnostic.self) { try check(reversedOperands) }
     }
@@ -499,13 +651,7 @@ private struct ReachableInvariantFailure {
         let swiftAction = try #require(try emitter.machineMembers().first {
             $0.description.contains("private static func _visitUpdates0(")
         }?.description)
-        let additionWitness = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
-            .standardizedFileURL
-        let expectedSwift = try String(contentsOf: additionWitness, encoding: .utf8)
-            .replacingOccurrences(of: "let _arithmetic1: Int = 1", with: "let _arithmetic1: Int = -1")
-            .replacingOccurrences(of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.subtract")
+        let expectedSwift = try scalarArithmeticWitness(operation: "subtract", operand: -1)
         let actualTokens = Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
         let expectedTokens = Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text)
         #expect(actualTokens == expectedTokens)
@@ -513,8 +659,9 @@ private struct ReachableInvariantFailure {
         let initial = try CheckedSubtractionOverflow.initialMachines()
         #expect(Set(initial.map(\.state.count)) == [3, Int.max])
         var successful = try CheckedSubtractionOverflow.makeMachine(.init(count: 3))
-        let transition = try successful.send(.advance)
-        #expect(transition.before.count == 3 && transition.after.count == 4)
+        let transitionBefore = successful.state
+        try successful.send(.advance)
+        #expect(transitionBefore.count == 3 && successful.state.count == 4)
         let controlToken = try #require(TLAStateProjection.Token(validating: "pc"))
         #expect(try successful.formalProjection(of: successful.snapshot).value(for: controlToken) == .string("Done"))
 
@@ -574,19 +721,14 @@ private struct ReachableInvariantFailure {
         let swiftAction = try #require(try emitter.machineMembers().first {
             $0.description.contains("private static func _visitUpdates0(")
         }?.description)
-        let witness = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
-            .standardizedFileURL
-        let expectedSwift = try String(contentsOf: witness, encoding: .utf8)
-            .replacingOccurrences(of: "let _arithmetic1: Int = 1", with: "let _arithmetic1: Int = 2")
-            .replacingOccurrences(of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.multiply")
+        let expectedSwift = try scalarArithmeticWitness(operation: "multiply", operand: 2)
         #expect(Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
             == Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text))
 
         var successful = try CheckedMultiplicationOverflow.makeMachine(.init(count: 3))
-        let transition = try successful.send(.advance)
-        #expect(transition.before.count == 3 && transition.after.count == 6)
+        let transitionBefore = successful.state
+        try successful.send(.advance)
+        #expect(transitionBefore.count == 3 && successful.state.count == 6)
         let controlToken = try #require(TLAStateProjection.Token(validating: "pc"))
         #expect(try successful.formalProjection(of: successful.snapshot).value(for: controlToken) == .string("Done"))
 
@@ -622,8 +764,9 @@ private struct ReachableInvariantFailure {
     func negationPreservesGeneratedOutcomes() throws {
         #expect(Int.min == -Int.max - 1)
         var successful = try CheckedNestedNegation.makeMachine(.init(count: 3))
-        let transition = try successful.send(.advance)
-        #expect(transition.before.count == 3 && transition.after.count == -2)
+        let transitionBefore = successful.state
+        try successful.send(.advance)
+        #expect(transitionBefore.count == 3 && successful.state.count == -2)
         let controlToken = try #require(TLAStateProjection.Token(validating: "pc"))
         #expect(try successful.formalProjection(of: successful.snapshot).value(for: controlToken) == .string("Done"))
 
@@ -651,7 +794,7 @@ private struct ReachableInvariantFailure {
         let source = "---- MODULE WidthMismatch ----\n====\n"
         do {
             _ = try RenderedSpecification(_generatedModule: "WidthMismatch", source: source,
-                compilationIdentity: "width-mismatch", declarations: [], checkDeadlock: false,
+                compilationIdentity: "width-mismatch", declarations: [], _generatedConstants: [], checkDeadlock: false,
                 _generatedIntegerBitWidth: Int.bitWidth - 1, _generatedIntrinsicInvariants: [],
                 invariants: [], reachabilityProperties: [], properties: [], refinements: [],
                 symmetry: [], actions: [])
@@ -665,8 +808,8 @@ private struct ReachableInvariantFailure {
     @Test("generated Swift retains valid Int results beyond TLC's integer range")
     func arithmeticAboveTLCIntegerRange() throws {
         var machine = try CheckedExecutionBeyondTLCIntegerRange.makeMachine()
-        let transition = try machine.send(.advance)
-        #expect(transition.after.count == 2_147_483_648)
+        try machine.send(.advance)
+        #expect(machine.state.count == 2_147_483_648)
     }
 
     @Test("evidence callback errors do not become model evaluation failures")
@@ -688,7 +831,8 @@ private struct ReachableInvariantFailure {
     func invariantsAreObservations() throws {
         var machine = try ReachableInvariantFailure.makeMachine()
         #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
-        #expect(try machine.send(.advance).after.count == 1)
+        try machine.send(.advance)
+        #expect(machine.state.count == 1)
         #expect(try machine.violatedInvariants(atLevel: 2) == [.Zero])
     }
 }
@@ -727,11 +871,26 @@ private struct CheckedRecordConversion {
 }
 
 extension NativeExecutionBoundaryTests {
+
+    private func scalarArithmeticWitness(operation: String, operand: Int) throws -> String {
+        let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
+        let source = try String(contentsOf: file, encoding: .utf8)
+        // Only the ordered addition route records the assignment prefix.
+        let record = "SwiftTLA._recordNativeOrderedIntAssignmentFailure(&context, actionOrdinal: 0, assignmentOrdinal: 1, preceding: [], reason: failure)"
+        let parts = source.components(separatedBy: record)
+        try #require(parts.count == 2)
+        return nativeWitnessSource(parts.joined())
+            .replacingOccurrences(of: "let _arithmetic1: \(nativeIntType) = 1",
+                                  with: "let _arithmetic1: \(nativeIntType) = \(operand)")
+            .replacingOccurrences(of: "_nativeIntAdd", with: "_NativeMachineOperations.\(operation)")
+    }
+
     @Test("record narrowing preserves valid fields and rejects out-of-domain values")
     func checkedRecordConversion() throws {
         var machine = try CheckedRecordConversion.makeMachine()
-        _ = try machine.send(.valid)
-        _ = try machine.send(.change)
+        try machine.send(.valid)
+        try machine.send(.change)
         let before = machine.state
         #expect(before.record.count == 1)
         #expect(throws: NativeMachineEvaluationError.noMatchingCase) {
@@ -760,7 +919,7 @@ extension NativeExecutionBoundaryTests {
         })
         let swiftInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("CheckedRecordConversionSwiftVisitor.txt")
-        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }

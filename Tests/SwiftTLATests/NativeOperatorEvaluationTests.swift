@@ -327,7 +327,8 @@ private struct MissingFunctionKey {
             #expect(try successor.state.value(for: result) == .integer(1))
         }
         var machine = try RecursiveCallbackCapture.makeMachine()
-        #expect(try machine.send(.walk).after.result == 1)
+        try machine.send(.walk)
+        #expect(machine.state.result == 1)
     }
 
     @Test("function application evaluates a failing key before its function")
@@ -370,7 +371,8 @@ private struct MissingFunctionKey {
         let actual = rendered.tlaBundle.root.tla.replacingOccurrences(
             of: "__binder_SpecParser_[0-9]+_[0-9]+_", with: "__binder_",
             options: .regularExpression)
-        #expect(actual == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expectedProofModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(actual == expectedProofModule)
 
         let source = Parser.parse(source: try String(contentsOfFile: #filePath, encoding: .utf8))
         let declaration = try #require(source.statements.compactMap {
@@ -382,7 +384,7 @@ private struct MissingFunctionKey {
         })
         let swiftProofInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("MissingFunctionKeySwiftVisitor.txt")
-        let expectedVisitor = try String(contentsOf: swiftProofInput, encoding: .utf8)
+        let expectedVisitor = nativeWitnessSource(try String(contentsOf: swiftProofInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
@@ -424,7 +426,8 @@ private struct MissingFunctionKey {
         let successor = try #require(try runtime.successors(for: action, from: initial).first)
         var machine = try UnusedOperatorArguments.makeMachine()
         #expect(try successor.state.value(for: result) == .integer(0))
-        #expect(try machine.send(.emptyMapping).after.result == 0)
+        try machine.send(.emptyMapping)
+        #expect(machine.state.result == 0)
     }
 
     @Test("an empty quantifier domain leaves its body argument unevaluated")
@@ -437,7 +440,8 @@ private struct MissingFunctionKey {
         let successor = try #require(try runtime.successors(for: action, from: initial).first)
         var machine = try UnusedOperatorArguments.makeMachine()
         #expect(try successor.state.value(for: result) == .integer(7))
-        #expect(try machine.send(.emptyDomain).after.result == 7)
+        try machine.send(.emptyDomain)
+        #expect(machine.state.result == 7)
     }
 
     @Test("formal and local operators do not evaluate unused invalid arguments")
@@ -452,8 +456,10 @@ private struct MissingFunctionKey {
         let localAction = try #require(compilation.layout.testActionID(named: "local"))
         let formalSuccessor = try #require(try runtime.successors(for: formalAction, from: initial).first)
         let localSuccessor = try #require(try runtime.successors(for: localAction, from: initial).first)
-        #expect(try formalMachine.send(.formal).after.result == 7)
-        #expect(try localMachine.send(.local).after.result == 9)
+        try formalMachine.send(.formal)
+        #expect(formalMachine.state.result == 7)
+        try localMachine.send(.local)
+        #expect(localMachine.state.result == 9)
         #expect(try formalSuccessor.state.value(for: result) == .integer(formalMachine.state.result))
         #expect(try localSuccessor.state.value(for: result) == .integer(localMachine.state.result))
     }
@@ -474,6 +480,15 @@ private struct MissingFunctionKey {
             try machine.send(.loop)
         }
         #expect(machine.state == before)
+        var modelFailures = 0
+        #expect(throws: NativeMachineEvaluationError.recursionDepthExceeded(limit)) {
+            try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
+                checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+                if case .evaluationFailure = event { modelFailures += 1 }
+            }
+        }
+        #expect(modelFailures == 0)
+        #expect(machine.state == before)
     }
 
     @Test("Lambda applications consume the same recursion budget as named calls")
@@ -486,12 +501,20 @@ private struct MissingFunctionKey {
         // 2,050 named calls fit; the interleaved lambda calls exceed the limit.
         #expect(2050 < limit && 2050 * 2 > limit)
         #expect(throws: EvalError.recursionDepthExceeded(limit)) {
-            try runtime.successors(for: action, from: initial)
+            try _visitNativeInitialBranch {
+                _ = try runtime.successors(for: action, from: initial)
+            } onEvaluationFailure: { _ in
+                Issue.record("A compiled call-depth limit became a completed model failure")
+            }
         }
         var machine = try NestedLambdaCallDepth.makeMachine()
         let before = machine.state
         #expect(throws: NativeMachineEvaluationError.recursionDepthExceeded(limit)) {
-            try machine.send(.countDown)
+            try _visitNativeInitialBranch {
+                try machine.send(.countDown)
+            } onEvaluationFailure: { _ in
+                Issue.record("A native call-depth limit became a completed model failure")
+            }
         }
         #expect(machine.state == before)
     }
@@ -505,7 +528,8 @@ private struct MissingFunctionKey {
         let result = try #require(compilation.layout.testVariableID(named: "result"))
         let successor = try #require(try runtime.successors(for: action, from: initial).first)
         var machine = try NestedLambdaCallDepth.makeMachine()
-        #expect(try machine.send(.complete).after.result == 0)
+        try machine.send(.complete)
+        #expect(machine.state.result == 0)
         #expect(try successor.state.value(for: result) == .integer(machine.state.result))
     }
 
@@ -543,7 +567,8 @@ private struct MissingFunctionKey {
         let result = try #require(compilation.layout.testVariableID(named: "result"))
         let successor = try #require(try runtime.successors(for: action, from: initial).first)
         var machine = try EvaluatedArgumentReuse.makeMachine()
-        #expect(try machine.send(.finish).after.result == 0)
+        try machine.send(.finish)
+        #expect(machine.state.result == 0)
         #expect(try successor.state.value(for: result) == .integer(machine.state.result))
     }
 
@@ -557,7 +582,8 @@ private struct MissingFunctionKey {
         let successor = try #require(try runtime.successors(for: action, from: initial).first)
         var machine = try EvaluatedArgumentReuse.makeMachine()
         #expect(try successor.state.value(for: result) == .integer(0))
-        #expect(try machine.send(.reuseOrdinary).after.result == 0)
+        try machine.send(.reuseOrdinary)
+        #expect(machine.state.result == 0)
     }
 
     @Test("LET values reuse their evaluated result inside a deeper callee")
@@ -570,7 +596,8 @@ private struct MissingFunctionKey {
         let successor = try #require(try runtime.successors(for: action, from: initial).first)
         var machine = try EvaluatedArgumentReuse.makeMachine()
         #expect(try successor.state.value(for: result) == .integer(0))
-        #expect(try machine.send(.reuseLet).after.result == 0)
+        try machine.send(.reuseLet)
+        #expect(machine.state.result == 0)
     }
 
     @Test("an earlier body failure does not force a later argument")
@@ -615,7 +642,8 @@ private struct MissingFunctionKey {
         let accepted = try #require(compilation.layout.testActionID(named: "accepted"))
         let successor = try #require(try runtime.successors(for: accepted, from: initial).first)
         var machine = try BoundedOperatorExecution.makeMachine()
-        #expect(try machine.send(.accepted).after.result == 7)
+        try machine.send(.accepted)
+        #expect(machine.state.result == 7)
         #expect(try successor.state.value(for: result) == .integer(machine.state.result))
 
         let failures: [(String, BoundedOperatorExecution.Action, EvalError, NativeMachineEvaluationError)] = [

@@ -26,7 +26,7 @@ extension ParserSession {
                   let target = binding.arguments.first,
                   let field = generatedFieldName(target.expression),
                   let value = binding.arguments.last,
-                  value.label?.text == "to",
+                  value.label?.text == "to" || value.label?.text == "projecting",
                   let source = decodeTypedFacadeValue(value.expression, scope: sourceScope),
                   seen.insert(field).inserted else {
                 components.diagnostics.append(.init(
@@ -36,7 +36,7 @@ extension ParserSession {
             }
             propertyDeclarationOffsets["generatedModelInstances.\(name).bindings.\(field)", default: []].append(
                 value.expression.positionAfterSkippingLeadingTrivia.utf8Offset)
-            bindings.append(.init(fieldName: field, source: source))
+            bindings.append(.init(fieldName: field, source: source, projected: value.label?.text == "projecting"))
         }
         return .init(name: name, targetModelType: typePath.joined(separator: "."), fieldBindings: bindings)
     }
@@ -70,8 +70,8 @@ extension ParserSession {
                   mapping.arguments.count == 2 || mapping.arguments.count == 3,
                   let target = mapping.arguments.first,
                   let field = generatedFieldName(target.expression),
-                  let value = mapping.arguments.first(where: { $0.label?.text == "from" }),
-                  value.label?.text == "from",
+                  let value = mapping.arguments.dropFirst().first,
+                  value.label?.text == "from" || value.label?.text == "projecting",
                   let source = generatedSourceFieldName(value.expression).map(StateExpr.variable)
                     ?? decodeTypedFacadeValue(value.expression, scope: sourceScope) else {
                 components.diagnostics.append(.init(
@@ -79,10 +79,11 @@ extension ParserSession {
                     source: statement))
                 return nil
             }
-            let projection = mapping.arguments.first(where: { $0.label?.text == "projecting" })
+            let inferredProjection = value.label?.text == "projecting"
+            let projection = mapping.arguments.dropFirst(2).first
             guard
                   (projection == nil && mapping.arguments.count == 2)
-                    || (projection != nil && mapping.arguments.count == 3),
+                    || (!inferredProjection && projection?.label?.text == "projecting" && mapping.arguments.count == 3),
                   projection == nil || projection?.expression.as(MemberAccessExprSyntax.self)?
                     .declName.baseName.sourceIdentifierName == "self",
                   seen.insert(field).inserted else {
@@ -93,7 +94,7 @@ extension ParserSession {
             }
             propertyDeclarationOffsets["generatedRefinements.\(name).mappings.\(field)", default: []].append(
                 value.expression.positionAfterSkippingLeadingTrivia.utf8Offset)
-            mappings.append(.init(fieldName: field, source: source, projected: projection != nil))
+            mappings.append(.init(fieldName: field, source: source, projected: inferredProjection || projection != nil))
         }
         propertyDeclarationOffsets["generatedRefinements.\(name)", default: []].append(
             call.positionAfterSkippingLeadingTrivia.utf8Offset)

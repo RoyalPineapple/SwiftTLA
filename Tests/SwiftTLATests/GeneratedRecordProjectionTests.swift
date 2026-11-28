@@ -10,7 +10,7 @@ struct GeneratedRecordProjectionTests {
             "ready": .bool(true)
         ])
         let packet = try #require(Packet(formalValue: valid))
-        #expect(packet == .init(payload: .init(value: 2), ready: true))
+        #expect(packet.payload.value == 2 && packet.ready)
         #expect(packet.tlaValue == valid)
 
         let malformed: [TLAValue] = [

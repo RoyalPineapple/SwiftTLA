@@ -1,3 +1,7 @@
+// Binary search narrows an interval in a sorted sequence until it finds the target or exhausts
+// the interval.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/LoopInvariance/BinarySearch.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -9,85 +13,79 @@ import SwiftTLAMacros
 @TLAModel
 package struct BinarySearchModel: Sendable {
     private enum Step: String, CaseIterable {
-        case a
+        case probeMidpointOrFinish = "a"
     }
 
     package static var spec: TLASpec {
         #spec("BinarySearch") { model in
             Extends(.integers)
-            let Values = model.parameter(as: Set<Int>.self,
+            let values = model.parameter(tlaName: "Values", as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([1, 2, 3, 4, 5])]))
-            let MaxSeqLen = model.parameter(as: Int.self, in: 8...8)
-            let resultCorrect = Invariant()
-            let TypeOK = Invariant()
-            let Inv = Invariant()
+            let maximumSequenceLength = model.parameter(tlaName: "MaxSeqLen", as: Int.self, in: 8...8)
             let Termination = Temporal()
-            let BinarySearch = Algorithm(fairness: .weak, scoped: { scope in
-                let seq = scope.sharedVar(in: SortedSequences(
-                    of: Values,
-                    lengths: IntRange(1, through: MaxSeqLen)
+            Algorithm("BinarySearch", fairness: .weak) { scope in
+                let sortedValues = scope.sharedVar(tlaName: "seq", initiallyIn: SortedSequences(
+                    of: values,
+                    lengths: IntRange(1, through: maximumSequenceLength)
                 ))
-                let val = scope.sharedVar(in: Values)
+                let searchValue = scope.sharedVar(tlaName: "val", initiallyIn: values)
                 let low = scope.sharedVar(initial: 1)
-                let high: SharedVariable<Int> = scope.sharedVar(initial: seq.count)
+                let high: SharedVariable<Int> = scope.sharedVar(initial: sortedValues.count)
                 let result = scope.sharedVar(initial: 0)
 
-                While(Step.a, low <= high && result == 0) {
+                While(Step.probeMidpointOrFinish, low <= high && result == 0) {
                     Let((low + high).integerDivided(by: 2)) { mid in
-                        Let(seq[mid.expr]) { middleValue in
-                            If(middleValue == val) {
-                                Assign(result, to: mid.expr)
+                        Let(sortedValues[mid.expr]) { middleValue in
+                            If(middleValue == searchValue) {
+                                result.set(mid.expr)
                             } else: {
-                                If(val < middleValue) {
-                                    Assign(high, to: mid.expr - 1)
+                                If(searchValue < middleValue) {
+                                    high.set(mid.expr - 1)
                                 } else: {
-                                    Assign(low, to: mid.expr + 1)
+                                    low.set(mid.expr + 1)
                                 }
                             }
                         }
                     }
                 }
 
-                let typeOK = seq.count >= 1 && seq.count <= MaxSeqLen
-                    && ForAll(in: IntRange(1, through: seq.count)) { index in
-                        Values.contains(seq[index])
-                            && ForAll(in: IntRange(index + 1, through: seq.count)) { other in
-                                seq[index] <= seq[other]
+                let typeOK = sortedValues.count >= 1 && sortedValues.count <= maximumSequenceLength
+                    && IntRange(1, through: sortedValues.count).allSatisfy { index in
+                        values.contains(sortedValues[index])
+                            && IntRange(index + 1, through: sortedValues.count).allSatisfy { other in
+                                sortedValues[index] <= sortedValues[other]
                             }
                     }
-                    && Values.contains(val)
-                    && low >= 1 && low <= seq.count + 1
-                    && high >= 0 && high <= seq.count
-                    && result >= 0 && result <= seq.count
-                TypeOK { typeOK }
-                Inv {
+                    && values.contains(searchValue)
+                    && low >= 1 && low <= sortedValues.count + 1
+                    && high >= 0 && high <= sortedValues.count
+                    && result >= 0 && result <= sortedValues.count
+                Invariant("TypeOK") { typeOK }
+                let containsValue = sortedValues.contains(searchValue)
+                Invariant("Inv") {
                     typeOK
-                    result == 0 || (seq.count > 0 && seq[result] == val)
+                    result == 0 || (sortedValues.count > 0 && sortedValues[result] == searchValue)
                     Finished() || If(
-                        Exists(in: IntRange(1, through: seq.count)) { index in seq[index] == val },
-                        then: Exists(in: IntRange(low, through: high)) { index in seq[index] == val },
+                        containsValue,
+                        then: IntRange(low, through: high).contains { index in sortedValues[index] == searchValue },
                         else: result == 0
                     )
                     !Finished() || result != 0
-                        || ForAll(in: IntRange(1, through: seq.count)) { index in seq[index] != val }
+                        || !containsValue
                 }
-                resultCorrect {
+                Invariant("resultCorrect") {
                     (!Finished()) || If(
-                        Exists(in: IntRange(1, through: seq.count)) { index in
-                            seq[index.expr] == val
-                        },
-                        then: seq[result] == val,
+                        containsValue,
+                        then: sortedValues[result] == searchValue,
                         else: result == 0
                     )
                 }
                 Termination(.eventually(Finished()))
-            })
-            BinarySearch
-            let MCBinarySearch = Validation {
-                Bind(Values, to: Set<Int>([1, 2, 3, 4, 5]))
-                Bind(MaxSeqLen, to: 8)
             }
-            MCBinarySearch
+            Validation("MCBinarySearch") {
+                Bind(values, to: Set<Int>([1, 2, 3, 4, 5]))
+                Bind(maximumSequenceLength, to: 8)
+            }
         }
     }
 }

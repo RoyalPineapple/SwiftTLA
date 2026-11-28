@@ -1,9 +1,43 @@
 import Foundation
 import Testing
 import SwiftTLA
-import UpstreamParity
+@testable import UpstreamParity
 
 struct UpstreamTLCParityCacheTests {
+    @Test("unchanged original inputs reuse the captured process and changed configuration runs TLC again")
+    func reusesOnlyMatchingReferenceInputs() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let executor = RecordingTLCExecutor(results: (1...3).map { .init(status: 0, stdout: "run \($0)", stderr: "") })
+        let process = TLCProcessAdapter(executor: executor)
+        let launch = try fixtureCase(testReferencePin())
+        let cache = root.appendingPathComponent("cache")
+        func capture(_ name: String, cfg: String, requireHit: Bool = false) throws {
+            let request = TLCProcessRequest(javaExecutable: root.appendingPathComponent("java"),
+                jar: root.appendingPathComponent("tlc.jar"), bridgeJar: root.appendingPathComponent("bridge.jar"),
+                bundle: .external(root: .init(name: "Reference", tla: "---- MODULE Reference ----\n====", cfg: cfg)),
+                graphEvents: root.appendingPathComponent("events.bin.gz"), traceOutput: root.appendingPathComponent("trace.json"),
+                workingDirectory: root, finiteGraphCase: launch, runID: UUID(), invocation: .propertyCheck)
+            _ = try UpstreamReferenceCache.run(request, process: process, retainingIn: root.appendingPathComponent(name), cache: cache, requireHit: requireHit)
+        }
+        try capture("first", cfg: "SPECIFICATION Spec")
+        try capture("again", cfg: "SPECIFICATION Spec", requireHit: true)
+        #expect(executor.requests.count == 1)
+        #expect(try Data(contentsOf: root.appendingPathComponent("first/tlc-process.json")) ==
+            Data(contentsOf: root.appendingPathComponent("again/tlc-process.json")))
+        let entry = try #require(fm.contentsOfDirectory(at: cache, includingPropertiesForKeys: nil).first)
+        try Data("changed".utf8).write(to: entry.appendingPathComponent("logs/tlc.stdout.log"))
+        #expect(throws: UpstreamTLCParityError.self) { try capture("corrupt", cfg: "SPECIFICATION Spec") }
+        #expect(throws: UpstreamTLCParityError.self) {
+            try capture("missing", cfg: "SPECIFICATION Spec\nINVARIANT Safe", requireHit: true)
+        }
+        #expect(executor.requests.count == 1)
+        try capture("different", cfg: "SPECIFICATION Spec\nINVARIANT Safe")
+        #expect(executor.requests.count == 2)
+    }
+
     @Test("sampled upstream evidence changes identity with simulation bounds and source")
     func sampledInputsHaveDistinctKeys() throws {
         let scenario = try #require(EWD840AnimationModel.validationScenarios().first)

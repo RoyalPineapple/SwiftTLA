@@ -1,3 +1,6 @@
+// A request and its acknowledgment alternate across an asynchronous interface.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -18,7 +21,10 @@ package struct AsynchInterfaceModel: Sendable {
         }
     }
 
-    package enum Step: String, CaseIterable { case Send, Rcv }
+    package enum Step: String, CaseIterable {
+        case send = "Send"
+        case receive = "Rcv"
+    }
 
     package static var spec: TLASpec {
         #spec("AsynchInterface") { scope in
@@ -26,29 +32,24 @@ package struct AsynchInterfaceModel: Sendable {
             let Data = scope.parameter(as: Set<Datum>.self, in: Set<Set<Datum>>([
                 Set<Datum>([Datum.d1, Datum.d2, Datum.d3]), Set<Datum>([Datum.ap1, Datum.ap2])
             ]))
-            let val = scope.sharedVar(in: Data)
-            let rdy = scope.sharedVar(in: 0...1)
+            let val = scope.sharedVar(initiallyIn: Data)
+            let rdy = scope.sharedVar(initiallyIn: 0...1)
             let ack = scope.sharedVar(initial: rdy)
-            let TypeInvariant = Invariant()
 
-            Do(Step.Send) {
-                When(rdy == ack)
+            Do(Step.send, when: rdy == ack) {
                 With(Data) { datum in
-                    Assign(val, to: datum)
+                    val.set(datum)
                 }
-                Assign(rdy, to: 1 - rdy)
+                rdy.set(1 - rdy)
             }
-            Do(Step.Rcv) {
-                When(rdy != ack)
-                Assign(ack, to: 1 - ack)
+            Do(Step.receive, when: rdy != ack) {
+                ack.set(1 - ack)
             }
-            TypeInvariant {
-                Data.contains(val) && rdy >= 0 && rdy <= 1 && ack >= 0 && ack <= 1
+            Invariant("TypeInvariant") {
+                Data.contains(val) && (0...1).contains(rdy) && (0...1).contains(ack)
             }
-            let Upstream = Validation { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
-            Upstream
-            let APAsynchInterface = Validation { Bind(Data, to: Set<Datum>([Datum.ap1, Datum.ap2])) }
-            APAsynchInterface
+            Validation("Upstream") { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
+            Validation("APAsynchInterface") { Bind(Data, to: Set<Datum>([Datum.ap1, Datum.ap2])) }
         }
     }
 }

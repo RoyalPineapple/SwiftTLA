@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 struct GeneratedMachineDocumentationTests {
-    @Test("README clock examples compile from their exact fixture sources")
+    @Test("README examples match the sources in the documentation package")
     func readmeClockExamplesMatchCompilingFixtures() throws {
         let root = packageRoot()
         let readme = try String(
@@ -90,7 +90,7 @@ struct GeneratedMachineDocumentationTests {
             encoding: .utf8
         )
 
-        for term in ["Transition", "Action", "State", "send(_:)", "isEnabled(_:)"] {
+        for term in ["Action", "State", "send(_:)", "isEnabled(_:)"] {
             #expect(guide.contains(term), "Markdown guide is missing typed term: \(term)")
             #expect(docc.contains(term), "SwiftTLA DocC is missing typed term: \(term)")
         }
@@ -125,6 +125,8 @@ struct GeneratedMachineDocumentationTests {
 
     private var readmeExampleSources: [String: String] {
         [
+            "readme-sequential-counter":
+                "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/SequentialCounter.swift",
             "readme-clock-model":
                 "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/READMEClockModel.swift",
             "readme-clock-swiftui":
@@ -137,7 +139,6 @@ struct GeneratedMachineDocumentationTests {
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
             ("`GeneratedMachineError`", "Sources/SwiftTLA/GeneratedMachineError.swift", "public enum GeneratedMachineError"),
             ("Generated `Action`", "Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift", "public enum Action"),
-            ("Generated `Transition`", "Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift", "public struct Transition"),
             ("Generated `Actor`", "Sources/SwiftTLAPlugin/NativeSwiftEmitter+Actor.swift", "public actor Actor"),
         ]
     }

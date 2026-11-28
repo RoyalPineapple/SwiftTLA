@@ -56,8 +56,8 @@ struct NQueensCorpusStateGraphTests {
                 let successors = try current.successors(for: action)
                 var sent = current
                 if successors.count == 1 {
-                    let transition = try sent.send(action)
-                    #expect(transition.after == successors[0].state)
+                    try sent.send(action)
+                    #expect(sent.state == successors[0].state)
                     #expect(sent.snapshot == successors[0].snapshot)
                 } else {
                     #expect(throws: GeneratedMachineError.ambiguousAction) { try sent.send(action) }

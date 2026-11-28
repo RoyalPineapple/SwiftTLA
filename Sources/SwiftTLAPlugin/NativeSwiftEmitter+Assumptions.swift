@@ -25,16 +25,16 @@ extension NativeSwiftEmitter {
         var pending = [assumption.expression]
         var recordsOutput = false
         while let candidate = pending.popLast() {
-            if case .printT = candidate.operation { recordsOutput = true; break }
+            if candidate.operation == .printT || candidate.operation == .printReturning { recordsOutput = true; break }
             pending.append(contentsOf: candidate.children)
         }
         declarations += try nativeDeclarations("""
         public static func evaluateAssumptions(\(parameterArgument)) throws -> AssumptionEvaluation {
-            \(recordsOutput ? "var" : "let") _evaluatedValues: [TLAValue] = []
+            \(recordsOutput ? "var" : "let") _evaluatedValues: [SwiftTLA.AssumptionPrint<SwiftTLA.TLAValue>] = []
             let satisfied = \(assumptionExpression)
             return AssumptionEvaluation(
                 satisfied: satisfied,
-                evaluatedValues: _evaluatedValues)
+                prints: _evaluatedValues)
         }
         """)
         let scenarios = try program.behavior.validationScenarios.map { scenario -> String in
@@ -52,8 +52,8 @@ extension NativeSwiftEmitter {
         }
         declarations += try nativeDeclarations("""
         public struct ValidationScenario: AssumptionValidationScenario {
-            public let name: String
-            public let displayName: String
+            public let name: \(nativeStringType)
+            public let displayName: \(nativeStringType)
             \(configured ? "public let configuration: Configuration" : "")
             public func evaluateAssumptions() throws -> AssumptionEvaluation {
                 try \(model.typeName).evaluateAssumptions(\(parameterCall))

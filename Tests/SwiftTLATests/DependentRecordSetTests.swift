@@ -11,14 +11,15 @@ struct DependentRecordSetTests {
             let expected = Set((0...maximum).flatMap { first in
                 (0...first).compactMap { second in
                     first + second <= maximum
-                        ? DependentRecordSetModel.Pair(first: first, second: second) : nil
+                        ? [first, second] : nil
                 }
             })
             let machines = try scenario.initialMachines()
-            #expect(Set(machines.map { $0.state.pair }) == expected)
+            #expect(Set(machines.map { [$0.state.pair.first, $0.state.pair.second] }) == expected)
             for var machine in machines {
                 let before = machine.state
-                #expect(try machine.send(.stay).after == before)
+                try machine.send(.stay)
+                #expect(machine.state == before)
             }
             let graph = try scenario.explore(maximumStates: 100)
             #expect(graph.transitions.count == expected.count)

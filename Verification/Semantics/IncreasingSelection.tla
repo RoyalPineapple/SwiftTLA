@@ -8,7 +8,9 @@ __SwiftTLAChoiceFailure0 == ~((\E __binder_SpecParser_383_0 \in {1, 2, 3} : (__b
 __SwiftTLAAnyEvaluationFailure0 == ~((\E __binder_SpecParser_383_0 \in {1, 2, 3} : (__binder_SpecParser_383_0 > position)))
 __SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)
 
-Init == position = 0
+Init ==
+  /\ position = 0
+  /\ (IF (position >= (-2 * 1000000000 - 147483648) /\ position <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE position \in ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)..((9 * 1000000000 + 223372036) * 1000000000 + 854775807))
 
 Next == advance
 

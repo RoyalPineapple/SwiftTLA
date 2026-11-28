@@ -6,10 +6,10 @@ struct ElevatorBankDemoTests {
     @Test("car and passenger dictionaries retain Swift records and validate formal fields")
     func preservesRecordState() throws {
         let machine = try ElevatorBank.makeMachine()
-        let cars: [ElevatorBank.CarID: ElevatorBank.Car] = machine.state.cars
-        let riders: [ElevatorBank.Rider: ElevatorBank.Passenger] = machine.state.riders
-        let car = try #require(cars[.carA])
-        let rider = try #require(riders[.alice])
+        let cars = machine.state.cars
+        let riders = machine.state.riders
+        let car: ElevatorBank.Car = try #require(cars[.carA])
+        let rider: ElevatorBank.Passenger = try #require(riders[.alice])
         #expect(ElevatorBank.Car(formalValue: car.tlaValue) == car)
         #expect(ElevatorBank.Passenger(formalValue: rider.tlaValue) == rider)
         #expect(ElevatorBank.Car(formalValue: .record([
@@ -24,7 +24,7 @@ struct ElevatorBankDemoTests {
     func descendingTravelPreservesOtherEntries() throws {
         var machine = try ElevatorBank.makeMachine()
         let initial = machine.state
-        for _ in 0..<6 { _ = try machine.send(.operate(process: .carB)) }
+        for _ in 0..<6 { try machine.send(.operate(process: .carB)) }
         #expect(machine.state.cars[.carB] == .init(floor: .one, door: .closed, rider: .none))
         #expect(machine.state.riders[.bob]?.phase == .arrived)
         #expect(machine.state.cars[.carA] == initial.cars[.carA])
@@ -40,22 +40,22 @@ struct ElevatorBankDemoTests {
         #expect(machine.state.cars[.carA]?.rider == ElevatorBank.Rider.none)
         #expect(machine.state.riders[.alice]?.phase == .waiting)
 
-        _ = try machine.send(.operate(process: .carA))
+        try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA]?.door == .open)
 
-        _ = try machine.send(.operate(process: .carA))
+        try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA]?.door == .closed)
         #expect(machine.state.cars[.carA]?.rider == .alice)
         #expect(machine.state.riders[.alice]?.phase == .onboard)
 
-        _ = try machine.send(.operate(process: .carA))
+        try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA]?.floor == .two)
-        _ = try machine.send(.operate(process: .carA))
+        try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA]?.floor == .three)
 
-        _ = try machine.send(.operate(process: .carA))
+        try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA]?.door == .open)
-        _ = try machine.send(.operate(process: .carA))
+        try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA]?.rider == ElevatorBank.Rider.none)
         #expect(machine.state.cars[.carA]?.door == .closed)
         #expect(machine.state.riders[.alice]?.phase == .arrived)

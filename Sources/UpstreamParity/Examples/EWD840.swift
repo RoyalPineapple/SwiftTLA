@@ -1,3 +1,7 @@
+// A token travels around a ring to detect when computation has ended despite messages between
+// nodes.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/EWD840.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -12,7 +16,10 @@ package struct EWD840Model: Sendable {
     }
 
     private enum Step: String, CaseIterable {
-        case InitiateProbe, PassToken, SendMsg, Deactivate
+        case initiateProbe = "InitiateProbe"
+        case passToken = "PassToken"
+        case sendMessage = "SendMsg"
+        case deactivate = "Deactivate"
     }
 
     package static var spec: TLASpec {
@@ -20,92 +27,85 @@ package struct EWD840Model: Sendable {
             Extends(.naturals)
             let N = scope.parameter(as: Int.self, in: Int.all)
             Assume(N > 0)
-            let Node = IntRange(0, through: N - 1)
+            let Node = 0..<N
             let colors = SetExpr<Color>.literal(.white, .black)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
-            let color: SharedVariable<[Int: Color]> = scope.sharedVar(in: Functions(from: Node, to: colors))
-            let tpos = scope.sharedVar(in: Node)
+                initiallyIn: Functions(from: Node, to: Bool.all))
+            let color: SharedVariable<[Int: Color]> = scope.sharedVar(initiallyIn: Functions(from: Node, to: colors))
+            let tpos = scope.sharedVar(initiallyIn: Node)
             let tcolor = scope.sharedVar(initial: Color.black)
 
-            let initiate = Do(Step.InitiateProbe, when: tpos == 0
+            let initiate = Do(Step.initiateProbe, when: tpos == 0
                 && (tcolor == Color.black || color[0] == Color.black)) {
-                Assign(tpos, to: N - 1)
-                Assign(tcolor, to: Color.white)
-                Assign(color[0], to: Color.white)
+                tpos.set(N - 1)
+                tcolor.set(Color.white)
+                color[0].set(Color.white)
             }
-            initiate
 
-            let pass = Do(Step.PassToken, over: Node) { i in
+            let pass = Do(Step.passToken, over: Node) { i in
                 When(i != 0 && tpos == i
                     && (!active[i] || color[i] == Color.black || tcolor == Color.black))
-                Assign(tpos, to: i - 1)
-                Assign(tcolor, to: If(color[i] == Color.black, then: Color.black, else: tcolor))
-                Assign(color[i], to: Color.white)
+                tpos.set(i - 1)
+                tcolor.set(If(color[i] == Color.black, then: Color.black, else: tcolor))
+                color[i].set(Color.white)
             }
-            pass
             WeakFairness(anyOf: [initiate, pass])
 
-            Do(Step.SendMsg, over: Node) { i in
+            Do(Step.sendMessage, over: Node) { i in
                 When(active[i])
                 With(Node) { j in
                     When(j != i)
-                    Assign(active[j], to: true)
+                    active[j].set(true)
                     If(j > i) {
-                        Assign(color[i], to: Color.black)
+                        color[i].set(Color.black)
                     }
                 }
             }
 
-            Do(Step.Deactivate, over: Node) { i in
+            Do(Step.deactivate, over: Node) { i in
                 When(active[i])
-                Assign(active[i], to: false)
+                active[i].set(false)
             }
 
-            let TypeOK = Invariant()
-            let TerminationDetection = Invariant()
-            let Inv = Invariant()
-            let JsonInv = Invariant()
             let Liveness = Temporal()
-            let terminated = ForAll(in: Node) { i in !active[i] }
+            let terminated = Node.allSatisfy { i in !active[i] }
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
-            TypeOK {
-                Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
+            let typeOK = Invariant("TypeOK")
+            typeOK {
+                Functions(from: Node, to: Bool.all).contains(active)
                     && Functions(from: Node, to: colors).contains(color)
                     && Node.contains(tpos) && colors.contains(tcolor)
             }
-            TerminationDetection { !terminationDetected || terminated }
-            let inductiveInvariant = ForAll(in: Node) { i in tpos >= i || !active[i] }
-                || Exists(in: IntRange(0, through: tpos)) { i in color[i] == Color.black }
+            let terminationDetection = Invariant("TerminationDetection")
+            terminationDetection { !terminationDetected || terminated }
+            let inductiveInvariant = Node.allSatisfy { i in tpos >= i || !active[i] }
+                || IntRange(0, through: tpos).contains { i in color[i] == Color.black }
                 || tcolor == Color.black
-            Inv { inductiveInvariant }
+            let inv = Invariant("Inv")
+            inv { inductiveInvariant }
             // The upstream JSON trace/exit effect belongs to validation, not the state predicate.
-            JsonInv { inductiveInvariant }
+            let jsonInv = Invariant("JsonInv")
+            jsonInv { inductiveInvariant }
             Liveness(.leadsTo(terminated, terminationDetected))
 
             let TD = Instance(of: SyncTerminationDetectionModel.self) {
                 Bind(\.N, to: N)
             }
-            TD
             let TDSpec = Refinement(instance: TD) {
                 Map(\.active, from: active)
                 Map(\.terminationDetected, from: terminationDetected)
             }
-            TDSpec
 
-            let EWD840 = Validation { Bind(N, to: 3) }
-                .checking(only: [TypeOK, TerminationDetection, Inv, Liveness, TDSpec])
+            Validation("EWD840") { Bind(N, to: 3) }
+                .checking(only: [typeOK, terminationDetection, inv, Liveness, TDSpec])
                 .checkingDeadlock(false)
-            EWD840
-            let APEWD840 = Validation { Bind(N, to: 3) }
-                .checking(only: [TypeOK, TerminationDetection])
+            Validation("APEWD840") { Bind(N, to: 3) }
+                .checking(only: [typeOK, terminationDetection])
                 .checkingDeadlock(false)
-            APEWD840
-            let EWD840_json = Validation { Bind(N, to: 4) }
-                .checking(only: [JsonInv])
+            Validation("EWD840_json") { Bind(N, to: 4) }
+                .checking(only: [jsonInv])
                 .checkingDeadlock(false)
-            EWD840_json
         }
     }
 }

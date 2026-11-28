@@ -8,7 +8,7 @@ machine and a TLA+ export from the same `#spec` declaration.
 `SwiftTLA` contains the source language, compiler, generated-machine support,
 and formal renderers. `SwiftTLAMacros` contains `@TLAModel`.
 
-Application code uses generated `State`, `Action`, `Transition`, machine, and
+Application code uses generated `State`, `Action`, machine, and
 `Actor` types.
 
 ## Execute the generated machine
@@ -18,7 +18,7 @@ not compile the source model at runtime or use an expression interpreter.
 
 ```swift
 var machine = try BoundedCounter.makeMachine()
-let transition = try machine.send(.advance)
+try machine.send(.advance)
 ```
 
 For a finite model, `ReachabilityGraph` checks the same generated transitions.

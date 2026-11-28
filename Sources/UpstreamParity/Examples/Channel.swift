@@ -1,3 +1,6 @@
+// Sending and receiving data use a handshake to keep successive transfers distinct.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Composing/Channel.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -23,7 +26,10 @@ package struct ChannelModel: Sendable {
         package let val: Datum
     }
 
-    package enum Step: String, CaseIterable { case Send, Rcv }
+    package enum Step: String, CaseIterable {
+        case send = "Send"
+        case receive = "Rcv"
+    }
 
     package static var spec: TLASpec {
         #spec("Channel") { scope in
@@ -31,31 +37,27 @@ package struct ChannelModel: Sendable {
             let Data = scope.parameter(as: Set<Datum>.self, in: Set<Set<Datum>>([
                 Set<Datum>([Datum.d1, Datum.d2, Datum.d3]), Set<Datum>([Datum.ap1, Datum.ap2])
             ]))
-            let chan = scope.sharedVar(in: Data.flatMapping { value in
+            let chan = scope.sharedVar(initiallyIn: Data.flatMapping { value in
                 Set<Int>([0, 1]).mapping { bit in
                     Channel.expression(ack: bit, rdy: bit, val: value)
                 }
             })
-            let TypeInvariant = Invariant()
 
-            Do(Step.Send, over: Data) { d in
+            Do(Step.send, over: Data) { d in
                 When(chan.rdy == chan.ack)
-                Assign(chan.val, to: d)
-                Assign(chan.rdy, to: 1 - chan.rdy)
+                chan.val.set(d)
+                chan.rdy.set(1 - chan.rdy)
             }
-            Do(Step.Rcv) {
-                When(chan.rdy != chan.ack)
-                Assign(chan.ack, to: 1 - chan.ack)
+            Do(Step.receive, when: chan.rdy != chan.ack) {
+                chan.ack.set(1 - chan.ack)
             }
-            TypeInvariant {
+            Invariant("TypeInvariant") {
                 Data.contains(chan.val)
-                    && IntRange(0, through: 1).contains(chan.rdy)
-                    && IntRange(0, through: 1).contains(chan.ack)
+                    && (0...1).contains(chan.rdy)
+                    && (0...1).contains(chan.ack)
             }
-            let Upstream = Validation { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
-            Upstream
-            let APChannel = Validation { Bind(Data, to: Set<Datum>([Datum.ap1, Datum.ap2])) }
-            APChannel
+            Validation("Upstream") { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
+            Validation("APChannel") { Bind(Data, to: Set<Datum>([Datum.ap1, Datum.ap2])) }
         }
     }
 }

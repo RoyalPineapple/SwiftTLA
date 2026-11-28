@@ -39,7 +39,7 @@ struct LearnProofsCorpusCheckingTests {
             let next = try #require(successors.first)
             #expect(next.action == .Next)
             #expect(next.machine.state.x == step * 2)
-            _ = try machine.send(.Next)
+            try machine.send(.Next)
             #expect(machine.state == next.machine.state)
         }
         let rendered = try AddTwoModel.render()

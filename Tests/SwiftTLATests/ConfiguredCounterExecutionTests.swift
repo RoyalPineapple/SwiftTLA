@@ -32,10 +32,15 @@ struct ConfiguredCounterExecutionTests {
             #expect(machine.state.previous == 0)
             #expect(machine.state.copied == 0)
             for value in 1...limit {
-                _ = try machine.send(.advance)
-                #expect(machine.state.value == value)
-                #expect(machine.state.previous == value - 1)
-                #expect(machine.state.copied == value)
+                let before = machine.state
+                let transitionBefore = machine.state
+                try machine.send(.advance)
+                #expect(transitionBefore == before)
+                let expected = try projection([
+                    ("value", .int(value)), ("previous", .int(value - 1)), ("copied", .int(value)),
+                    ("pc", .function([.string("only"): .string(value == limit ? "Done" : "advance")]))
+                ])
+                #expect(try machine.formalProjection(of: machine.snapshot) == expected)
             }
             #expect(try !machine.isEnabled(.advance))
             #expect(machine.configuration == configuration)
@@ -67,6 +72,33 @@ struct ConfiguredCounterExecutionTests {
         let machines = try ConfiguredCounter.initialMachines(configuration: two) + ConfiguredCounter.initialMachines(configuration: four)
         #expect(throws: ExplorationError.configurationMismatch) {
             try ReachabilityGraph(initialMachines: machines, maximumStates: 10)
+        }
+
+        let first = try SymbolicRecordConstructionModel.Configuration(start: .init(value: 1))
+        let same = try SymbolicRecordConstructionModel.Configuration(start: .init(value: 1))
+        let second = try SymbolicRecordConstructionModel.Configuration(start: .init(value: 2))
+        #expect(first.start == second.start)
+        #expect(first.start.tlaValue != second.start.tlaValue)
+        #expect(first == same)
+        #expect(first != second)
+        #expect(Set([first, same, second]).count == 2)
+        let firstMachine = try SymbolicRecordConstructionModel.makeMachine(configuration: first)
+        let sameMachine = try SymbolicRecordConstructionModel.makeMachine(configuration: same)
+        let secondMachine = try SymbolicRecordConstructionModel.makeMachine(configuration: second)
+        #expect(throws: GeneratedMachineStateDiagnostic.self) {
+            try SymbolicRecordConstructionModel.Configuration(start: .init(value: 9))
+        }
+        #expect(firstMachine.state.packet.payload.value == 1)
+        #expect(secondMachine.state.packet.payload.value == 2)
+        #expect(firstMachine.hasSameConfiguration(as: sameMachine))
+        #expect(!firstMachine.hasSameConfiguration(as: secondMachine))
+        let recordMachines = [firstMachine, secondMachine]
+        #expect(throws: ExplorationError.configurationMismatch) {
+            try ReachabilityGraph(initialMachines: recordMachines, maximumStates: 10)
+        }
+        #expect(throws: ExplorationError.configurationMismatch) {
+            try MachineValidator.run(initialMachines: recordMachines, maximumStates: 10,
+                checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { _ in }
         }
     }
 }

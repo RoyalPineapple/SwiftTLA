@@ -1,3 +1,6 @@
+// A boat transports people across a river while each bank must remain safe.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -25,7 +28,7 @@ package struct MissionariesAndCannibalsModel: Sendable {
         package static var defaultValue: Self { .E }
     }
 
-    private enum Step: String, CaseIterable { case Next }
+    private enum Step: String, CaseIterable { case next = "Next" }
 
     package static var spec: TLASpec {
         #spec("MissionariesAndCannibals") { scope in
@@ -44,46 +47,43 @@ package struct MissionariesAndCannibalsModel: Sendable {
                     If(bank == Bank.E, then: People, else: Set<Person>())
                 })
 
-            let TypeOK = Invariant()
-            let Solution = Invariant()
-
-            Do(Step.Next) {
+            Do(Step.next) {
                 With(Subsets(of: who_is_on_bank[bank_of_boat])) { passengers in
                     let other = If(bank_of_boat == Bank.E, then: Bank.W, else: Bank.E)
                     let departing = who_is_on_bank[bank_of_boat].subtracting(passengers)
                     let arriving = who_is_on_bank[other].union(passengers)
-                    When(SetExpr<Int>.literal(1, 2).contains(passengers.expr.cardinality))
+                    When(SetExpr<Int>.literal(1, 2).contains(passengers.expr.count))
                     When(departing.isSubset(of: Cannibals)
-                        || departing.intersection(Cannibals).cardinality
-                            <= departing.intersection(Missionaries).cardinality)
+                        || departing.intersection(Cannibals).count
+                            <= departing.intersection(Missionaries).count)
                     When(arriving.isSubset(of: Cannibals)
-                        || arriving.intersection(Cannibals).cardinality
-                            <= arriving.intersection(Missionaries).cardinality)
-                    Assign(who_is_on_bank, to:
+                        || arriving.intersection(Cannibals).count
+                            <= arriving.intersection(Missionaries).count)
+                    who_is_on_bank.set(
                         Dictionary<Bank, Set<Person>>.mapping(over: Banks) { bank in
                             If(bank == bank_of_boat, then: departing, else: arriving)
                         })
-                    Assign(bank_of_boat, to: other)
+                    bank_of_boat.set(other)
                 }
             }
-            TypeOK {
+            let typeOK = Invariant("TypeOK")
+            typeOK {
                 Banks.contains(bank_of_boat)
                     && Functions(from: Banks, to: Subsets(of: People)).contains(who_is_on_bank)
             }
-            Solution { !who_is_on_bank[Bank.E].isEmpty }
+            let solution = Invariant("Solution")
+            solution { !who_is_on_bank[Bank.E].isEmpty }
 
-            let MissionariesAndCannibals = Validation {
+            Validation("MissionariesAndCannibals") {
                 Bind(Missionaries, to: Set<Person>([.m1, .m2, .m3]))
                 Bind(Cannibals, to: Set<Person>([.c1, .c2, .c3]))
-            }.checking(only: [TypeOK, Solution])
-                .expect(Solution, .violated)
-            MissionariesAndCannibals
-            let APMissionariesAndCannibals = Validation {
+            }.checking(only: [typeOK, solution])
+                .expect(solution, .violated)
+            Validation("APMissionariesAndCannibals") {
                 Bind(Missionaries, to: Set<Person>([.apM1, .apM2, .apM3]))
                 Bind(Cannibals, to: Set<Person>([.apC1, .apC2, .apC3]))
-            }.checking(only: [TypeOK, Solution])
-                .expect(Solution, .violated)
-            APMissionariesAndCannibals
+            }.checking(only: [typeOK, solution])
+                .expect(solution, .violated)
         }
     }
 }

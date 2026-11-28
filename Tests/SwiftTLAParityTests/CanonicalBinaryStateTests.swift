@@ -21,6 +21,21 @@ struct CanonicalBinaryStateTests {
         }
     }
 
+    @Test("a tuple VIEW retains repeated and reordered full-state fields byte for byte")
+    func encodesTupleViewFromFullState() throws {
+        let a = TLAValue.function([.int(1): .set([.string("é")])])
+        let b = TLAValue.tuple([.string("e\u{301}")])
+        let full = try state([("z", b), ("a", a)])
+        var representative = CanonicalBinaryState.Encoder()
+        var key = CanonicalBinaryState.Encoder()
+        try representative.encode(full, tupleView: [1, 0, 1], key: &key)
+        #expect(try key.bytes == CanonicalBinaryState.encode(state([("View", .tuple([b, a, b]))]), viewed: true))
+        #expect(try representative.bytes == CanonicalBinaryState.encode(full))
+        #expect(throws: CanonicalBinaryState.CodingError.malformed) {
+            try representative.encode(full, tupleView: [2], key: &key)
+        }
+    }
+
     @Test("a state value has a versioned, unambiguous byte identity")
     func exactStateBytes() throws {
         let projection = try state([("x", .int(1))])
@@ -129,6 +144,87 @@ struct CanonicalBinaryStateTests {
         #expect(encoded == (try CanonicalBinaryState.encode(reordered)))
         #expect(encoded != (try CanonicalBinaryState.encode(changed)))
         try CanonicalBinaryState.validate(encoded)
+    }
+
+    @Test("generated field traversal supplies the same complete state and tuple VIEW to both consumers")
+    func generatedProjectionConsumers() throws {
+        let scenario = try #require(try NanoBlockchainModel.validationScenarios().first)
+        let machine = try #require(try scenario.initialOutcomes().states.first)
+        let projection = try machine.formalProjection(of: machine.snapshot)
+        var materialized = false
+        var walked = false
+        var full = CanonicalBinaryState.Encoder(), key = CanonicalBinaryState.Encoder()
+        try full.encode(tupleView: [3, 0, 3], key: &key, visit: {
+            walked = try machine._visitFormalProjection(of: machine.snapshot, into: &$0)
+            return walked
+        }, projection: {
+            materialized = true
+            return projection
+        })
+        var reference = CanonicalBinaryState.Encoder(), view = CanonicalBinaryState.Encoder()
+        try reference.encode(projection, tupleView: [3, 0, 3], key: &view)
+        #expect(walked && !materialized)
+        #expect(key.bytes == view.bytes)
+        #expect(full.bytes == reference.bytes)
+    }
+
+    @Test("tuple capture reports the same nested paths and first conversion failure as formal projection")
+    func projectionFailureOrder() throws {
+        let field = try #require(TLAStateProjection.Token(validating: "ledger"))
+        func visit<S: _NativeProjectionSink>(_ sink: inout S, duplicate: String?) throws -> Bool {
+            try sink.field(field, "1invalid") { name, out in
+                try out.record(_NativeProjectionRecord(["account"])) { _, child in try child.projected(.constant(name)) }
+            }
+            if duplicate == "set" {
+                try sink.field(field, [1, 1]) { values, out in
+                    try out.members(values) { item, child in try child.projected(.int(item)) }
+                }
+            } else if duplicate == "function" {
+                let entries = [(key: 0, value: 1), (key: 0, value: 2)]
+                try sink.field(field, entries) { pairs, out in
+                    try out.constantFunction(pairs, key: { _ in .constant("same") },
+                        value: { value, child in try child.projected(.int(value)) })
+                }
+            }
+            return true
+        }
+        for (duplicate, diagnostic) in [
+            (nil as String?, TLAStateProjectionDiagnostic.invalidConstant(path: "ledger.account")),
+            ("set", .invalidValue(path: "duplicate formal set element")),
+            ("function", .invalidValue(path: "duplicate formal function key"))
+        ] {
+            func projection() throws -> TLAStateProjection {
+                var values = _NativeProjectionCollector()
+                _ = try visit(&values, duplicate: duplicate)
+                return try values.projection()
+            }
+            var full = CanonicalBinaryState.Encoder(), key = CanonicalBinaryState.Encoder()
+            #expect(throws: diagnostic) { try projection() }
+            #expect(throws: diagnostic) {
+                try full.encode(tupleView: [0], key: &key, visit: { try visit(&$0, duplicate: duplicate) },
+                    projection: projection)
+            }
+        }
+    }
+
+    @Test("distinct formal members with identical wire bytes retain the canonical set identity")
+    func equivalentMemberCapture() throws {
+        let token = try #require(TLAStateProjection.Token(validating: "members"))
+        func visit<S: _NativeProjectionSink>(_ sink: inout S) throws -> Bool {
+            try sink.field(token, [TLAValue.tuple([.int(1)]), .function([.int(1): .int(1)])]) { values, out in
+                try out.members(values) { member, child in try child.projected(member) }
+            }
+            return true
+        }
+        var values = _NativeProjectionCollector()
+        _ = try visit(&values)
+        let projection = try values.projection()
+        var full = CanonicalBinaryState.Encoder(), key = CanonicalBinaryState.Encoder()
+        try full.encode(tupleView: [0, 0], key: &key, visit: visit, projection: { projection })
+        var reference = CanonicalBinaryState.Encoder(), view = CanonicalBinaryState.Encoder()
+        try reference.encode(projection, tupleView: [0, 0], key: &view)
+        #expect(key.bytes == view.bytes)
+        #expect(full.bytes == reference.bytes)
     }
 
     private func state(_ bindings: [(String, TLAValue)]) throws -> TLAStateProjection {

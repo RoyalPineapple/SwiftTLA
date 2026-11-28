@@ -1,3 +1,7 @@
+// The animation records probe, token, message, and deactivation events in Dijkstra’s termination
+// detector.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/EWD840_anim.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -10,8 +14,28 @@ package struct EWD840AnimationModel: Sendable {
         package static var defaultValue: Self { .white }
     }
 
+    package enum AnimationAction: String, TLAValueType {
+        case initial = "init"
+        case initiateProbe = "InitiateProbe"
+        case passToken = "PassToken"
+        case sendMessage = "SendMsg"
+        case deactivate = "Deactivate"
+
+        package static var defaultValue: Self { .initial }
+    }
+
+    @TLATuple
+    package struct AnimationHistory: Hashable, Sendable {
+        package let lastSender: Int
+        package let lastRecipient: Int
+        package let action: AnimationAction
+    }
+
     private enum Step: String, CaseIterable {
-        case AnimInitiateProbe, AnimPassToken, AnimSendMsg, AnimDeactivate
+        case animInitiateProbe = "AnimInitiateProbe"
+        case animPassToken = "AnimPassToken"
+        case animSendMsg = "AnimSendMsg"
+        case animDeactivate = "AnimDeactivate"
     }
 
     package static var spec: TLASpec {
@@ -22,61 +46,58 @@ package struct EWD840AnimationModel: Sendable {
             let Node = IntRange(0, through: N - 1)
             let colors = SetExpr<Color>.literal(.white, .black)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
-            let color: SharedVariable<[Int: Color]> = scope.sharedVar(in: Functions(from: Node, to: colors))
+                initiallyIn: Functions(from: Node, to: Bool.all))
+            let color: SharedVariable<[Int: Color]> = scope.sharedVar(initiallyIn: Functions(from: Node, to: colors))
             let tpos = scope.sharedVar(initial: N - 1)
             let tcolor = scope.sharedVar(initial: Color.black)
-            let history = scope.sharedVar(initial: Triple(first: 0, second: 0, third: "init"))
+            let history = scope.sharedVar(initial: AnimationHistory(lastSender: 0, lastRecipient: 0, action: AnimationAction.initial))
 
-            let initiate = Do(Step.AnimInitiateProbe, when: tpos == 0
+            let initiate = Do(Step.animInitiateProbe, when: tpos == 0
                 && (tcolor == Color.black || color[0] == Color.black)) {
-                Assign(tpos, to: N - 1)
-                Assign(tcolor, to: Color.white)
-                Assign(color[0], to: Color.white)
-                Assign(history, to: Triple.literal(history.first(), history.second(), "InitiateProbe"))
+                tpos.set(N - 1)
+                tcolor.set(Color.white)
+                color[0].set(Color.white)
+                history.action.set(.initiateProbe)
             }
-            initiate
 
-            let pass = Do(Step.AnimPassToken, over: Node) { i in
+            let pass = Do(Step.animPassToken, over: Node) { i in
                 When(i != 0 && tpos == i
                     && (!active[i] || color[i] == Color.black || tcolor == Color.black))
-                Assign(tpos, to: i - 1)
-                Assign(tcolor, to: If(color[i] == Color.black, then: Color.black, else: tcolor))
-                Assign(color[i], to: Color.white)
-                Assign(history, to: Triple.literal(history.first(), history.second(), "PassToken"))
+                tpos.set(i - 1)
+                tcolor.set(If(color[i] == Color.black, then: Color.black, else: tcolor))
+                color[i].set(Color.white)
+                history.action.set(.passToken)
             }
-            pass
             WeakFairness(anyOf: [initiate, pass])
 
-            Do(Step.AnimSendMsg, over: Node) { i in
+            Do(Step.animSendMsg, over: Node) { i in
                 When(active[i])
                 With(Node) { j in
                     When(j != i)
-                    Assign(active[j], to: true)
+                    active[j].set(true)
                     If(j > i) {
-                        Assign(color[i], to: Color.black)
+                        color[i].set(Color.black)
                     }
-                    Assign(history, to: Triple.literal(i, j, "SendMsg"))
+                    history.set(AnimationHistory.expression(lastSender: i, lastRecipient: j, action: AnimationAction.sendMessage))
                 }
             }
 
-            Do(Step.AnimDeactivate, over: Node) { i in
+            Do(Step.animDeactivate, over: Node) { i in
                 When(active[i])
-                Assign(active[i], to: false)
-                Assign(history, to: Triple.literal(history.first(), history.second(), "Deactivate"))
+                active[i].set(false)
+                history.action.set(.deactivate)
             }
 
-            let AnimInv = Invariant()
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
-            AnimInv { !terminationDetected || scope.checkingLevel < 20 }
+            let animInv = Invariant("AnimInv")
+            animInv { !terminationDetected || scope.checkingLevel < 20 }
 
-            let EWD840_anim = Validation { Bind(N, to: 9) }
-                .checking(only: [AnimInv])
+            Validation("EWD840_anim") { Bind(N, to: 9) }
+                .checking(only: [animInv])
                 .checkingDeadlock(false)
                 .simulating(traces: 100)
-                .expect(AnimInv, .violated)
-            EWD840_anim
+                .expect(animInv, .violated)
         }
     }
 }

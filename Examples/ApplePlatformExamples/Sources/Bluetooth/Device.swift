@@ -34,23 +34,20 @@ public struct PeripheralModel {
 
     public static var spec: TLASpec {
         #spec {
-            let knownPeripheralPhase = Invariant()
-            let peripheralModel = Algorithm(scoped: { scope in
+            Algorithm("peripheralModel") { scope in
                 let phase = scope.sharedVar(initial: Phase.disconnected)
                 Each(ConnectProcess.all) { _ in
-                    Do(Step.connected) {
-                        When(phase == .disconnected)
-                        Assign(phase, to: Phase.connected)
+                    Do(Step.connected, when: phase == .disconnected) {
+                        phase.set(Phase.connected)
                         Goto(Step.connected)
                     }
                 }
-                Each(BeginDiscoveryProcess.all) { _ in Do(Step.beginDiscovery) { When(phase == .connected); Assign(phase, to: Phase.discovering); Goto(Step.beginDiscovery) } }
-                Each(FinishDiscoveryProcess.all) { _ in Do(Step.finishDiscovery) { When(phase == .discovering); Assign(phase, to: Phase.ready); Goto(Step.finishDiscovery) } }
-                Each(DiscoveryFailedProcess.all) { _ in Do(Step.discoveryFailed) { When(phase == .discovering); Assign(phase, to: Phase.connected); Goto(Step.discoveryFailed) } }
-                Each(DisconnectProcess.all) { _ in Do(Step.disconnect) { When(phase == .ready); Assign(phase, to: Phase.disconnected); Goto(Step.disconnect) } }
-                knownPeripheralPhase { phase == .disconnected || phase == .connected || phase == .discovering || phase == .ready }
-            })
-            peripheralModel
+                Each(BeginDiscoveryProcess.all) { _ in Do(Step.beginDiscovery, when: phase == .connected) { phase.set(Phase.discovering); Goto(Step.beginDiscovery) } }
+                Each(FinishDiscoveryProcess.all) { _ in Do(Step.finishDiscovery, when: phase == .discovering) { phase.set(Phase.ready); Goto(Step.finishDiscovery) } }
+                Each(DiscoveryFailedProcess.all) { _ in Do(Step.discoveryFailed, when: phase == .discovering) { phase.set(Phase.connected); Goto(Step.discoveryFailed) } }
+                Each(DisconnectProcess.all) { _ in Do(Step.disconnect, when: phase == .ready) { phase.set(Phase.disconnected); Goto(Step.disconnect) } }
+                Invariant("knownPeripheralPhase") { phase == .disconnected || phase == .connected || phase == .discovering || phase == .ready }
+            }
         }
     }
 
@@ -84,23 +81,23 @@ public actor Device: Identifiable {
     public var state: PeripheralModel.State { machine.state }
 
     func connected() async throws {
-        _ = try machine.send(.connected)
+        try machine.send(.connected)
     }
 
     public func discoverServices(_ uuids: [CBUUID]? = nil) async throws -> [CBService] {
         guard let peripheral else { throw BleError.notReady }
         guard try machine.isEnabled(.beginDiscovery) else { throw BleError.notReady }
-        _ = try machine.send(.beginDiscovery)
+        try machine.send(.beginDiscovery)
         return try await withCheckedThrowingContinuation { servicesContinuation = $0; peripheral.discoverServices(uuids) }
     }
 
     func finishedDiscoveringServices(_ error: (any Error)?) async {
         do {
             if let error {
-                _ = try machine.send(.discoveryFailed)
+                try machine.send(.discoveryFailed)
                 servicesContinuation?.resume(throwing: error)
             } else {
-                _ = try machine.send(.finishDiscovery)
+                try machine.send(.finishDiscovery)
                 servicesContinuation?.resume(returning: peripheral?.services ?? [])
             }
         } catch {

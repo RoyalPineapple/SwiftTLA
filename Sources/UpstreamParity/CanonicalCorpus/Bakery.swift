@@ -1,3 +1,6 @@
+// Processes choose numbered tickets and wait their turn to enter a critical section.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Bakery-Boulangerie/Bakery.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -23,11 +26,11 @@ package struct BakeryModel: Sendable {
             let Inv = Invariant()
             let MutualExclusion = Invariant()
 
-            let Bakery = Algorithm(scoped: { scope in
-                let num: SharedVariable<[Int: Int]> = scope.sharedVar(in: Functions(from: Procs, to: Nat))
-                let flag: SharedVariable<[Int: Bool]> = scope.sharedVar(in: Functions(from: Procs, to: Set<Bool>([false, true])))
+            Algorithm("Bakery") { scope in
+                let num: SharedVariable<[Int: Int]> = scope.sharedVar(initiallyIn: Functions(from: Procs, to: Nat))
+                let flag: SharedVariable<[Int: Bool]> = scope.sharedVar(initiallyIn: Functions(from: Procs, to: Set<Bool>([false, true])))
 
-                Each(Procs, fairness: .weak(excluding: [Label.ncs]), scoped: { (selfID: ProcessIdentifier<Int>, scope: ProcessScope) in
+                Each(Procs, fairness: .weak(excluding: [Label.ncs])) { (selfID: ProcessIdentifier<Int>, scope: ProcessScope) in
                     let unchecked: LocalVariable<Set<Int>> = scope.localVar(in: Subsets(of: Procs))
                     let max: LocalVariable<Int> = scope.localVar(in: Nat)
                     let nxt: LocalVariable<Int> = scope.localVar(in: Procs)
@@ -39,50 +42,50 @@ package struct BakeryModel: Sendable {
 
                     Do(Label.e1) {
                         Either {
-                            Assign(flag[selfID], to: !flag[selfID])
+                            flag[selfID].set(!flag[selfID])
                             Goto(Label.e1)
                         } or: {
-                            Assign(flag[selfID], to: true)
-                            Assign(unchecked, to: Procs.removing(selfID))
-                            Assign(max, to: 0)
+                            flag[selfID].set(true)
+                            unchecked.set(Procs.removing(selfID))
+                            max.set(0)
                         }
                     }
 
                     While(Label.e2, !unchecked.isEmpty) {
                         With(unchecked) { process in
-                            Assign(unchecked, to: unchecked.removing(process))
-                            If(num[process] > max) { Assign(max, to: num[process]) }
+                            unchecked.remove(process)
+                            If(num[process] > max) { max.set(num[process]) }
                         }
                     }
 
                     Do(Label.e3) {
                         Either {
                             With(Nat) { ticket in
-                                Assign(num[selfID], to: ticket.expr)
+                                num[selfID].set(ticket.expr)
                                 Goto(Label.e3)
                             }
                         } or: {
                             With(Nat) { ticket in
                                 When(ticket.expr > max)
-                                Assign(num[selfID], to: ticket.expr)
+                                num[selfID].set(ticket.expr)
                             }
                         }
                     }
 
                     Do(Label.e4) {
                         Either {
-                            Assign(flag[selfID], to: !flag[selfID])
+                            flag[selfID].set(!flag[selfID])
                             Goto(Label.e4)
                         } or: {
-                            Assign(flag[selfID], to: false)
-                            Assign(unchecked, to: Procs.removing(selfID))
+                            flag[selfID].set(false)
+                            unchecked.set(Procs.removing(selfID))
                         }
                     }
 
                     Do(Label.w1) {
                         If(!unchecked.isEmpty) {
                             With(unchecked) { process in
-                                Assign(nxt, to: process.expr)
+                                nxt.set(process.expr)
                                 When(!flag[process])
                                 Goto(Label.w2)
                             }
@@ -92,7 +95,7 @@ package struct BakeryModel: Sendable {
                     Do(Label.w2) {
                         When(num[nxt] == 0 || num[selfID] < num[nxt]
                             || (num[selfID] == num[nxt] && selfID < nxt))
-                        Assign(unchecked, to: unchecked.removing(nxt.expr))
+                        unchecked.remove(nxt.expr)
                         Goto(Label.w1)
                     }
 
@@ -101,11 +104,11 @@ package struct BakeryModel: Sendable {
                     Do(Label.exit) {
                         Either {
                             With(Nat) { ticket in
-                                Assign(num[selfID], to: ticket.expr)
+                                num[selfID].set(ticket.expr)
                                 Goto(Label.exit)
                             }
                         } or: {
-                            Assign(num[selfID], to: 0)
+                            num[selfID].set(0)
                             Goto(Label.ncs)
                         }
                     }
@@ -134,7 +137,7 @@ package struct BakeryModel: Sendable {
                     Inv {
                         typeOK && activeTicket && choosingFlag && distinctNext
                             && excludesSelf && observedMaximum
-                            && ForAll(in: Procs) { (other: WithValue<Int>) -> Expr<Bool> in
+                            && Procs.allSatisfy { (other: WithValue<Int>) -> Expr<Bool> in
                                 let passedMember = (At(Label.w1, selfID) || At(Label.w2, selfID))
                                     && !unchecked.contains(other) && other != selfID
                                 let criticalMember = At(Label.cs, selfID) && other != selfID
@@ -151,25 +154,23 @@ package struct BakeryModel: Sendable {
                                 return !(passedMember || criticalMember) || before
                             }
                     }
-                })
+                }
 
                 MutualExclusion {
-                    ForAll(in: Procs) { first in
-                        ForAll(in: Procs) { second in
+                    Procs.allSatisfy { first in
+                        Procs.allSatisfy { second in
                             first == second || !(At(Label.cs, first) && At(Label.cs, second))
                         }
                     }
                 }
-            })
-            Bakery
+            }
             InitialStates(satisfying: Inv)
-            let MCBakery = Validation {
+            Validation("MCBakery") {
                 Bind(N, to: 2)
                 Bind(MaxNat, to: 2)
             }.checking(only: [MutualExclusion, TypeOK, Inv])
                 .checkingDeadlock(false)
                 .behavior(.initialAndNext)
-            MCBakery
         }
     }
 }

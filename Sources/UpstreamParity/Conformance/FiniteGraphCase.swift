@@ -211,7 +211,18 @@ func tlaLocationArgumentIdentity(_ argument: String) -> String {
             identity.append(character)
         }
     }
-    return identity
+    // TLC may print a record's fields in a different order from the declared action.
+    guard identity.first == "[", identity.last == "]",
+          let fields = try? TLCValueParser.components(String(identity.dropFirst().dropLast())),
+          fields.count > 1 else { return identity }
+    var names: Set<Substring> = []
+    for field in fields {
+        guard let arrow = field.range(of: "|->") else { return identity }
+        let name = field[..<arrow.lowerBound]
+        guard name.range(of: #"^[A-Za-z_][A-Za-z_0-9]*$"#, options: .regularExpression) != nil,
+              names.insert(name).inserted else { return identity }
+    }
+    return "[" + fields.sorted().joined(separator: ",") + "]"
 }
 
 /// The source-controlled declaration for a finite conformance case.
@@ -229,6 +240,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             case assumptionsOnly = "assumptions-only"
         }
         package let comparisonMode: ComparisonMode
+        package let referenceCommunityModules: Bool
         package let assumptionExpectation: ValidationExpectation?
         package let sourceModel: FiniteGraphSourceModel
         package let scenario: String?
@@ -244,7 +256,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let timeoutSeconds: TimeInterval
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case id, sourceModel, scenario, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds, comparisonMode, assumptionExpectation
+            case id, sourceModel, scenario, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds, comparisonMode, assumptionExpectation, referenceCommunityModules
         }
 
         package struct Dependency: Decodable, Sendable {
@@ -267,6 +279,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             id = try container.decode(String.self, forKey: .id)
             sourceModel = try container.decode(FiniteGraphSourceModel.self, forKey: .sourceModel)
             comparisonMode = try container.decodeIfPresent(ComparisonMode.self, forKey: .comparisonMode) ?? .exhaustive
+            referenceCommunityModules = try container.decodeIfPresent(Bool.self, forKey: .referenceCommunityModules) ?? false
             assumptionExpectation = try container.decodeIfPresent(ValidationExpectation.self, forKey: .assumptionExpectation)
             scenario = try container.decodeIfPresent(String.self, forKey: .scenario)
             module = try container.decode(String.self, forKey: .module)

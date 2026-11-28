@@ -38,9 +38,9 @@ struct ConfiguredSequenceDomainMachine {
             let lengths = scope.parameter(as: Set<Int>.self, in: Set<Set<Int>>([
                 Set<Int>([]), Set<Int>([0]), Set<Int>([1, 2]), Set<Int>([0, 1, 2]), Set<Int>([-1, 0])
             ]))
-            let row = scope.sharedVar(in: Sequences(of: members, lengths: lengths))
-            let sorted = scope.sharedVar(in: SortedSequences(of: members, lengths: lengths))
-            let zeroBased = scope.sharedVar(in: ZeroBasedSequences(of: members, lengths: lengths))
+            let row = scope.sharedVar(initiallyIn: Sequences(of: members, lengths: lengths))
+            let sorted = scope.sharedVar(initiallyIn: SortedSequences(of: members, lengths: lengths))
+            let zeroBased = scope.sharedVar(initiallyIn: ZeroBasedSequences(of: members, lengths: lengths))
             Do(Step.stay) { Skip() }
             Invariant("Bounded") { row.count <= 2 && sorted.count <= 2 && zeroBased.count <= 2 }
             let empty = Validation(label: "Empty") {
@@ -87,7 +87,7 @@ struct NominalSequenceMachine {
             let members = scope.parameter(as: Set<Choice>.self,
                 in: Set<Set<Choice>>([Set<Choice>([Choice.one, Choice.two])]))
             let limit = scope.parameter(as: Int.self, in: 0...2)
-            let row = scope.sharedVar(in: Sequences(of: members, lengths: IntRange(0, through: limit)))
+            let row = scope.sharedVar(initiallyIn: Sequences(of: members, lengths: IntRange(0, through: limit)))
             Do(Step.stay) { Skip() }
             Invariant("Bounded") { row.count <= limit }
             let nominal = Validation(label: "Nominal") {

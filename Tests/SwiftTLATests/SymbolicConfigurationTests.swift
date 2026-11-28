@@ -9,7 +9,8 @@ struct SymbolicConfigurationTests {
             members: [1, 2], input: input, limit: 1_000_000_000)
         var machine = try SymbolicConfigurationModel.makeMachine(configuration: configuration)
         #expect(machine.state.sequence == input)
-        #expect(try machine.send(.append).after.sequence == input + [1])
+        try machine.send(.append)
+        #expect(machine.state.sequence == input + [1])
 
         let empty = try SymbolicConfigurationModel.Configuration(members: [], input: [], limit: 0)
         #expect(try SymbolicConfigurationModel.makeMachine(configuration: empty).state.sequence.isEmpty)

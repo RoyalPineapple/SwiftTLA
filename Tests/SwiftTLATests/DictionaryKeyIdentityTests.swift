@@ -19,12 +19,12 @@ struct DictionaryKeyIdentityTests {
         #expect(machine.state.links == [.first: .second, .second: .first])
         #expect(machine.state.labels == [.first: .first, .second: .second])
 
-        let transition = try machine.send(.update)
-        #expect(transition.before.values[.first] == 1)
-        #expect(transition.after.values == [.first: 2, .second: 2])
-        #expect(transition.after.labels == [.first: .second, .second: .second])
-        #expect(transition.after.links == transition.before.links)
-        #expect(machine.state == transition.after)
+        let transitionBefore = machine.state
+        try machine.send(.update)
+        #expect(transitionBefore.values[.first] == 1)
+        #expect(machine.state.values == [.first: 2, .second: 2])
+        #expect(machine.state.labels == [.first: .second, .second: .second])
+        #expect(machine.state.links == transitionBefore.links)
     }
 
     @Test func generatedEnumProjectionRejectsOtherRepresentations() {

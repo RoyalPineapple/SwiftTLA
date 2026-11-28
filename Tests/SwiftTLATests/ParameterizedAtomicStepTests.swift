@@ -28,9 +28,9 @@ struct ParameterizedAtomicStepTests {
         var machine = try ParameterizedAtomicSteps.makeMachine(configuration: .init(members: [0, 1]))
         #expect(try !machine.isEnabled(.transfer(source: 1, destination: 0)))
         #expect(try !machine.isEnabled(.select(member: 2)))
-        _ = try machine.send(.select(member: 1))
+        try machine.send(.select(member: 1))
         #expect(machine.state.value == 1 && machine.state.copied == 1)
-        _ = try machine.send(.transfer(source: 1, destination: 0))
+        try machine.send(.transfer(source: 1, destination: 0))
         #expect(machine.state.value == 0 && machine.state.copied == 0)
     }
 
@@ -86,7 +86,7 @@ struct ParameterizedAtomicStepTests {
 
         var machine = try ThreeArgumentActionModel.makeMachine()
         #expect(try machine.isEnabled(.transfer(source: 2, destination: 20, amount: 200)))
-        _ = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
+        try machine.send(.transfer(source: 2, destination: 20, amount: 200))
         #expect(machine.state.value == 222)
 
         let rendered = try ThreeArgumentActionModel.render()

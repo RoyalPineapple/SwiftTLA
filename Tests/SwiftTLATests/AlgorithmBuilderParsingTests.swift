@@ -48,6 +48,41 @@ import SwiftTLAMacros
         return try specification.loweredSourceModel()
     }
 
+    @Test("copy blocks bind both members to declared state fields of their own receiver")
+    func copyBlocksRequireDeclaredFields() throws {
+        func parseCopy(_ body: String) throws -> TLASpec {
+            parseAlgorithm(try parseSpecTestClosure("""
+            {
+                let counter = Algorithm { scope in
+                    let x = scope.sharedVar(initial: 2)
+                    let named = scope.sharedVar(_name: "second", initial: 3)
+                    let enabled = scope.sharedVar(initial: true)
+                    let alias = x
+                    Do(TestControlLabel.advance, in: State.self) { work in \(body) }
+                }
+                counter
+            }
+            """))
+        }
+        #expect(try parseCopy("work.second = work.x").diagnostics.isEmpty)
+        #expect(try parseCopy("work.second = -0x10").diagnostics.isEmpty)
+        for (body, detail) in [
+            ("work.enabled += 1", "target of += must be an Int"),
+            ("work.x += work.enabled", "amount added by += must be an Int"),
+            ("work.x += other.second", "whole fields of work"),
+            ("work.enabled = 0", "requires an Int state field"),
+            ("work.alias = 0", "Declare the state field 'alias'"),
+            ("work.x = x", "whole fields of work"),
+            ("work.named = work.x", "Declare the state field 'named'"),
+            ("work.x = work.alias", "Declare the state field 'alias'"),
+            ("work.second = other.x", "whole fields of work"),
+            ("work.x = work.second + 1", "whole fields of work"),
+        ] {
+            let parsed = try parseCopy(body)
+            #expect(parsed.diagnostics.contains { $0.message.contains(detail) })
+        }
+    }
+
     @Test("process steps reject separate fairness declarations inside Each")
     func processStepFairnessRequiresEachPolicy() throws {
         let parsed = parseAlgorithm(try parseSpecTestClosure("""
@@ -372,7 +407,7 @@ import SwiftTLAMacros
         let source = """
         {
             let ZeroBasedCount = Algorithm(scoped: { scope in
-                let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
+                let input = scope.sharedVar(_name: "input", initiallyIn: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(1, 2),
                     lengths: 1...2
                 ))
@@ -393,25 +428,25 @@ import SwiftTLAMacros
         #expect(!module.contains("Len(input)"))
     }
 
-    @Test("Algorithm parser preserves tuple type through With and quantifier bindings")
-    func parsesBoundTupleCounts() throws {
+    @Test("Algorithm parser preserves tuple type through With and quantifier bindings", arguments: ["tuple", "Len", "Cardinality", "PrintT", "TLCGet"])
+    func parsesBoundTupleCounts(binder: String) throws {
         let source = """
         {
-            Extends(.sequences)
+            \(binder == "TLCGet" ? "Extends(.tlc)" : "")
             let BoundTupleCount = Algorithm(scoped: { scope in
                 let pending = scope.sharedVar(_name: "pending",
                     initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>.literal(1))
                 )
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
-                    With(pending) { tuple in
-                        Assign(count, to: tuple.expr.count)
+                    With(pending) { \(binder) in
+                        Assign(count, to: \(binder).expr.count)
                     }
                     Stop()
                 }
                 Invariant("TupleLengths") {
-                    ForAll(in: pending.expr) { tuple in
-                        tuple.expr.count == 1
+                    ForAll(in: pending.expr) { \(binder) in
+                        \(binder).expr.count == 1
                     }
                 }
             })
@@ -421,7 +456,18 @@ import SwiftTLAMacros
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let module = try compile(parsed, named: "BoundTupleCount").render().tlaBundle.tla
+        let compilation = try compile(parsed, named: "BoundTupleCount")
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let invariant = try #require(compilation.semantics.behavior.invariants.first)
+        #expect(try runtime.invariantHolds(invariant, in: initial))
+        let module = try compilation.render().tlaBundle.tla
+        let predicate = try #require(module.split(separator: "\n").first { $0.hasPrefix("TupleLengths ==") })
+        let quantifier = try #require(predicate.range(of: "\\A "))
+        let formalBinder = try #require(predicate[quantifier.upperBound...].split(separator: " ").first)
+        #expect(!["Len", "Cardinality", "TLCGet"].contains(String(formalBinder)))
+        #expect(predicate.contains("Len(\(formalBinder))"))
+        if binder == "PrintT" { #expect(formalBinder == "PrintT") }
         #expect(module.components(separatedBy: "Len(").count == 3)
     }
 
@@ -436,7 +482,7 @@ import SwiftTLAMacros
                     TupleExpr<Node>.literal(Node.two, Node.one)
                 )
                 let frontier = scope.sharedVar(_name: "frontier",
-                    in: SetExpr<TupleExpr<Node>>.literal(
+                    initiallyIn: SetExpr<TupleExpr<Node>>.literal(
                         TupleExpr<Node>.literal(Node.one, Node.two),
                         TupleExpr<Node>.literal(Node.two, Node.one)
                     )
@@ -797,8 +843,80 @@ import SwiftTLAMacros
         ])
     }
 
-    @Test("Unsupported for-loop body source is diagnosed")
-    func rejectsUnsupportedForLoopBodySource() throws {
+    @Test("Bounded loops preserve scalar filters and diagnose unsupported bodies")
+    func preservesScalarLoopFiltersAndRejectsUnsupportedBodies() throws {
+        let cases: [(condition: String, selected: [Int], matches: (Int) -> Bool)] = [
+            ("", [0, 1, 2, 3], { _ in true }),
+            ("true", [0, 1, 2, 3], { _ in true }),
+            ("false", [], { _ in false }),
+            ("(false)", [], { _ in false }),
+            ("include", [], { _ in false }),
+            ("(include)", [], { _ in false }),
+            ("flag", [0, 1, 2, 3], { _ in true }),
+            ("!flag", [], { _ in !true }),
+            ("flag == include", [], { _ in true == false }),
+            ("flag != include", [0, 1, 2, 3], { _ in true != false }),
+            ("index == 2", [2], { $0 == 2 }),
+            ("index >= 1 && index <= 2", [1, 2], { $0 >= 1 && $0 <= 2 }),
+            ("index == 0 || 6 / index > 2", [0, 1, 2], { $0 == 0 || 6 / $0 > 2 }),
+            ("index != 0 && 6 / index > 1", [1, 2, 3], { $0 != 0 && 6 / $0 > 1 }),
+            ("((index - 3) / 2) == 0", [2, 3], { (($0 - 3) / 2) == 0 }),
+            ("((index - 3) % 2) == (-1)", [0, 2], { (($0 - 3) % 2) == -1 }),
+            ("index % (-2) == 1", [1, 3], { $0 % (-2) == 1 }),
+            ("flag && index >= cutoff", [2, 3], { true && $0 >= 2 }),
+            ("!(index == 2)", [0, 1, 3], { !($0 == 2) }),
+            ("(index + 1) * 2 == 4", [1], { ($0 + 1) * 2 == 4 }),
+            ("`index` == 0", [0], { $0 == 0 })
+        ]
+        for (condition, selected, matches) in cases {
+            let built = #spec("FilteredBuilder") { scope in
+                Constant("index", 99)
+                let count = scope.sharedVar(initial: 0)
+                for index in 0...3 where matches(index) {
+                    SwiftTLA.Action("step\(index)") { count.becomes(1) }
+                }
+                SwiftTLA.Action("tail") { count.becomes(2) }
+            }
+            let expected = selected.map { "step\($0)" } + ["tail"]
+            let expectedValues = selected.map { _ in 1 } + [2]
+            #expect(built.actions.map(\.name) == expected)
+            let builtCompilation = try built.compile()
+            let builtRuntime = CompiledRuntime(compilation: builtCompilation)
+            let builtInitial = try #require(try builtRuntime.initialStates().first)
+            let builtCount = try #require(builtCompilation.layout.testVariableID(named: "count"))
+            #expect(try builtRuntime.successors(from: builtInitial).map {
+                try $0.state.value(for: builtCount)
+            } == expectedValues.map(CompiledValue.integer))
+
+            let filter = condition.isEmpty ? "" : " where \(condition)"
+            let syntax = Parser.parse(source: """
+            struct FilteredBuilder {
+                static var spec: TLASpec {
+                    #spec("FilteredBuilder") { scope in
+                        Constant("index", 99)
+                        let count = scope.sharedVar(initial: 0)
+                        let include = false
+                        let flag = true
+                        let cutoff = 2
+                        for index in 0...3\(filter) {
+                            SwiftTLA.Action("step\\(index)") { count.becomes(1) }
+                        }
+                        SwiftTLA.Action("tail") { count.becomes(2) }
+                    }
+                }
+            }
+            """)
+            let declaration = try #require(syntax.statements.first?.item.as(StructDeclSyntax.self))
+            let verified = try TLASpecVerifier.parseAndVerify(declaration)
+            #expect(verified.program.layout.actions.map { $0.declaration.name } == expected)
+            #expect(verified.api.actions.map(\.swiftIdentifier) == expected)
+            let runtime = CompiledRuntime(program: verified.program)
+            let initial = try #require(try runtime.initialStates().first)
+            let count = try #require(verified.program.layout.testVariableID(named: "count"))
+            #expect(try runtime.successors(from: initial).map {
+                try $0.state.value(for: count)
+            } == expectedValues.map(CompiledValue.integer))
+        }
         let source = """
         {
             for index in 1...1 {
@@ -991,7 +1109,8 @@ import SwiftTLAMacros
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "ThreeWith")
         let rendered = try specification.compile().render().tlaBundle.tla
-        #expect(rendered.components(separatedBy: "\\E ").count == 4)
+        let choose = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("choose ==") })
+        #expect(choose.components(separatedBy: "\\E ").count == 4)
     }
 
     @Test("parser preserves a bounded statement macro through compilation")
@@ -1267,11 +1386,11 @@ import SwiftTLAMacros
         let source = """
         {
             let FunctionDomain = Algorithm { scope in
-                let successors = scope.sharedVar(_name: "successors", in: Where(
+                let successors = scope.sharedVar(_name: "successors", initiallyIn: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
-                    ForAll(Node.all) { node in
-                        successor[node].cardinality == 1
+                    Node.all.allSatisfy { node in
+                        successor[node].count == 1
                     }
                 })
                 Do(TestControlLabel.done) { Stop() }
@@ -1508,20 +1627,46 @@ import SwiftTLAMacros
             RawLabel
         }
         """
+        enum Step: String, CaseIterable {
+            case start = "Begin"
+            case loop = "Repeat"
+            case finish = "\u{46}inish"
+        }
+        let declaration = try #require(Parser.parse(source: #"""
+        struct RawControlLabels {
+            enum Step: String, CaseIterable {
+                case start = "Begin"
+                case loop = "Repeat"
+                case finish = "\u{46}inish"
+            }
+        }
+        """#).statements.first?.item.as(StructDeclSyntax.self))
+        let enums = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
         let closure = try parseSpecTestClosure(source)
-        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure,
-            sourceTypes: .init(enums: [parserTestEnum("Step", cases: [
-                "start": .string("Begin"),
-                "loop": .string("Repeat"),
-                "finish": .string("Finish")
-            ])]))
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, sourceTypes: .init(enums: enums))
 
+        #expect(enums.first?.value(named: "finish") == .string("Finish"))
         #expect(parsed.diagnostics.isEmpty)
         let algorithm = try #require(parsed.sourceAlgorithms.first?.model)
-        #expect(algorithm.sequentialSteps.map(\.label.name) == ["Begin", "Repeat", "Finish"])
-        #expect(algorithm.sequentialSteps[0].statements == [.goto(.init(name: "Finish"))])
-        #expect(algorithm.sequentialSteps[1].statements == [.goto(.init(name: "Finish"))])
-        _ = try compile(parsed, named: "RawLabel")
+        #expect(algorithm.sequentialSteps.map(\.label.name).map { Array($0.utf8) }
+            == Step.allCases.map { Array($0.rawValue.utf8) })
+        #expect(algorithm.sequentialSteps[0].statements == [.goto(.init(name: Step.finish.rawValue))])
+        #expect(algorithm.sequentialSteps[1].statements == [.goto(.init(name: Step.finish.rawValue))])
+        let (compilation, evidence) = try parsed.compileRetainingSequentialControl()
+        let control = try #require(evidence)
+        let scheduled = try #require(control.scheduled.canonicalTraces(sourceWrites: false))
+        let lowered = try #require(control.lowered.canonicalTraces(sourceWrites: false))
+        #expect(scheduled == lowered)
+        let rendered = try compilation.render()
+        #expect(rendered.actions.map(\.sourceName) == control.authored.actions.map(\.label))
+        let built = try TLASpec("Parsed") {
+            Algorithm("RawLabel") {
+                Do(Step.start) { Goto(Step.finish) }
+                While(Step.loop, true) { Goto(Step.finish) }
+                Do(Step.finish) { Stop() }
+            }
+        }.compile().render()
+        #expect(rendered.tlaBundle.root.tla.utf8.elementsEqual(built.tlaBundle.root.tla.utf8))
     }
 
     @Test("Do, While, and Goto reject labels outside a registered enum")
@@ -1613,79 +1758,196 @@ import SwiftTLAMacros
             Counter
         }
         """
-        let closure = try parseSpecTestClosure(source)
-        let parsed = parseAlgorithm(
-            closure,
-            enums: [parserTestEnum(
-                "ParserNode",
-                cases: ["left": .string("left"), "right": .string("right")],
-                finiteValues: [.string("left"), .string("right")]
-            )]
-        )
-        let parserSpecification = try loweredSource(parsed, named: "Counter")
-        let parserCompilation = try parserSpecification.compile()
-        #expect(parserCompilation.description.variables.map(\.name) == ["pc", "count"])
-        #expect(parserCompilation.description.actions.map(\.name) == ["increment", "Terminating"])
-        #expect(parserCompilation.description.controlLocations.first?.owner == .process(
-            algorithm: "Counter",
-            declarationOrder: 0,
-            typeName: "ParserNode"
-        ))
-    }
-
-    @Test("parsed shared initializers retain and evaluate their formal expression")
-    func parsedSharedInitializerRetainsFormalExpression() throws {
-        let closure = try parseSpecTestClosure("""
-        { scope in
-            let count: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: 1 + 2)
+        for root in ["count", "pc"] {
+            let closure = try parseSpecTestClosure(source.replacingOccurrences(of: "_name: \"count\"",
+                    with: "_name: \"\(root)\""))
+            let parsed = parseAlgorithm(
+                closure,
+                enums: [parserTestEnum(
+                    "ParserNode",
+                    cases: ["left": .string("left"), "right": .string("right")],
+                    finiteValues: [.string("left"), .string("right")]
+                )]
+            )
+            let parserSpecification = try loweredSource(parsed, named: "Counter")
+            let parserCompilation = try parserSpecification.compile()
+            #expect(parserCompilation.description.variables.map(\.name) == [root == "pc" ? "pc_1" : "pc", root])
+            #expect(parserCompilation.description.actions.map(\.name) == ["increment", "Terminating"])
+            #expect(parserCompilation.description.controlLocations.first?.owner == .process(
+                algorithm: "Counter",
+                declarationOrder: 0,
+                typeName: "ParserNode"
+            ))
         }
-        """)
-        let parsed = SpecParser.parseSpecClosure(named: "SharedInitializer", closure)
-        #expect(parsed.diagnostics.isEmpty)
-
-        let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
-
-        #expect(parsedVariable.initialization == .expression(.add(.value(.int(1)), .value(.int(2)))))
-
-        let compilation = try parsed.compile()
-        let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-        let count = try #require(TLAStateProjection.Token(validating: "count"))
-        #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
     }
 
-    @Test("parsed and built literal initializers have one compilation identity")
+    @Test("parsed shared initializers retain raw values and explicit formal expressions")
+    func parsedSharedInitializersRetainValueContext() throws {
+        let raw = TLASpec("SharedInitializer") { scope in
+            let _: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: 1 + 2)
+        }
+        let formal = TLASpec("SharedInitializer") { scope in
+            let _: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: Expr<Int>(1) + 2)
+        }
+        let cases: [(String, VariableInitialization, TLASpec)] = [
+            ("1 + 2", .value(.int(3)), raw),
+            ("Expr<Int>(1) + 2", .expression(.add(.value(.int(1)), .value(.int(2)))), formal),
+        ]
+        for (source, expected, built) in cases {
+            let closure = try parseSpecTestClosure("""
+            { scope in
+                let count: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: \(source))
+            }
+            """)
+            let parsed = SpecParser.parseSpecClosure(named: "SharedInitializer", closure)
+            try #require(parsed.diagnostics.isEmpty)
+            let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
+            #expect(parsedVariable.initialization == expected)
+            let compilation = try parsed.compile()
+            let builtCompilation = try built.compile()
+            #expect(compilation.identity == builtCompilation.identity)
+            let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+            let count = try #require(TLAStateProjection.Token(validating: "count"))
+            #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
+        }
+
+        let dependentCases: [(Int, String, Int?, [Int]?)] = [
+            (0, "count + 1", 1, nil),
+            (.max, "count + 1", nil, [.max, 1]),
+            (.max, "1 + count", nil, [1, .max]),
+            (.min, "count + (-1)", nil, [.min, -1]),
+            (.max - 1, "(count + 1) + (count + 2)", nil, [.max - 1, 2]),
+            (.max, "(count + 1) + (count + 2)", nil, [.max, 1]),
+            (-2, "(count + 1) + (count + 2)", -1, nil),
+            (0, "(count + 1) + (count + 2)", 3, nil)
+        ]
+        for (initial, expression, expected, operands) in dependentCases {
+            for inAlgorithm in [false, true] {
+                let declarations = """
+                let count = scope.sharedVar(initial: \(initial))
+                let copied = scope.sharedVar(initial: \(expression))
+                """
+                let body = inAlgorithm ? """
+                {
+                    let algorithm = Algorithm(scoped: { scope in
+                        \(declarations)
+                    })
+                    algorithm
+                }
+                """ : "{ scope in \(declarations) }"
+                let parsed = try SpecParser.parseSpecClosure(named: "SharedInitializer",
+                    parseSpecTestClosure(body)).compile()
+                let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: parsed))
+                let outcomes = try CompiledRuntime(program: program).initialOutcomes()
+                let count = try #require(TLAStateProjection.Token(validating: "count"))
+                let copied = try #require(TLAStateProjection.Token(validating: "copied"))
+                if let expected {
+                    #expect(outcomes.failures.isEmpty)
+                    try #require(outcomes.states.count == 1)
+                    let projection = try outcomes.states[0].projection(using: program.layout)
+                    #expect(projection.value(for: count) == .int(initial))
+                    #expect(projection.value(for: copied) == .int(expected))
+                } else {
+                    let operands = try #require(operands)
+                    #expect(outcomes.states.isEmpty)
+                    try #require(outcomes.failures.count == 1)
+                    let failure = outcomes.failures[0]
+                    #expect(failure.failure == .integerOverflow(.addition, operands: operands))
+                    #expect(failure.site == .initializer(1))
+                    #expect(try failure.formalBindingsBeforeFailure() == TLAStateProjection(validating: [
+                        .init(token: count, value: .int(initial))
+                    ]))
+                }
+            }
+        }
+    }
+
+    @Test("parsed and built literal initializers and state reads preserve their values and compilation identity")
     func parsedAndBuiltLiteralInitializersShareIdentity() throws {
-        let closure = try parseSpecTestClosure("""
-        { scope in
-            let count = scope.sharedVar(_name: "count", initial: 1)
+        func built<Value: TLAValueType>(_ value: Value) -> TLASpec {
+            TLASpec("LiteralInitializer") { scope in
+                let _ = scope.sharedVar(_name: "count", initial: value)
+            }
         }
-        """)
-        let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
-        let built = try TLASpec("LiteralInitializer") { scope in
-            let _ = scope.sharedVar(_name: "count", initial: 1)
-        }.compile()
-
-        #expect(parsed.identity == built.identity)
+        let integerCases: [(String, Int)] = [
+            ("0", 0), ("-0", 0), ("00012", 12),
+            ("1_000_000_001", 1_000_000_001), ("-1_000_000_001", -1_000_000_001),
+            ("0b1010_0101", 165), ("-0b1010_0101", -165),
+            ("0o17", 15), ("-0o17", -15),
+            ("0xCA_FE", 51_966), ("-0xca_fe", -51_966),
+            ("9223372036854775807", .max), ("-9223372036854775808", .min),
+            ("0x7fff_ffff_ffff_ffff", .max), ("-0x8000_0000_0000_0000", .min)
+        ]
+        var cases: [(String, TLASpec, TLAValue)] = integerCases.map { ($0.0, built($0.1), .int($0.1)) }
+        cases += [
+            ("true", built(true), .bool(true)),
+            ("\"one\"", built("one"), .string("one")),
+            ("[1]", built([1]), .tuple([.int(1)]))
+        ]
+        for (source, specification, expected) in cases {
+            let built = try specification.compile()
+            for inAlgorithm in [false, true] {
+                let declaration = """
+                let count = scope.sharedVar(initial: \(source))
+                let copied = scope.sharedVar(initial: count)
+                """
+                let body = inAlgorithm ? """
+                {
+                    let algorithm = Algorithm(scoped: { scope in
+                        \(declaration)
+                    })
+                    algorithm
+                }
+                """ : "{ scope in \(declaration) }"
+                let closure = try parseSpecTestClosure(body)
+                let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
+                if !inAlgorithm {
+                    let literal = try SpecParser.parseSpecClosure(named: "LiteralInitializer",
+                        parseSpecTestClosure("{ scope in let count = scope.sharedVar(initial: \(source)) }")).compile()
+                    #expect(literal.identity == built.identity, "literal initializer \(source)")
+                }
+                #expect(parsed.layout.variables.count == 2)
+                #expect(parsed.semantics.behavior.actions.isEmpty)
+                let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: parsed))
+                let outcomes = try CompiledRuntime(program: program).initialOutcomes()
+                #expect(outcomes.failures.isEmpty)
+                try #require(outcomes.states.count == 1)
+                let count = try #require(TLAStateProjection.Token(validating: "count"))
+                let copied = try #require(TLAStateProjection.Token(validating: "copied"))
+                let projection = try outcomes.states[0].projection(using: parsed.layout)
+                #expect(projection.value(for: count) == expected,
+                    "\(inAlgorithm ? "Algorithm" : "spec") initializer \(source)")
+                #expect(projection.value(for: copied) == expected,
+                    "\(inAlgorithm ? "Algorithm" : "spec") state read of \(source)")
+            }
+        }
     }
 
     @Test("parsed initial domains retain state dependencies")
     func parsedInitialDomainsRetainStateDependencies() throws {
         let closure = try parseSpecTestClosure("""
         { scope in
-            let limit = scope.sharedVar(_name: "limit", initial: 2)
-            let choice = scope.sharedVar(_name: "choice", in: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
+            let limit = scope.sharedVar(_name: "limit", initiallyIn: 1...2)
+            let choice = scope.sharedVar(_name: "choice", initiallyIn: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
                 value <= limit
             })
         }
         """)
         let parsed = SpecParser.parseSpecClosure(named: "DependentInitialDomain", closure)
         let compilation = try parsed.compile()
-        let choice = try #require(compilation.layout.testVariableID(named: "choice"))
-        let states = try CompiledRuntime(compilation: compilation).initialStates()
-
-        #expect(Set(try states.map {
-            try $0.value(for: choice).rendered(using: compilation.layout)
-        }) == [.int(1), .int(2)])
+        let limit = try #require(TLAStateProjection.Token(validating: "limit"))
+        let choice = try #require(TLAStateProjection.Token(validating: "choice"))
+        let outcomes = try CompiledRuntime(compilation: compilation).initialOutcomes()
+        #expect(outcomes.failures.isEmpty)
+        #expect(outcomes.states.count == 3)
+        let pairs = try outcomes.states.map { state -> TLAValue in
+            let projection = try state.projection(using: compilation.layout)
+            return .tuple([try #require(projection.value(for: limit)),
+                           try #require(projection.value(for: choice))])
+        }
+        #expect(Set(pairs) == [.tuple([.int(1), .int(1)]),
+                              .tuple([.int(2), .int(1)]),
+                              .tuple([.int(2), .int(2)])])
     }
 
     @Test("unsupported variable initializers fail during parsing")

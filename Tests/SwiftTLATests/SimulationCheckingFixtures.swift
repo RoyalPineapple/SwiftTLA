@@ -39,7 +39,7 @@ struct LastCandidateGenerator: RandomNumberGenerator {
 struct ConstrainedInitialSafetySimulationModel {
     static var spec: TLASpec {
         #spec("ConstrainedInitialSafetySimulation") { scope in
-            let value = scope.sharedVar(in: IntRange(0, through: 1))
+            let value = scope.sharedVar(initiallyIn: IntRange(0, through: 1))
             Constraint(value == 0)
             Invariant("OnlyZero") { value == 0 }
         }
@@ -128,6 +128,7 @@ struct SampledFairTemporalModel {
             advance
             stay
             WeakFairness(advance)
+            Constraint(value == 0)
             let EventuallyOne = Temporal()
             EventuallyOne(.eventually(value == 1))
             let sampled = Validation {}.checking(only: [EventuallyOne])

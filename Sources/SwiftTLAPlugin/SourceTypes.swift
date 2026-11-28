@@ -23,13 +23,26 @@ package struct SourceEnum: Sendable {
     let cases: [(name: String, value: TLAValue)]
     let finiteValues: [TLAValue]
     let isFiniteDomain: Bool
+    let supportsOptional: Bool
 
     package init(typeName: String, cases: [(name: String, value: TLAValue)] = [],
-                 finiteValues: [TLAValue]? = nil, isFiniteDomain: Bool = false) {
+                 finiteValues: [TLAValue]? = nil, isFiniteDomain: Bool = false, supportsOptional: Bool = false) {
         self.typeName = typeName
         self.cases = cases
         self.finiteValues = finiteValues ?? cases.map(\.value)
         self.isFiniteDomain = isFiniteDomain
+        self.supportsOptional = supportsOptional
+    }
+
+    var stringRawValues: [(TLAValue, String)]? {
+        var result: [(TLAValue, String)] = []
+        for entry in cases {
+            switch entry.value {
+            case .string(let raw), .constant(let raw): result.append((entry.value, raw))
+            default: return nil
+            }
+        }
+        return result.isEmpty ? nil : result
     }
 
     func value(named name: String) -> TLAValue? {
@@ -65,9 +78,15 @@ final class SourceTypeResolver {
     private var types: [String: ResolvedSourceType] = [:]
 
     init(metadata: SourceTypeMetadata = .init()) {
-        enums = CompiledEnums(cases: Dictionary(uniqueKeysWithValues: metadata.enums.map { declaration in
-            (declaration.typeName, declaration.cases.map { (name: $0.name, value: CompiledValue(formal: $0.value)) })
-        }))
+        var cases: [String: [(name: String, value: CompiledValue)]] = [:]
+        for declaration in metadata.enums {
+            let members = declaration.cases.map { (name: $0.name, value: CompiledValue(formal: $0.value)) }
+            cases[declaration.typeName] = members
+            if declaration.supportsOptional {
+                cases[declaration.typeName + "?"] = [("$nil", .string("none"))] + members
+            }
+        }
+        enums = CompiledEnums(cases: cases)
         self.metadata = metadata
         let names = Set(metadata.enums.map(\.typeName)).union(metadata.structs.keys)
         var nominalNames = Dictionary(grouping: names) { TokenSyntax.identifier($0).sourceIdentifierName }
@@ -91,6 +110,19 @@ final class SourceTypeResolver {
 
     func resolve(_ source: String) throws -> CompiledValueType {
         try resolveType(source).type
+    }
+
+    func normalizedStateType(_ spelling: String?, resolved: CompiledValueType?)
+        -> (spelling: String?, resolved: CompiledValueType?) {
+        guard let resolved else { return (spelling, nil) }
+        let primitives: [CompiledValueType] = [.int, .bool, .string]
+        if primitives.contains(resolved) {
+            let canonical = resolved.swiftType
+            if (try? resolve(canonical)) == resolved { return (canonical, nil) }
+            return (spelling, resolved)
+        }
+        let needsWitness = spelling == nil || ["Int", "Bool", "String"].contains(spelling ?? "")
+        return (spelling, needsWitness ? resolved : nil)
     }
 
     func formalShape(for source: String) throws -> FormalValueShape {
@@ -136,6 +168,17 @@ final class SourceTypeResolver {
 
     private func resolveUncached(_ type: TypeSyntax, resolving: Set<String>, sourceLocated: Bool) throws -> ResolvedSourceType {
         let source = type.trimmedDescription
+        func optional(_ wrapped: ResolvedSourceType) throws -> ResolvedSourceType {
+            guard case .named(let name) = wrapped.type,
+                  let declaration = metadata.enums.first(where: { $0.typeName == name && $0.supportsOptional }) else {
+                throw CompiledValueType.diagnostic("type", "a modeled optional requires a NoneEncodedOptionalElement")
+            }
+            let identity = name + "?"
+            return .init(type: .named(identity), view: .finite(typeName: identity, values: [.string("none")] + declaration.cases.map(\.value)))
+        }
+        if let syntax = type.as(OptionalTypeSyntax.self) {
+            return try optional(resolveType(syntax.wrappedType, resolving: resolving, sourceLocated: sourceLocated))
+        }
         if let array = type.as(ArrayTypeSyntax.self) {
             let element = try resolveType(array.element, resolving: resolving, sourceLocated: sourceLocated)
             return .init(type: .array(element.type), view: .sequence(element.view))
@@ -201,6 +244,7 @@ final class SourceTypeResolver {
             case "Bool": return .init(type: .bool, view: .boolean)
             default: return .init(type: .string, view: .string)
             }
+        case "Optional": return try optional(resolveArguments(expecting: 1)[0])
         case "Set", "SetExpr":
             let element = try resolveArguments(expecting: 1)[0]
             return .init(type: .set(element.type), view: .set(element.view))
@@ -306,11 +350,22 @@ final class SourceTypeResolver {
                     views.append(.init(name: field, shape: value.view))
                 }
             }
+            if declaration.hasTLATupleAttribute {
+                let layout = CompiledTupleLayout(fields.map(\.type), declaration:
+                    .init(name: Self.qualifiedName(of: declaration), labels: fields.map(\.name)))
+                return .init(type: .tuple(layout), view: .tuple(views.map(\.shape)))
+            }
             return .init(type: .nominalRecord(Self.qualifiedName(of: declaration), fields), view: .record(views))
         }
         let view: FormalValueShape
         if let declaration = metadata.enums.first(where: { $0.typeName == name && $0.isFiniteDomain }) {
-            view = .finite(typeName: identity, values: declaration.finiteValues)
+            var values = declaration.finiteValues
+            if Set(declaration.cases.map(\.value)).count < declaration.cases.count {
+                // Normalized aliases denote one finite-view member.
+                var seen: Set<TLAValue> = []
+                values = values.filter { seen.insert($0).inserted }
+            }
+            view = .finite(typeName: identity, values: values)
         } else {
             view = .unsupported(name)
         }

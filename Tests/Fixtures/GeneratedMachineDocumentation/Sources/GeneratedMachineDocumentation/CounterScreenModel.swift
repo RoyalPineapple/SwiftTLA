@@ -15,15 +15,15 @@ struct CounterScreenModel {
 
     static var spec: TLASpec {
         #spec {
-            let counterScreenModel = Algorithm(scoped: { scope in
+            let counterScreenModel = Algorithm { scope in
                 let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in
                     Do(Step.advance, when: value < 1) {
-                        Assign(value, to: value + 1)
+                        value += 1
                         Stop()
                     }
                 }
-            })
+            }
             counterScreenModel
         }
     }

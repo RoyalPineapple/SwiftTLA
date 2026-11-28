@@ -61,6 +61,9 @@ struct CompiledLowerer {
     private let authoredAlgorithm: AlgorithmModel?
     private let reservedRenderedNames: Set<String>
     private let rootOperators: [String: OperatorID]
+    private let importedOperatorIDs: Set<OperatorID>
+    private let checkingBodyBinderOrdinals: Bool
+    private let sequentialAssignmentTargets: [String: [String: String]]
     private var operatorArities: [OperatorID: Int]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal: Int
@@ -71,18 +74,24 @@ struct CompiledLowerer {
     private(set) var operators = CompiledOperators()
     private(set) var modelValueNames: Set<String> = []
     private(set) var requiredStandardModules: Set<StandardModule> = []
+    private(set) var orderedActionBodyBinderOrdinals: [ActionID: Range<Int>] = [:]
+    private(set) var orderedSequentialAssignmentTargets: [ActionID: [BinderID: VariableID]] = [:]
 
     init(
         spec: TLASpec,
         closure: FormalModuleClosure,
         layout: CompiledLayout,
-        incomingModuleParameters: [FormalModuleReplacement] = []
+        incomingModuleParameters: [FormalModuleReplacement] = [],
+        importedOperatorNames: [String: String] = [:],
+        checkingBodyBinderOrdinals: Bool = false
     ) {
         self.closure = closure
         self.layout = layout
+        self.checkingBodyBinderOrdinals = checkingBodyBinderOrdinals
+        sequentialAssignmentTargets = spec.sequentialAssignmentTargets
         nextBinderOrdinal = layout.parameters.count
-        binderNames = Dictionary(uniqueKeysWithValues: layout.parameters.map { ($0.binder, $0.reference.name) })
-        knownBinderNames = Set(binderNames.values)
+        binderNames = Dictionary(uniqueKeysWithValues: layout.parameters.map { ($0.binder, $0.reference.tlaName ?? $0.reference.name) })
+        knownBinderNames = Set(layout.parameters.map { $0.reference.name })
         constants = spec.constants
         formalParameters = Set(spec.formalParameters.map(\.name))
         self.incomingModuleParameters = incomingModuleParameters
@@ -104,22 +113,43 @@ struct CompiledLowerer {
         }
         operatorArities = arities
         rootOperators = operators
-        operatorNames = Dictionary(uniqueKeysWithValues: operators.map { ($0.value, $0.key) })
+        importedOperatorIDs = Set(importedOperatorNames.keys.compactMap { operators[$0] })
+        operatorNames = Dictionary(uniqueKeysWithValues: operators.map {
+            ($0.value, importedOperatorNames[$0.key] ?? $0.key)
+        })
         nextOperatorOrdinal = operators.count
     }
 
-    var bindings: CompiledBindingTable {
+    func bindings(reserving importedNames: Set<String>, operatorReservations: Set<String>,
+        avoiding moduleDeclarations: Set<String>) -> CompiledBindingTable {
         var names = binderNames
-        var unavailable = reservedRenderedNames.union(modelValueNames)
+        var operations = operatorNames
+        var unavailable = reservedRenderedNames.union(modelValueNames).union(importedNames)
             .union(binderNames.values).union(operatorNames.values)
+            .union(operatorReservations)
+            .union(moduleDeclarations)
+        let importedDeclarations = importedNames.union(importedOperatorIDs.compactMap { operatorNames[$0] })
+        let reservedOperators = operatorReservations.union(importedDeclarations).union(modelValueNames)
+        for (operation, name) in operatorNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
+            where !importedOperatorIDs.contains(operation) {
+            let preferred = tlaDeclarationStem(isTLADeclarationName(name) ? name : "_\(name)")
+            guard reservedOperators.contains(name) || preferred != name else { continue }
+            let renamed = StateExpr.freshBoundName(preferred, avoiding: unavailable)
+            operations[operation] = renamed
+            unavailable.insert(renamed)
+        }
         let parameterIDs = Set(layout.parameters.map(\.binder))
         for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
-            where modelValueNames.contains(name) || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
-            let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
+            where modelValueNames.contains(name) || importedDeclarations.contains(name)
+                || (parameterIDs.contains(binder)
+                    && (reservedRenderedNames.contains(name) || operatorReservations.contains(name)
+                        || tlaDeclarationStem(name) != name)) {
+            let preferred = parameterIDs.contains(binder) ? tlaDeclarationStem(name) : name
+            let renamed = StateExpr.freshBoundName(preferred, avoiding: unavailable)
             names[binder] = renamed
             unavailable.insert(renamed)
         }
-        return .init(operatorNames: operatorNames, binders: names)
+        return .init(operatorNames: operations, binders: names, sourceOperators: rootOperators)
     }
 
     private var rootScope: BindingScope {
@@ -179,11 +209,18 @@ struct CompiledLowerer {
             if case .value(let value) = declaration.initialization {
                 try validateValue(value, at: "\(path).initialization")
             }
-            initializations[variableLayout.id] = try lower(
+            let lowered = try lower(
                 declaration.initialization,
                 at: "\(path).initialization",
                 scope: rootScope
             )
+            try StraightLineAssignmentCheck.verifyInitialIntExpression(
+                declaration.initialization, lowered: lowered, layout: layout,
+                at: "\(path).initialization")
+            try StraightLineAssignmentCheck.verifyInitialControlLocation(
+                declaration.initialization, lowered: lowered, layout: layout,
+                at: "\(path).initialization")
+            initializations[variableLayout.id] = lowered
         }
         let actions: [CompiledAction] = try zip(spec.actions, layout.actions).map {
             try lower($0.0, id: $0.1.id)
@@ -365,7 +402,8 @@ struct CompiledLowerer {
         }
         let compiledFairness: [CompiledFairnessCondition] = fairness.map { condition in
             .init(scope: condition.scope, isStrong: condition.isStrong, projection: condition.projection,
-                enabledActions: condition.projection.map { predicate($0).enabledActions } ?? [])
+                preserved: condition.preserved, enabledActions: [condition.projection, condition.preserved]
+                    .compactMap { $0 }.reduce(into: Set<ActionID>()) { $0.formUnion(predicate($1).enabledActions) })
         }
         let fairnessProfiles = try lowerFairnessProfiles(spec.fairnessProfiles, base: compiledFairness)
         let stateProperties = statePropertyBodies.map { property in
@@ -533,8 +571,10 @@ struct CompiledLowerer {
                 }
             }
             if selectedSymmetry != nil {
+                let stepRefinements = Set(spec.generatedRefinements.filter { $0.behavior == .initialAndNext }.map(\.name))
                 let unsupported = properties.filter {
-                    checks.contains($0.id) && ($0.declaration.kind == .temporalProperty || $0.declaration.kind == .refinement)
+                    checks.contains($0.id) && ($0.declaration.kind == .temporalProperty
+                        || ($0.declaration.kind == .refinement && !stepRefinements.contains($0.declaration.name)))
                 }.map(\.declaration.name)
                 guard unsupported.isEmpty else {
                     throw CompilationDiagnostic(code: .unsupportedSymmetryReduction, stage: .validation,
@@ -720,6 +760,7 @@ struct CompiledLowerer {
                     name: process.name,
                     binder: try bound("self", in: scope, at: "\(path).binders"),
                     swiftType: process.swiftType,
+                    fixedID: try process.fixedID.map { try lower($0, at: "\(path).id", scope: rootScope) },
                     domain: domain,
                     fairness: process.fairness,
                     fairnessExcludedSteps: Set(try process.fairnessExcludedLabels.map {
@@ -767,17 +808,34 @@ struct CompiledLowerer {
                     return false
                 }
             }
-            guard algorithm.processes.count == 1,
-                  case .forAll(let domain, let binding, let predicate) = expression,
-                  domain == algorithm.processes[0].domain
-            else { return false }
-            switch predicate {
-            case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),
-                 .equal(.controlLocation(let location), .functionApply(.programCounter, .variable(let process))):
-                return location.sourceName == CompilerControlSymbol.done.rawValue && process == binding
-            default:
-                return false
+            func finishedProcess(in predicate: StateExpr) -> StateExpr? {
+                switch predicate {
+                case .equal(.functionApply(.programCounter, let id), .controlLocation(let location)),
+                     .equal(.controlLocation(let location), .functionApply(.programCounter, let id)):
+                    return location.sourceName == CompilerControlSymbol.done.rawValue ? id : nil
+                default:
+                    return nil
+                }
             }
+
+            var remaining = Set(algorithm.processes.map(\.domain))
+            var predicates = [expression]
+            while let predicate = predicates.popLast() {
+                let domain: StateExpr
+                switch predicate {
+                case .and(let lhs, let rhs):
+                    predicates.append(contentsOf: [lhs, rhs])
+                    continue
+                case .forAll(let set, let binding, let body):
+                    guard finishedProcess(in: body) == .variable(binding) else { return false }
+                    domain = set
+                default:
+                    guard let id = finishedProcess(in: predicate) else { return false }
+                    domain = .setLiteral([id])
+                }
+                guard remaining.remove(domain) != nil else { return false }
+            }
+            return remaining.isEmpty
         }
 
         func property(
@@ -1113,7 +1171,9 @@ struct CompiledLowerer {
         case .projected(let condition, let projection):
             let base = try lower(condition, actions: actions, sourceActions: sourceActions, at: path)
             let value = try lower(projection, at: "\(path).projection", scope: rootScope)
-            return .init(scope: base.scope, isStrong: base.isStrong, projection: value)
+            return .init(scope: base.scope, isStrong: base.isStrong, projection: value, preserved: base.preserved)
+        case .weakFairnessNextPreserving(let value):
+            return .init(scope: .next, isStrong: false, preserved: try lower(value, at: "\(path).preserving", scope: rootScope))
         case .weakFairnessNext:
             return .init(scope: .next, isStrong: false)
         case .strongFairnessNext:
@@ -1157,19 +1217,16 @@ struct CompiledLowerer {
                     nextSafeAction: "Group only steps from the same Each declaration.")
             }
             let ids = try names.map { try self.action(named: $0, at: "\(path).action") }
-            guard let first = actions[ids[0]], first.bindings.count == 1 else { throw diagnostic(path: path) }
             for id in ids {
-                guard let compiled = actions[id], compiled.bindings.count == 1 else {
-                    throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: path,
-                        expected: "actions over one process population", actual: names.joined(separator: ", "),
-                        nextSafeAction: "Group only steps from the same Each declaration.")
-                }
-                let requirements = compiled.bindings[0].domain.stateRequirements(operators: operators)
-                guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
-                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
-                        path: "\(path).domain", expected: "an immutable process fairness population",
-                        actual: "a domain that reads state or action enabledness",
-                        nextSafeAction: "Declare the process population with immutable parameters or values.")
+                guard let action = actions[id], !action.bindings.isEmpty else { throw diagnostic(path: path) }
+                for binding in action.bindings {
+                    let requirements = binding.domain.stateRequirements(operators: operators)
+                    guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
+                        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                            path: "\(path).domain", expected: "an immutable process fairness population",
+                            actual: "a domain that reads state or action enabledness",
+                            nextSafeAction: "Declare the actor and its action arguments over immutable domains.")
+                    }
                 }
             }
             return .init(scope: .eachActionGroup(ids), isStrong: condition.isStrong)
@@ -1215,7 +1272,20 @@ struct CompiledLowerer {
         }
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
-        let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
+        let firstBodyBinder = nextBinderOrdinal
+        let scheduledTargets = sequentialAssignmentTargets[action.name] ?? [:]
+        var assignmentTargets: [BinderID: VariableID] = [:]
+        let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope,
+            displacedAssignmentTargets: action.displacedAssignmentTargets,
+            scheduledTargets: scheduledTargets, assignmentTargets: &assignmentTargets)
+        guard assignmentTargets.count == scheduledTargets.count else {
+            throw Self.invalidTraversal(at: "actions.\(action.name).assignmentTargets")
+        }
+        if !assignmentTargets.isEmpty { orderedSequentialAssignmentTargets[id] = assignmentTargets }
+        let bodyBinderOrdinals = checkingBodyBinderOrdinals ? firstBodyBinder..<nextBinderOrdinal : nil
+        let ordered = try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
+            body: body, layout: layout, bodyBinderOrdinals: bodyBinderOrdinals)
+        if let ordered { orderedActionBodyBinderOrdinals[id] = ordered }
         try body.verifyBranchwiseContinuation(at: "actions.\(action.name).body")
         return CompiledAction(
             id: id,
@@ -1356,11 +1426,13 @@ struct CompiledLowerer {
                         )
                     }
                     lowered.append(.init(expression: .controlLocation(location), operatorReferences: []))
-                case .enabledAction(let name):
-                    lowered.append(.init(
-                        expression: .enabledAction(try action(named: name, at: path)),
-                        operatorReferences: []
-                    ))
+                case .enabledAction(let name, let argument):
+                    let id = try action(named: name, at: path)
+                    if let argument {
+                        scheduleUnary(argument, at: path, scope: scope, operation: .enabledAction(id), on: &tasks)
+                    } else {
+                        lowered.append(.init(expression: .enabledAction(id), operatorReferences: []))
+                    }
                 case .assertView(let value, let shape):
                     guard shape.isSupported else {
                         throw CompilationDiagnostic(
@@ -1397,6 +1469,7 @@ struct CompiledLowerer {
                     scheduleUnary(value, at: path, scope: successorScope, operation: .nextState, on: &tasks)
                 case .not, .and, .or, .ifThenElse:
                     scheduleBooleanBranch(expression, at: path, scope: scope, on: &tasks)
+                case .printReturning(let value, let result): scheduleBinary(value, result, at: path, scope: scope, operation: .printReturning, on: &tasks)
                 case .printT(let value): scheduleUnary(value, at: path, scope: scope, operation: .printT, on: &tasks)
                 case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, operation: .cardinality, on: &tasks)
                 case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .powerSet, on: &tasks)
@@ -2123,7 +2196,9 @@ struct CompiledLowerer {
     private mutating func lower(
         _ action: ActionExpr,
         at path: String,
-        scope: BindingScope
+        scope: BindingScope,
+        displacedAssignmentTargets: [String: String], scheduledTargets: [String: String],
+        assignmentTargets: inout [BinderID: VariableID]
     ) throws -> CompiledActionExpr {
         var tasks = [ActionLoweringTask.expression(action, path: path, scope: scope)]
         var lowered: [CompiledActionExpr] = []
@@ -2158,8 +2233,16 @@ struct CompiledLowerer {
                         on: &tasks
                     )
                 case .define(let name, let value, let body):
-                    let nested = try bind([name], at: "\(taskPath).binder", scope: scope)
-                    let binder = try bound(name, in: nested, at: taskPath)
+                    let displacedTarget = try displacedAssignmentTargets[name].map { target in
+                        try variable(named: target, at: "\(taskPath).assign")
+                    }
+                    let binder = try allocateBinder(name, in: scope, at: "\(taskPath).binder",
+                        displacedAssignmentTarget: displacedTarget)
+                    if let target = scheduledTargets[name] {
+                        assignmentTargets[binder] = try variable(named: target, at: "\(taskPath).assign")
+                    }
+                    var nested = scope
+                    nested.values[name] = binder
                     let compiledValue = try lower(value, at: "\(taskPath).value", scope: scope)
                     scheduleAction(
                         [(body, "\(taskPath).body")],
@@ -2223,6 +2306,11 @@ struct CompiledLowerer {
         switch initialization {
         case .value(let value): return .value(.value(.init(formal: value)))
         case .expression(let expression): return .value(try lower(expression, at: path, scope: scope))
+        case .memberOf(.value(.set(let values))) where !values.isEmpty
+            && values.allSatisfy({ if case .int = $0 { return true }; return false }):
+            // Keep closed Int domains in the same checked initializer plan as literal members.
+            let members = StateExpr.setLiteral(values.sorted().map(StateExpr.value))
+            return .memberOf(try lower(members, at: path, scope: scope))
         case .memberOf(let set): return .memberOf(try lower(set, at: path, scope: scope))
         }
     }
@@ -2446,7 +2534,8 @@ struct CompiledLowerer {
         _ name: String,
         exactRenderedName: String? = nil,
         in scope: BindingScope,
-        at path: String
+        at path: String,
+        displacedAssignmentTarget: VariableID? = nil
     ) throws -> BinderID {
         guard isFormalIdentifier(name) else {
             throw CompilationDiagnostic(
@@ -2458,14 +2547,15 @@ struct CompiledLowerer {
                 nextSafeAction: "Use an ASCII identifier beginning with a letter or underscore."
             )
         }
-        let binder = BinderID(ordinal: nextBinderOrdinal)
+        let binder = BinderID(ordinal: nextBinderOrdinal, displacedAssignmentTarget: displacedAssignmentTarget)
         nextBinderOrdinal += 1
         knownBinderNames.insert(name)
-        var preferredRenderedName = exactRenderedName ?? name
+        var preferredRenderedName = exactRenderedName ?? tlaDeclarationStem(name)
         while isPlusCalDeclarationName(preferredRenderedName) == false {
             preferredRenderedName = "_\(preferredRenderedName)"
         }
-        var unavailableNames = reservedRenderedNames
+        var unavailableNames = reservedRenderedNames.union(tlaPredefinedIdentifierNames)
+        unavailableNames.formUnion(layout.parameters.compactMap { binderNames[$0.binder] })
         unavailableNames.formUnion(scope.values.values.compactMap { binderNames[$0] })
         unavailableNames.formUnion(scope.operators.values.compactMap { operatorNames[$0] })
         let renderedName = exactRenderedName == nil

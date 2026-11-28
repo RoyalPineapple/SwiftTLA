@@ -16,8 +16,10 @@ extension StateExpr {
         }
         while let (expression, bound) = pending.popLast() {
             switch expression {
-            case .sourceIssue, .value, .integerSet, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
+            case .sourceIssue, .value, .integerSet, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter, .currentProcess, .programCounter, .procedureStack, .controlLocation:
                 break
+            case .enabledAction(_, let argument):
+                if let argument { pending.append((argument, bound)) }
             case .setCheckingRegister(_, let value):
                 pending.append((value, bound))
             case .variable(let name):
@@ -35,7 +37,7 @@ extension StateExpr {
                  .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
                  .tupleAppend(let lhs, let rhs), .tupleConcatenate(let lhs, let rhs),
                  .functionApply(let lhs, let rhs), .functionSet(let lhs, let rhs),
-                 .randomSubset(let lhs, let rhs):
+                 .randomSubset(let lhs, let rhs), .printReturning(let lhs, let rhs):
                 schedule([lhs, rhs], bound: bound)
             case .assertView(let value, _), .nextState(let value), .negate(let value), .not(let value), .printT(let value), .cardinality(let value), .randomElement(let value),
                  .powerSet(let value), .sequenceSet(let value), .unionAll(let value), .tupleLength(let value),

@@ -6,6 +6,7 @@ import SwiftSyntaxMacros
 import SwiftDiagnostics
 import SwiftParser
 import SwiftTLA
+import SwiftTLACompilerSupport
 
 // MARK: - Shared parsing and verification
 
@@ -13,10 +14,21 @@ struct MacroCompilation {
     let typeName: String
     let api: GeneratedMachineAPI
     let program: CompiledProgram
+    let directCopySource: DirectCopySource?
+    let directCopyLexicalSource: DirectCopyLexicalSource?
+    let stackSeedSource: OrderedIntStackSeedSource?
+    let procedureLoopSources: [SequentialControlEvidence.ProcedureLoopSource]
 
-    init(typeName: String, program: CompiledProgram) throws {
+    init(typeName: String, program: CompiledProgram, directCopySource: DirectCopySource? = nil,
+         directCopyLexicalSource: DirectCopyLexicalSource? = nil,
+         stackSeedSource: OrderedIntStackSeedSource? = nil,
+         procedureLoopSources: [SequentialControlEvidence.ProcedureLoopSource] = []) throws {
         self.typeName = typeName
         self.program = program
+        self.directCopySource = directCopySource
+        self.directCopyLexicalSource = directCopyLexicalSource
+        self.stackSeedSource = stackSeedSource
+        self.procedureLoopSources = procedureLoopSources
         api = try GeneratedMachineAPI(layout: program.layout, actions: program.behavior.actions)
     }
 }
@@ -38,14 +50,24 @@ enum TLASpecVerifier {
         let parser = ParserSession(sourceTypes: sourceMetadata)
         parser.sourceModelTypeName = typeName
         let parsed = parser.parseSpecClosure(named: source.name, source.closure)
+        let procedureLoopSources = SequentialControlEvidence.captureProcedureLoops(source: parsed) {
+            parser.actionDeclarationOffset(for: "actions.\($0)")
+        }
         do {
             let compilation = try parsed.compile()
+            try OrderedIntSourceSyntaxCheck.verify(source.closure, parsed: parsed, enums: enumInfos,
+                sourceTypes: sourceMetadata)
             if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty && parsed.assumptions.isEmpty {
                 throw ModelMacroError.emptyState
             }
+            let directCopySource = parsed.sourceAlgorithms.count == 1
+                ? parsed.sourceAlgorithms.first?.model.directScalarCopyInput : nil
+            let program = try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
+            let stackSeedSource = OrderedIntStackSeedSource.check(source.closure, program: program)
             return try MacroCompilation(
-                typeName: typeName,
-                program: try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
+                typeName: typeName, program: program, directCopySource: directCopySource,
+                directCopyLexicalSource: directCopySource == nil ? nil : parser.registeredDirectCopyLexicalSource,
+                stackSeedSource: stackSeedSource, procedureLoopSources: procedureLoopSources
             )
         } catch let diagnostic as CompilationDiagnostic {
             var located = diagnostic
@@ -63,72 +85,14 @@ enum TLASpecVerifier {
     // MARK: - Helpers
 
     static func findSpec(in members: MemberBlockItemListSyntax, defaultName: String? = nil) throws -> (name: String, closure: ClosureExprSyntax)? {
-        let declarations = members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter {
-            $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec" }
+        do {
+            return try ModelSpecificationSyntax.find(in: members, defaultName: defaultName)
+        } catch {
+            switch error {
+            case .nonLiteralSpecification: throw ModelMacroError.nonLiteralSpecification
+            case .dynamicModuleName: throw ModelMacroError.dynamicModuleName
+            }
         }
-        guard let declaration = declarations.first else { return nil }
-        guard declarations.count == 1,
-              declaration.modifiers.contains(where: { $0.name.text == "static" }),
-              declaration.bindings.count == 1,
-              let binding = declaration.bindings.first,
-              binding.initializer == nil,
-              let accessors = binding.accessorBlock?.accessors
-        else { throw ModelMacroError.nonLiteralSpecification }
-
-        let statements: CodeBlockItemListSyntax
-        if let body = accessors.as(CodeBlockItemListSyntax.self) {
-            statements = body
-        } else if let getters = accessors.as(AccessorDeclListSyntax.self),
-                  getters.count == 1,
-                  let getter = getters.first,
-                  getter.accessorSpecifier.tokenKind == .keyword(.get),
-                  getter.effectSpecifiers == nil,
-                  let body = getter.body {
-            statements = body.statements
-        } else {
-            throw ModelMacroError.nonLiteralSpecification
-        }
-        guard statements.count == 1, let statement = statements.first else {
-            throw ModelMacroError.nonLiteralSpecification
-        }
-        let expression: ExprSyntax?
-        if case .expr(let value) = statement.item {
-            expression = value
-        } else {
-            expression = statement.item.as(ReturnStmtSyntax.self)?.expression
-        }
-        guard let source = try specMacroSource(from: expression, defaultName: defaultName) else {
-            throw ModelMacroError.nonLiteralSpecification
-        }
-        return source
-    }
-
-    private static func specMacroSource(from expression: ExprSyntax?, defaultName: String?) throws -> (name: String, closure: ClosureExprSyntax)? {
-        guard let macro = expression?.as(MacroExpansionExprSyntax.self),
-              macro.macroName.text == "spec" else { return nil }
-        guard macro.additionalTrailingClosures.isEmpty else {
-            throw ModelMacroError.nonLiteralSpecification
-        }
-        let arguments = macro.arguments
-        let trailingClosure = macro.trailingClosure
-        if arguments.isEmpty, let trailingClosure, let defaultName {
-            return (defaultName, trailingClosure)
-        }
-        guard let first = arguments.first,
-              first.label == nil,
-              let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
-            throw ModelMacroError.dynamicModuleName
-        }
-        if arguments.count == 1, let trailingClosure {
-            return (name, trailingClosure)
-        }
-        if arguments.count == 2, trailingClosure == nil,
-           let last = arguments.last,
-           last.label == nil || last.label?.text == "scoped",
-           let closure = last.expression.as(ClosureExprSyntax.self) {
-            return (name, closure)
-        }
-        throw ModelMacroError.nonLiteralSpecification
     }
 
     /// Qualified spellings must name the module that owns the recognized type.
@@ -143,7 +107,7 @@ enum TLASpecVerifier {
             let name = type.name.sourceIdentifierName
             switch (module.name.sourceIdentifierName, name) {
             case ("Swift", "Int"), ("Swift", "String"), ("Swift", "CaseIterable"),
-                 ("SwiftTLA", "TLAValueType"), ("SwiftTLA", "FiniteTLAValueDomain"):
+                 ("SwiftTLA", "TLAValueType"), ("SwiftTLA", "FiniteTLAValueDomain"), ("SwiftTLA", "NoneEncodedOptionalElement"):
                 return name
             default: return nil
             }
@@ -151,7 +115,7 @@ enum TLASpecVerifier {
     }
 
     static func infersFiniteEnumConformance(_ inheritedNames: Set<String>) -> Bool {
-        inheritedNames.contains("CaseIterable")
+        (inheritedNames.contains("CaseIterable") || inheritedNames.contains("NoneEncodedOptionalElement"))
             && (inheritedNames.contains("Int") || inheritedNames.contains("String"))
             && !inheritedNames.contains("TLAValueType")
             && !inheritedNames.contains("FiniteTLAValueDomain")
@@ -169,8 +133,9 @@ enum TLASpecVerifier {
             guard intBacked || stringBacked else { continue }
             let formalValue = inheritedNames.contains("TLAValueType")
                 || inheritedNames.contains("FiniteTLAValueDomain")
+            let supportsOptional = inheritedNames.contains("NoneEncodedOptionalElement")
             let inferredFiniteDomain = infersFiniteEnumConformance(inheritedNames)
-            guard formalValue || inferredFiniteDomain else {
+            guard formalValue || inferredFiniteDomain || supportsOptional else {
                 continue
             }
 
@@ -223,13 +188,17 @@ enum TLASpecVerifier {
                     let encoded: TLAValue
                     if constructor == "constant", case .string(let raw) = value {
                         encoded = .constant(raw)
+                    } else if constructor == "canonicalSwiftString", case .string(let raw) = value {
+                        encoded = .canonicalSwiftString(raw)
                     } else {
                         encoded = value
                     }
                     guard caseNames.insert(caseName).inserted else {
                         throw ModelMacroError.duplicateEnumCase(typeName: enumDecl.name.sourceIdentifierName, caseName: caseName)
                     }
-                    guard caseValues.insert(encoded).inserted else {
+                    // Normalization must not reject distinct raw declarations.
+                    let uniquenessValue = constructor == "canonicalSwiftString" ? value : encoded
+                    guard caseValues.insert(uniquenessValue).inserted else {
                         throw ModelMacroError.duplicateEnumRawValue(typeName: enumDecl.name.sourceIdentifierName, caseName: caseName)
                     }
                     cases.append((caseName, encoded))
@@ -239,11 +208,16 @@ enum TLASpecVerifier {
             if case .cases(let encodings) = encoding, Set(encodings.keys) != caseNames {
                 throw ModelMacroError.unsupportedEnumEncoding(typeName: enumDecl.name.text)
             }
+            if supportsOptional, cases.contains(where: { $0.value == .string("none") }) {
+                throw CompiledValueType.diagnostic("types." + enumDecl.name.text,
+                    "the formal string \"none\" is reserved for nil")
+            }
             enums.append(SourceEnum(
                 typeName: enumDecl.name.text,
                 cases: cases,
                 finiteValues: try finiteValues(in: enumDecl, cases: cases),
-                isFiniteDomain: inheritedNames.contains("FiniteTLAValueDomain") || inferredFiniteDomain
+                isFiniteDomain: inheritedNames.contains("FiniteTLAValueDomain") || inferredFiniteDomain || supportsOptional,
+                supportsOptional: supportsOptional
             ))
         }
         return enums
@@ -258,7 +232,7 @@ enum TLASpecVerifier {
         let encodings = declaration.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter {
             $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "tlaValue" }
         }
-        guard let encoding = encodings.first else { return .rawValue(intBacked ? "int" : "string") }
+        guard let encoding = encodings.first else { return .rawValue(intBacked ? "int" : "canonicalSwiftString") }
         let failure = ModelMacroError.unsupportedEnumEncoding(typeName: declaration.name.text)
         guard encodings.count == 1, encoding.bindings.count == 1,
               !encoding.modifiers.contains(where: { $0.name.text == "static" }),
@@ -436,7 +410,8 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
         in context: some MacroExpansionContext
     ) throws -> [AttributeSyntax] {
         if let record = member.as(StructDeclSyntax.self) {
-            guard !TLASpecVerifier.inheritedTypeNames(in: record.inheritanceClause).contains("TLAValueType"),
+            guard !record.hasTLATupleAttribute,
+                  !TLASpecVerifier.inheritedTypeNames(in: record.inheritanceClause).contains("TLAValueType"),
                   let source = declaration.memberBlock.members.compactMap({ $0.decl.as(StructDeclSyntax.self) })
                     .first(where: { $0.name.sourceIdentifierName == record.name.sourceIdentifierName }),
                   let model = try? TLASpecVerifier.parseAndVerify(declaration) else { return [] }
@@ -492,7 +467,11 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
             if model.program.layout.variables.isEmpty && model.program.behavior.actions.isEmpty {
                 return try emitter.assumptionMembers()
             }
-            return try emitter.machineMembers()
+            var members = try emitter.machineMembers()
+            if isParameterlessRefinementTarget(declaration) {
+                members += try emitter.parameterlessRefinementTarget()
+            }
+            return members
         } catch let diagnostic as SourceParseDiagnostic {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
             return []

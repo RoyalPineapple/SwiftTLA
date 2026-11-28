@@ -41,15 +41,20 @@ struct AlgorithmBuilderTests {
         #expect(try value(named: "ready", in: next, compilation: compilation) == .bool(false))
     }
 
-    @Test("A step guard protects every branch and update", arguments: [false, true])
-    func wholeStepGuard(enabled: Bool) throws {
+    @Test("A step guard protects every branch and retains reached failures", arguments: [false, true], [false, true])
+    func wholeStepGuard(enabled: Bool, disabledAlternative: Bool) throws {
         let algorithm = Algorithm("GuardedBranches", scoped: { scope in
             let ready = scope.sharedVar(_name: "ready", initial: enabled)
             let value = scope.sharedVar(_name: "value", initial: 0)
             let changed = scope.sharedVar(_name: "changed", initial: false)
+            let divisor = scope.sharedVar(_name: "divisor", initial: 0)
             Do(TestControlLabel.advance, when: ready) {
                 Assign(changed, to: true)
                 Either {
+                    if disabledAlternative {
+                        When(1.expr / divisor > 0)
+                        When(false.expr)
+                    }
                     Assign(value, to: 1)
                 } or: {
                     Assign(value, to: 2)
@@ -57,8 +62,23 @@ struct AlgorithmBuilderTests {
             }
         })
         let (compilation, initial) = try initialState(of: loweredSourceSpecification(algorithm))
-        let next = try successors(named: "advance", in: compilation, from: initial)
-        #expect(next.count == (enabled ? 2 : 0))
+        let from: CompiledState
+        if enabled && disabledAlternative {
+            #expect(throws: EvalError.divisionByZero) {
+                try successors(named: "advance", in: compilation, from: initial)
+            }
+            #expect(try !compilation.render().intrinsicInvariantNames.isEmpty)
+            let divisor = try #require(compilation.layout.testVariableID(named: "divisor"))
+            from = try initial.updating(divisor, to: .integer(1))
+        } else {
+            from = initial
+        }
+        let next = try successors(named: "advance", in: compilation, from: from)
+        #expect(next.count == (enabled ? (disabledAlternative ? 1 : 2) : 0))
+        if enabled && disabledAlternative {
+            let sibling = try #require(next.first)
+            #expect(try value(named: "value", in: sibling, compilation: compilation) == .int(2))
+        }
         for state in next {
             #expect(try value(named: "changed", in: state, compilation: compilation) == .bool(true))
         }
@@ -625,7 +645,7 @@ struct AlgorithmBuilderTests {
             }
         }
         let algorithm = Algorithm("ReachableGraph", scoped: { scope in
-            let _ = scope.sharedVar(_name: "successors", in: choices)
+            let _ = scope.sharedVar(_name: "successors", initiallyIn: choices)
             Do(TestControlLabel.done) { Stop() }
         })
 
@@ -982,17 +1002,24 @@ struct AlgorithmBuilderTests {
         }
     }
 
-    @Test("A later guard reads the updated value before committing the step")
-    func laterGuardReadsUpdatedValue() throws {
+    @Test("A later guard reads the updated value before committing the step", arguments: [true, false])
+    func laterGuardReadsUpdatedValue(_ mayComplete: Bool) throws {
         let algorithm = Algorithm("ReadAfterWrite", scoped: { scope in
             let value = scope.sharedVar(_name: "value", initial: 0)
             Do(TestControlLabel.advance) {
                 Assign(value, to: value + 1)
                 When(value > 0)
+                if !mayComplete { When(false.expr) }
             }
         })
 
         let compilation = try TLASpec("ReadAfterWrite") { algorithm }.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let successors = try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial)
+        guard mayComplete else {
+            #expect(successors.isEmpty)
+            return
+        }
         let rendered = try compilation
             .render().plusCalBundle()
             .root.tla
@@ -1000,9 +1027,7 @@ struct AlgorithmBuilderTests {
         let assignmentRange = try #require(rendered.range(of: "value := __atomic_0;"))
         #expect(guardRange.lowerBound < assignmentRange.lowerBound)
 
-        let initial = try firstCompiledState(in: compilation)
-        let next = try #require(try compiledSuccessors(
-            named: "advance", arguments: [], in: compilation, from: initial).first)
+        let next = try #require(successors.first)
         #expect(try renderedValue(named: "value", in: next, compilation: compilation) == .int(1))
     }
 
@@ -1485,6 +1510,37 @@ struct AlgorithmBuilderTests {
         #expect(rendered.components(separatedBy: "same(").count == 2)
     }
 
+    @Test("a fixed process keeps its identity in control state and executes a parameterless fair action")
+    func fixedProcessControlsItsOwnStep() throws {
+        let algorithm = Algorithm("FixedWorker", scoped: { scope in
+            let count = scope.sharedVar(_name: "count", initial: 0)
+            Process(id: 10, fairness: .weak) {
+                Do(TestControlLabel.advance) { count += 1 }
+            }
+        })
+        let spec = try loweredSourceSpecification(algorithm)
+        #expect(spec.fairness == [.weakFairnessActionGroup(["advance"])])
+        let plusCal = try renderedSourceAlgorithmPlusCal(algorithm)
+        #expect(plusCal.components(separatedBy: "\n").contains {
+            $0.contains("fair process (") && $0.hasSuffix(" = 10)")
+        })
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "advance", in: compilation, from: initial)
+        #expect(try value(named: "count", in: next, compilation: compilation) == .int(1))
+        #expect(try value(named: "pc", in: next, compilation: compilation) == .function([.int(10): .string("Done")]))
+    }
+
+    @Test("a process identity cannot follow mutable state")
+    func rejectsMutableProcessID() {
+        let algorithm = Algorithm("MovingWorker", scoped: { scope in
+            let count = scope.sharedVar(_name: "count", initial: 0)
+            Process(id: count) {
+                Do(TestControlLabel.advance) { count += 1 }
+            }
+        })
+        #expect(algorithm.validate().contains { $0.code == .invalidFixedProcessID })
+    }
+
     @Test("When, Assert, With, and process fairness lower as formal semantics")
     func lowersMechanicalPlusCalStatements() throws {
         let algorithm = Algorithm("Mechanical", scoped: { scope in
@@ -1595,7 +1651,7 @@ struct AlgorithmBuilderTests {
     @Test("SharedVar closed ranges supply every declared initial state")
     func lowersNondeterministicSharedInitialization() throws {
         let algorithm = Algorithm("NondeterministicSharedInitialization", scoped: { scope in
-            let value = scope.sharedVar(_name: "value", in: 1...3)
+            let value = scope.sharedVar(_name: "value", initiallyIn: 1...3)
             Each(Node.all) { _ in
                 Do(TestControlLabel.tick, when: value < 3) {
                     Assign(value, to: value + 1)
@@ -1617,7 +1673,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("DependentInitialDomain", scoped: { scope in
             let maximum = scope.sharedVar(_name: "maximum", initial: 2)
             let _ = scope.sharedVar(_name: "candidate",
-                in: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
+                initiallyIn: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
             )
             Do(TestControlLabel.stop) { Stop() }
         })
@@ -1735,7 +1791,7 @@ struct AlgorithmBuilderTests {
     @Test("dependent typed function initialization is evaluated after earlier initial state choices")
     func lowersDependentFunctionInitialization() throws {
         let algorithm = Algorithm("DependentInitial", scoped: { scope in
-            let seed = scope.sharedVar(_name: "seed", in: SetExpr<Bool>.literal(false, true))
+            let seed = scope.sharedVar(_name: "seed", initiallyIn: SetExpr<Bool>.literal(false, true))
             let _ = scope.sharedVar(_name: "mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
             Each(Node.all) { _ in
                 Do(TestControlLabel.stop) { Stop() }
@@ -1912,7 +1968,7 @@ private struct FunctionDomainGeneratedModel {
     static var spec: TLASpec {
         #spec("FunctionDomainGenerated") {
             let FunctionDomainGenerated = Algorithm(scoped: { scope in
-                let successors = scope.sharedVar(_name: "successors", in: Where(
+                let successors = scope.sharedVar(_name: "successors", initiallyIn: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
                     ForAll(Node.all) { node in

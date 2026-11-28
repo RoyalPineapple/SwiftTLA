@@ -33,7 +33,7 @@ struct CompiledRuntime {
     func initialOutcomes() throws -> InitialEvaluationOutcomes<CompiledState> {
         var pending: [(Int, [VariableID: CompiledValue])] = [(0, [:])]
         var states: [CompiledState] = []
-        var firstFailure: NativeMachineEvaluationError?
+        var failures: [InitialEvaluationFailure] = []
         let initializations = behavior.initializations
         let selectedInvariant = behavior.initialInvariant.map { selected in
             guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
@@ -42,7 +42,7 @@ struct CompiledRuntime {
             return invariant
         }
         while let (index, values) = pending.popLast() {
-            try _NativeMachineOperations.visitInitialBranch {
+            try _visitNativeInitialBranch {
                 guard index < initializations.count else {
                     let state = try CompiledState(values: layout.variables.map { variable in
                         guard let value = values[variable.id] else {
@@ -107,18 +107,29 @@ struct CompiledRuntime {
                     }
                 }
             } onEvaluationFailure: { failure in
-                if firstFailure == nil { firstFailure = failure }
+                let site: InitialEvaluationFailure.Site = index < initializations.count
+                    ? .initializer(initializations[index].0.ordinal) : .selectedInvariant
+                failures.append(.init(site: site, failure: failure, projectingBefore: { [values, layout = self.layout] in
+                    let entries = try values.map { variable, value -> TLAStateProjection.Entry in
+                        guard let field = layout.variables.first(where: { $0.id == variable }) else {
+                            throw CompiledEvaluationError.invalidVariableID(variable)
+                        }
+                        guard let token = TLAStateProjection.Token(validating: field.formalName) else {
+                            throw TLAStateProjectionDiagnostic.invalidKey(path: field.formalName)
+                        }
+                        return .init(token: token, value: try value.rendered(using: layout))
+                    }
+                    return try TLAStateProjection(validating: entries)
+                }))
             }
         }
-        return .init(states: states, firstFailure: firstFailure)
+        return .init(states: states, failures: failures)
     }
 
     func successors(from state: CompiledState) throws -> [CompiledSuccessor] {
         try state.requireIdentity(identity)
-        let enabledActions = try enabledActions(in: state)
-        return try behavior.actions.flatMap { action in
-            try successors(for: action.id, from: state, enabledActions: enabledActions)
-        }
+        let enumerator = actionEnumerator(in: state)
+        return try behavior.actions.flatMap { try enumerator.enumerateSuccessors($0) }
     }
 
     func successors(for actionID: ActionID, from state: CompiledState) throws -> [CompiledSuccessor] {
@@ -126,20 +137,7 @@ struct CompiledRuntime {
         guard let action = behavior.actions.first(where: { $0.id == actionID }) else {
             throw CompiledEvaluationError.unresolvedOperator
         }
-        return try successors(for: actionID, from: state,
-            enabledActions: enabledActions(in: state, required: behavior.enabledActionDependencies[action.id] ?? []))
-    }
-
-    private func successors(
-        for actionID: ActionID,
-        from state: CompiledState,
-        enabledActions: Set<ActionID>
-    ) throws -> [CompiledSuccessor] {
-        guard let action = behavior.actions.first(where: { $0.id == actionID }) else {
-            throw CompiledEvaluationError.unresolvedOperator
-        }
-        return try actionEnumerator(in: state, enabledActions: enabledActions)
-            .enumerateSuccessors(action)
+        return try actionEnumerator(in: state).enumerateSuccessors(action)
     }
 
     func assumeHolds(in state: CompiledState) throws -> Bool {
@@ -161,13 +159,7 @@ struct CompiledRuntime {
 
     func evaluate(_ queries: [CompiledStateQuery], in state: CompiledState) throws -> [CompiledValue] {
         try state.requireIdentity(identity)
-        let evaluator = CompiledEvaluator(
-            state: state,
-            operators: operators, functions: functions,
-            enabledActions: try enabledActions(in: state, required: queries.reduce(into: Set<ActionID>()) {
-                $0.formUnion($1.enabledActions)
-            })
-        )
+        let evaluator = evaluator(in: state)
         return try queries.map { try evaluator.evaluate($0.expression) }
     }
 
@@ -177,24 +169,18 @@ struct CompiledRuntime {
         return try boolean(constraint, in: state)
     }
 
-    private func enabledActions(in state: CompiledState, required: Set<ActionID>? = nil) throws -> Set<ActionID> {
-        var enabled = Set<ActionID>()
-        for index in behavior.enabledActionIndices {
-            let action = behavior.actions[index]
-            if let required, !required.contains(action.id) { continue }
-            if try actionEnumerator(in: state, enabledActions: enabled).enumerate(action).isEmpty == false {
-                enabled.insert(action.id)
-            }
+    private func evaluator(in state: CompiledState, bindings: CompiledBindings = .init()) -> CompiledEvaluator {
+        CompiledEvaluator(state: state, operators: operators, functions: functions, bindings: bindings) { id, argument in
+            let action = behavior.actions[id.ordinal]
+            let enumerator = actionEnumerator(in: state)
+            if let argument { return try enumerator.isEnabled(action, for: argument) }
+            return try !enumerator.enumerate(action).isEmpty
         }
-        return enabled
     }
 
-    private func actionEnumerator(
-        in state: CompiledState, enabledActions: Set<ActionID>
-    ) -> CompiledActionEnumerator {
+    private func actionEnumerator(in state: CompiledState) -> CompiledActionEnumerator {
         .init(state: state) { expression, bindings in
-            try CompiledEvaluator(state: state, operators: operators, functions: functions,
-                bindings: bindings, enabledActions: enabledActions).evaluate(expression)
+            try evaluator(in: state, bindings: bindings).evaluate(expression)
         }
     }
 
@@ -203,11 +189,7 @@ struct CompiledRuntime {
         in state: CompiledState,
         bindings: CompiledBindings = .init()
     ) throws -> Bool {
-        let value = try CompiledEvaluator(
-            state: state,
-            operators: operators, functions: functions, bindings: bindings,
-            enabledActions: try enabledActions(in: state, required: predicate.enabledActions)
-        ).evaluate(predicate.expression)
+        let value = try evaluator(in: state, bindings: bindings).evaluate(predicate.expression)
         guard case .boolean(let boolean) = value else {
             throw EvalError.expected(.boolean, actual: [value])
         }

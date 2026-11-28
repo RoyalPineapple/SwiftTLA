@@ -4,6 +4,28 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct GeneratedTLCOracleTests {
+    @Test("an imported assumption failure is not an initial evaluation failure")
+    func attributesInitialFailureToProbe() throws {
+        let retained = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let logs = retained.appendingPathComponent("logs")
+        try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: retained) }
+        let stdout = logs.appendingPathComponent("tlc.stdout.log")
+        let module = "Counter__InitialFailureCheck"
+
+        #expect(try GeneratedTLCOracle.initialFailureVerdict(
+            outcome: .completed, retained: retained, module: module) == .satisfied)
+        try Data("Error: Assumption line 3 of module Counter is false.\n".utf8).write(to: stdout)
+        #expect(throws: GeneratedTLCOracle.Error.invalidOutcome(
+            "initial failure check: unrelated assumption violation")) {
+            try GeneratedTLCOracle.initialFailureVerdict(
+                outcome: .assumptionViolation, retained: retained, module: module)
+        }
+        try Data("Error: Assumption line 3 of module \(module) is false.\n".utf8).write(to: stdout)
+        #expect(try GeneratedTLCOracle.initialFailureVerdict(
+            outcome: .assumptionViolation, retained: retained, module: module) == .violated)
+    }
+
     @Test("postcondition failures are distinguished from ordinary assumption failures")
     func identifiesPostconditionVerdict() throws {
         let retained = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

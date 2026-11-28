@@ -25,8 +25,7 @@ struct SequenceIndexConversionTests {
                 #expect(members == [.second, .first, .second])
                 #expect(rootMembers == members)
                 let before = machine.snapshot
-                let transition = try machine.send(.rotate)
-                #expect(transition.after == machine.state)
+                try machine.send(.rotate)
                 #expect(try #require(graph.transitions[before]).contains {
                     $0.action == .rotate && $0.target == machine.snapshot
                 })

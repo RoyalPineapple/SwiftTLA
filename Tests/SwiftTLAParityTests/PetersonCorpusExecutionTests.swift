@@ -7,22 +7,32 @@ struct PetersonCorpusExecutionTests {
     func turnBreaksContention() throws {
         var machine = try PetersonModel.makeMachine()
         for process in PetersonModel.Process.allCases {
-            _ = try machine.send(.a0(process: process))
-            _ = try machine.send(.a1(process: process))
-            _ = try machine.send(.a2(process: process))
+            try machine.send(.a0(process: process))
+            try machine.send(.a1(process: process))
+            try machine.send(.a2(process: process))
         }
         #expect(machine.state.turn == .one)
         #expect(try machine.isEnabled(.a3(process: .one)))
         #expect(try !machine.isEnabled(.a3(process: .two)))
-        _ = try machine.send(.a3(process: .one))
+        try machine.send(.a3(process: .one))
         #expect(try machine.isEnabled(.cs(process: .one)))
     }
 
     @Test("Peterson native exploration preserves the complete formal graph without deadlock")
     func nativeGraphMatchesFormalGraph() throws {
-        let native = try ReachabilityGraph(initialMachines: PetersonModel.initialMachines(), maximumStates: 1_000)
+        let scenarios = try PetersonModel.validationScenarios()
+        let published = try #require(scenarios.first { $0.name == "published" })
+        let safety = try #require(scenarios.first { $0.name == "safety" })
+        #expect(safety.checking.properties == [.TypeOK, .Inv])
+        let native = try published.explore(maximumStates: 1_000)
         #expect(native.transitions.count == Example.petersonTwoProcess.expectedDistinct)
+        let generated = native.initialStates.count + native.transitions.values.reduce(0) { $0 + $1.count }
+        #expect(generated == 77)
+        #expect(try native.transitions.keys.map { try native.trace(to: $0).count }.max() == 11)
+        #expect(native.checking.properties == [.TypeOK, .Inv, .LSpec])
+        #expect(native.refinementFailures.isEmpty)
         #expect(native.safetyViolations.isEmpty)
+        #expect(native.deadlockedStates.isEmpty)
         let compilation = try PetersonModel.spec.compile()
         let formal = try ModelChecker(compilation: compilation,
             configuration: .init(maximumStateLimit: 1_000, symmetryReduction: .disabled)).explore()

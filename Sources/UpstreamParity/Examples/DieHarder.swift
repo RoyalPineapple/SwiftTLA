@@ -1,9 +1,17 @@
+// The jug puzzle uses a set of jugs with different capacities and permits a pour between two
+// jugs.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DieHard/DieHarder.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
 package struct DieHarderModel: Sendable {
-    package enum Step: String, CaseIterable { case FillJug, EmptyJug, JugToJug }
+    package enum Step: String, CaseIterable {
+        case fillJug = "FillJug"
+        case emptyJug = "EmptyJug"
+        case jugToJug = "JugToJug"
+    }
 
     package static var spec: TLASpec {
         #spec("DieHarder") { scope in
@@ -15,37 +23,35 @@ package struct DieHarderModel: Sendable {
                 in: Functions(from: Jug, to: Set<Int>([3, 5])))
             let Goal = scope.parameter(as: Int.self, in: Set<Int>([4]))
             let contents = scope.sharedVar(initial: Dictionary<String, Int>.mapping(over: Jug) { _ in 0 })
-            let TypeOK = Invariant()
-            let NotSolved = Invariant()
-            Assume(Capacity.keys == Jug && Goal >= 0 && ForAll(in: Jug) { j in Capacity[j] > 0 })
-            Do(Step.FillJug, over: Jug) { j in Assign(contents[j], to: Capacity[j]) }
-            Do(Step.EmptyJug, over: Jug) { j in Assign(contents[j], to: 0) }
-            Do(Step.JugToJug, over: Jug, Jug) { j, k in
+            Assume(Capacity.keys == Jug && Goal >= 0 && Jug.allSatisfy { j in Capacity[j] > 0 })
+            Do(Step.fillJug, over: Jug) { j in contents[j].set(Capacity[j]) }
+            Do(Step.emptyJug, over: Jug) { j in contents[j].set(0) }
+            Do(Step.jugToJug, over: Jug, Jug) { j, k in
                 When(j != k)
                 If(contents[j] < Capacity[k] - contents[k]) {
                     let amountPoured = contents[j]
-                    Assign(contents[j], to: 0)
-                    Assign(contents[k], to: contents[k] + amountPoured)
+                    contents[j].set(0)
+                    contents[k] += amountPoured
                 } else: {
                     let amountPoured = Capacity[k] - contents[k]
-                    Assign(contents[j], to: contents[j] - amountPoured)
-                    Assign(contents[k], to: Capacity[k])
+                    contents[j].set(contents[j] - amountPoured)
+                    contents[k].set(Capacity[k])
                 }
             }
-            TypeOK { contents.keys == Jug && ForAll(in: Jug) { j in contents[j] >= 0 } }
-            NotSolved { ForAll(in: Jug) { j in contents[j] != Goal } }
-            let MCDieHarder = Validation {
-                Bind(Jug, to: Set<String>(["j1", "j2"]))
+            let typeOK = Invariant("TypeOK")
+            typeOK { contents.keys == Jug && Jug.allSatisfy { j in contents[j] >= 0 } }
+            let notSolved = Invariant("NotSolved")
+            notSolved { Jug.allSatisfy { j in contents[j] != Goal } }
+            Validation("MCDieHarder") {
+                Bind(Jug, to: ["j1", "j2"])
                 Bind(Capacity, to: ["j1": 3, "j2": 5])
                 Bind(Goal, to: 4)
-            }.expect(NotSolved, .violated)
-            MCDieHarder
-            let APDieHarder = Validation {
-                Bind(Jug, to: Set<String>(["small_OF_JUG", "big_OF_JUG"]))
+            }.expect(notSolved, .violated)
+            Validation("APDieHarder") {
+                Bind(Jug, to: ["small_OF_JUG", "big_OF_JUG"])
                 Bind(Capacity, to: ["small_OF_JUG": 3, "big_OF_JUG": 5])
                 Bind(Goal, to: 4)
-            }.checking(only: [TypeOK])
-            APDieHarder
+            }.checking(only: [typeOK])
         }
     }
 }

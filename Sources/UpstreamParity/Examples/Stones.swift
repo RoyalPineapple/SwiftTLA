@@ -1,3 +1,6 @@
+// The model evaluates the stone-weighing puzzle with the configured weights.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Stones/Stones.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -12,7 +15,7 @@ package struct StonesModel: Sendable {
             Assume(W >= 0 && N >= 1 && N <= W &&
                 LetRec("SeqSum", taking: [Int].self,
                     { (seqSum: LocalRecursion<[Int], Int>, sequence: WithValue<[Int]>) in
-                        If(sequence.count == 0, then: 0,
+                        If(sequence.isEmpty, then: 0,
                             else: sequence.head() + seqSum(sequence.tail()))
                     }, in: { seqSum in
                         LetRec("Partitions", taking: Pair<[Int], Int>.self,
@@ -20,9 +23,9 @@ package struct StonesModel: Sendable {
                                input: WithValue<Pair<[Int], Int>>) in
                                 If(input.first().count == N,
                                    then: SetExpr<[Int]>.literal(input.first()),
-                                   else: IntRange(1, through: If(input.first().count == 0,
+                                   else: IntRange(1, through: If(input.first().isEmpty,
                                        then: input.second(), else: input.first().head()))
-                                       .filtering { x in
+                                       .filter { x in
                                            N - input.first().count - 1 <= input.second() - x.expr
                                                && input.second() <= x.expr * (N - input.first().count)
                                        }
@@ -32,10 +35,10 @@ package struct StonesModel: Sendable {
                                                input.second() - x.expr))
                                        })
                             }, in: { partitions in
-                                Exists(in: partitions(Pair.literal(Array<Int>(), W))) { partition in
-                                    If(ForAll(in: IntRange(1, through: W)) { weight in
-                                        Exists(in: Functions(from: IntRange(1, through: N),
-                                                             to: IntRange(-1, through: 1))) { coefficients in
+                                partitions(Pair.literal(Array<Int>(), W)).contains { partition in
+                                    If(IntRange(1, through: W).allSatisfy { weight in
+                                        Functions(from: IntRange(1, through: N),
+                                                             to: IntRange(-1, through: 1)).contains { coefficients in
                                             seqSum(SequenceMapping(length: N) { index in
                                                 coefficients[index.expr] * partition[index.expr]
                                             }) == weight.expr
@@ -44,11 +47,10 @@ package struct StonesModel: Sendable {
                                 } || PrintT("No solution")
                             })
                     }))
-            let Stones = Validation {
+            Validation("Stones") {
                 Bind(W, to: 40)
                 Bind(N, to: 4)
             }.checkingDeadlock(false)
-            Stones
         }
     }
 }

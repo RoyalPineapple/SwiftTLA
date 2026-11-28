@@ -2,6 +2,36 @@ public protocol FiniteTLAValueDomain: TLAValueType, Hashable, Sendable {
   static var finiteValues: [Self] { get }
 }
 
+/// Uses the upstream string "none" for a missing value of this enum.
+public protocol NoneEncodedOptionalElement: CaseIterable, RawRepresentable where RawValue == String {}
+
+extension NoneEncodedOptionalElement where Self: TLAValueType {
+  static var presentValueShape: FormalValueShape {
+    .finite(typeName: String(describing: Self.self), values: allCases.map(\.tlaValue))
+  }
+}
+
+extension Optional: TLAValueType, TLAValueConvertible, TypedExpression, StateExprConvertible where Wrapped: NoneEncodedOptionalElement & TLAValueType {
+  public static var defaultValue: Self { nil }
+  public static var formalValueShape: FormalValueShape {
+    .finite(typeName: "\(Wrapped.self)?", values: [.string("none")] + Wrapped.allCases.map(\.tlaValue))
+  }
+  public var tlaValue: TLAValue { map(\.tlaValue) ?? .string("none") }
+  public var sourceIssue: SourceModelIssue? {
+    if Wrapped.allCases.contains(where: { $0.tlaValue == .string("none") }) {
+      return .formalDeclaration(kind: "optional", name: String(describing: Wrapped.self),
+        problem: "a wrapped value uses the reserved formal string \"none\"")
+    }
+    return flatMap(\.sourceIssue)
+  }
+  public init?(formalValue: TLAValue) {
+    if formalValue == .string("none") { self = nil }
+    else if let value = Wrapped(formalValue: formalValue), value.preservesFormalValue(formalValue) { self = value }
+    else { return nil }
+    guard sourceIssue == nil else { return nil }
+  }
+}
+
 extension FiniteTLAValueDomain {
   public static var formalValueShape: FormalValueShape {
     .finite(typeName: String(describing: Self.self), values: tlaValues)
@@ -230,6 +260,13 @@ extension Int {
   public static var all: Expr<Set<Int>> { Expr(.integerSet) }
 }
 
+extension Bool {
+  /// Both values a Boolean state variable can take.
+  public static var all: Expr<Set<Bool>> {
+    Expr(.setLiteral([false.stateExpr, true.stateExpr]))
+  }
+}
+
 /// All subsets of the supplied formal set.
 public func Subsets<Domain: FormalSetValue>(
   of values: some TypedExpression<Domain>
@@ -369,6 +406,8 @@ extension TypedExpression where ExpressionValue: FormalSetValue {
   public var isEmpty: Expr<Bool> {
     Expr(.equal(.cardinality(stateExpr), .value(.int(0))))
   }
+
+  public var count: Expr<Int> { cardinality }
 
   public var cardinality: Expr<Int> {
     Expr<Int>(.cardinality(stateExpr))
@@ -663,12 +702,7 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
     length: some TypedExpression<Int>,
     with value: some TypedExpression<Element>
   ) -> Expr<Self> {
-    let index = "__zeroBasedSequenceIndex"
-    return Expr(.functionLiteral(
-      .integerRange(.int(0), .subtract(length.stateExpr, .int(1))),
-      index,
-      value.stateExpr
-    ))
+    Expr(formalZeroBasedSequence(length: length.stateExpr, repeating: value.stateExpr))
   }
 
   public static func filled(length: some TypedExpression<Int>, with value: Element) -> Expr<Self> {
@@ -810,10 +844,16 @@ package func formalSequenceDomain(
   return .letValue(lengthsName, lengths, .caseExpr([valid, sequences], nil))
 }
 
+package func formalZeroBasedSequence(length: StateExpr, repeating value: StateExpr) -> StateExpr {
+  let index = StateExpr.freshBoundName("__zeroBasedSequenceIndex", avoiding: value.freeVariableNames)
+  return .functionLiteral(.integerRange(.int(0), .subtract(length, .int(1))), index, value)
+}
+
 /// The index domain guarantees that exactly one CASE branch matches.
 package func formalZeroBasedSequence(_ elements: [StateExpr]) -> StateExpr {
   guard !elements.isEmpty else { return .value(.function([:])) }
-  let index = "__zeroBasedSequenceIndex"
+  let index = StateExpr.freshBoundName("__zeroBasedSequenceIndex",
+    avoiding: elements.reduce(into: Set<String>()) { $0.formUnion($1.freeVariableNames) })
   let branches = elements.enumerated().flatMap { offset, element in
     [StateExpr.equal(.variable(index), .int(offset)), element]
   }
@@ -857,7 +897,64 @@ extension TypedExpression where ExpressionValue: FormalSetValue {
 
 }
 
+package func formalSequenceContains(_ sequence: StateExpr, _ element: StateExpr) -> StateExpr {
+  let names = sequence.freeVariableNames.union(element.freeVariableNames)
+  let values = StateExpr.freshBoundName("__sequence", avoiding: names)
+  let sought = StateExpr.freshBoundName("__element", avoiding: names)
+  let index = StateExpr.freshBoundName("__index", avoiding: names)
+  let positions = StateExpr.integerRange(.int(1), .tupleLength(.variable(values)))
+  let match = StateExpr.equal(.tupleDynamicAccess(.variable(values), .variable(index)), .variable(sought))
+  // Singleton domains evaluate the receiver, then the argument, even for an empty sequence.
+  return .exists(.setLiteral([sequence]), values,
+    .exists(.setLiteral([element]), sought, .exists(positions, index, match)))
+}
+
+package func formalSequenceQuantifier(_ sequence: StateExpr, parameter: String, predicate: StateExpr, all: Bool) -> StateExpr {
+  let names = sequence.freeVariableNames.union(predicate.freeVariableNames).union([parameter])
+  let receiver = StateExpr.freshBoundName("__sequence", avoiding: names)
+  let index = StateExpr.freshBoundName("__index", avoiding: names)
+  let positions = StateExpr.integerRange(.int(1), .tupleLength(.variable(receiver)))
+  let element = StateExpr.tupleDynamicAccess(.variable(receiver), .variable(index))
+  let body = StateExpr.letValue(parameter, element, predicate)
+  return .letValue(receiver, sequence, all ? .forAll(positions, index, body) : .exists(positions, index, body))
+}
+
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  /// Tests the elements of this sequence. An empty sequence satisfies every predicate.
+  @_disfavoredOverload
+  public func allSatisfy<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    _ predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Bool> {
+    sequenceQuantifier(all: true, parameter: generatedBinderName(file: file, line: line, column: column), predicate)
+  }
+
+  /// Searches in sequence order, stopping at the first match.
+  @_disfavoredOverload
+  public func contains<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    where predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Bool> {
+    sequenceQuantifier(all: false, parameter: generatedBinderName(file: file, line: line, column: column), predicate)
+  }
+
+  private func sequenceQuantifier<Predicate: TypedExpression<Bool>>(
+    all: Bool, parameter: String, _ predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Bool> {
+    let element = WithValue<ExpressionValue.Element>(expression: .variable(parameter))
+    return Expr(formalSequenceQuantifier(stateExpr, parameter: parameter, predicate: predicate(element).stateExpr, all: all))
+  }
+
+  @_disfavoredOverload
+  public func contains(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<Bool> {
+    Expr(formalSequenceContains(stateExpr, element.stateExpr))
+  }
+
+  @_disfavoredOverload
+  public func contains(_ element: ExpressionValue.Element) -> Expr<Bool> {
+    contains(element.expr)
+  }
+
   public func prepending(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<ExpressionValue> {
     Expr(.tupleConcatenate(.tupleLiteral([element.stateExpr]), stateExpr))
   }
@@ -1013,6 +1110,23 @@ extension TypedExpression {
   }
 }
 
+/// The formal integer domain starting at the lower bound and excluding the upper bound.
+@_disfavoredOverload
+public func ..< (lower: some TypedExpression<Int>, upper: some TypedExpression<Int>) -> Expr<Set<Int>> {
+  Expr(formalHalfOpenRange(lower.stateExpr, upper.stateExpr))
+}
+
+package func formalHalfOpenRange(_ lower: StateExpr, _ upper: StateExpr) -> StateExpr {
+  let names = lower.freeVariableNames.union(upper.freeVariableNames)
+  let first = StateExpr.freshBoundName("__rangeStart", avoiding: names)
+  let end = StateExpr.freshBoundName("__rangeEnd", avoiding: names)
+  // Evaluate both endpoints once. Only a nonempty domain needs a predecessor.
+  return .letValue(first, lower, .letValue(end, upper,
+    .ifThenElse(.lessThan(.variable(first), .variable(end)),
+      .integerRange(.variable(first), .subtract(.variable(end), .int(1))),
+      .integerRange(.int(1), .int(0)))))
+}
+
 /// A bounded, inclusive TLA+ integer set whose endpoints can depend on state.
 public func IntRange(
   _ lower: some TypedExpression<Int>,
@@ -1034,6 +1148,30 @@ public func IntRange(_ lower: Int, through upper: Int) -> Expr<Set<Int>> {
 }
 
 extension TypedExpression where ExpressionValue: FormalSetValue {
+  /// Tests the predicate for every member of this formal set, including the empty-set case.
+  public func allSatisfy<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    _ predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Bool> {
+    ForAll(in: self, file: file, line: line, column: column, where: predicate)
+  }
+
+  /// Tests whether any member of this set satisfies the predicate.
+  public func contains<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    where predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Bool> {
+    Exists(in: self, file: file, line: line, column: column, where: predicate)
+  }
+
+  /// Returns the set of members that satisfy the predicate.
+  public func filter<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    _ predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<ExpressionValue> {
+    filtering(file: file, line: line, column: column, predicate)
+  }
+
   /// Selects formal set members that satisfy `predicate`.
   public func filtering<Predicate: TypedExpression<Bool>>(
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
@@ -1127,6 +1265,8 @@ extension TypedExpression where ExpressionValue: FormalTupleValue {
 }
 
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  public var isEmpty: Expr<Bool> { count == 0 }
+
   public func head() -> Expr<ExpressionValue.Element> {
     Expr(.tupleHead(stateExpr))
   }
@@ -1137,6 +1277,14 @@ extension TypedExpression where ExpressionValue: FormalSequenceValue {
 }
 
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  /// Counts matching positions, including repeated values.
+  public func count<Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    where predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<Int> {
+    selecting(file: file, line: line, column: column, where: predicate).count
+  }
+
   /// Selects formal sequence members that satisfy `predicate`.
   public func selecting<Predicate: TypedExpression<Bool>>(
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
@@ -1258,4 +1406,28 @@ func finiteDomainIndex<Domain: FiniteTLAValueDomain>(_ index: Domain) -> StateEx
     ))
   }
   return .value(value)
+}
+
+/// Swift field names for the ordered slots of a generated tuple.
+public protocol _GeneratedTupleValue: FormalTupleValue {
+  static func _formalTupleIndex(_ keyPath: PartialKeyPath<Self>) -> Int?
+}
+
+extension _GeneratedTupleValue {
+  public static func _tupleFieldType<Field: TLAValueType>(_: KeyPath<Self, Field>) -> Field.Type { Field.self }
+
+  public static func _tupleField<Field: TLAValueType>(_ value: TLAValue, as: Field.Type) -> Field? {
+    guard let field = Field(formalValue: value), field.preservesFormalValue(value) else { return nil }
+    return field
+  }
+}
+
+extension TypedExpression where ExpressionValue: _GeneratedTupleValue {
+  @_disfavoredOverload
+  public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<ExpressionValue, Field>) -> Expr<Field> {
+    guard let index = ExpressionValue._formalTupleIndex(keyPath) else {
+      return Expr(.sourceIssue(.formalDeclaration(kind: "tuple field", name: String(reflecting: ExpressionValue.self), problem: "key path does not identify a stored tuple field")))
+    }
+    return Expr(.tupleAccess(stateExpr, index))
+  }
 }

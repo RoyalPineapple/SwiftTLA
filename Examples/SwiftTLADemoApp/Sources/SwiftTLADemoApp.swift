@@ -81,7 +81,7 @@ private struct TwoBucketsView: View {
     private func perform(_ action: TwoBuckets.Action) {
         guard var machine else { return }
         do {
-            _ = try machine.send(action)
+            try machine.send(action)
             self.machine = machine
             error = nil
         }
@@ -209,9 +209,9 @@ private struct DuckDuckLeaderView: View {
         defer { isDelivering = false }
         do {
             var nextMachine = machine
-            let transition = try nextMachine.send(action)
+            try nextMachine.send(action)
             guard runID == simulationID else { return false }
-            let forwarded = transition.after.messages.first {
+            let forwarded = nextMachine.state.messages.first {
                 $0.candidate == candidate &&
                     $0.from == node
             }
@@ -319,7 +319,7 @@ private struct ElevatorBankView: View {
     private func operate(_ action: ElevatorBank.Action) {
         guard var machine else { return }
         do {
-            _ = try machine.send(action)
+            try machine.send(action)
             self.machine = machine
             error = nil
         }
@@ -510,7 +510,7 @@ private struct GeneratedSurfaceSummary: View {
             HStack(alignment: .top, spacing: 18) {
                 GeneratedSurfaceItem(
                     title: "Typed machine",
-                    detail: "Each generated machine exposes State, Action, and Transition."
+                    detail: "Each generated machine exposes typed state and actions."
                 )
                 GeneratedSurfaceItem(
                     title: "Native adapters",
@@ -828,7 +828,7 @@ private struct DuckRingCanvas: View {
         ZStack {
             Circle().stroke(.white.opacity(0.25), lineWidth: 4)
                 .frame(width: layout.radius * 2, height: layout.radius * 2)
-            DuckRingSeats(nodes: nodes, identifiers: state.identifiers, leader: state.leader, layout: layout)
+            DuckRingSeats(nodes: nodes, state: state, layout: layout)
             DuckRingMessages(state: state, activeDelivery: delivery, layout: layout)
             if let delivery {
                 DuckMessageBadge(candidate: delivery.candidate)
@@ -843,17 +843,16 @@ private struct DuckRingCanvas: View {
 
 private struct DuckRingSeats: View {
     let nodes: [ChangRoberts.Node]
-    let identifiers: [ChangRoberts.Node: Int]
-    let leader: Int
+    let state: ChangRoberts.State
     let layout: DuckRingLayout
 
     var body: some View {
         ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
-            if let identifier = identifiers[node] {
+            if let identifier = state.identifiers[node] {
                 DuckSeat(
                     number: index + 1,
                     identifier: identifier,
-                    isLeaderHome: identifier == leader && leader != 0
+                    isLeaderHome: identifier == state.leader && state.leader != 0
                 )
                 .position(layout.ringPoint(for: node))
             }

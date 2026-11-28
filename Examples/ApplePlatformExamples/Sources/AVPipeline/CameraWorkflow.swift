@@ -46,36 +46,34 @@ public struct CameraWorkflow {
 
     public static var spec: TLASpec {
         #spec {
-            let validPhase = Invariant()
-            let cameraWorkflow = Algorithm(scoped: { scope in
+            Algorithm("cameraWorkflow") { scope in
                 let phase = scope.sharedVar(initial: Phase.starting)
                 Each(ReadyProcess.all) { _ in
-                    Do(Step.ready) { When(phase == Phase.starting); Assign(phase, to: Phase.live); Goto(Step.ready) }
+                    Do(Step.ready, when: phase == Phase.starting) { phase.set(Phase.live); Goto(Step.ready) }
                 }
                 Each(RecordProcess.all) { _ in
-                    Do(Step.record) { When(phase == Phase.live); Assign(phase, to: Phase.recording); Goto(Step.record) }
+                    Do(Step.record, when: phase == Phase.live) { phase.set(Phase.recording); Goto(Step.record) }
                 }
                 Each(StopRecordingProcess.all) { _ in
-                    Do(Step.stopRecording) { When(phase == Phase.recording); Assign(phase, to: Phase.stopping); Goto(Step.stopRecording) }
+                    Do(Step.stopRecording, when: phase == Phase.recording) { phase.set(Phase.stopping); Goto(Step.stopRecording) }
                 }
                 Each(RecordingSucceededProcess.all) { _ in
-                    Do(Step.recordingSucceeded) { When(phase == Phase.stopping); Assign(phase, to: Phase.live); Goto(Step.recordingSucceeded) }
+                    Do(Step.recordingSucceeded, when: phase == Phase.stopping) { phase.set(Phase.live); Goto(Step.recordingSucceeded) }
                 }
                 Each(RecordingFailedProcess.all) { _ in
-                    Do(Step.recordingFailed) { When(phase == Phase.recording || phase == Phase.stopping); Assign(phase, to: Phase.live); Goto(Step.recordingFailed) }
+                    Do(Step.recordingFailed, when: phase == Phase.recording || phase == Phase.stopping) { phase.set(Phase.live); Goto(Step.recordingFailed) }
                 }
                 Each(RecordingCancelledProcess.all) { _ in
-                    Do(Step.recordingCancelled) { When(phase == Phase.recording || phase == Phase.stopping); Assign(phase, to: Phase.live); Goto(Step.recordingCancelled) }
+                    Do(Step.recordingCancelled, when: phase == Phase.recording || phase == Phase.stopping) { phase.set(Phase.live); Goto(Step.recordingCancelled) }
                 }
                 Each(PlayProcess.all) { _ in
-                    Do(Step.play) { When(phase == Phase.live); Assign(phase, to: Phase.playing); Goto(Step.play) }
+                    Do(Step.play, when: phase == Phase.live) { phase.set(Phase.playing); Goto(Step.play) }
                 }
                 Each(LiveProcess.all) { _ in
-                    Do(Step.live) { When(phase == Phase.playing); Assign(phase, to: Phase.live); Goto(Step.live) }
+                    Do(Step.live, when: phase == Phase.playing) { phase.set(Phase.live); Goto(Step.live) }
                 }
-                validPhase { phase == Phase.starting || phase == Phase.live || phase == Phase.recording || phase == Phase.stopping || phase == Phase.playing }
-            })
-            cameraWorkflow
+                Invariant("validPhase") { phase == Phase.starting || phase == Phase.live || phase == Phase.recording || phase == Phase.stopping || phase == Phase.playing }
+            }
         }
     }
 }

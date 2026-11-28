@@ -79,7 +79,7 @@ struct EitherChoiceAfterDivisionFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("EitherChoiceAfterDivisionFailureModel") { scope in
-            let divisor = scope.sharedVar(in: 0...1)
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.pick) {
                 Either {
@@ -247,6 +247,28 @@ struct ParameterDerivedDictionaryKeyFailuresModel: Sendable {
 }
 
 @TLAModel
+struct CoordinateCandidateFailuresModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("CoordinateCandidateFailuresModel") { scope in
+            let coordinates = scope.sharedVar(initial: Set<Pair<Int, Int>>([
+                Pair(first: 0, second: -5), Pair(first: -1, second: 4), Pair(first: -1, second: 3)
+            ]))
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                With(coordinates) { point in
+                    result.set(If(point.first() == -1 && point.second() == 3,
+                        then: 1 / divisor, else: 1 % modulus))
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
 struct StateDependentStringCandidateFailuresModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 
@@ -273,7 +295,7 @@ struct BoundBodyChoiceFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("BoundBodyChoiceFailureModel") { scope in
-            let source = scope.sharedVar(in: 0...1)
+            let source = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.pick) {
                 Let(source) { bound in
@@ -292,8 +314,8 @@ struct ConditionalChoiceThenModuloFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("ConditionalChoiceThenModuloFailureModel") { scope in
-            let selector = scope.sharedVar(in: 0...1)
-            let divisor = scope.sharedVar(in: 0...1)
+            let selector = scope.sharedVar(initiallyIn: 0...1)
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.compute) {
                 If(Select(from: Set<Bool>([true])) { _ in selector == 1 }) {
@@ -312,8 +334,8 @@ struct ExpressionConditionalFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("ExpressionConditionalFailureModel") { scope in
-            let mode = scope.sharedVar(in: 0...1)
-            let divisor = scope.sharedVar(in: 0...1)
+            let mode = scope.sharedVar(initiallyIn: 0...1)
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.compute) {
                 Assign(result, to: If(mode == 1,
@@ -330,8 +352,8 @@ struct ShortCircuitFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("ShortCircuitFailureModel") { scope in
-            let enabled = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let divisor = scope.sharedVar(in: 0...1)
+            let enabled = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.conjunction) {
                 When(enabled && (1 % divisor == 0))
@@ -351,9 +373,9 @@ struct NestedShortCircuitFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("NestedShortCircuitFailureModel") { scope in
-            let enabled = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let ready = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let divisor = scope.sharedVar(in: 0...1)
+            let enabled = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let ready = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.advance) {
                 When(enabled && (ready || (1 % divisor == 0)))
@@ -369,9 +391,9 @@ struct ConditionalShortCircuitFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("ConditionalShortCircuitFailureModel") { scope in
-            let enabled = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let ready = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let divisor = scope.sharedVar(in: 0...1)
+            let enabled = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let ready = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.advance) {
                 When(enabled && If(ready, then: true, else: 1 % divisor == 0))
@@ -387,9 +409,9 @@ struct BranchingBooleanFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("BranchingBooleanFailureModel") { scope in
-            let enabled = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let ready = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let divisor = scope.sharedVar(in: 0...1)
+            let enabled = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let ready = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.advance) {
                 When(If(enabled, then: ready && (1 % divisor == 0),
@@ -406,9 +428,9 @@ struct ConditionalBooleanAssignmentModel: Sendable {
 
     static var spec: TLASpec {
         #spec("ConditionalBooleanAssignmentModel") { scope in
-            let enabled = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let ready = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let divisor = scope.sharedVar(in: 0...1)
+            let enabled = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let ready = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: false)
             Do(Step.advance) {
                 Assign(result,
@@ -424,8 +446,8 @@ struct BoundConditionalBodyFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("BoundConditionalBodyFailureModel") { scope in
-            let mode = scope.sharedVar(in: 0...1)
-            let divisor = scope.sharedVar(in: 0...1)
+            let mode = scope.sharedVar(initiallyIn: 0...1)
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.compute) {
                 Let(If(mode == 1,
@@ -464,38 +486,72 @@ struct ConjunctiveAlternativeFailureModel: Sendable {
 }
 
 @TLAModel
-struct BranchwiseConjunctionFailureOrderModel: Sendable {
+struct UndefinedChoiceDomainModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 
     static var spec: TLASpec {
-        #spec("BranchwiseConjunctionFailureOrderModel") { scope in
-            let divisor = scope.sharedVar(in: 0...1)
-            let modulus = scope.sharedVar(in: Set<Int>([-1, 0, 1, 2]))
-            let selected = scope.sharedVar(initial: -1)
+        #spec("UndefinedChoiceDomainModel") { scope in
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.pick) {
-                Either {
-                    Assign(selected, to: 0)
-                } or: {
-                    Assign(selected, to: 1 % modulus)
+                With(SetExpr<Int>.literal(1 / divisor)) { candidate in
+                    Assign(result, to: candidate)
                 }
-                Assign(result, to: 1 / divisor)
             }
         }
     }
 }
 
 @TLAModel
-struct UndefinedChoiceDomainModel: Sendable {
+struct RecordCandidateFailuresModel: Sendable {
+    struct Reply: Hashable, Sendable {
+        let z: Int
+        let a: Int
+    }
+
+    struct StopMessage: Hashable, Sendable {
+        let m: Int
+    }
+
+    typealias Message = OneOf<StopMessage, Reply>
     enum Step: String, CaseIterable { case pick }
 
     static var spec: TLASpec {
-        #spec("UndefinedChoiceDomainModel") { scope in
-            let divisor = scope.sharedVar(in: 0...1)
-            let result = scope.sharedVar(initial: 0)
+        #spec("RecordCandidateFailures") { scope in
+            let messages = scope.sharedVar(initial: SetExpr<Message>.literal(
+                Message.first(StopMessage.expression(m: -99)),
+                Message.second(Reply.expression(z: -2, a: 1)),
+                Message.second(Reply.expression(z: 2, a: 0)),
+                Message.second(Reply.expression(z: 1, a: 0))))
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let value = scope.sharedVar(initial: 0)
             Do(Step.pick) {
-                With(SetExpr<Int>.literal(1 / divisor)) { candidate in
-                    Assign(result, to: candidate)
+                With(messages) { message in
+                    let first = message.recordFields.contains("a")
+                        && message.assuming(Reply.self).a == 0 && message.assuming(Reply.self).z == 1
+                    value.set(If(first, then: 1 / divisor, else: 1 % modulus))
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
+struct SendCandidateOrderModel: Sendable {
+    enum Step: String, CaseIterable { case lateFailure, duplicate }
+
+    static var spec: TLASpec {
+        #spec("SendCandidateOrderModel") { scope in
+            let result = scope.sharedVar(initial: -1)
+            Do(Step.lateFailure) {
+                Choose(0...2) { candidate in
+                    Assign(result, to: 2 / (2 - candidate))
+                }
+            }
+            Do(Step.duplicate) {
+                Choose(0...2) { _ in
+                    Assign(result, to: 7)
                 }
             }
         }

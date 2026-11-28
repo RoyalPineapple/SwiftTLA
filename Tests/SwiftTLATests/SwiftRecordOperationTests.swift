@@ -3,7 +3,7 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct SwiftRecordOperationTests {
-    @Test("record fingerprints include nested field types even when values are empty")
+    @Test("record fingerprints preserve literal kinds and nested field types")
     func fingerprintsResolvedFields() throws {
         func expression(element: CompiledValueType) -> StateExpr {
             .recordLiteral(.init(orderedFields: [.init(name: "items", value: .tupleLiteral([]))],
@@ -20,6 +20,15 @@ struct SwiftRecordOperationTests {
                 invariants: []).compile()
         }
         #expect(try compilation(integers).identity != compilation(booleans).identity)
+        let recordValue = TLAValue.record(["WF_payload": .int(1)])
+        let functionValue = TLAValue.function([.string("WF_payload"): .int(1)])
+        for (left, right) in [(recordValue, functionValue),
+                              (.tuple([recordValue]), .tuple([functionValue])),
+                              (.bool(true), .constant("TRUE"))] {
+            #expect(left != right)
+            #expect(alphaKey(StateExpr.value(left)) != alphaKey(.value(right)))
+            #expect(try compilation(.value(left)).identity != compilation(.value(right)).identity)
+        }
         #expect(alphaKey(expression(element: .nominalRecord("Item", [.init(name: "value", type: .int)])))
             != alphaKey(expression(element: .nominalRecord("Item", [.init(name: "value", type: .bool)]))))
     }
@@ -53,6 +62,32 @@ struct SwiftRecordOperationTests {
         #expect(formal.renderedModuleSource.contains("count |->"))
         #expect(formal.renderedModuleSource.contains("ready |->"))
         #expect(!formal.renderedModuleSource.contains("RecordMachine.Packet"))
+
+        typealias Packet = GeneratedSwiftRecord.Packet
+        let authored = SetExpr(Packet(count: 1, ready: false), Packet(count: 2, ready: false),
+            Packet(count: 1, ready: false))
+        #expect(authored.elements.map(\.count).sorted() == [1, 2])
+        #expect(try compiledValue(authored.cardinality.stateExpr) == .int(2))
+        let selected = Select(from: authored) { $0.count == 2 }
+        #expect(try compiledValue(selected.stateExpr) == .record(["count": .int(2), "ready": .bool(false)]))
+        for spelling in ["SetExpr<Packet>.literal", "SetExpr<Packet>"] {
+            for predicate in ["candidate in candidate.count == 2", "$0.count == 2"] {
+                do {
+                    let selected = try swiftRecordModel(replacement:
+                        "Select(from: \(spelling)(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { \(predicate) }")
+                    let variable = try #require(selected.program.layout.variables.first { $0.declaration.name == "packet" })
+                    #expect(selected.program.variableTypes[variable.id] == expected)
+                    var selectedEmitter = NativeSwiftEmitter(model: selected)
+                    #expect(try !selectedEmitter.machineMembers().isEmpty)
+                } catch {
+                    Issue.record("\(spelling), \(predicate): \(error)")
+                }
+            }
+        }
+        #expect(throws: SourceParseDiagnostic.self) {
+            try swiftRecordModel(replacement:
+                "Select(from: SetExpr<Packet>(Packet.expression(count: packet.count, ready: true))) { candidate in true }")
+        }
     }
 
     @Test("Swift record constructors reject wrong identities, fields, and field types", arguments: [

@@ -94,7 +94,8 @@ extension StateExpr {
         case .processLocalFamily(let name): return replacements.values[.processLocalFamily(name)] ?? expr
         case .currentProcess: return replacements.values[.currentProcess] ?? expr
         case .programCounter, .procedureStack: return expr
-        case .value, .integerSet, .controlLocation, .enabledAction: return expr
+        case .value, .integerSet, .controlLocation: return expr
+        case .enabledAction(let name, let argument): return .enabledAction(name, argument: argument.map { sub($0) })
         case .add(let l, let r): return .add(sub(l), sub(r))
         case .subtract(let l, let r): return .subtract(sub(l), sub(r))
         case .multiply(let l, let r): return .multiply(sub(l), sub(r))
@@ -167,6 +168,7 @@ extension StateExpr {
         case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
         case .sequenceFromFunction(let function): return .sequenceFromFunction(sub(function))
         case .printT(let value): return .printT(sub(value))
+        case .printReturning(let value, let result): return .printReturning(sub(value), sub(result))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))
         case .randomSubset(let count, let domain): return .randomSubset(sub(count), sub(domain))
@@ -251,7 +253,8 @@ extension StateExpr {
         }
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
-            case .sourceIssue, .value, .integerSet, .variable, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction: return expression
+            case .sourceIssue, .value, .integerSet, .variable, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation: return expression
+            case .enabledAction(let name, let argument): return .enabledAction(name, argument: argument.map(visit))
             case .setCheckingRegister(let reference, let value): return .setCheckingRegister(reference, visit(value))
             case .add(let a, let b): return .add(visit(a), visit(b))
             case .subtract(let a, let b): return .subtract(visit(a), visit(b))
@@ -318,6 +321,7 @@ extension StateExpr {
             case .sequenceFromSet(let value): return .sequenceFromSet(visit(value))
             case .sequenceFromFunction(let function): return .sequenceFromFunction(visit(function))
             case .printT(let value): return .printT(visit(value))
+            case .printReturning(let value, let result): return .printReturning(visit(value), visit(result))
             case .setSum(let function, let set): return .setSum(visit(function), visit(set))
             case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
             case .randomSubset(let count, let domain): return .randomSubset(visit(count), visit(domain))

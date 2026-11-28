@@ -6,7 +6,7 @@ struct ChangRobertsDemoTests {
     @Test("message state preserves the authored Swift record and validates formal fields")
     func preservesMessageRecord() throws {
         let machine = try ChangRoberts.makeMachine()
-        let messages: Set<ChangRoberts.Message> = machine.state.messages
+        let messages = machine.state.messages
         let message = ChangRoberts.Message(candidate: 12, from: .five, to: .six)
         #expect(messages.contains(message))
         #expect(ChangRoberts.Message(formalValue: message.tlaValue) == message)
@@ -25,7 +25,7 @@ struct ChangRobertsDemoTests {
     func electsLargestIdentifier() throws {
         var machine = try ChangRoberts.makeMachine()
         let dropped = ChangRoberts.Message(candidate: 2, from: .two, to: .three)
-        _ = try machine.send(.deliver(process: .three))
+        try machine.send(.deliver(process: .three))
         #expect(!machine.state.messages.contains(dropped))
         #expect(machine.state.messages.count == 11)
 
@@ -53,7 +53,7 @@ struct ChangRobertsDemoTests {
         #expect(machine.state.messages.count == 12)
         #expect(try machine.isEnabled(.deliver(process: .six)))
 
-        _ = try machine.send(.deliver(process: .six))
+        try machine.send(.deliver(process: .six))
 
         let forwarded = try #require(machine.state.messages.first {
             $0.candidate == 12 &&
@@ -66,7 +66,7 @@ struct ChangRobertsDemoTests {
     @Test("Chang–Roberts actor serializes a typed delivery")
     func actorExecutesTypedDelivery() async throws {
         let actor = try ChangRoberts.Actor()
-        _ = try await actor.send(.deliver(process: .six))
+        try await actor.send(.deliver(process: .six))
 
         let state = await actor.state
         let forwarded = try #require(state.messages.first {

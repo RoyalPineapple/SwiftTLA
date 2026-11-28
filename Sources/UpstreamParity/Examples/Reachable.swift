@@ -1,65 +1,87 @@
+// A work list discovers all nodes reachable from the starting node.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MisraReachability/Reachable.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
-/// A bounded source port of Misra's reachable-node algorithm.
-///
-/// The upstream TLC configuration chooses a four-node graph in which every
-/// node has exactly two successors. This model makes that configuration a
-/// static formal choice, then runs the published work-list algorithm.
 @TLAModel
 package struct ReachableModel: Sendable {
-    package enum Node: Int, FiniteTLAValueDomain {
-        case one = 1
-        case two = 2
-        case three = 3
-        case four = 4
-
-        package static var defaultValue: Self { .one }
-        package static let finiteValues: [Self] = [.one, .two, .three, .four]
-
-        package var tlaValue: TLAValue { .int(rawValue) }
+    package enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case n1, n2, n3, n4
+        package static var defaultValue: Self { .n1 }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
-        case a
+        case processFrontierOrFinish = "a"
+        case terminating = "Terminating"
     }
 
     package static var spec: TLASpec {
-        #spec("Reachable") {
-            Extends(.finiteSets)
-            Extends(.integers)
-            let Reachable = Algorithm(fairness: .weak, scoped: { scope in
-                let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
-                let successors = Select(
-                    from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
-                        ForAll(Node.all) { node in
-                            graph[node].cardinality == 2
-                        }
-                    },
-                    matching: { graph in graph.expr == graph.expr }
-                )
-                let marked = scope.sharedVar(initial: SetExpr<Node>())
-                let frontier = scope.sharedVar(initial: SetExpr<Node>.literal(.one))
+        #spec("MCReachable") { scope in
+            let population = Set<Node>([.n1, .n2, .n3, .n4])
+            let nodes = scope.parameter(as: Set<Node>.self, in: Subsets(of: population))
+            let start = scope.parameter(as: Node.self, in: population)
+            let root = Set<Node>().inserting(start)
+            let pairs = Subsets(of: nodes).filter { neighbors in neighbors.count == 2 }
+            let successors = Select(from: Functions(from: nodes, to: pairs)) { _ in true }
 
-                While(Step.a, !frontier.isEmpty) {
-                    With(frontier) { node in
-                        If(!marked.contains(node)) {
-                            Assign(marked, to: marked.inserting(node))
-                            Assign(frontier, to: frontier.expr.union(successors[node]))
+            FormalDefinition("FollowsEdges", taking: [Node].self, Dictionary<Node, Set<Node>>.self) { path, graph -> Expr<Bool> in
+                IntRange(1, through: path.count - 1).allSatisfy { i in
+                    graph[path[i]].contains(path[i + 1])
+                }
+            }
+            let paths = Sequences(of: nodes, lengths: IntRange(1, through: nodes.count))
+            FormalDefinition("ReachableFrom", taking: Set<Node>.self, Dictionary<Node, Set<Node>>.self) { starts, graph -> Expr<Set<Node>> in
+                nodes.filter { end in
+                    paths.contains { path in
+                        starts.contains(path[1]) && path[path.count] == end
+                            && FormalCall(as: Bool.self, "FollowsEdges", path, graph)
+                    }
+                }
+            }
+
+            let marked = scope.sharedVar(initial: Set<Node>())
+            let vroot = scope.sharedVar(initial: root)
+            let pc = scope.sharedVar(initial: "a")
+
+            let processFrontierOrFinish = Do(Step.processFrontierOrFinish) {
+                When(pc == "a")
+                If(vroot.isEmpty) {
+                    pc.set("Done")
+                } else: {
+                    With(vroot) { node in
+                        If(marked.contains(node)) {
+                            vroot.remove(node)
                         } else: {
-                            Assign(frontier, to: frontier.removing(node))
+                            marked.insert(node)
+                            vroot.formUnion(successors[node])
                         }
                     }
                 }
+            }
+            let terminating = Do(Step.terminating) {
+                When(pc == "Done")
+                Skip()
+            }
+            WeakFairness(anyOf: [processFrontierOrFinish, terminating])
 
-                Invariant("TypeOK") {
-                    marked.isSubset(of: SetExpr<Node>.literal(.one, .two, .three, .four))
-                    frontier.isSubset(of: SetExpr<Node>.literal(.one, .two, .three, .four))
-                    (!Finished()) || frontier.isEmpty
-                }
-                Eventually("EventuallyFinished", Finished())
-            })
-            Reachable
+            let wellTyped = marked.isSubset(of: nodes) && vroot.isSubset(of: nodes)
+                && Set<String>(["a", "Done"]).contains(pc) && (pc != "Done" || vroot.isEmpty)
+            let discovered = marked.union(vroot)
+            let reachable = FormalCall(as: Set<Node>.self, "ReachableFrom", root, successors)
+            let remaining = FormalCall(as: Set<Node>.self, "ReachableFrom", vroot, successors)
+            Invariant("TypeOK") { wellTyped }
+            Invariant("Inv1") { wellTyped && marked.allSatisfy { node in successors[node].isSubset(of: discovered) } }
+            Invariant("Inv2") { marked.union(remaining) == FormalCall(as: Set<Node>.self, "ReachableFrom", discovered, successors) }
+            Invariant("Inv3") { reachable == marked.union(remaining) }
+            Invariant("PartialCorrectness") { pc != "Done" || marked == reachable }
+            Eventually("Termination", pc == "Done")
+            Validation("Upstream") {
+                Bind(nodes, to: population)
+                Bind(start, to: Node.n1)
+            }
         }
     }
 }

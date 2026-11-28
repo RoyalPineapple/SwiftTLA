@@ -12,7 +12,6 @@ Each generated machine exposes these `Sendable` value types:
 - `State`: immutable typed values for declared variables.
 - `Action`: a typed action identity and typed parameters.
 - `Property`: a model-owned identity for each invariant, reachability goal, temporal property, and refinement.
-- `Transition`: the typed action and state before and after one successful transition.
 
 Collections use native `Set`, `Array`, and `Dictionary` values. Pairs and records
 use generated immutable structs, and finite unions use generated enums.
@@ -34,9 +33,9 @@ serializes `send(_:)` and exposes the same typed state and actions.
 
 ```swift
 let actor = try Counter.Actor()
-let transition = try await actor.send(.advance)
+try await actor.send(.advance)
 let actorState = await actor.state
-assert(actorState == transition.after)
+assert(actorState.count == 1)
 
 let seeded = try Counter.Actor(.init(count: 0))
 let seededState = await seeded.state
@@ -45,6 +44,16 @@ assert(seededState.count == 0)
 
 The typed initializer selects one unique state from the source model's declared
 initial states.
+
+`initialOutcomes()` retains successful initial states and reached model failures.
+An attempt to enumerate mathematical `Int` or `Seq(S)` with a nonempty element set throws a capability error.
+Powersets, integer ranges and function spaces also throw when their collection count exceeds native representation limits.
+Call-depth exhaustion and missing checking contexts propagate too.
+This does not mean that a model branch failed.
+Logical out-of-domain function calls remain reached model failures.
+An assumption-only model without parameters has one empty initial state.
+An empty set of initial states represents a different outcome.
+When domain membership does not require enumeration, you can supply a typed initial state to `makeMachine(_:)`.
 
 ## Property checks
 
@@ -61,10 +70,17 @@ A property from another model cannot identify a result in this model.
 
 ## Model-owned validation scenarios
 
-`let completesAtTwo = Validation(label: "Completes at two") { Bind(limit, to: 2); Bind(stopAtLimit, to: true) }`
-followed by `completesAtTwo` inside `#spec` declares a finite configuration
-beside the algorithm. The binding is its identity; the optional label is only
-for display. `.expectDeadlock(.violated)` changes the expected deadlock outcome
+A validation call inside `#spec` names the scenario and supplies its parameters.
+The optional label appears in reports.
+
+```swift
+Validation("completesAtTwo", label: "Completes at two") {
+    Bind(limit, to: 2)
+    Bind(stopAtLimit, to: true)
+}
+```
+
+`.expectDeadlock(.violated)` changes the expected deadlock outcome
 without disabling its check.
 
 `Model.validationScenarios()` returns immutable generated scenario values.

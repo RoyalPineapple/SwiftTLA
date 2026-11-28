@@ -1,3 +1,6 @@
+// Interleaved processes update their own entries in two shared arrays.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TeachingConcurrency/Simple.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -17,10 +20,7 @@ package struct TeachingSimpleN5Model: Sendable {
     package static var spec: TLASpec {
         #spec("Simple") {
             Extends(.integers)
-            let PCorrect = Invariant()
-            let TypeOK = Invariant()
-            let Inv = Invariant()
-            let Simple = Algorithm(scoped: { scope in
+            Algorithm("Simple") { scope in
                 let x = scope.sharedVar(initial: Function<Process, Int>.mapping { _ in 0 })
                 let y = scope.sharedVar(initial: Function<Process, Int>.mapping { _ in 0 })
                 let predecessor = Function<Process, Process>.literal(
@@ -29,35 +29,33 @@ package struct TeachingSimpleN5Model: Sendable {
 
                 Each(Process.all) { process in
                     Do(Step.a) {
-                        Assign(x, to: x.updating(process, to: 1))
+                        x.set(x.updating(process, to: 1))
                     }
                     Do(Step.b) {
-                        Assign(y, to: y.updating(process, to: x[predecessor[process]]))
+                        y.set(y.updating(process, to: x[predecessor[process]]))
                     }
                 }
 
-                let typeOK = ForAll(Process.all) { process in
+                let typeOK = Process.all.allSatisfy { process in
                     SetExpr<Int>.literal(0, 1).contains(x[process])
                         && SetExpr<Int>.literal(0, 1).contains(y[process])
                         && (At(Step.a, process) || At(Step.b, process) || Finished(process))
                 }
-                PCorrect {
-                    !ForAll(Process.all) { process in Finished(process) }
-                        || Exists(in: Process.all) { process in y[process] == 1 }
+                Invariant("PCorrect") {
+                    !Process.all.allSatisfy { process in Finished(process) }
+                        || Process.all.contains { process in y[process] == 1 }
                 }
-                TypeOK { typeOK }
-                Inv {
+                Invariant("TypeOK") { typeOK }
+                Invariant("Inv") {
                     typeOK
-                    ForAll(Process.all) { process in
+                    Process.all.allSatisfy { process in
                         !(At(Step.b, process) || Finished(process)) || x[process] == 1
                     }
-                    !ForAll(Process.all) { process in Finished(process) }
-                        || Exists(in: Process.all) { process in y[process] == 1 }
+                    !Process.all.allSatisfy { process in Finished(process) }
+                        || Process.all.contains { process in y[process] == 1 }
                 }
-            })
-            Simple
-            let simpleValidation = Validation(label: "Simple") {}
-            simpleValidation
+            }
+            Validation("simpleValidation", label: "Simple") {}
         }
     }
 }

@@ -6,6 +6,40 @@ package enum MachineValidationEvidenceError: Error, Equatable {
     case invalidPropertyName
 }
 
+private struct RecordedActionFailure: Encodable {
+    let source: Int
+    struct Binding: Encodable {
+        let binding: Int
+        let target: Int
+        let value: Int
+    }
+
+    let action: Int
+    let branch: Int?
+    let phase: String?
+    let site: Int
+    let target: Int
+    let before: [Binding]
+    let payload: BinaryEvaluationFailure
+
+    init(_ occurrence: ValidationActionFailureOccurrence) {
+        source = occurrence.source
+        action = occurrence.failure.action
+        switch occurrence.failure.location {
+        case .arm(let ordinal):
+            branch = ordinal
+            phase = nil
+        case .sharedPrefix:
+            branch = nil
+            phase = "sharedPrefix"
+        }
+        site = occurrence.failure.site
+        target = occurrence.failure.target
+        before = occurrence.failure.before.map { Binding(binding: $0.binding, target: $0.target, value: $0.value) }
+        payload = BinaryEvaluationFailure(occurrence.failure.reason)
+    }
+}
+
 private struct MachineValidationProfile: Encodable {
     let schema: String
     let caseID: String
@@ -30,6 +64,7 @@ private struct MachineValidationProfile: Encodable {
     let estimatedCanonicalEncodingSeconds: Double
     let estimatedStateWriteSeconds: Double
     let estimatedEdgeWriteSeconds: Double
+    let orderedActionFailureHistory: [RecordedActionFailure]?
 }
 
 /// Append-only evidence from the generated Swift machine. TLC is never read by this checker.
@@ -38,7 +73,9 @@ package enum MachineValidationEvidence {
         scenario: Scenario, initialMachines: [Scenario.Machine], caseID: String,
         maximumStates: Int, stopOnViolation: Bool,
         stopOnReachability: Bool = false,
-        checking: ModelChecks<Scenario.Property>? = nil, to output: URL,
+        checking: ModelChecks<Scenario.Property>? = nil,
+        fairness: [MachineFairnessCondition<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = [],
+        to output: URL,
         observe: ((MachineValidationEvent<Scenario.Machine>) throws -> Void)? = nil
     ) throws -> MachineValidationSummary<Scenario.Property> {
         let startedAt = DispatchTime.now().uptimeNanoseconds
@@ -59,7 +96,6 @@ package enum MachineValidationEvidence {
         var actionIDs: [Scenario.Machine.Action: UInt32] = [:]
         var previousAction: (action: Scenario.Machine.Action, id: UInt32)?
         var stateEvents = 0
-        var stateLevels: [Int] = []
         var edgeEvents = 0
         var sampledStates = 0
         var sampledEdges = 0
@@ -85,64 +121,64 @@ package enum MachineValidationEvidence {
             return id
         }
 
-        func level(after predecessor: Int?) throws -> Int {
-            guard let predecessor else { return 1 }
-            guard stateLevels.indices.contains(predecessor) else {
-                throw ExplorationError.configurationMismatch
+        func encode(_ snapshot: Scenario.Machine.Snapshot, observation: MachineValidationObservation<Scenario.Machine>,
+                    sampled: Bool = false) throws -> Data? {
+            guard let level = observation.checkingLevel else { throw ExplorationError.configurationMismatch }
+            let start = sampled ? DispatchTime.now().uptimeNanoseconds : 0
+            var projectionTime: UInt64 = 0
+            defer {
+                if sampled {
+                    typedProjectionNanoseconds += projectionTime
+                    canonicalEncodingNanoseconds += DispatchTime.now().uptimeNanoseconds - start - projectionTime
+                }
             }
-            let (next, overflow) = stateLevels[predecessor].addingReportingOverflow(1)
-            guard !overflow else { throw ExplorationError.levelOverflow }
-            return next
-        }
-
-        func encodeStateKey(_ snapshot: Scenario.Machine.Snapshot, atLevel level: Int) throws {
-            try stateKeyEncoder.encode(scenario.formalIdentityProjection(of: snapshot, using: machine,
-                atLevel: level),
-                viewed: scenario.usesView)
-        }
-
-        func representative(_ snapshot: Scenario.Machine.Snapshot) throws -> Data? {
+            if case .tupleFields(let slots) = observation.identity {
+                do {
+                    try representativeEncoder.encode(tupleView: slots, key: &stateKeyEncoder,
+                        visit: { try machine._visitFormalProjection(of: snapshot, into: &$0) },
+                        projection: {
+                            let full = try machine.formalProjection(of: snapshot)
+                            if sampled { projectionTime = DispatchTime.now().uptimeNanoseconds - start }
+                            return full
+                        })
+                    return representativeEncoder.bytes
+                } catch {
+                    // Match ordinary capture's diagnostic if the VIEW also fails.
+                    try stateKeyEncoder.encode(scenario.formalIdentityProjection(of: snapshot, using: machine,
+                        atLevel: level), viewed: true)
+                    throw error
+                }
+            }
+            let key: TLAStateProjection
+            if case .evaluated(let evaluated) = observation.identity { key = evaluated }
+            else { key = try scenario.formalIdentityProjection(of: snapshot, using: machine, atLevel: level) }
+            if sampled { projectionTime = DispatchTime.now().uptimeNanoseconds - start }
+            try stateKeyEncoder.encode(key, viewed: scenario.usesView)
             guard scenario.usesView else { return nil }
-            try representativeEncoder.encode(machine.formalProjection(of: snapshot))
+            let beforeFull = sampled ? DispatchTime.now().uptimeNanoseconds : 0
+            let full = try machine.formalProjection(of: snapshot)
+            if sampled { projectionTime += DispatchTime.now().uptimeNanoseconds - beforeFull }
+            try representativeEncoder.encode(full)
             return representativeEncoder.bytes
         }
 
-        let result = try scenario.runValidation(initialMachines: initialMachines,
+        let result = try scenario.captureValidation(initialMachines: initialMachines,
             maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability
-        ) { event in
+            stopOnReachability: stopOnReachability, fairness: fairness
+        ) { observation in
+            let event = observation.event
             switch event {
             case .state(let id, let snapshot, let isInitial, let predecessor, _):
-                let checkingLevel: Int
-                if scenario.usesView {
-                    guard id == stateLevels.count, isInitial == (predecessor == nil) else {
-                        throw ExplorationError.configurationMismatch
-                    }
-                    checkingLevel = try level(after: predecessor)
-                    stateLevels.append(checkingLevel)
-                } else {
-                    checkingLevel = 1
-                }
+                guard id == stateEvents, isInitial == (predecessor == nil) else { throw ExplorationError.configurationMismatch }
                 stateEvents += 1
-                if stateEvents % 256 == 1 {
+                let sampled = stateEvents % 256 == 1
+                let full = try encode(snapshot, observation: observation, sampled: sampled)
+                let writeStartedAt = sampled ? DispatchTime.now().uptimeNanoseconds : 0
+                try writer.state(id: UInt64(id), key: stateKeyEncoder.bytes, initial: isInitial, representative: full)
+                if sampled {
                     sampledStates += 1
-                    let projectionStartedAt = DispatchTime.now().uptimeNanoseconds
-                    let projection = try scenario.formalIdentityProjection(of: snapshot, using: machine,
-                        atLevel: checkingLevel)
-                    let encodingStartedAt = DispatchTime.now().uptimeNanoseconds
-                    try stateKeyEncoder.encode(projection, viewed: scenario.usesView)
-                    let writeStartedAt = DispatchTime.now().uptimeNanoseconds
-                    try writer.state(id: UInt64(id), key: stateKeyEncoder.bytes, initial: isInitial,
-                        representative: representative(snapshot))
-                    let finishedAt = DispatchTime.now().uptimeNanoseconds
-                    typedProjectionNanoseconds += encodingStartedAt - projectionStartedAt
-                    canonicalEncodingNanoseconds += writeStartedAt - encodingStartedAt
-                    stateWriteNanoseconds += finishedAt - writeStartedAt
-                } else {
-                    try encodeStateKey(snapshot, atLevel: checkingLevel)
-                    try writer.state(id: UInt64(id), key: stateKeyEncoder.bytes, initial: isInitial,
-                        representative: representative(snapshot))
+                    stateWriteNanoseconds += DispatchTime.now().uptimeNanoseconds - writeStartedAt
                 }
             case .edge(let source, let action, let target):
                 let action = try actionID(action)
@@ -160,11 +196,10 @@ package enum MachineValidationEvidence {
                     throw MachineValidationEvidenceError.invalidPropertyName
                 }
                 let action = try action.map(actionID)
-                try encodeStateKey(snapshot,
-                    atLevel: scenario.usesView ? level(after: predecessor) : 1)
+                let full = try encode(snapshot, observation: observation)
                 try writer.invariantFailure(property: name, key: stateKeyEncoder.bytes,
                     predecessor: predecessor.map(UInt64.init), action: action,
-                    representative: representative(snapshot))
+                    representative: full)
             case .deadlock(let state):
                 try writer.deadlock(state: UInt64(state))
             case .reachability(let property, let snapshot, let predecessor, let action):
@@ -172,11 +207,10 @@ package enum MachineValidationEvidence {
                     throw MachineValidationEvidenceError.invalidPropertyName
                 }
                 let action = try action.map(actionID)
-                try encodeStateKey(snapshot,
-                    atLevel: scenario.usesView ? level(after: predecessor) : 1)
+                let full = try encode(snapshot, observation: observation)
                 try writer.reached(property: name, key: stateKeyEncoder.bytes,
                     predecessor: predecessor.map(UInt64.init), action: action,
-                    representative: representative(snapshot))
+                    representative: full)
             case .evaluationFailure(let source, let action, let reason):
                 try writer.evaluationFailure(source: UInt64(source), action: actionID(action), reason: reason)
             }
@@ -218,7 +252,8 @@ package enum MachineValidationEvidence {
             estimatedStateWriteSeconds: estimatedSeconds(
                 stateWriteNanoseconds, samples: sampledStates, total: stateEvents),
             estimatedEdgeWriteSeconds: estimatedSeconds(
-                edgeWriteNanoseconds, samples: sampledEdges, total: edgeEvents))
+                edgeWriteNanoseconds, samples: sampledEdges, total: edgeEvents),
+            orderedActionFailureHistory: result.orderedActionFailureHistory?.map(RecordedActionFailure.init))
         try JSONEncoder().encode(profile).write(
             to: output.deletingPathExtension().appendingPathExtension("profile.json"), options: .atomic)
         return result

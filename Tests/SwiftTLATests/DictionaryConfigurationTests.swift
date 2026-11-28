@@ -30,7 +30,7 @@ struct DictionaryConfigurationTests {
             jugs: ["small", "big"], capacity: ["small": 3, "big": 5])
         var machine = try ConfiguredDictionaryValues.makeMachine(configuration: configuration)
         #expect(machine.state.contents == configuration.capacity)
-        _ = try machine.send(.fill(jug: "small"))
+        try machine.send(.fill(jug: "small"))
         #expect(machine.state.contents == ["small": 3, "big": 5])
     }
 
@@ -39,7 +39,7 @@ struct DictionaryConfigurationTests {
     ])
     func rejectsInvalidFunctions(_ capacity: [String: Int]) {
         #expect(throws: (any Error).self) {
-            try ConfiguredDictionaryValues.Configuration(jugs: ["small", "big"], capacity: capacity)
+            try ConfiguredDictionaryValues.Configuration(jugs: ["small", "big"], capacity: .init(uniqueKeysWithValues: capacity.map { (_NativeString(sourceString: $0.key), $0.value) }))
         }
     }
 

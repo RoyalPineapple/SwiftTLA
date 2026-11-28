@@ -28,9 +28,9 @@ struct DieHardestParallelCorpusCheckingTests {
         let scenario = try #require(DieHardestParallelModel.validationScenarios().first { $0.name == name })
         let graph = try scenario.explore(maximumStates: 100_000)
         #expect(graph.initialStates.count == 1)
-        func next(_ contents: [String: Int], capacities: [String: Int]) -> Set<[String: Int]> {
+        func next(_ contents: [_NativeString: Int], capacities: [_NativeString: Int]) -> Set<[_NativeString: Int]> {
             if freeze && contents.values.contains(2) { return [contents] }
-            var result: Set<[String: Int]> = []
+            var result: Set<[_NativeString: Int]> = []
             for j in capacities.keys {
                 var filled = contents
                 filled[j] = capacities[j]

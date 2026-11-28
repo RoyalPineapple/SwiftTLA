@@ -76,7 +76,7 @@ struct SymmetryParserFidelityTests {
                     finiteValues: [.string("t1"), .string("t2")])
             ]))
         #expect(parsed.diagnostics.map(\.message) == [
-            "Symmetry requires an immutable named let binding and a registration reference."
+            "Symmetry requires a named let binding or an inline literal name."
         ])
 
         let mutable = try #require(Parser.parse(source: """

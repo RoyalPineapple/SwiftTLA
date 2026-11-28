@@ -1,3 +1,6 @@
+// Philosophers alternate between thinking and eating while competing with their neighbors.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DiningPhilosophers/DiningPhilosophers.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -37,7 +40,7 @@ package struct DiningPhilosophersModel: Sendable {
             let ExclusiveAccess = Invariant()
             let NobodyStarves = AlwaysEventually()
 
-            let DiningPhilosophers = Algorithm(scoped: { scope in
+            Algorithm("DiningPhilosophers") { scope in
                 let forks = scope.sharedVar(initial: Function<Philosopher, Fork>.literal(
                     (Philosopher.one, Fork(holder: Philosopher.one, clean: false)),
                     (Philosopher.two, Fork(holder: Philosopher.one, clean: false)),
@@ -46,7 +49,7 @@ package struct DiningPhilosophersModel: Sendable {
                     (Philosopher.five, Fork(holder: Philosopher.five, clean: false))
                 ))
 
-                Each(Philosopher.all, fairness: .weak, scoped: { philosopher, scope in
+                Each(Philosopher.all, fairness: .weak) { philosopher, scope in
                     let hungry = scope.localVar(initial: true)
 
                     Do(Step.loop) {
@@ -66,35 +69,32 @@ package struct DiningPhilosophersModel: Sendable {
                             && rightFork.clean == true) { canEat in
 
                             Either {
-                                When(leftFork.holder == philosopher && leftFork.clean == false)
-                                Assign(forks[philosopher].holder, to: left)
-                                Assign(forks[philosopher].clean, to: true)
-                            } or: {
-                                Either {
-                                    When(
-                                        rightFork.holder == philosopher
-                                            && rightFork.clean == false
-                                            && !(leftFork.holder == philosopher && leftFork.clean == false)
-                                    )
-                                    Assign(forks[right].holder, to: right)
-                                    Assign(forks[right].clean, to: true)
-                                } or: {
-                                    When(
-                                        !(leftFork.holder == philosopher && leftFork.clean == false)
-                                            && !(rightFork.holder == philosopher && rightFork.clean == false)
-                                    )
+                                When(leftFork.holder == philosopher && leftFork.clean == false) {
+                                    forks[philosopher].holder.set(left)
+                                    forks[philosopher].clean.set(true)
                                 }
+                                When(
+                                    rightFork.holder == philosopher
+                                        && rightFork.clean == false
+                                        && !(leftFork.holder == philosopher && leftFork.clean == false)
+                                ) {
+                                    forks[right].holder.set(right)
+                                    forks[right].clean.set(true)
+                                }
+                                When(
+                                    !(leftFork.holder == philosopher && leftFork.clean == false)
+                                        && !(rightFork.holder == philosopher && rightFork.clean == false)
+                                ) {}
                             }
 
                             Either {
-                                When(canEat && hungry == true)
-                                Goto(Step.eat)
-                            } or: {
-                                Either {
-                                    When(!canEat && hungry == true)
+                                When(canEat && hungry == true) {
+                                    Goto(Step.eat)
+                                }
+                                When(!canEat && hungry == true) {
                                     Goto(Step.loop)
-                                } or: {
-                                    When(hungry == false)
+                                }
+                                When(hungry == false) {
                                     Goto(Step.think)
                                 }
                             }
@@ -102,7 +102,7 @@ package struct DiningPhilosophersModel: Sendable {
                     }
 
                     Do(Step.think) {
-                        Assign(hungry, to: true)
+                        hungry.set(true)
                         Goto(Step.loop)
                     }
 
@@ -111,9 +111,9 @@ package struct DiningPhilosophersModel: Sendable {
                             If(philosopher == Philosopher.two, then: Philosopher.three, else:
                                 If(philosopher == Philosopher.three, then: Philosopher.four, else:
                                     If(philosopher == Philosopher.four, then: Philosopher.five, else: Philosopher.one))))
-                        Assign(hungry, to: false)
-                        Assign(forks[philosopher].clean, to: false)
-                        Assign(forks[right].clean, to: false)
+                        hungry.set(false)
+                        forks[philosopher].clean.set(false)
+                        forks[right].clean.set(false)
                         Goto(Step.loop)
                     }
 
@@ -126,13 +126,13 @@ package struct DiningPhilosophersModel: Sendable {
                             || forks[philosopher].holder == .four
                             || forks[philosopher].holder == .five)
                             && (hungry == true || hungry == false)
-                            && (At(Step.loop, philosopher) || At(Step.think, philosopher) || At(Step.eat, philosopher))
+                            && philosopher.isAt(anyOf: Step.loop, .think, .eat)
                     }
-                })
+                }
 
                 ExclusiveAccess {
-                    ForAll(Philosopher.all) { first in
-                        ForAll(Philosopher.all) { second in
+                    Philosopher.all.allSatisfy { first in
+                        Philosopher.all.allSatisfy { second in
                             first == second
                                 || !(At(Step.eat, first) && At(Step.eat, second)
                                     && ((first == Philosopher.one && second == Philosopher.two)
@@ -143,14 +143,11 @@ package struct DiningPhilosophersModel: Sendable {
                         }
                     }
                 }
-            })
-            DiningPhilosophers
-            let NP5 = Validation {}
-            NP5
-            let apNP5 = Validation(label: "AP NP5") {}
+            }
+            Validation("NP5") {}
+            Validation("apNP5", label: "AP NP5") {}
                 .checking(only: [TypeOK, ExclusiveAccess])
                 .behavior(.initialAndNext)
-            apNP5
         }
     }
 }

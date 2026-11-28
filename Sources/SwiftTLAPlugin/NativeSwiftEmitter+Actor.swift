@@ -11,7 +11,7 @@ extension NativeSwiftEmitter {
         let configurationArguments = machineArguments
         let actionMembers = model.api.actions.isEmpty ? "" : """
 
-                public func isEnabled(_ action: Action) throws -> Bool {
+                public func isEnabled(_ action: Action) throws -> \(nativeBoolType) {
                     try machine.isEnabled(action)
                 }
 
@@ -19,7 +19,7 @@ extension NativeSwiftEmitter {
                     try machine.enabledActions()
                 }
 
-                public func send(_ action: Action) throws -> Transition {
+                public func send(_ action: Action) throws {
                     try machine.send(action)
                 }
                 """

@@ -11,7 +11,7 @@ struct ClockView: View {
                 Button("Tick") {
                     do {
                         var machine = machine
-                        _ = try machine.send(.tick)
+                        try machine.send(.tick)
                         self.machine = machine
                         diagnostic = ""
                     } catch {

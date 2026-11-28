@@ -1,3 +1,6 @@
+// The same concurrency exercise models overlapping writes to regular registers.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TeachingConcurrency/SimpleRegular.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -21,10 +24,7 @@ package struct TeachingSimpleRegularN8Model: Sendable {
     package static var spec: TLASpec {
         #spec("SimpleRegular") {
             Extends(.integers)
-            let PCorrect = Invariant()
-            let TypeOK = Invariant()
-            let Inv = Invariant()
-            let SimpleRegular = Algorithm(scoped: { scope in
+            Algorithm("SimpleRegular") { scope in
                 let x = scope.sharedVar(initial: Function<Process, SetExpr<Int>>.literal(
                     (.p0, SetExpr<Int>.literal(0)), (.p1, SetExpr<Int>.literal(0)),
                     (.p2, SetExpr<Int>.literal(0)), (.p3, SetExpr<Int>.literal(0)),
@@ -42,43 +42,41 @@ package struct TeachingSimpleRegularN8Model: Sendable {
 
                 Each(Process.all) { process in
                     Do(Step.a1) {
-                        Assign(x, to: x.updating(process, to: SetExpr<Int>.literal(0, 1)))
+                        x.set(x.updating(process, to: SetExpr<Int>.literal(0, 1)))
                     }
                     Do(Step.a2) {
-                        Assign(x, to: x.updating(process, to: SetExpr<Int>.literal(1)))
+                        x.set(x.updating(process, to: SetExpr<Int>.literal(1)))
                     }
                     Do(Step.b) {
                         With(x[predecessor[process]]) { value in
-                            Assign(y, to: y.updating(process, to: value.expr))
+                            y.set(y.updating(process, to: value.expr))
                         }
                     }
                 }
 
-                let typeOK = ForAll(Process.all) { process in
+                let typeOK = Process.all.allSatisfy { process in
                     !x[process].isEmpty
                         && x[process].isSubset(of: SetExpr<Int>.literal(0, 1))
                         && SetExpr<Int>.literal(0, 1).contains(y[process])
                         && (At(Step.a1, process) || At(Step.a2, process)
                             || At(Step.b, process) || Finished(process))
                 }
-                PCorrect {
-                    !ForAll(Process.all) { process in Finished(process) }
-                        || Exists(in: Process.all) { process in y[process] == 1 }
+                Invariant("PCorrect") {
+                    !Process.all.allSatisfy { process in Finished(process) }
+                        || Process.all.contains { process in y[process] == 1 }
                 }
-                TypeOK { typeOK }
-                Inv {
+                Invariant("TypeOK") { typeOK }
+                Invariant("Inv") {
                     typeOK
-                    ForAll(Process.all) { process in
+                    Process.all.allSatisfy { process in
                         !(At(Step.b, process) || Finished(process))
                             || x[process] == SetExpr<Int>.literal(1)
                     }
-                    !ForAll(Process.all) { process in Finished(process) }
-                        || Exists(in: Process.all) { process in y[process] == 1 }
+                    !Process.all.allSatisfy { process in Finished(process) }
+                        || Process.all.contains { process in y[process] == 1 }
                 }
-            })
-            SimpleRegular
-            let simpleRegularValidation = Validation(label: "SimpleRegular") {}
-            simpleRegularValidation
+            }
+            Validation("simpleRegularValidation", label: "SimpleRegular") {}
         }
     }
 }

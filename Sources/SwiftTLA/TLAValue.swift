@@ -159,7 +159,8 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
 
     package var isTLCConfigurationLiteral: Bool {
         switch self {
-        case .int(let value): value >= 0
+        // CFG values require a numeric token; larger integers render as expressions.
+        case .int(let value): value >= 0 && value <= 1_000_000_000
         case .bool, .constant: true
         case .string(let value):
             !value.unicodeScalars.contains { $0 == "\"" || $0 == "\\" || $0.value < 32 }
@@ -169,7 +170,6 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
     }
 
     private func _tlaForm(_ depth: Int = 0) -> String {
-        let xs = "__tla_fn_\(depth)"
         switch self {
         case .int(let n): return Self._integerForm(n)
         case .bool(let b): return b ? "TRUE" : "FALSE"
@@ -192,19 +192,28 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
         case .tuple(let t):
             return "<<\(t.map { $0._tlaForm(depth) }.joined(separator: ", "))>>"
         case .record(let r):
+            if r.fields.isEmpty || !r.fields.allSatisfy({ isTLARecordFieldName($0.name) }) {
+                let entries = r.fields.map { (Self.string($0.name), $0.value) }
+                // shortcut: preserve duplicate-key payloads until their value contract is resolved.
+                if Set(entries.map { $0.0 }).count == entries.count {
+                    return Self.function(Dictionary(uniqueKeysWithValues: entries))._tlaForm(depth)
+                }
+            }
             let fields = r.fields.map { "\($0.name) |-> \($0.value._tlaForm(depth))" }
             return "[\(fields.joined(separator: ", "))]"
         case .function(let mapping):
             let sorted = mapping.sorted(by: { $0.key < $1.key })
             let innerDepth = depth + 1
+            var xs = "__tla_fn_\(depth)"
             if sorted.isEmpty { return "[\(xs) \\in {} |-> TRUE]" }
+            let rendered = sorted.map { (key: $0.key._tlaForm(innerDepth), value: $0.value._tlaForm(innerDepth)) }
+            while rendered.contains(where: { $0.key.contains(xs) || $0.value.contains(xs) }) { xs += "_" }
             let values = Set(sorted.map(\.value))
-            if values.count == 1, let v = values.first {
-                let domain = "{\(sorted.map { "\($0.key._tlaForm(innerDepth))" }.joined(separator: ", "))}"
-                return "[\(xs) \\in \(domain) |-> \(v._tlaForm(innerDepth))]"
+            let domain = "{\(rendered.map(\.key).joined(separator: ", "))}"
+            if values.count == 1 {
+                return "[\(xs) \\in \(domain) |-> \(rendered[0].value)]"
             }
-            let domain = "{\(sorted.map { "\($0.key._tlaForm(innerDepth))" }.joined(separator: ", "))}"
-            let body = sorted.map { "(\(xs) = \($0.key._tlaForm(innerDepth))) -> \($0.value._tlaForm(innerDepth))" }.joined(separator: " [] ")
+            let body = rendered.map { "(\(xs) = \($0.key)) -> \($0.value)" }.joined(separator: " [] ")
             return "[\(xs) \\in \(domain) |-> CASE \(body)]"
 
         case .constant(let name): return name
@@ -329,7 +338,8 @@ extension TLAValue: Codable {
             self = .tuple(elements)
         case .record:
             try Self.requireKeys([.version, .tag, .fields], from: decoder, for: tag)
-            guard let fields = try? container.decode([RecordEntry].self, forKey: .fields), Set(fields.map(\.key)).count == fields.count else {
+            guard let fields = try? container.decode([RecordEntry].self, forKey: .fields),
+                  Set(fields.map { TLAValue.string($0.key) }).count == fields.count else {
                 throw TLAValueCodingError.malformedValue(tag.rawValue)
             }
             self = .record(TLARecord(fields.map { .init($0.key, $0.value) }))

@@ -11,7 +11,7 @@ private enum OracleCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "Usage: tlc-validate oracle run --case <id-or-all> --output <directory> --maximum-states <positive-integer> | oracle cache-key --case <id> --maximum-states <positive-integer>"
+            return "Usage: tlc-validate oracle export --case <id> --output <new-directory> | oracle run --case <id-or-all> --output <directory> --maximum-states <positive-integer> | oracle cache-key --case <id> --maximum-states <positive-integer>"
         case .unknownScenario(let id): return "unknown scenario: \(id)"
         case .invalidToolchain: return "invalid pinned TLC toolchain"
         case .outputExists(let path): return "output already exists: \(path)"
@@ -21,6 +21,17 @@ private enum OracleCommandError: Error, CustomStringConvertible {
 
 func runOracle(arguments: [String]) -> Never {
     do {
+        if arguments.count == 5, arguments[0] == "export", arguments[1] == "--case", arguments[3] == "--output" {
+            let root = try RetainedFiles.projectRoot(URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+            let manifest = try decode(FiniteGraphManifest.self, at: root.appendingPathComponent("Verification/FiniteGraph/cases.json"))
+            guard let declaration = manifest.cases.first(where: { $0.id == arguments[2] }) else {
+                throw OracleCommandError.unknownScenario(arguments[2])
+            }
+            let output = URL(fileURLWithPath: arguments[4], isDirectory: true)
+            guard !FileManager.default.fileExists(atPath: output.path) else { throw OracleCommandError.outputExists(output.path) }
+            try GeneratedTLCOracle.retainGeneratedInputs(declaration.renderModel().tlaBundle, in: output)
+            exit(0)
+        }
         if arguments.count == 5, arguments[0] == "cache-key", arguments[1] == "--case",
            arguments[3] == "--maximum-states", let maximumStates = Int(arguments[4]),
            maximumStates > 0 {

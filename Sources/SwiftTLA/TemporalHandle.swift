@@ -9,9 +9,26 @@ public struct TemporalPropertyHandle: ModelProperty {
         declaration(condition.map(\.stateExpr))
     }
 
+    /// Requires the complete temporal condition separately for every member of the domain.
+    public func callAsFunction<Domain: FormalSetValue>(
+        forEach domain: some TypedExpression<Domain>,
+        file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+        _ condition: (Expr<Domain.Element>) -> TemporalCondition<Expr<Bool>>
+    ) -> QuantifiedTemporalDeclaration {
+        let binder = generatedBinderName(file: file, line: line, column: column)
+        return .init(property: .init(name: reference.name,
+            expr: condition(Expr(.variable(binder))).map(\.stateExpr),
+            bindings: [.init(name: binder, domain: domain.stateExpr,
+                generatedSwiftType: swiftSurfaceTypeName(for: Domain.Element.self))], reference: reference))
+    }
+
     package func declaration(_ condition: TemporalCondition<StateExpr>) -> TemporalDecl {
         .init(reference: reference, expr: condition)
     }
+}
+
+public struct QuantifiedTemporalDeclaration: SpecComponent, Sendable {
+    package let property: NamedTemporal
 }
 
 public func Temporal(label: String? = nil, _name: String = "") -> TemporalPropertyHandle {

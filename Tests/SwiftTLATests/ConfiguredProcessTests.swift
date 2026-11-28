@@ -14,7 +14,7 @@ struct ConfiguredProcessTests {
             var machine = try #require(scenario.initialMachines().first)
             let actions = try machine.enabledActions()
             for action in actions {
-                _ = try machine.send(action)
+                try machine.send(action)
             }
             #expect(machine.state.selected == population)
             let graph = try scenario.explore(maximumStates: 20)
@@ -30,7 +30,7 @@ struct ConfiguredProcessTests {
             let completionTrace = try graph.trace(to: completed)
             #expect(completionTrace.first?.state == replay.snapshot)
             for step in completionTrace.dropFirst() {
-                _ = try replay.send(#require(step.action))
+                try replay.send(#require(step.action))
                 #expect(replay.snapshot == step.state)
             }
             #expect(replay.snapshot == completed)

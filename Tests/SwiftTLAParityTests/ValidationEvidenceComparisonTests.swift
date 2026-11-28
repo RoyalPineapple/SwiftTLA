@@ -434,6 +434,24 @@ struct ValidationEvidenceComparisonTests {
             generated: generated, reference: reference, actions: [actions[0]], in: root) == nil)
     }
 
+    @Test("upstream action names resolve across generated name allocation")
+    func allocatedActionMatchesPublishedSpelling() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let generated = root.appendingPathComponent("generated.bin")
+        let reference = root.appendingPathComponent("reference.bin")
+        let action = RenderedAction(sourceName: "Next", emittedBaseName: "Next__2",
+            arguments: [], renderedName: "Next__2")
+        try tlcGraph(edgeCount: 1, actionName: "Next__2", actionLocation: "").write(to: generated)
+        try tlcGraph(edgeCount: 1, actionName: "Next", actionLocation: "").write(to: reference)
+        #expect(try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+            generated: generated, reference: reference, actions: [action], in: root) == nil)
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action Next()")) {
+            try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+                generated: reference, reference: generated, actions: [action], in: root)
+        }
+    }
+
     @Test("substituted TLC leaves remain available when the outer action is not declared")
     func substitutedActionUsesDeclaredLeaf() throws {
         let root = try fixture()
@@ -450,6 +468,29 @@ struct ValidationEvidenceComparisonTests {
             "ambiguous TLC action Next() or Move(0)")) {
             _ = try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
                 generated: generated, reference: reference, actions: [actions[0], leaf], in: root)
+        }
+    }
+
+    @Test("record-valued action labels preserve field values across TLC print orders")
+    func resolvesRecordAction() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let generated = root.appendingPathComponent("generated.bin")
+        let reference = root.appendingPathComponent("reference.bin")
+        let request = TLAValue.record(["addr": .constant("a1"), "op": .string("Rd")])
+        let action = RenderedAction(sourceName: "Issue", arguments: [request], renderedName: "issue")
+        func graph(_ fields: String) -> Data {
+            tlcGraph(edgeCount: 1, actionName: "Issue",
+                actionLocation: "<Issue([\(fields)]) line 1, col 1 to line 1, col 8 of module Example>")
+        }
+        try graph(#"addr |-> a1, op |-> "Rd""#).write(to: generated)
+        try graph(#"op |-> "Rd", addr |-> a1"#).write(to: reference)
+        #expect(try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+            generated: generated, reference: reference, actions: [action], in: root) == nil)
+        try graph("op |-> Rd, addr |-> a1").write(to: reference)
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action Issue([addr|->a1,op|->Rd])")) {
+            try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+                generated: generated, reference: reference, actions: [action], in: root)
         }
     }
 

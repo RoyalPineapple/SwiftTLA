@@ -1,10 +1,18 @@
+// Two water jugs can be filled, emptied, or poured into each other to measure a target quantity.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DieHard/DieHard.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
 package struct DieHardModel: Sendable {
     package enum Step: String, CaseIterable {
-        case FillSmallJug, FillBigJug, EmptySmallJug, EmptyBigJug, SmallToBig, BigToSmall
+        case fillSmallJug = "FillSmallJug"
+        case fillBigJug = "FillBigJug"
+        case emptySmallJug = "EmptySmallJug"
+        case emptyBigJug = "EmptyBigJug"
+        case smallToBig = "SmallToBig"
+        case bigToSmall = "BigToSmall"
     }
 
     package static var spec: TLASpec {
@@ -12,34 +20,35 @@ package struct DieHardModel: Sendable {
             Extends(.naturals)
             let big = scope.sharedVar(initial: 0)
             let small = scope.sharedVar(initial: 0)
-            let TypeOK = Invariant()
-            let NotSolved = Invariant()
-            Do(Step.FillSmallJug) { Assign(small, to: 3) }
-            Do(Step.FillBigJug) { Assign(big, to: 5) }
-            Do(Step.EmptySmallJug) { Assign(small, to: 0) }
-            Do(Step.EmptyBigJug) { Assign(big, to: 0) }
-            Do(Step.SmallToBig) {
+            Do(Step.fillSmallJug) { small.set(3) }
+            Do(Step.fillBigJug) { big.set(5) }
+            Do(Step.emptySmallJug) { small.set(0) }
+            Do(Step.emptyBigJug) { big.set(0) }
+            Do(Step.smallToBig) {
                 If(big + small <= 5) {
-                    Assign(big, to: big + small)
-                    Assign(small, to: 0)
+                    big += small
+                    small.set(0)
                 } else: {
-                    Assign(small, to: small - (5 - big))
-                    Assign(big, to: 5)
+                    small.set(small - (5 - big))
+                    big.set(5)
                 }
             }
-            Do(Step.BigToSmall) {
+            Do(Step.bigToSmall) {
                 If(big + small <= 3) {
-                    Assign(small, to: big + small)
-                    Assign(big, to: 0)
+                    small.set(big + small)
+                    big.set(0)
                 } else: {
-                    Assign(big, to: big - (3 - small))
-                    Assign(small, to: 3)
+                    big.set(big - (3 - small))
+                    small.set(3)
                 }
             }
-            TypeOK { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
-            NotSolved { big != 4 }
-            let Upstream = Validation {}.expect(NotSolved, .violated)
-            Upstream
+            Invariant("TypeOK") {
+                (0...5).contains(big)
+                (0...3).contains(small)
+            }
+            let notSolved = Invariant("NotSolved")
+            notSolved { big != 4 }
+            Validation("Upstream") {}.expect(notSolved, .violated)
         }
     }
 }

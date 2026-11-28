@@ -19,9 +19,9 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
 /// Validated state at the explicit native-to-TLA serialization boundary.
 public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
     @_documentation(visibility: internal)
-    public static func losslessSet<Element: Hashable & Sendable>(
-        _ source: Set<Element>, project: (Element) throws -> TLAValue
-    ) throws -> TLAValue {
+    public static func losslessSet<Source: Collection & Sendable>(
+        _ source: Source, project: (Source.Element) throws -> TLAValue
+    ) throws -> TLAValue where Source.Element: Sendable {
         let values = try source.map(project)
         let projected = Set(values)
         guard projected.count == source.count else {
@@ -35,6 +35,10 @@ public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
         fileprivate let identifier: String
 
         public init?(validating identifier: String) {
+            if Self.isASCIIIdentifier(identifier) {
+                self.identifier = identifier
+                return
+            }
             guard let first = identifier.unicodeScalars.first,
                   first.properties.isAlphabetic || first == "_",
                   identifier.unicodeScalars.dropFirst().allSatisfy({
@@ -45,7 +49,29 @@ public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
             self.identifier = identifier
         }
 
+        private static func isASCIIIdentifier(_ name: String) -> Bool {
+            name.utf8.withContiguousStorageIfAvailable { bytes in
+                guard !bytes.isEmpty else { return false }
+                for (index, byte) in bytes.enumerated() {
+                    switch byte {
+                    case 65...90, 97...122, 95: continue
+                    case 48...57 where index > 0: continue
+                    default: return false
+                    }
+                }
+                return true
+            } ?? false
+        }
+
         public var description: String { identifier }
+
+        public static func == (lhs: Self, rhs: Self) -> Bool {
+            FormalStringIdentity.equal(lhs.identifier, rhs.identifier)
+        }
+
+        public func hash(into hasher: inout Hasher) {
+            FormalStringIdentity.hash(identifier, into: &hasher)
+        }
     }
 
     /// One validated value in a state projection.
@@ -86,7 +112,7 @@ public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
         entries.map { "\($0.token) = \($0.value)" }.joined(separator: ", ")
     }
 
-    private static func validate(_ value: TLAValue, at path: String) throws {
+    package static func validate(_ value: TLAValue, at path: String) throws {
         switch value {
         case .int, .bool, .string:
             return
@@ -110,9 +136,9 @@ public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
                 try validate(value, at: "\(path)[\(index)]")
             }
         case .record(let fields):
-            var names: Set<String> = []
+            var names: Set<Token> = []
             for field in fields.fields {
-                guard Token(validating: field.name) != nil, names.insert(field.name).inserted else {
+                guard let token = Token(validating: field.name), names.insert(token).inserted else {
                     throw TLAStateProjectionDiagnostic.invalidKey(path: "\(path).\(field.name)")
                 }
                 try validate(field.value, at: "\(path).\(field.name)")

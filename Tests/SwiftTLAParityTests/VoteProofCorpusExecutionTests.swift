@@ -24,7 +24,7 @@ struct VoteProofCorpusExecutionTests {
             && $0.machine.state.maxBal[.a3] == -1 })
         let before = native.snapshot
         do {
-            _ = try native.send(.pcalProcess1(process: .a1))
+            try native.send(.pcalProcess1(process: .a1))
             Issue.record("Distinct ballot or vote outcomes must remain ambiguous")
         } catch GeneratedMachineError.ambiguousAction {}
         #expect(native.snapshot == before)

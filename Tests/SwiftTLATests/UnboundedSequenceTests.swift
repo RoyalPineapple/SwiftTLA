@@ -7,7 +7,8 @@ struct UnboundedSequenceTests {
         for input in [[], [1, 2], Array(repeating: 2, count: 10_000)] {
             var machine = try UnboundedSequenceModel.makeMachine(.init(sequence: input))
             #expect(machine.state.sequence == input)
-            #expect(try machine.send(.append).after.sequence == input + [1])
+            try machine.send(.append)
+            #expect(machine.state.sequence == input + [1])
         }
         #expect(throws: GeneratedMachineError.invalidInitialState) {
             try UnboundedSequenceModel.makeMachine(.init(sequence: [1, 3]))
@@ -15,7 +16,14 @@ struct UnboundedSequenceTests {
         #expect(throws: NativeMachineEvaluationError.nonEnumerableSequenceDomain) {
             try UnboundedSequenceModel.makeMachine()
         }
-        let bundle = try UnboundedSequenceModel.spec.compile().render().tlaBundle
+        #expect(throws: NativeMachineEvaluationError.nonEnumerableSequenceDomain) {
+            try UnboundedSequenceModel.initialOutcomes()
+        }
+        let compilation = try UnboundedSequenceModel.spec.compile()
+        #expect(throws: EvalError.nonEnumerableSequenceDomain) {
+            try CompiledRuntime(compilation: compilation).initialOutcomes()
+        }
+        let bundle = try compilation.render().tlaBundle
         #expect(bundle.tla.contains("Seq({1, 2})"))
     }
 

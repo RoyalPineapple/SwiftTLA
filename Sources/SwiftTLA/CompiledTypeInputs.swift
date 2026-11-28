@@ -3,6 +3,87 @@ package struct CompiledEnums: Sendable {
     package let cases: [String: [(name: String, value: CompiledValue)]]
     package let domains: [String: Set<CompiledValue>]
 
+    /// The TLA value of a projected read is determined by the declared integer cases.
+    func integerProjectionInput(_ rhs: CompiledExpression) -> CompiledExpression? {
+        guard rhs.operation == .convert, rhs.resultType == .int, rhs.children.count == 1 else { return nil }
+        let read = rhs.children[0]
+        guard read.children.isEmpty else { return nil }
+        switch read.operation {
+        case .stateVariable, .boundValue: break
+        default: return nil
+        }
+        guard let members = integerMembers(of: read.resultType) else { return nil }
+        for member in members {
+            var stack = [member]
+            guard (try? rhs.operation.apply(to: &stack, operandCount: 1)) != nil, stack == [member] else { return nil }
+        }
+        return read
+    }
+
+    private func integerMembers(of type: CompiledValueType) -> [CompiledValue]? {
+        let members: [CompiledValue]
+        switch type {
+        case .named(let name): members = cases[name]?.map(\.value) ?? []
+        case .finite(let values): members = values
+        default: return nil
+        }
+        guard !members.isEmpty, members.allSatisfy({ if case .integer = $0 { true } else { false } })
+        else { return nil }
+        return members
+    }
+
+    /// A straight-line capture spine with a represented integer and a terminal write frame.
+    package func projectedAssignmentBinders(in action: CompiledActionExpr) -> [BinderID]? {
+        integerAssignmentBinders(in: action, requiresProjection: true)
+    }
+
+    func integerAssignmentBinders(in action: CompiledActionExpr, requiresProjection: Bool) -> [BinderID]? {
+        var body = action
+        if case .and(.guard_, let continuation) = body { body = continuation }
+        var binders: [BinderID] = []
+        var usesRepresentation = false
+        while case .define(let binder, let value, let continuation) = body {
+            var pending = [value]
+            while let node = pending.popLast() {
+                switch node.operation {
+                case .add where node.resultType == .int && node.children.count == 2:
+                    pending.append(contentsOf: node.children)
+                case .convert where integerProjectionInput(node) != nil:
+                    usesRepresentation = true
+                case .value(.integer), .stateVariable, .boundValue:
+                    guard node.children.isEmpty else { return nil }
+                    if node.resultType != .int {
+                        guard integerMembers(of: node.resultType) != nil else { return nil }
+                        usesRepresentation = true
+                    }
+                default: return nil
+                }
+            }
+            binders.append(binder)
+            body = continuation
+        }
+        guard !requiresProjection || usesRepresentation else { return nil }
+        let captured = Set(binders)
+        var frame = [body]
+        var writesCapture = false
+        while let part = frame.popLast() {
+            switch part {
+            case .and(let left, let right): frame.append(contentsOf: [left, right])
+            case .assign(_, let rhs):
+                guard rhs.children.isEmpty else { return nil }
+                switch rhs.operation {
+                case .boundValue(let id) where captured.contains(id): writesCapture = true
+                case .controlLocation: break
+                default: return nil
+                }
+            case .unchanged: break
+            case .guard_(let test) where test.booleanConstant == true: break
+            default: return nil
+            }
+        }
+        return writesCapture ? binders : nil
+    }
+
     package init(cases: [String: [(name: String, value: CompiledValue)]] = [:]) {
         self.cases = cases.mapValues { $0.sorted { $0.value < $1.value } }
         domains = cases.mapValues { Set($0.map(\.value)) }
@@ -164,6 +245,10 @@ package struct CompiledTypeContext: Sendable {
         }
         switch source {
         case .named(let name):
+            if case .named(let optional) = expected, optional == name + "?",
+               let source = namedDomains[name], let target = namedDomains[optional] {
+                return source.isSubset(of: target) && !source.contains(.string("none"))
+            }
             if expected != .unknown, namedRepresentations[name] == expected { return true }
             if case .finite(let members) = expected, let domain = namedDomains[name] {
                 return domain.isSubset(of: Set(members))
@@ -185,6 +270,27 @@ package struct CompiledTypeContext: Sendable {
         default: break
         }
         return false
+    }
+
+    /// A checked view of a declared union member retains that member's Swift representation.
+    package func declaredView(_ shape: FormalValueShape, in source: CompiledValueType) throws -> CompiledValueType? {
+        func matches(_ type: CompiledValueType, _ view: FormalValueShape) throws -> Bool {
+            if case .record(let fields) = view, let declared = type.recordFields {
+                guard fields.count == declared.count else { return false }
+                return try fields.allSatisfy { field in
+                    guard let member = declared.first(where: { $0.name == field.name }) else { return false }
+                    return try matches(member.type, field.shape)
+                }
+            }
+            if case .oneOf(let left, let right) = type, case .union(let first, let second) = view {
+                return try matches(left, first) && matches(right, second)
+            }
+            return try resolve(view) == type
+        }
+        if try matches(source, shape) { return source }
+        guard let alternatives = source.unionAlternatives else { return nil }
+        let members = try alternatives.compactMap { try declaredView(shape, in: $0) }
+        return members.count == 1 ? members[0] : nil
     }
 
     /// Resolve structural type information using this program's nominal domains.

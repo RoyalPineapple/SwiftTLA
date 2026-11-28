@@ -3,8 +3,8 @@
 ## Host Safety
 
 - GitHub Actions / SwiftTLA-ValidationEvidence remains the admission authority.
-- Local validation is diagnostic-only and allowed only through `scripts/local-validation.sh`: `static`, a focused `swiftpm-test <filter>`, or a focused `xcode-test <identifier>`.
-- The wrapper takes the repository-wide exclusive lock, serializes work, isolates build artifacts, and stops unsafe memory pressure. Do not invoke local `swift test`, `xcodebuild test`, `make ci*`, TLC, or broad compiler/test commands directly.
+- Local validation is diagnostic-only and allowed only through `scripts/local-validation.sh`: `static`, `port-build` for the local corpus CLI, a focused `swiftpm-test <filter>`, or a focused `xcode-test <identifier>`.
+- Focused Xcode checks on distinct packages can overlap with private DerivedData. The wrapper serializes checks of the same package and allows up to one heavy validation job per logical CPU, reserving one CPU for other work on multicore hosts. An exclusive holder of the repository-wide Xcode lock waits for all active Xcode checks and blocks new ones. Additional slots require enough current memory headroom for another guarded process tree. Product SwiftPM builds and tests serialize on their worktree’s product cache. Proof commands retain their repository lock. Proof preparation that uses SwiftPM products also takes the worktree product lock and reuses its validated compiler build. Heavy jobs share capacity slots. Static checks take a worktree-local lock. Keep the per-process-tree and system memory guards enabled. Do not invoke local `swift test`, `xcodebuild test`, `make ci*`, TLC, or broad compiler/test commands directly.
 - Any mode outside the wrapper requires explicit user authorization for the exact command.
 
 ## Typed Boundaries
@@ -16,7 +16,7 @@ Treat string-keyed and otherwise untyped data as a guarded boundary.
 - At a public boundary, use a typed model API or a dedicated projection type that owns the raw map.
 - A projection must validate keys and values before it returns typed data.
 - Do not index a raw state map at an application call site.
-- Use generated `State`, `Action`, and `Transition` types for application code.
+- Use generated `State` and `Action` types for application code.
 - Name any unavoidable raw-TLA conversion explicitly. Do not present it as normal application state.
 
 ## Concurrency

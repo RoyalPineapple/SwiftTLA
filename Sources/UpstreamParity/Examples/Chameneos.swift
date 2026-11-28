@@ -1,3 +1,6 @@
+// Creatures meet in pairs, change color, and count their meetings.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Chameneos/Chameneos.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -27,7 +30,7 @@ package struct ChameneosModel: Sendable {
     package typealias Color = OneOf<Hue, FadedToken>
     package typealias CreatureState = Pair<Color, Int>
     package typealias WaitingPlace = OneOf<Int, EmptyMeetingPlace>
-    package enum Step: String, CaseIterable { case Next }
+    package enum Step: String, CaseIterable { case next = "Next" }
 
     package static var spec: TLASpec {
         #spec("Chameneos") { scope in
@@ -37,8 +40,6 @@ package struct ChameneosModel: Sendable {
             let Faded = scope.parameter(as: FadedToken.self, in: Set<FadedToken>([.faded]))
             let MeetingPlaceEmpty = scope.parameter(as: EmptyMeetingPlace.self,
                 in: Set<EmptyMeetingPlace>([.empty]))
-            let TypeOK = Invariant()
-            let SumMet = Invariant()
             Assume(N > 0 && M > 0)
             let creatureIDs = IntRange(1, through: M)
             let initialColors = SetExpr<Hue>.literal(.blue, .red, .yellow)
@@ -47,20 +48,20 @@ package struct ChameneosModel: Sendable {
                 Pair.literal(Color.first(Hue.red), 0),
                 Pair.literal(Color.first(Hue.yellow), 0)
             )
-            let chameneoses: SharedVariable<[Int: CreatureState]> = scope.sharedVar(in: Functions(from: creatureIDs, to: initialStates))
+            let chameneoses: SharedVariable<[Int: CreatureState]> = scope.sharedVar(initiallyIn: Functions(from: creatureIDs, to: initialStates))
             let fadedColor = Color.second(Faded)
             let empty = WaitingPlace.second(MeetingPlaceEmpty)
             let meetingPlace: SharedVariable<WaitingPlace> = scope.sharedVar(initial: empty)
             let numMeetings = scope.sharedVar(initial: 0)
 
-            Do(Step.Next) {
+            Do(Step.next) {
                 With(creatureIDs) { cid in
                     When(chameneoses[cid].first() != fadedColor)
                     If(meetingPlace == empty) {
                         If(numMeetings < N) {
-                            Assign(meetingPlace, to: WaitingPlace.first(cid))
+                            meetingPlace.set(WaitingPlace.first(cid))
                         } else: {
-                            Assign(chameneoses[cid], to: Pair.literal(
+                            chameneoses[cid].set(Pair.literal(
                                 fadedColor, chameneoses[cid].second()))
                         }
                     } else: {
@@ -72,20 +73,20 @@ package struct ChameneosModel: Sendable {
                                 Select(from: initialColors) { color in
                                     color.expr != myColor && color.expr != otherColor
                                 })) { newColor in
-                                Assign(meetingPlace, to: empty)
-                                Assign(chameneoses[cid], to: Pair.literal(
+                                meetingPlace.set(empty)
+                                chameneoses[cid].set(Pair.literal(
                                     Color.first(newColor.expr), chameneoses[cid].second() + 1))
-                                Assign(chameneoses[waiting], to: Pair.literal(
+                                chameneoses[waiting].set(Pair.literal(
                                     Color.first(newColor.expr), chameneoses[waiting].second() + 1))
-                                Assign(numMeetings, to: numMeetings + 1)
+                                numMeetings += 1
                             }
                         }
                     }
                 }
             }
-            TypeOK {
+            Invariant("TypeOK") {
                 chameneoses.keys == creatureIDs
-                    && ForAll(in: creatureIDs) { id in
+                    && creatureIDs.allSatisfy { id in
                         let color = chameneoses[id.expr].first()
                         return (color == Color.first(Hue.blue)
                             || color == Color.first(Hue.red)
@@ -93,12 +94,12 @@ package struct ChameneosModel: Sendable {
                             || color == fadedColor)
                             && IntRange(0, through: N).contains(chameneoses[id.expr].second())
                     }
-                    && (meetingPlace == empty || Exists(in: creatureIDs) { id in
+                    && (meetingPlace == empty || creatureIDs.contains { id in
                         meetingPlace == WaitingPlace.first(id.expr)
                     })
             }
 
-            SumMet {
+            Invariant("SumMet") {
                 let meetings = SequenceMapping(length: M) { index in
                     chameneoses[index.expr].second()
                 }
@@ -108,13 +109,12 @@ package struct ChameneosModel: Sendable {
                 numMeetings != N || total == 2 * N
             }
 
-            let Chameneos = Validation {
+            Validation("Chameneos") {
                 Bind(N, to: 4)
                 Bind(M, to: 4)
                 Bind(Faded, to: FadedToken.faded)
                 Bind(MeetingPlaceEmpty, to: EmptyMeetingPlace.empty)
             }.checkingDeadlock(false)
-            Chameneos
         }
     }
 }

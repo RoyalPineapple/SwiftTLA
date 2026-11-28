@@ -2,7 +2,7 @@ import SwiftTLA
 
 /// Generates a typed Swift state machine from a struct's source model.
 ///
-/// The generated surface includes `State`, `Action`, `Transition`, direct
+/// The generated surface includes `State`, `Action`, direct
 /// execution, and a typed actor that owns the generated machine.
 @attached(member, names: arbitrary)
 @attached(memberAttribute)
@@ -37,3 +37,8 @@ public macro spec(_ name: StaticString, @SpecBuilder _ body: () -> [SpecComponen
 
 @freestanding(expression)
 public macro spec(_ name: StaticString, @SpecBuilder scoped body: (SpecificationScope) -> [SpecComponent]) -> TLASpec = #externalMacro(module: "SwiftTLAPlugin", type: "SpecExpressionMacro")
+
+/// Represents the stored properties of a Swift struct as a TLA+ tuple, in declaration order.
+@attached(member, names: named(expression))
+@attached(extension, conformances: _GeneratedTupleValue, names: named(defaultValue), named(formalValueShape), named(tlaValue), named(init), named(_formalTupleIndex), named(sourceIssue))
+public macro TLATuple() = #externalMacro(module: "SwiftTLAPlugin", type: "TupleValueMacro")

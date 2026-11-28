@@ -1,8 +1,7 @@
 # Typed collections in `#spec`
 
-Use a typed model parameter to choose a finite population for each validation
-scenario. The population changes configuration data, not the generated Swift
-`State` or `Action` types.
+Choose which devices take part in each check. In this example the east and west
+devices each have a phase. Sending `.advance` to a device increments its phase.
 
 ```swift
 import SwiftTLA
@@ -21,39 +20,35 @@ struct DeviceContract {
                 Dictionary<DeviceID, Int>.mapping(over: devices) { _ in 0 })
             let NonnegativePhase = Invariant()
 
-            let advance = Algorithm(scoped: { scope in
-                Each(devices, scoped: { (device: ProcessIdentifier<DeviceID>, scope: ProcessScope) in
+            Algorithm("advance") { scope in
+                Each(devices) { (device: ProcessIdentifier<DeviceID>, scope: ProcessScope) in
                     Do(Label.advance) {
-                        Assign(phase[device], to: phase[device] + 1)
+                        phase[device] += 1
                         Goto(Label.advance)
                     }
-                })
-            })
-            advance
+                }
+            }
             NonnegativePhase {
-                ForAll(in: devices) { device in phase[device] >= 0 }
+                devices.allSatisfy { device in phase[device] >= 0 }
             }
 
-            let twoDevices = Validation { Bind(devices, to: Set<DeviceID>([.east, .west])) }
-            twoDevices
+            Validation("twoDevices") { Bind(devices, to: Set<DeviceID>([.east, .west])) }
         }
     }
 }
 ```
 
-The algorithm defines one typed action family over the configured `devices`
-set. Its shared `phase` value is a function keyed by those process IDs. The
-scenario binds stable member IDs once; native execution and TLA+ export use the
-same binding and transition program. A different valid ID set changes the process
-instances, not the generated type of `phase` or the action family. Application
-objects stay outside model state; their stable `DeviceID` values are modeled.
+Both devices start at zero. After one `.advance(process: .east)`, east is at
+one and west is still at zero. `NonnegativePhase` checks that every device's
+phase stays at or above zero. A different set of device IDs uses the same Swift
+`State` and `Action` types. The model stores IDs so it can describe a device
+without storing an app object.
 
-Application code uses the generated machine and typed actions:
 
 ```swift
 let configuration = try DeviceContract.Configuration(devices: [.east, .west])
 var machine = try DeviceContract.makeMachine(configuration: configuration)
-_ = try machine.send(.advance(process: .east))
+try machine.send(.advance(process: .east))
 let firstPhase: Int? = machine.state.phase[.east]
 ```
 
@@ -61,3 +56,38 @@ The checker treats members as distinct unless the model explicitly declares
 and justifies symmetry. A collection or process population alone never enables
 symmetry reduction. See [DSLDesign.md](DSLDesign.md) for the configuration and
 symmetry contracts.
+
+## Named tuple values
+
+Use an ordinary Swift struct for a record. Add `@TLATuple` when its formal
+representation must be positional, for example to match an upstream trace.
+
+```swift
+@TLATuple
+struct Request: Hashable, Sendable {
+    let kind: String
+    let actor: Int
+}
+```
+
+`Request(kind: "read", actor: 2)` encodes as `<<"read", 2>>`. Inside a model,
+`Request.expression(kind: "read", actor: worker)` can include symbolic values.
+Read the same fields as `request.kind` and `request.actor`. A tuple may have
+zero or more stored fields. Their declaration order determines their positions
+in the formal value. Reordering fields changes the trace format.
+
+A generated state field declared as `[Request]` contains ordinary `Request`
+values. To read a tuple from a formal trace, decode it as the declared type:
+
+```swift
+let traceValue = TLAValue.tuple([.string("read"), .int(2)])
+let request = Request(formalValue: traceValue)
+```
+
+Here `request?.actor` is `2`. A missing slot or a string in the actor slot
+returns `nil`. The upstream tuple carries no Swift type name.
+
+Inside a `Do` block, select a named tuple field and call `.set` to replace
+just that slot. For example, `history.action.set(.passToken)` keeps the sender
+and recipient in their original positions. The generated machine still exposes
+the ordinary Swift value through `machine.state.history`.

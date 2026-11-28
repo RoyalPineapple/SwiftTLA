@@ -65,14 +65,14 @@ struct DieHarderCorpusStateGraphTests {
     func preservesOrderedPouring() throws {
         let scenario = try #require(DieHarderModel.validationScenarios().first)
         var machine = try DieHarderModel.makeMachine(configuration: scenario.configuration)
-        _ = try machine.send(.FillJug(j: "j2"))
-        _ = try machine.send(.JugToJug(j: "j2", k: "j1"))
+        try machine.send(.FillJug(j: "j2"))
+        try machine.send(.JugToJug(j: "j2", k: "j1"))
         #expect(machine.state.contents == ["j1": 3, "j2": 2])
-        _ = try machine.send(.EmptyJug(j: "j1"))
-        _ = try machine.send(.JugToJug(j: "j2", k: "j1"))
+        try machine.send(.EmptyJug(j: "j1"))
+        try machine.send(.JugToJug(j: "j2", k: "j1"))
         #expect(machine.state.contents == ["j1": 2, "j2": 0])
-        _ = try machine.send(.FillJug(j: "j2"))
-        _ = try machine.send(.JugToJug(j: "j2", k: "j1"))
+        try machine.send(.FillJug(j: "j2"))
+        try machine.send(.JugToJug(j: "j2", k: "j1"))
         #expect(machine.state.contents == ["j1": 3, "j2": 4])
     }
 }

@@ -116,6 +116,27 @@ THEOREM EvaluationCheckMatchesSource ==
         DEF Emitted!__SwiftTLAEvaluationOK, SourceEvaluationOK,
             SourceAnyFailure
 
+THEOREM EmittedAdditionFailureObservationsMatchTheSourcePrefix ==
+    ASSUME x \in Int
+    PROVE /\ Emitted!__SwiftTLAOverflowOperation0 = "addition"
+          /\ Emitted!__SwiftTLAOverflowOperands0 = <<x, 1>>
+          /\ Emitted!__SwiftTLAOverflowBefore0 = <<>>
+          /\ Emitted!__SwiftTLAOverflowOperation1 = "addition"
+          /\ Emitted!__SwiftTLAOverflowOperands1 = <<x, 1>>
+          /\ Emitted!__SwiftTLAOverflowBefore1 = <<>>
+          /\ Emitted!__SwiftTLAOverflowOperation1_1 = "addition"
+          /\ Emitted!__SwiftTLAOverflowOperands1_1 = <<x + 1, 1>>
+          /\ Emitted!__SwiftTLAOverflowBefore1_1 =
+                (IF SourceRepeatFailureAt(2) THEN <<x + 1>> ELSE <<>>)
+    PROOF
+    <1>prefix. Emitted!__SwiftTLAOverflowBefore1_1 =
+                   (IF SourceRepeatFailureAt(2) THEN <<x + 1>> ELSE <<>>)
+        BY RepeatFailuresMatchSourceOrder, SMT DEF Emitted!__SwiftTLAOverflowBefore1_1
+    <1>. QED BY <1>prefix, SMT
+        DEF Emitted!__SwiftTLAOverflowOperation0, Emitted!__SwiftTLAOverflowOperands0, Emitted!__SwiftTLAOverflowBefore0,
+            Emitted!__SwiftTLAOverflowOperation1, Emitted!__SwiftTLAOverflowOperands1, Emitted!__SwiftTLAOverflowBefore1,
+            Emitted!__SwiftTLAOverflowOperation1_1, Emitted!__SwiftTLAOverflowOperands1_1
+
 WrongFirstOnlyFailure ==
     SourceCopyFailure \/ SourceRepeatFailureAt(1)
 
@@ -125,6 +146,9 @@ THEOREM DroppingSecondWriteFailureChangesCheck ==
           /\ SourceAnyFailure
           /\ Emitted!__SwiftTLAAnyEvaluationFailure1
           /\ ~Emitted!__SwiftTLAEvaluationOK
+          /\ Emitted!__SwiftTLAOverflowOperation1_1 = "addition"
+          /\ Emitted!__SwiftTLAOverflowOperands1_1 = <<SwiftIntMax, 1>>
+          /\ Emitted!__SwiftTLAOverflowBefore1_1 = <<SwiftIntMax>>
     PROOF
     <1>1. x \in Int
         BY SwiftIntBounds, SMT DEF SwiftIntBounds
@@ -142,6 +166,15 @@ THEOREM DroppingSecondWriteFailureChangesCheck ==
     <1>5. ~Emitted!__SwiftTLAEvaluationOK
         BY <1>1, <1>2, EvaluationCheckMatchesSource,
             SMT DEF SourceEvaluationOK
-    <1>. QED BY <1>2, <1>4, <1>5
+    <1>second. SourceRepeatFailureAt(2)
+        BY SwiftIntBounds, SMT
+            DEF SwiftIntBounds, SourceRepeatFailureAt, SourceRepeatGuards,
+                Rule!SourceFailureAt, Rule!SourcePrefixDefined, SourceAddDefined
+    <1>observation.
+        /\ Emitted!__SwiftTLAOverflowOperation1_1 = "addition"
+        /\ Emitted!__SwiftTLAOverflowOperands1_1 = <<SwiftIntMax, 1>>
+        /\ Emitted!__SwiftTLAOverflowBefore1_1 = <<SwiftIntMax>>
+        BY <1>1, <1>second, EmittedAdditionFailureObservationsMatchTheSourcePrefix, SMT
+    <1>. QED BY <1>2, <1>4, <1>5, <1>observation
 
 =====================================================================

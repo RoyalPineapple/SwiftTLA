@@ -48,28 +48,27 @@ public struct ChangRoberts {
                 Message(candidate: 4, from: .eleven, to: .twelve)
             ]))
             let leader = scope.sharedVar(initial: 0)
-            let changRoberts = Algorithm {
+            Algorithm("changRoberts") {
                 Each(Node.all, fairness: .weak) { node in
                     Do(Step.deliver) {
                         With(messages) { message in
                             When(leader == 0 && message.to == node)
                             Either {
-                                When(message.candidate == identifiers[node])
-                                Assign(leader, to: message.candidate)
-                                Assign(messages, to: messages.removing(message))
-                            } or: {
-                                Either {
-                                    When(message.candidate > identifiers[node])
-                                    Assign(messages, to: messages.removing(message).inserting(
+                                When(message.candidate == identifiers[node]) {
+                                    leader.set(message.candidate)
+                                    messages.remove(message)
+                                }
+                                When(message.candidate > identifiers[node]) {
+                                    messages.set(messages.removing(message).inserting(
                                         Message.expression(
                                             candidate: message.candidate,
                                             from: node,
                                             to: next[node]
                                         )
                                     ))
-                                } or: {
-                                    When(message.candidate < identifiers[node])
-                                    Assign(messages, to: messages.removing(message))
+                                }
+                                When(message.candidate < identifiers[node]) {
+                                    messages.remove(message)
                                 }
                             }
                         }
@@ -77,9 +76,7 @@ public struct ChangRoberts {
                     }
                 }
             }
-            changRoberts
-            let LeaderDomain = Invariant()
-            LeaderDomain { leader >= 0 && leader <= 12 }
+            Invariant("LeaderDomain") { (0...12).contains(leader) }
         }
     }
 }

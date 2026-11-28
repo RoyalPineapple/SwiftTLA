@@ -1,3 +1,6 @@
+// Processes wake and terminate while a synchronous detector checks for completion.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/SyncTerminationDetection.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -5,7 +8,9 @@ import SwiftTLAMacros
 @TLAModel
 package struct SyncTerminationDetectionModel: Sendable {
     private enum Step: String, CaseIterable {
-        case Terminate, Wakeup, DetectTermination
+        case terminate = "Terminate"
+        case wakeUp = "Wakeup"
+        case detectTermination = "DetectTermination"
     }
 
     package static var spec: TLASpec {
@@ -13,51 +18,46 @@ package struct SyncTerminationDetectionModel: Sendable {
             Extends(.naturals)
             let N = scope.parameter(as: Int.self, in: Int.all)
             Assume(N > 0)
-            let Node = IntRange(0, through: N - 1)
-            let active = scope.sharedVar(in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
-            let terminated = ForAll(in: Node) { node in !active[node] }
-            let terminationDetected = scope.sharedVar(in: SetExpr<Bool>.literal(false, terminated))
+            let Node = 0..<N
+            let active = scope.sharedVar(initiallyIn: Functions(from: Node, to: Bool.all))
+            let terminated = Node.allSatisfy { node in !active[node] }
+            let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
 
-            let TypeOK = Invariant()
-            let TDCorrect = Invariant()
             let Quiescence = Temporal()
             let Liveness = Temporal()
 
-            Do(Step.Terminate, over: Node) { node in
+            Do(Step.terminate, over: Node) { node in
                 When(active[node])
-                Assign(active[node], to: false)
+                active[node].set(false)
                 With(SetExpr<Bool>.literal(terminationDetected, terminated)) { detected in
-                    Assign(terminationDetected, to: detected)
+                    terminationDetected.set(detected)
                 }
             }
-            Do(Step.Wakeup, over: Node, Node) { node, destination in
+            Do(Step.wakeUp, over: Node, Node) { node, destination in
                 When(active[node])
-                Assign(active[destination], to: true)
+                active[destination].set(true)
             }
-            let detectTermination = Do(Step.DetectTermination) {
-                When(terminated)
-                Assign(terminationDetected, to: true)
+            let detectTermination = Do(Step.detectTermination, when: terminated) {
+                terminationDetected.set(true)
             }
-            detectTermination
             WeakFairness(detectTermination)
 
-            TypeOK {
-                Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
-                    && SetExpr<Bool>.literal(false, true).contains(terminationDetected)
+            let typeOK = Invariant("TypeOK")
+            typeOK {
+                Functions(from: Node, to: Bool.all).contains(active)
+                    && Bool.all.contains(terminationDetected)
             }
-            TDCorrect { !terminationDetected || terminated }
+            let TDCorrect = Invariant { !terminationDetected || terminated }
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
             Liveness(.leadsTo(terminated, terminationDetected))
 
-            let SyncTerminationDetection = Validation {
+            Validation("SyncTerminationDetection") {
                 Bind(N, to: 7)
             }
-            SyncTerminationDetection
 
-            let APSyncTerminationDetection = Validation {
+            Validation("APSyncTerminationDetection") {
                 Bind(N, to: 7)
-            }.checking(only: [TypeOK, TDCorrect])
-            APSyncTerminationDetection
+            }.checking(only: [typeOK, TDCorrect])
         }
     }
 }

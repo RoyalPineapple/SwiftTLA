@@ -18,6 +18,7 @@ public enum VariableInitialization: Sendable, Equatable {
 
 public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let name: String
+  package let tlaName: String?
   package let displayLabel: String?
   public let initialization: VariableInitialization
   package let generatedSwiftType: String?
@@ -37,12 +38,13 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
 
   package init(
     name: String, initialization: VariableInitialization,
-    displayLabel: String? = nil,
+    tlaName: String? = nil, displayLabel: String? = nil,
     generatedSwiftType: String? = nil,
     resolvedValueType: CompiledValueType? = nil,
     origin: VariableOrigin
   ) {
     self.name = name
+    self.tlaName = tlaName
     self.displayLabel = displayLabel
     self.initialization = initialization.normalized
     self.generatedSwiftType = generatedSwiftType
@@ -137,6 +139,7 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
   public let bindings: [ActionBinding]
   let sourceIssue: SourceModelIssue?
   let isTermination: Bool
+  let displacedAssignmentTargets: [String: String]
 
   public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
     self.init(name: name, body: body, bindings: bindings, isTermination: false)
@@ -148,11 +151,17 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     bindings: [ActionBinding] = [],
     isTermination: Bool
   ) {
+    self.init(name: name, body: body, bindings: bindings, isTermination: isTermination, displacedAssignmentTargets: [:])
+  }
+
+  init(name: String, body: ActionExpr, bindings: [ActionBinding] = [], isTermination: Bool,
+       displacedAssignmentTargets: [String: String]) {
     self.name = name
     self.body = body
     self.bindings = bindings
     self.sourceIssue = Self.bindingIssue(action: name, bindings: bindings)
     self.isTermination = isTermination
+    self.displacedAssignmentTargets = bindings.isEmpty ? displacedAssignmentTargets : [:]
   }
 
   private static func bindingIssue(action: String, bindings: [ActionBinding]) -> SourceModelIssue? {
@@ -247,6 +256,18 @@ public enum StandardModule: String, Sendable, Hashable, CaseIterable {
   case sequences = "Sequences"
   case tlc = "TLC"
   case randomization = "Randomization"
+
+  var exportedDeclarationNames: Set<String> {
+    switch self {
+    case .integers: ["Int", "Nat"]
+    case .naturals: ["Nat"]
+    case .finiteSets: ["IsFiniteSet", "Cardinality"]
+    case .sequences: ["Seq", "Len", "Append", "Head", "Tail", "SubSeq", "SelectSeq"]
+    case .tlc: ["Print", "PrintT", "Assert", "JavaTime", "TLCGet", "TLCSet",
+                "Permutations", "SortSeq", "RandomElement", "Any", "ToString", "TLCEval"]
+    case .randomization: ["RandomSubset", "RandomSetOfSubsets", "TestRandomSetOfSubsets"]
+    }
+  }
 }
 
 package func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {
@@ -298,6 +319,11 @@ public struct TLASpec: Sendable {
   package var sourceAtomicSteps: [AtomicStep] = []
   var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
   package var algorithmPhase: AlgorithmPhase
+  var orderedIntProofActionNames: Set<String> = []
+  var scalarCopyRoutes: [String: StraightLineAssignmentCheck.ScalarCopyReceipt] = [:]
+  var sequentialAssignmentTargets: [String: [String: String]] = [:]
+  package var sourceSpecDefaultDeadlockWitness = false
+  package var orderedIntSourceComponents: [_OrderedIntSourceComponent]?
   package var diagnostics: [SourceParseDiagnostic] = []
 
   package init(
@@ -367,16 +393,18 @@ public enum AuthoredPlusCalDeclarationPhase: Sendable, Hashable {
 
 public struct VarDecl: SpecComponent, Sendable {
   public let name: String
+  package let tlaName: String?
   package let displayLabel: String?
   public let initialization: VariableInitialization
   package let generatedSwiftType: String?
   package init(
     _ name: String,
     initialization: VariableInitialization,
-    displayLabel: String? = nil,
+    tlaName: String? = nil, displayLabel: String? = nil,
     generatedSwiftType: String? = nil
   ) {
     self.name = name
+    self.tlaName = tlaName
     self.displayLabel = displayLabel
     self.initialization = initialization.normalized
     self.generatedSwiftType = generatedSwiftType
@@ -616,6 +644,16 @@ public struct RefinementMapping: Sendable, Equatable {
 }
 
 public func Refinement(
+  _ name: String,
+  instance: FormalModuleInstance,
+  operator: RefinementDecl.Operator = .spec,
+  mappings: [RefinementMapping],
+  label: String? = nil
+) -> RefinementDecl {
+  Refinement(_name: name, instance: instance, operator: `operator`, mappings: mappings, label: label)
+}
+
+public func Refinement(
   _name: String = "",
   instance: FormalModuleInstance,
   operator: RefinementDecl.Operator = .spec,
@@ -699,6 +737,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ReachableDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ValidationDeclaration) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessProfileDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: QuantifiedTemporalDeclaration) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
@@ -869,7 +908,8 @@ public func Action(
     bindings: parameters.map(\.actionBinding)
   )
 }
-public func Invariant(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
+/// Inside `#spec`, an immutable binding supplies the omitted property name.
+public func Invariant(_ name: String = "", @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
   InvDecl(name, body())
 }
 public func Reachable(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> ReachableDecl {
@@ -902,6 +942,7 @@ public func WeakFairness(_ step: AtomicStep) -> FairnessDecl {
 public func WeakFairness(anyOf steps: [AtomicStep]) -> FairnessDecl {
   FairnessDecl(.weakFairnessActionGroup(steps.map { $0.model.label.name }))
 }
+/// Groups enabled steps by their first argument (the actor), across all remaining argument choices.
 public func WeakFairness(eachOf steps: [AtomicStep]) -> FairnessDecl {
   FairnessDecl(.weakFairnessEachActionGroup(steps.map { $0.model.label.name }))
 }
@@ -911,6 +952,7 @@ public func StrongFairness(_ step: AtomicStep) -> FairnessDecl {
 public func StrongFairness(anyOf steps: [AtomicStep]) -> FairnessDecl {
   FairnessDecl(.strongFairnessActionGroup(steps.map { $0.model.label.name }))
 }
+/// Groups enabled steps by their first argument (the actor), across all remaining argument choices.
 public func StrongFairness(eachOf steps: [AtomicStep]) -> FairnessDecl {
   FairnessDecl(.strongFairnessEachActionGroup(steps.map { $0.model.label.name }))
 }
@@ -925,6 +967,14 @@ public func WeakFairness(_ step: AtomicStep, on projection: some TypedExpression
 }
 public func StrongFairness(_ step: AtomicStep, on projection: some TypedExpression) -> FairnessDecl {
   FairnessDecl(.projected(.strongFairness(step.model.label.name), projection.stateExpr))
+}
+/// Requires weak fairness only for nonstuttering steps that preserve this value.
+public func WeakFairnessNext(preserving value: some TypedExpression) -> FairnessDecl {
+  FairnessDecl(.weakFairnessNextPreserving(value.stateExpr))
+}
+/// Counts steps that change the projection and leave the preserved value unchanged.
+public func WeakFairnessNext(on projection: some TypedExpression, preserving value: some TypedExpression) -> FairnessDecl {
+  FairnessDecl(.projected(.weakFairnessNextPreserving(value.stateExpr), projection.stateExpr))
 }
 public func WeakFairnessNext(on projection: some TypedExpression) -> FairnessDecl {
   FairnessDecl(.projected(.weakFairnessNext, projection.stateExpr))

@@ -10,7 +10,7 @@ package struct NonEmptySubsetSelectionModel: Sendable {
             let members = model.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([1, 2]), Set<Int>([1, 2, 3])]))
             let selection = Algorithm(scoped: { scope in
-                let selectedKeys = scope.sharedVar(in: NonEmptySubsets(of: members))
+                let selectedKeys = scope.sharedVar(initiallyIn: NonEmptySubsets(of: members))
                 Do(Step.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
             })
             selection

@@ -1,4 +1,27 @@
 extension TLASpec {
+  /// Checks the real builder output against the structural witness emitted by `#spec`.
+  public func _checkingOrderedIntSource(
+    algorithm name: String, components: [_OrderedIntSourceComponent]
+  ) -> TLASpec {
+    var checked = self
+    guard sourceAlgorithms.count == 1,
+      sourceAlgorithms[0].model.name == name,
+      sourceAlgorithms[0].model.matchesOrderedIntSource(components)
+    else {
+      checked.diagnostics.append(.init(
+        message: "The expanded #spec changed an ordered Int algorithm.",
+        source: name,
+        expected: "the authored initial values, labels, targets, reads, and assignment order",
+        actual: "the runtime Algorithm builder produced a different source model",
+        nextSafeAction: "Report this #spec builder translation failure."
+      ))
+      return checked
+    }
+    checked.sourceSpecDefaultDeadlockWitness = true
+    checked.orderedIntSourceComponents = components
+    return checked
+  }
+
   public init(
     _ name: String,
     @SpecBuilder _ builder: () -> [SpecComponent]
@@ -25,7 +48,7 @@ extension TLASpec {
         variables.append(
           NamedVar(
             name: v.name, initialization: v.initialization,
-            displayLabel: v.displayLabel,
+            tlaName: v.tlaName, displayLabel: v.displayLabel,
             generatedSwiftType: v.generatedSwiftType, origin: .source))
       } else if let a = comp as? ActionDecl {
         actions.append(NamedAction(
@@ -47,6 +70,8 @@ extension TLASpec {
         initialInvariantSelections.append(initial.invariant)
       } else if let property = comp as? ReachableDecl {
         reachabilityProperties.append(.init(name: property.name, body: property.body, reference: property.reference))
+      } else if let quantified = comp as? QuantifiedTemporalDeclaration {
+        temporalProperties.append(quantified.property)
       } else if let t = comp as? TemporalDecl {
         temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr, bindings: [], reference: t.reference))
       } else if let f = comp as? FairnessDecl {
@@ -91,7 +116,9 @@ extension TLASpec {
 }
 
 extension TLASpec {
-  func loweredSourceModel() throws -> TLASpec {
+  func loweredSourceModel(retainingScalarCopyRoutes: Bool = false,
+                          retainingSequentialAssignmentTargets: Bool = false,
+                          recordAtomicAssignment: ((String, String, ScheduledAtomicAssignment) -> Void)? = nil) throws -> TLASpec {
     if let diagnostic = diagnostics.first { throw diagnostic }
     guard sourceAlgorithms.count <= 1 else {
       throw CompilationDiagnostic(
@@ -114,10 +141,19 @@ extension TLASpec {
     var actionConstraints = actionConstraints
     var formalOperatorDefinitions = formalOperatorDefinitions
     var authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
+    var orderedIntProofActionNames = orderedIntProofActionNames
+    var scalarCopyRoutes = scalarCopyRoutes
+    var sequentialAssignmentTargets = sequentialAssignmentTargets
 
     for step in sourceAtomicSteps {
-      let lowered = try AlgorithmLowerer.lowerAtomicStep(step)
-      actions.append(.init(name: step.model.label.name, body: lowered.action, bindings: step.bindings))
+      let record = recordAtomicAssignment.map { record in
+        { (name: String, assignment: ScheduledAtomicAssignment) in record(step.model.label.name, name, assignment) }
+      }
+      let lowered = try AlgorithmLowerer.lowerAtomicStep(step, recordScheduledAssignment: record)
+      try StraightLineAssignmentCheck.verify(step, lowered: lowered.action,
+        stateRoots: Set(variables.map(\.name)))
+      actions.append(.init(name: step.model.label.name, body: lowered.action, bindings: step.bindings,
+        isTermination: false, displacedAssignmentTargets: lowered.displacedAssignmentTargets))
       invariants += lowered.assertions.enumerated().map {
         NamedStatePredicate(name: "__step_assert_\(step.model.label.name)_\($0.offset)",
           body: step.bindings.reversed().reduce($0.element) { body, binding in
@@ -129,7 +165,9 @@ extension TLASpec {
     if algorithmPhase == .source {
       for algorithm in sourceAlgorithms {
         try algorithm.requireValid()
-        let resolved = algorithm.model.resolvingAtomicSteps()
+        let (resolved, scheduledCopies, scheduledTargets) = algorithm.model.resolvingAtomicSteps(
+          retainingScalarCopyRoutes: retainingScalarCopyRoutes && initialInvariantSelections.isEmpty,
+          retainingSequentialAssignmentTargets: retainingSequentialAssignmentTargets && initialInvariantSelections.isEmpty)
         let authoredPlusCalPlan = AuthoredPlusCalAlgorithmPlan(resolved)
         let lowered = try AlgorithmLowerer.lower(
           resolved,
@@ -137,6 +175,26 @@ extension TLASpec {
           formalOperatorDefinitions: formalOperatorDefinitions,
           enumerateInitialControl: !initialInvariantSelections.isEmpty
         )
+        if algorithm.model.processes.isEmpty,
+           algorithm.model.procedures.isEmpty,
+           let sourceStep = algorithm.model.sequentialSteps.first,
+           algorithm.model.sequentialSteps.count == 1,
+           let condition = sourceStep.loopCondition,
+           case .value(.bool(true)) = condition,
+           lowered.actions.count == 1,
+           !lowered.variables.contains(where: { $0.origin == .programCounter }) {
+          try StraightLineAssignmentCheck.verify(AtomicStep(model: sourceStep),
+            lowered: lowered.actions[0].body, stateRoots: Set(lowered.variables.map(\.name)))
+        }
+        if algorithm.model.processes.isEmpty, algorithm.model.procedures.isEmpty {
+          let verified = try StraightLineAssignmentCheck.verifySequential(
+            algorithm.model, scheduledCopies: scheduledCopies, lowered: lowered,
+            enumerateInitialControl: !initialInvariantSelections.isEmpty,
+            scheduledTargets: retainingSequentialAssignmentTargets ? scheduledTargets : nil)
+          orderedIntProofActionNames.formUnion(verified.actionNames)
+          scalarCopyRoutes = verified.scalarCopies
+          sequentialAssignmentTargets = scheduledTargets.filter { verified.actionNames.contains($0.key) }
+        }
         authoredPlusCalAlgorithmPlan = authoredPlusCalPlan
         variables += lowered.variables
         actions += lowered.actions
@@ -150,24 +208,7 @@ extension TLASpec {
       }
     }
 
-    actions = actions.map { action in
-      let body: ActionExpr
-      if case .existsAction(let binder, let domain, let memberBody) = action.body {
-        body = .existsAction(
-          binder,
-          domain,
-          ActionNormalization.complete(memberBody, variables: variables)
-        )
-      } else {
-        body = ActionNormalization.complete(action.body, variables: variables)
-      }
-      return NamedAction(
-        name: action.name,
-        body: body,
-        bindings: action.bindings,
-        isTermination: action.isTermination
-      )
-    }
+    actions = try actions.map { try $0.completingFrame(variables: variables) }
 
     for action in actions {
       try ActionNormalization.verifyComplete(action.body, variables: variables,
@@ -207,6 +248,11 @@ extension TLASpec {
     lowered.fairnessProfiles = fairnessProfiles
     lowered.initialInvariantSelections = initialInvariantSelections
     lowered.algorithmPhase = .lowered
+    lowered.orderedIntProofActionNames = orderedIntProofActionNames
+    lowered.scalarCopyRoutes = scalarCopyRoutes
+    lowered.sequentialAssignmentTargets = sequentialAssignmentTargets
+    lowered.sourceSpecDefaultDeadlockWitness = sourceSpecDefaultDeadlockWitness
+    lowered.orderedIntSourceComponents = orderedIntSourceComponents
     return lowered
   }
 
@@ -283,9 +329,13 @@ extension CompiledModuleMetadata {
       + (declarations.actionConstraint.map { [$0] } ?? [])
       + renderedProperties
       + (try authoredPlusCalSymmetry(layout: layout, parameterNames: parameterNames))
+    var metadata = self
+    metadata.name = declarations.moduleName
+    // Standard modules keep their canonical names; only user imports use the allocation map.
+    metadata.imports = imports.map { declarations.moduleNames[$0] ?? $0 }
     let module = AuthoredPlusCalModule(
-      name: name,
-      extendsModules: authoredPlusCalExtends + requiredModules.map(\.rawValue).sorted().filter { !authoredPlusCalExtends.contains($0) },
+      name: metadata.name,
+      extendsModules: metadata.authoredPlusCalExtends + requiredModules.map(\.rawValue).sorted().filter { !metadata.authoredPlusCalExtends.contains($0) },
       constants: constantDeclaration(including: parameterNames).map { [$0] } ?? [],
       preludeDeclarations: prelude,
       algorithm: plusCalAlgorithm,
@@ -326,12 +376,12 @@ extension CompiledModuleMetadata {
   private func authoredPlusCalSymmetry(layout: CompiledLayout, parameterNames: [String]) throws -> [String] {
     let names = Dictionary(uniqueKeysWithValues: zip(layout.parameters.map(\.reference), parameterNames))
     return try symmetrySets.map { symmetry in
-      guard let domain = symmetry.domain.renderedSet(parameterNames: names) else {
+      guard let permutations = symmetry.domain.renderedPermutations(parameterNames: names) else {
         throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
           path: "symmetrySets.\(symmetry.variableName)", expected: "a rendered model parameter",
           actual: "a missing parameter", nextSafeAction: "Use a model-owned parameter.")
       }
-      return "Symm\(symmetry.variableName) == Permutations(\(domain))"
+      return "Symm\(symmetry.variableName) == \(permutations)"
     }
   }
 }

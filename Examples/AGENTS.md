@@ -8,7 +8,7 @@ Examples must use SwiftTLA as the behavioral source of truth.
 - Keep formal state solely in the generated machine; `@State`, delegates, view
   models, timers, and ad-hoc schedulers retain only platform state.
 - Delegate transition legality to the generated machine. Dispatch the
-  generated action and render its generated transition.
+  generated action and render its updated state.
 - Extend the typed DSL for new behavior and test parser diagnostics, generated
   Swift execution, native checking, and emitted TLA+ together.
 - Keep concrete platform handles at the edge, mapped by a typed formal ID.

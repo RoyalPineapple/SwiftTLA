@@ -52,7 +52,7 @@ struct GeneratedSelectionProofTests {
                 .deletingLastPathComponent()
                 .appendingPathComponent("../../Verification/Semantics/\(entry.witness)")
                 .standardizedFileURL
-            let expected = Array(Parser.parse(source: try String(contentsOf: witness, encoding: .utf8))
+            let expected = Array(Parser.parse(source: nativeWitnessSource(try String(contentsOf: witness, encoding: .utf8)))
                 .tokens(viewMode: .sourceAccurate)).map(\.text)
             let actual = Array(Parser.parse(source: normalized).tokens(viewMode: .sourceAccurate)).map(\.text)
             #expect(actual == expected, "Generated output changed for \(entry.model)")

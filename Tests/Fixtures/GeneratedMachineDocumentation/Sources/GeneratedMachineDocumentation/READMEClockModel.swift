@@ -9,50 +9,40 @@ public struct ClockModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("Clock") {
-            let ValidTime = Invariant()
-            let clock = Algorithm(label: "Clock", scoped: { scope in
-                let hour = scope.sharedVar(in: 0...23)
-                let minute = scope.sharedVar(in: 0...59)
-                let second = scope.sharedVar(in: 0...59)
+        #spec("Clock") { scope in
+            let hour = scope.sharedVar(initiallyIn: 0...23)
+            let minute = scope.sharedVar(initiallyIn: 0...59)
+            let second = scope.sharedVar(initiallyIn: 0...59)
 
-                While(Step.tick, true) {
+            Algorithm("clock", label: "Clock") {
+                Loop(Step.tick) {
                     Either {
-                        When(second < 59)
-                        Assign(second, to: second + 1)
-                    } or: {
-                        Either {
-                            When(second == 59)
-                            When(minute < 59)
-                            Assign(second, to: 0)
-                            Assign(minute, to: minute + 1)
-                        } or: {
-                            Either {
-                                When(second == 59)
-                                When(minute == 59)
-                                When(hour < 23)
-                                Assign(second, to: 0)
-                                Assign(minute, to: 0)
-                                Assign(hour, to: hour + 1)
-                            } or: {
-                                When(second == 59)
-                                When(minute == 59)
-                                When(hour == 23)
-                                Assign(second, to: 0)
-                                Assign(minute, to: 0)
-                                Assign(hour, to: 0)
-                            }
+                        When(second < 59) {
+                            second += 1
+                        }
+                        When(second == 59, minute < 59) {
+                            second.set(0)
+                            minute += 1
+                        }
+                        When(second == 59, minute == 59, hour < 23) {
+                            second.set(0)
+                            minute.set(0)
+                            hour += 1
+                        }
+                        When(second == 59, minute == 59, hour == 23) {
+                            second.set(0)
+                            minute.set(0)
+                            hour.set(0)
                         }
                     }
                 }
+            }
 
-                ValidTime {
-                    hour >= 0 && hour <= 23 &&
-                    minute >= 0 && minute <= 59 &&
-                    second >= 0 && second <= 59
-                }
-            })
-            clock
+            Invariant("validTime") {
+                (0...23).contains(hour)
+                (0...59).contains(minute)
+                (0...59).contains(second)
+            }
         }
     }
 }

@@ -8,6 +8,34 @@ struct IndependentAtomicStepTests {
         .init(enums: [parserTestEnum("Step", cases: ["next": .string("next"), "other": .string("other")])])
     }
 
+    @Test("independent integer overflow retains an earlier write even when a later assignment replaces it")
+    func retainsPrecedingWritesOnOverflow() throws {
+        let spec = SpecParser.parseSpecClosure(named: "IndependentOverflow", try parseSpecTestClosure("""
+        { scope in
+            let unread = scope.sharedVar(initial: 0)
+            let total = scope.sharedVar(initial: 9223372036854775807)
+            Do(Step.next) {
+                Assign(unread, to: 7)
+                Assign(total, to: total + 1)
+                Assign(unread, to: 0)
+            }
+        }
+        """), sourceTypes: sourceTypes)
+        try #require(spec.diagnostics.isEmpty)
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: spec.compile()))
+        let output = try program.renderModule()
+        let failures = output.evaluationFailureDeclarations
+        try #require(failures.contains { $0.hasPrefix("__SwiftTLAOverflowOperands0 == ") })
+        let before = try #require(failures.first { $0.hasPrefix("__SwiftTLAOverflowBefore0 == ") })
+        let action = try #require(program.behavior.actions.first)
+        guard case .define(let binder, _, _) = action.body else {
+            Issue.record("Expected the scheduled write of 7")
+            return
+        }
+        let name = try #require(program.binderNames[binder])
+        #expect(before == "__SwiftTLAOverflowBefore0 == (IF __SwiftTLAOverflowFailure0 THEN (LET \(name) == 7 IN <<\(name)>>) ELSE <<>>)")
+    }
+
     @Test("per-instance fairness on a typed independent step retains each action binding")
     func perInstanceFairness() throws {
         let spec = SpecParser.parseSpecClosure(named: "FairIndependentStep", try parseSpecTestClosure("""
@@ -207,10 +235,9 @@ struct IndependentAtomicStepTests {
         #expect(try renderedValue(named: "value", in: next, compilation: compilation) == .int(shadow ? 2 : 1))
     }
 
-    @Test("bound steps reject mutable bindings, duplicate registration, and unregistered enabledness", arguments: [
+    @Test("bound steps reject mutable bindings and duplicate registration", arguments: [
         "var next = Do(Step.next) { Skip() }\nnext",
-        "let next = Do(Step.next) { Skip() }\nnext\nnext",
-        "let next = Do(Step.next) { Skip() }\nInvariant(\"Ready\") { next.enabled }"
+        "let next = Do(Step.next) { Skip() }\nnext\nnext"
     ])
     func rejectsInvalidBoundSteps(_ declarations: String) throws {
         let spec = SpecParser.parseSpecClosure(named: "InvalidBoundSteps", try parseSpecTestClosure("""
@@ -234,12 +261,12 @@ struct IndependentAtomicStepTests {
         #expect(try !machine.isEnabled(.reset))
         #expect(try !machine.isEnabled(.blocked))
         #expect(try !machine.isEnabled(.rollback))
-        _ = try machine.send(.advance)
+        try machine.send(.advance)
         #expect(machine.state.value == 1 && machine.state.copied == 1)
-        _ = try machine.send(.advance)
+        try machine.send(.advance)
         #expect(machine.state.value == 2 && machine.state.copied == 2)
         #expect(try !machine.isEnabled(.advance))
-        _ = try machine.send(.reset)
+        try machine.send(.reset)
         #expect(machine.state.value == 0 && machine.state.copied == 0)
     }
 

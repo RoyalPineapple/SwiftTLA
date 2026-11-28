@@ -1,3 +1,7 @@
+// Removing two beans and replacing them according to their colors constrains the color of the
+// final bean.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CoffeeCan/CoffeeCan.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -8,7 +12,10 @@ package struct CoffeeCanModel: Sendable {
         package let white: Int
     }
     package enum Step: String, CaseIterable {
-        case PickSameColorWhite, PickSameColorBlack, PickDifferentColor, Termination
+        case pickSameColorWhite = "PickSameColorWhite"
+        case pickSameColorBlack = "PickSameColorBlack"
+        case pickDifferentColor = "PickDifferentColor"
+        case termination = "Termination"
     }
 
     package static var spec: TLASpec {
@@ -21,30 +28,26 @@ package struct CoffeeCanModel: Sendable {
                     Can.expression(black: black, white: white)
                 }
             }
-            let can = scope.sharedVar(in: cans.filtering { value in
+            let can = scope.sharedVar(initiallyIn: cans.filter { value in
                 IntRange(1, through: MaxBeanCount).contains(value.black + value.white)
             })
             let beanCount = can.black + can.white
 
-            Do(Step.PickSameColorWhite) {
-                When(beanCount > 1 && can.white >= 2)
-                Assign(can.black, to: can.black + 1)
-                Assign(can.white, to: can.white - 2)
+            Do(Step.pickSameColorWhite, when: beanCount > 1 && can.white >= 2) {
+                can.black += 1
+                can.white.set(can.white - 2)
             }
-            Do(Step.PickSameColorBlack) {
-                When(beanCount > 1 && can.black >= 2)
-                Assign(can.black, to: can.black - 1)
+            Do(Step.pickSameColorBlack, when: beanCount > 1 && can.black >= 2) {
+                can.black.set(can.black - 1)
             }
-            Do(Step.PickDifferentColor) {
-                When(beanCount > 1 && can.black >= 1 && can.white >= 1)
-                Assign(can.black, to: can.black - 1)
+            Do(Step.pickDifferentColor, when: beanCount > 1 && can.black >= 1 && can.white >= 1) {
+                can.black.set(can.black - 1)
             }
-            let Termination = Do(Step.Termination, when: beanCount == 1) { Skip() }
-            Termination
+            let Termination = Do(Step.termination, when: beanCount == 1) { Skip() }
             WeakFairnessNext()
 
-            let TypeInvariant = Invariant()
-            TypeInvariant {
+            let typeInvariant = Invariant("TypeInvariant")
+            typeInvariant {
                 can.black >= 0 && can.black <= MaxBeanCount
                     && can.white >= 0 && can.white <= MaxBeanCount
             }
@@ -63,14 +66,10 @@ package struct CoffeeCanModel: Sendable {
                 then: .eventually(can.black == 1 && can.white == 0),
                 else: .eventually(can.black == 0 && can.white == 1)))
 
-            let CoffeeCan100Beans = Validation { Bind(MaxBeanCount, to: 100) }
-            CoffeeCan100Beans
-            let CoffeeCan1000Beans = Validation { Bind(MaxBeanCount, to: 1000) }
-            CoffeeCan1000Beans
-            let CoffeeCan3000Beans = Validation { Bind(MaxBeanCount, to: 3000) }
-            CoffeeCan3000Beans
-            let APCoffeeCan = Validation { Bind(MaxBeanCount, to: 5) }.checking(only: [TypeInvariant])
-            APCoffeeCan
+            Validation("CoffeeCan100Beans") { Bind(MaxBeanCount, to: 100) }
+            Validation("CoffeeCan1000Beans") { Bind(MaxBeanCount, to: 1000) }
+            Validation("CoffeeCan3000Beans") { Bind(MaxBeanCount, to: 3000) }
+            Validation("APCoffeeCan") { Bind(MaxBeanCount, to: 5) }.checking(only: [typeInvariant])
         }
     }
 }

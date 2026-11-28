@@ -25,6 +25,7 @@ package enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
     case invalidName
     case emptyDomain
     case duplicateDomainMember
+    case invalidFixedProcessID
     case duplicateLabel
     case duplicateFairnessExemption
     case invalidFairnessExemption
@@ -138,7 +139,7 @@ internal enum AlgorithmPlacementValidator {
                 actual: component.actualPlacement,
                 nextSafeAction: component.nextSafeAction
             )
-        case .parameterizedStep:
+        case .parameterizedStep, .unknownStateField:
             .init(
                 code: .invalidAlgorithm,
                 stage: .validation,

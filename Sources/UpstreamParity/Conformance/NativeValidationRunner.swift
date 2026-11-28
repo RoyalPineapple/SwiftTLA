@@ -25,6 +25,7 @@ package struct NativeValidationReport: Codable, Sendable {
     package let initialStates: Int
     package let states: Int
     package let edges: Int
+    package let initialEvaluationFailure: ValidationVerdict?
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
     package let deadlockSelected: Bool
@@ -44,6 +45,7 @@ package enum NativeValidationRunner {
         scenario: Scenario, caseID: String, maximumStates: Int, to directory: URL
     ) throws -> NativeValidationReport {
         let names = scenario.formalPropertyNames
+        let rendered = try scenario.render()
         guard names == Scenario.Machine.formalPropertyNames,
               Set(names.keys) == Set(Scenario.Property.allCases),
               Set(names.values).count == names.count,
@@ -51,7 +53,7 @@ package enum NativeValidationRunner {
                   $0.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil
               }),
               scenario.checking.properties == Set(scenario.expectations.keys),
-              scenario.postconditionName == (try scenario.render()).postconditionName,
+              scenario.postconditionName == rendered.postconditionName,
               (scenario.postconditionExpectation != nil) == (scenario.postconditionName != nil),
               (scenario.deadlockExpectation != nil) == scenario.checking.checkDeadlock else {
             throw NativeValidationRunnerError.invalidCoverage(scenario.name)
@@ -61,8 +63,19 @@ package enum NativeValidationRunner {
                 maximumStates: maximumStates, traces: traces, maximumDepth: maximumDepth,
                 to: directory)
         }
-        let initial = try scenario.initialMachines()
-        guard let first = initial.first else { throw ExplorationError.noInitialStates }
+        let initialOutcomes = try scenario.initialOutcomes()
+        let initial = initialOutcomes.states
+        let initialFailureCheck = try rendered.initialEvaluationFailureBundle()
+        guard initialOutcomes.firstFailure == nil || initialFailureCheck != nil else {
+            throw NativeValidationRunnerError.invalidCoverage("unrendered initial evaluation failure")
+        }
+        guard let first = initial.first else {
+            if initialOutcomes.firstFailure != nil {
+                // shortcut: graph evidence needs a valid seed; add failure-only evidence before admitting this case.
+                throw NativeValidationRunnerError.unavailable("initial failure without a valid initial state")
+            }
+            throw ExplorationError.noInitialStates
+        }
         let invariant = Set(Scenario.Machine.invariantProperties)
         let reachability = Set(Scenario.Machine.reachabilityProperties)
         let temporal = Set(try first.temporalProperties(checking: scenario.checking.properties).keys)
@@ -80,6 +93,12 @@ package enum NativeValidationRunner {
             throw NativeValidationRunnerError.unavailable("decisive mode requires one selected safety check")
         }
         let needsGraph = !scenario.checking.properties.intersection(temporal.union(refinement)).isEmpty
+        var fairness: [MachineFairnessCondition<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = []
+        var fairnessFailure: (any Error)?
+        if needsGraph && scenario.behavior == .specification {
+            do { fairness = try scenario.fairnessConditions(on: first) }
+            catch { fairnessFailure = error }
+        }
         var capture = MachineValidationGraphCapture<Scenario.Machine>()
         let observe: ((MachineValidationEvent<Scenario.Machine>) throws -> Void)? = needsGraph ? { event in
             try capture.observe(event)
@@ -90,6 +109,7 @@ package enum NativeValidationRunner {
             maximumStates: maximumStates, stopOnViolation: decisive,
             stopOnReachability: decisive,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
+            fairness: fairness,
             to: directory.appendingPathComponent("machine.bin.gz"), observe: observe)
         switch (scenario.checkingMode, batch.completion) {
         case (.exhaustive, .exhausted),
@@ -105,10 +125,12 @@ package enum NativeValidationRunner {
         var temporalResults: [Scenario.Property: TemporalAnalysis<Scenario.Machine.Snapshot, Scenario.Machine.Action?>] = [:]
         var refinementFailures: [Scenario.Property: RefinementFailure<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = [:]
         if needsGraph {
-            let fairness = scenario.behavior == .specification
-                ? try scenario.fairnessConditions(on: first) : []
+            if let fairnessFailure { throw fairnessFailure }
+            guard let enabledness = batch.fairnessEnabledness else {
+                throw NativeValidationRunnerError.unavailable("fairness enabledness")
+            }
             var complete = try MachineValidationGraph(machine: first, capture: capture,
-                behavior: scenario.behavior, fairness: fairness)
+                behavior: scenario.behavior, fairness: fairness, enabledness: enabledness)
             temporalResults = try complete.temporalResults(checking: scenario.checking.properties)
             refinementFailures = try first.validationRefinementFailures(
                 in: &complete, checking: scenario.checking.properties)
@@ -154,6 +176,8 @@ package enum NativeValidationRunner {
             maximumStates: maximumStates,
             graphComplete: !decisive, initialStates: batch.initialStates,
             states: batch.states, edges: batch.edges,
+            initialEvaluationFailure: initialFailureCheck == nil ? nil
+                : (initialOutcomes.firstFailure == nil ? .satisfied : .violated),
             properties: properties, deadlock: deadlock,
             deadlockSelected: scenario.checking.checkDeadlock,
             postconditionName: scenario.postconditionName, postcondition: postcondition)
@@ -280,6 +304,7 @@ package enum NativeValidationRunner {
             schema: "swifttla.native-validation-report", scenario: scenario.name,
             maximumStates: maximumStates, graphComplete: false,
             initialStates: sampledTraceCount, states: sampledStateCount, edges: sampledEdgeCount,
+            initialEvaluationFailure: nil,
             properties: properties, deadlock: deadlock,
             deadlockSelected: scenario.checking.checkDeadlock,
             postconditionName: nil, postcondition: nil)

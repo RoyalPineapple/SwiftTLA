@@ -62,8 +62,8 @@ struct FallibleSequenceConcatenationMachine {
         #spec("FallibleSequenceConcatenationMachine") { scope in
             let front = scope.sharedVar(initial: [Int]([1]))
             let back = scope.sharedVar(initial: [Int]([2, 2]))
-            let frontLength = scope.sharedVar(in: 1...2)
-            let backLength = scope.sharedVar(in: 2...3)
+            let frontLength = scope.sharedVar(initiallyIn: 1...2)
+            let backLength = scope.sharedVar(initiallyIn: 2...3)
             Do(Step.combine) {
                 Assign(front, to: front.prefix(length: frontLength)
                     .concatenating(back.prefix(length: backLength)))
@@ -79,7 +79,7 @@ struct FallibleSequenceAppendMachine {
     static var spec: TLASpec {
         #spec("FallibleSequenceAppendMachine") { scope in
             let values = scope.sharedVar(initial: [Int]([1]))
-            let length = scope.sharedVar(in: 1...2)
+            let length = scope.sharedVar(initiallyIn: 1...2)
             Do(Step.append) {
                 Assign(values, to: values.prefix(length: length).appending(3))
             }
@@ -94,7 +94,7 @@ struct FallibleSequenceLengthMachine {
     static var spec: TLASpec {
         #spec("FallibleSequenceLengthMachine") { scope in
             let values = scope.sharedVar(initial: [Int]([1]))
-            let length = scope.sharedVar(in: 1...2)
+            let length = scope.sharedVar(initiallyIn: 1...2)
             let result = scope.sharedVar(initial: 0)
             Do(Step.measure) {
                 Assign(result, to: values.prefix(length: length).count)
@@ -110,7 +110,7 @@ struct FallibleSequenceHeadMachine {
     static var spec: TLASpec {
         #spec("FallibleSequenceHeadMachine") { scope in
             let values = scope.sharedVar(initial: [Int]([1]))
-            let length = scope.sharedVar(in: 0...2)
+            let length = scope.sharedVar(initiallyIn: 0...2)
             let result = scope.sharedVar(initial: 0)
             Do(Step.readHead) {
                 Assign(result, to: values.prefix(length: length).head())
@@ -125,13 +125,31 @@ struct FiniteInitialStepMachine {
 
     static var spec: TLASpec {
         #spec("FiniteInitialStepMachine") { scope in
-            let phase = scope.sharedVar(in: Set<Int>([1, 2]))
+            let phase = scope.sharedVar(initiallyIn: Set<Int>([1, 2]))
             Do(Step.prepare) {
                 When(phase == 1)
                 Assign(phase, to: 2)
             }
             let knownPhase = Invariant()
             knownPhase { phase == 1 || phase == 2 }
+        }
+    }
+}
+
+@TLAModel
+struct OrderedCollectionCommitFailure {
+    enum Step: String, CaseIterable { case advance }
+    static var spec: TLASpec {
+        #spec("OrderedCollectionCommitFailure") { scope in
+            let start = scope.parameter(as: Int.self, in: 0...1)
+            let queue = scope.sharedVar(initial: [Int]())
+            let divisor = scope.sharedVar(initial: start)
+            let number = scope.sharedVar(initial: Int.max)
+            Do(Step.advance) {
+                queue.set(queue.appending(1))
+                divisor.set(1 / divisor)
+                number.set(number + 1)
+            }
         }
     }
 }

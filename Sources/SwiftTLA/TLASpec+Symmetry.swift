@@ -7,11 +7,17 @@ public struct SymmetryReference: Hashable, Sendable {
 public enum SymmetryDomain: Hashable, Sendable {
   case finite(Set<TLAValue>)
   case parameter(ParameterReference)
+  case independentParameters(ParameterReference, ParameterReference)
 
-  package func renderedSet(parameterNames: [ParameterReference: String]) -> String? {
+  package func renderedPermutations(parameterNames: [ParameterReference: String]) -> String? {
     switch self {
-    case .finite(let values): return "{\(values.sorted().map(\.description).joined(separator: ", "))}"
-    case .parameter(let reference): return parameterNames[reference]
+    case .finite(let values):
+      return "Permutations({\(values.sorted().map(\.description).joined(separator: ", "))})"
+    case .parameter(let reference):
+      return parameterNames[reference].map { "Permutations(\($0))" }
+    case .independentParameters(let first, let second):
+      guard let a = parameterNames[first], let b = parameterNames[second] else { return nil }
+      return "Permutations(\(a)) \\union Permutations(\(b))"
     }
   }
 }
@@ -56,25 +62,38 @@ private func finiteSymmetryDeclaration<Member: TLAValueConvertible & Hashable>(
   return SymmetrySetDecl(name, converted, sourceIssue: issue)
 }
 
+public func Symmetry<Member: TLAValueType>(_ name: String, _ members: ModelParameter<Set<Member>>) -> SymmetrySetDecl {
+  SymmetrySetDecl(name, domain: .parameter(members.reference))
+}
+
 public func Symmetry<Member: TLAValueType>(_name: String = "", _ members: ModelParameter<Set<Member>>) -> SymmetrySetDecl {
   SymmetrySetDecl(_name, domain: .parameter(members.reference))
 }
 
+/// Permute values within each set independently.
+public func Symmetry<A: TLAValueType, B: TLAValueType>(
+  _name: String = "", independently first: ModelParameter<Set<A>>, _ second: ModelParameter<Set<B>>
+) -> SymmetrySetDecl {
+  SymmetrySetDecl(_name, domain: .independentParameters(first.reference, second.reference))
+}
+
 extension TLASpec {
-  func renderedDeclarationNames() -> Set<String> {
-    Set(
-      variables.map(\.name)
-        + constants.map(\.name)
+  func renderedDeclarationNames(includingActions: Bool = true, includingVariables: Bool = true,
+    includingProperties: Bool = true) -> Set<String> {
+    var names = Set(
+      constants.map(\.name)
         + formalParameters.map(\.name)
-        + actions.map(\.name)
-        + invariants.map(\.name)
-        + reachabilityProperties.map(\.name)
-        + temporalProperties.map(\.name)
         + recursiveFuncs.map(\.name)
         + formalOperatorDefinitions.map(\.name)
         + moduleInstances.map(\.name)
-        + refinements.map(\.name)
     )
+    if includingProperties {
+      names.formUnion(invariants.map(\.name) + reachabilityProperties.map(\.name)
+        + temporalProperties.map(\.name) + refinements.map(\.name))
+    }
+    if includingVariables { names.formUnion(variables.map { $0.tlaName ?? $0.name }) }
+    if includingActions { names.formUnion(actions.map(\.name)) }
+    return names
   }
 
   func validateSymmetryDeclarations() throws {
@@ -104,11 +123,7 @@ extension TLASpec {
           actual: "a duplicate declaration"
         )
       }
-      let possibleValues: Set<TLAValue>
-      switch symmetry.domain {
-      case .finite(let values):
-        possibleValues = values
-      case .parameter(let reference):
+      func members(of reference: ParameterReference) throws -> Set<TLAValue> {
         guard let parameter = parameters.first(where: { $0.reference == reference }) else {
           throw symmetryDiagnostic(path: "\(path).values",
             expected: "a model-owned set parameter", actual: "a foreign parameter")
@@ -118,7 +133,20 @@ extension TLASpec {
             expected: "a finite domain of nonempty atomic member sets",
             actual: "an unsupported parameter domain")
         }
-        possibleValues = values
+        return values
+      }
+      let possibleValues: Set<TLAValue>
+      switch symmetry.domain {
+      case .finite(let values): possibleValues = values
+      case .parameter(let reference): possibleValues = try members(of: reference)
+      case .independentParameters(let first, let second):
+        let a = try members(of: first)
+        let b = try members(of: second)
+        guard !a.isEmpty, !b.isEmpty, a.isDisjoint(with: b) else {
+          throw symmetryDiagnostic(path: "\(path).values",
+            expected: "two nonempty disjoint symmetry domains", actual: "empty or overlapping domains")
+        }
+        possibleValues = a.union(b)
       }
       guard !possibleValues.isEmpty else {
         throw symmetryDiagnostic(

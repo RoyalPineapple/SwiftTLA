@@ -426,6 +426,30 @@ import SwiftTLAMacros
         #expect(parsedCompilation.identity == builderCompilation.identity)
     }
 
+    @Test func formalDefinitionsSearchTheEnclosingSet() throws {
+        let source = """
+        {
+            let formal = Algorithm { scope in
+                let members = IntRange(1, through: 2)
+                FormalDefinition("matches", taking: Int.self) { value in
+                    members.contains { member in member == value }
+                }
+                FormalDefinition("allOne", parameters: [], body:
+                    members.allSatisfy { member in member == 1 })
+            }
+            formal
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(named: "Formal", try parseSpecTestClosure(source))
+        #expect(parsed.diagnostics.isEmpty)
+        let definitions = try #require(parsed.sourceAlgorithms.first?.model.formalOperatorDefinitions)
+        let members = IntRange(1, through: 2).stateExpr
+        #expect(definitions.map(\.body) == [
+            .exists(members, "member", .equal(.variable("member"), .variable("value0"))),
+            .forAll(members, "member", .equal(.variable("member"), .value(.int(1))))
+        ])
+    }
+
     @Test func typedFormalDefinitionParsesClosureBindersAndLocalRecursion() throws {
         let source = """
         {

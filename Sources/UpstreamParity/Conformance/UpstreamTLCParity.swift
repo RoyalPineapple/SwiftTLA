@@ -85,7 +85,7 @@ package enum UpstreamTLCParity {
         _ = try GeneratedTLCOracle.run(bundle: bundles.reference, id: id,
             maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
             workRoot: work, retained: referenceOutput, invocation: .propertyCheck,
-            renderedActions: rendered.actions, process: process, arguments: arguments)
+            renderedActions: rendered.actions, process: process, arguments: arguments, referenceCache: .readThrough)
         return try compareSampled(id: id, name: bundles.name, generated: bundles.generated,
             reference: bundles.reference, pin: pin, arguments: arguments, in: directory)
     }
@@ -341,7 +341,7 @@ package enum UpstreamTLCParity {
                     bundle: referenceBundle, id: id,
                     maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
                     workRoot: work, retained: referenceOutput, invocation: .propertyCheck,
-                    renderedActions: rendered.actions, process: process)
+                    renderedActions: rendered.actions, process: process, referenceCache: .readThrough)
                 if generatedOutcome == .deadlock { generatedDeadlock = .violated }
                 else { generatedResults[name] = try GeneratedTLCOracle.verdict(
                     for: name, outcome: generatedOutcome, rendered: rendered, retained: generatedOutput) }
@@ -361,7 +361,7 @@ package enum UpstreamTLCParity {
                     referenceResults[name] = try check(name: name, bundles: [referenceBundle], id: id,
                         maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
                         work: work, output: directory.appendingPathComponent("reference-\(name)"),
-                        rendered: rendered, process: process)
+                        rendered: rendered, process: process, referenceCache: .readThrough)
                 }
             }
             let decisiveResult = generatedResults.values.contains(.violated)
@@ -410,7 +410,7 @@ package enum UpstreamTLCParity {
         let referenceCheckingOutcome = try GeneratedTLCOracle.run(
             bundle: referenceGraphBundle, id: id, maximumStates: maximumStates, timeout: timeout,
             tools: tools, pin: pin, workRoot: work, retained: referenceGraphOutput,
-            invocation: .finiteGraph, renderedActions: rendered.actions, process: process)
+            invocation: .finiteGraph, renderedActions: rendered.actions, process: process, referenceCache: .readThrough)
         for outcome in [generatedCheckingOutcome, referenceCheckingOutcome] {
             guard outcome == .completed || outcome == .safetyViolation || outcome == .deadlock else {
                 throw UpstreamTLCParityError.invalidOutcome("\(id): \(outcome)")
@@ -433,7 +433,7 @@ package enum UpstreamTLCParity {
                     declarations: configuration.declarations, in: reference), id: id,
                 maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
                 workRoot: work, retained: referenceGraphOutput, invocation: .finiteGraph,
-                renderedActions: rendered.actions, process: process)
+                renderedActions: rendered.actions, process: process, referenceCache: .readThrough)
         }
         let generatedComplete = generatedOutcome == .completed
         let referenceComplete = referenceOutcome == .completed
@@ -460,7 +460,7 @@ package enum UpstreamTLCParity {
                 upstream = try check(name: name, bundles: [bundle], id: id,
                     maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
                     work: work, output: directory.appendingPathComponent("reference-\(name)"),
-                    rendered: rendered, process: process)
+                    rendered: rendered, process: process, referenceCache: .readThrough)
             }
             generatedResults[name] = generated
             referenceResults[name] = upstream
@@ -502,7 +502,7 @@ package enum UpstreamTLCParity {
             let referenceOutcome = try GeneratedTLCOracle.run(bundle: referenceBundle, id: id,
                 maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
                 workRoot: work, retained: referenceOutput, invocation: .propertyCheck,
-                renderedActions: rendered.actions, process: process)
+                renderedActions: rendered.actions, process: process, referenceCache: .readThrough)
             generatedPostcondition = try GeneratedTLCOracle.postconditionVerdict(
                 name: generatedName, outcome: generatedOutcome, retained: generatedOutput)
             referencePostcondition = try GeneratedTLCOracle.postconditionVerdict(
@@ -722,7 +722,7 @@ package enum UpstreamTLCParity {
         name: String, bundles: [TLAModuleBundle], id: String,
         maximumStates: Int, timeout: TimeInterval, tools: ResolvedTLCToolchain,
         pin: TLCReferencePin, work: URL, output: URL,
-        rendered: RenderedSpecification, process: TLCProcessAdapter
+        rendered: RenderedSpecification, process: TLCProcessAdapter, referenceCache: ReferenceCachePolicy = .disabled
     ) throws -> ValidationVerdict {
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
         var verdicts: [ValidationVerdict] = []
@@ -731,7 +731,7 @@ package enum UpstreamTLCParity {
             let outcome = try GeneratedTLCOracle.run(
                 bundle: bundle, id: id, maximumStates: maximumStates, timeout: timeout,
                 tools: tools, pin: pin, workRoot: work, retained: retained,
-                invocation: .propertyCheck, renderedActions: rendered.actions, process: process)
+                invocation: .propertyCheck, renderedActions: rendered.actions, process: process, referenceCache: referenceCache)
             verdicts.append(try GeneratedTLCOracle.verdict(for: name, outcome: outcome,
                 rendered: rendered, retained: retained))
         }
@@ -755,6 +755,6 @@ package enum UpstreamTLCParity {
         } ?? rendered.tlaBundle(checking: [], checkDeadlock: true)
         return try check(name: "deadlock", bundles: [bundle], id: id,
             maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
-            work: work, output: output, rendered: rendered, process: process)
+            work: work, output: output, rendered: rendered, process: process, referenceCache: reference == nil ? .disabled : .readThrough)
     }
 }

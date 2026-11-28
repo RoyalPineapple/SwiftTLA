@@ -4,22 +4,31 @@ import UpstreamParity
 
 let args = Array(CommandLine.arguments.dropFirst())
 switch args.first {
+case "reference":
+    do { try runReference(arguments: Array(args.dropFirst())); exit(0) }
+    catch { fputs("reference: \(error)\n", stderr); exit(2) }
 case "native": runNative(arguments: Array(args.dropFirst()))
 case "oracle": runOracle(arguments: Array(args.dropFirst()))
 case "compare": runCompare(arguments: Array(args.dropFirst()))
 case "upstream": runUpstream(arguments: Array(args.dropFirst()))
 case "temporal-symmetry": runTemporalSymmetry(arguments: Array(args.dropFirst()))
+case "initial-failure": runInitialFailure(arguments: Array(args.dropFirst()))
 default:
     fputs("""
     Usage: tlc-validate <command>
+      reference capture|compare --case <id> --module <root.tla> --config <model.cfg> --output <new-directory> [--native <directory>] [Importer=path/to/Import.tla ...]
       native list | run --case <id-or-all> --output <directory> --maximum-states <positive-integer>
       oracle run --case <id-or-all> --output <directory> --maximum-states <positive-integer>
+      oracle export --case <id> --output <new-directory>
       oracle cache-key --case <id> --maximum-states <positive-integer>
       compare run --case <id-or-all> --native <directory> --oracle <directory> --output <directory>
       upstream list | run --case <id-or-all> --output <directory> | cache-key --case <id>
       upstream trace-reference --output <directory>
       upstream shiviz-reference --output <directory>
       temporal-symmetry run --output <directory>
+      initial-failure prepare --authored-source <swift-file> --native-source <swift-file> --output <directory>
+      initial-failure prepare-arithmetic --authored-source <swift-file> --native-source <swift-file> --output <directory>
+      initial-failure prepare-conditional --authored-source <swift-file> --native-source <swift-file> --proof <tla-file> --operations <swift-file> --checking <swift-file> --output <directory>
     """, stderr)
     exit(1)
 }
@@ -138,4 +147,76 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
 private func failTemporalSymmetry(_ error: Error) -> Never {
     fputs("temporal-symmetry: \(error)\n", stderr)
     exit(2)
+}
+
+private func runInitialFailure(arguments: [String]) -> Never {
+    if arguments.first == "prepare-conditional" { runConditionalPreparation(arguments: arguments) }
+    guard arguments.count == 7, ["prepare", "prepare-arithmetic"].contains(arguments[0]),
+          arguments[1] == "--authored-source", !arguments[2].isEmpty,
+          arguments[3] == "--native-source", !arguments[4].isEmpty,
+          arguments[5] == "--output", !arguments[6].isEmpty else {
+        fputs("initial-failure: expected prepare --authored-source <swift-file> --native-source <swift-file> --output <directory>\n", stderr)
+        exit(2)
+    }
+    do {
+        let environment = ProcessInfo.processInfo.environment
+        guard let sourceSHA = environment["SWIFT_TLA_SHA"] else {
+            throw ValidationCLIError.invalidManifest("missing source SHA")
+        }
+        let authoredSource = try Data(contentsOf: URL(fileURLWithPath: arguments[2]))
+        let nativeFile = URL(fileURLWithPath: arguments[4])
+        if arguments[0] == "prepare-arithmetic" {
+            let authoredURL = URL(fileURLWithPath: arguments[2]).standardizedFileURL
+            let bytes = try Data(contentsOf: nativeFile)
+            try checkNativeOrigin(bytes, authored: authoredURL)
+            try ArithmeticAssignmentEvidence.prepare(sourceSHA: sourceSHA, authoredSource: authoredSource,
+                nativeSource: bytes, to: URL(fileURLWithPath: arguments[6]).standardizedFileURL)
+            print("arithmetic: prepared compiler outputs and reached native observations")
+            exit(0)
+        }
+        let nativeSource = try String(contentsOf: nativeFile, encoding: .utf8)
+        let report = try InitialFailureEvidence.prepare(sourceSHA: sourceSHA, authoredSource: authoredSource,
+            nativeSource: nativeSource, to: URL(fileURLWithPath: arguments[6]).standardizedFileURL)
+        print("initial-failure: \(report.result), site \(report.site), no graph")
+        exit(0)
+    } catch {
+        fputs("initial-failure: \(error)\n", stderr)
+        exit(2)
+    }
+}
+
+private func runConditionalPreparation(arguments: [String]) -> Never {
+    guard arguments.count == 13, arguments[1] == "--authored-source", arguments[3] == "--native-source",
+          arguments[5] == "--proof", arguments[7] == "--operations", arguments[9] == "--checking",
+          arguments[11] == "--output", [2, 4, 6, 8, 10, 12].allSatisfy({ !arguments[$0].isEmpty }) else {
+        fputs("initial-failure: expected prepare-conditional --authored-source <swift-file> --native-source <swift-file> --proof <tla-file> --operations <swift-file> --checking <swift-file> --output <directory>\n", stderr)
+        exit(2)
+    }
+    do {
+        guard let sourceSHA = ProcessInfo.processInfo.environment["SWIFT_TLA_SHA"] else {
+            throw ValidationCLIError.invalidManifest("missing source SHA")
+        }
+        let authored = URL(fileURLWithPath: arguments[2]).standardizedFileURL
+        let native = try Data(contentsOf: URL(fileURLWithPath: arguments[4]))
+        try checkNativeOrigin(native, authored: authored)
+        try ConditionalActionEvidence.prepare(sourceSHA: sourceSHA, authoredSource: Data(contentsOf: authored),
+            nativeSource: native, proofSource: Data(contentsOf: URL(fileURLWithPath: arguments[6])),
+            helpers: (try Data(contentsOf: URL(fileURLWithPath: arguments[8])),
+                      try Data(contentsOf: URL(fileURLWithPath: arguments[10]))),
+            to: URL(fileURLWithPath: arguments[12]).standardizedFileURL)
+        print("conditional: prepared actual native routing")
+        exit(0)
+    } catch {
+        fputs("conditional: \(error)\n", stderr)
+        exit(2)
+    }
+}
+
+private func checkNativeOrigin(_ native: Data, authored: URL) throws {
+    let origin = "// original-source-range: \(authored.path):"
+    guard let source = String(data: native, encoding: .utf8),
+          source.split(separator: "\n").filter({ $0.hasPrefix("// original-source-range: ") }).count == 1,
+          source.split(separator: "\n").contains(where: { $0.hasPrefix(origin) }) else {
+        throw ValidationCLIError.invalidManifest("expansion has another source origin")
+    }
 }

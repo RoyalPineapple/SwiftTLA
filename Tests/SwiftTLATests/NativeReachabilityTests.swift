@@ -18,7 +18,8 @@ import SwiftTLA
         #expect(choices.allSatisfy { $0.action == .choose })
         #expect(graph.transitions.count == 4)
         var application = initial
-        #expect(try application.send(.enter).after == entered.state)
+        try application.send(.enter)
+        #expect(application.state == entered.state)
         #expect(application.snapshot == entered.snapshot)
         #expect(throws: GeneratedMachineError.ambiguousAction) { try application.send(.choose) }
         #expect(application.snapshot == entered.snapshot)
@@ -41,9 +42,10 @@ import SwiftTLA
                     #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try dispatched.send(action) }
                     #expect(dispatched.snapshot == machine.snapshot)
                 case 1:
-                    let transition = try dispatched.send(action)
-                    #expect(transition.before == machine.state)
-                    #expect(transition.after == successors[0].state)
+                    let transitionBefore = dispatched.state
+                    try dispatched.send(action)
+                    #expect(transitionBefore == machine.state)
+                    #expect(dispatched.state == successors[0].state)
                     #expect(dispatched.snapshot == successors[0].snapshot)
                 default:
                     #expect(throws: GeneratedMachineError.ambiguousAction) { try dispatched.send(action) }
@@ -73,6 +75,36 @@ import SwiftTLA
             #expect(successors.first?.target == state)
         }
         #expect(!graph.safetyViolations.values.joined().contains(.deadlock))
+    }
+
+    @Test("Replay follows the recorded choice and checks the starting control location")
+    func replaysBranchingWitness() throws {
+        let start = try BranchingControl.makeMachine()
+        let before = start.snapshot
+        guard case .counterexample(let witness) = try start.check(
+            properties: [.AtMostOne], checkDeadlock: false, maximumStates: 10
+        ) else {
+            Issue.record("Expected the choice of two to violate AtMostOne")
+            return
+        }
+        let failed = try start.replay(witness)
+        #expect(failed.state.value == 2)
+        #expect(failed.snapshot == witness.trace.last?.state)
+        #expect(start.snapshot == before)
+
+        var entered = start
+        try entered.send(.enter)
+        #expect(entered.state == start.state)
+        #expect(throws: ExplorationError.replayMismatch(step: 0)) { try entered.replay(witness) }
+
+        guard case .counterexample(let initialViolation) = try failed.check(
+            properties: [.AtMostOne], checkDeadlock: false, maximumStates: 1
+        ) else {
+            Issue.record("Expected an initial violation at the failing snapshot")
+            return
+        }
+        #expect(initialViolation.trace.count == 1)
+        #expect(try failed.replay(initialViolation).snapshot == failed.snapshot)
     }
 
     @Test("An unfinished blocked machine is a deadlock with an initial-state trace")

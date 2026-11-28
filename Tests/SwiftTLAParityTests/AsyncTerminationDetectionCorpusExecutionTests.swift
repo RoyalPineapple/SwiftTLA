@@ -28,7 +28,7 @@ struct AsyncTerminationDetectionCorpusExecutionTests {
 
     @Test("termination uses its updated activity to choose whether detection occurs")
     func terminateUsesUpdatedState() throws {
-        let initial = try EWD998TerminationModel.initialMachines(configuration: .init(N: 4))
+        let initial = try EWD998TerminationModel.initialMachines(configuration: .init(nodeCount: 4))
         let source = try #require(initial.first {
             $0.state.active[0] == true && $0.state.active[1] == false
                 && $0.state.active[2] == false && $0.state.active[3] == false

@@ -4,6 +4,7 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 import Testing
+import UpstreamParity
 
 @Suite("Choice evaluation failures")
 struct ChoiceEvaluationFailureTests {
@@ -12,6 +13,20 @@ struct ChoiceEvaluationFailureTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/\(name)")
             .standardizedFileURL
+    }
+
+    @Test("Send drains later failures and counts distinct snapshots")
+    func sendCandidateOrder() throws {
+        var machine = try SendCandidateOrderModel.makeMachine()
+        let prior = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.lateFailure)
+        }
+        #expect(machine.snapshot == prior)
+        #expect(try machine.successors(for: .duplicate).map { $0.state.result } == [7])
+        let transitionBefore = machine.state
+        try machine.send(.duplicate)
+        #expect(transitionBefore.result == -1 && machine.state.result == 7)
     }
 
     @Test("The first failing Choose candidate determines the reported failure")
@@ -48,19 +63,20 @@ struct ChoiceEvaluationFailureTests {
         }
         var states = 0
         var edges = 0
-        var failures = 0
+        var failures: [NativeMachineEvaluationError] = []
         let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
             checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
             switch event {
             case .state: states += 1
             case .edge: edges += 1
             case .evaluationFailure(let source, let action, let reason):
-                failures += 1
-                #expect(source == 0 && action == .pick && reason == .divisionByZero)
+                failures.append(reason)
+                #expect(source == 0 && action == .pick)
             default: break
             }
         }
-        #expect(states == 1 && edges == 0 && failures == 1)
+        #expect(states == 1 && edges == 0)
+        #expect(failures == [.divisionByZero, .negativeModuloDivisor(-1)])
         #expect(outcome.completion == .evaluationFailure(.divisionByZero))
 
         let rendered = try OrderedEnumCandidateFailuresModel.render()
@@ -90,7 +106,7 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("OrderedEnumCandidateFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
             == expected.tokens(viewMode: .sourceAccurate).map(\.text))
@@ -173,6 +189,28 @@ struct ChoiceEvaluationFailureTests {
         })
     }
 
+    @Test("Coordinate candidates report the failure at the lexicographically first coordinate")
+    func coordinateFailureOrder() throws {
+        let machine = try CoordinateCandidateFailuresModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+
+        let tla = try CoordinateCandidateFailuresModel.render().tlaBundle.root.tla
+        let left = "__SwiftTLAFirstFailingCandidate0", right = "__SwiftTLAEarlierCandidate0"
+        #expect(tla.contains("(IF \(left)[1] = \(right)[1] THEN \(left)[2] <= \(right)[2] ELSE \(left)[1] <= \(right)[1])"))
+    }
+
+    @Test("Record choices report the first failure in field-key and field-value order")
+    func recordCandidateFailureOrder() throws {
+        let machine = try RecordCandidateFailuresModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+        let output = try RecordCandidateFailuresModel.render()
+        #expect(output.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
+    }
+
     @Test("Unranked state-dependent string candidates cannot claim ordered TLA failure parity")
     func stateDependentStringCandidateFailureOrder() throws {
         let machine = try StateDependentStringCandidateFailuresModel.makeMachine()
@@ -226,6 +264,18 @@ struct ChoiceEvaluationFailureTests {
         #expect(states == [0: 0, 1: 1])
         #expect(edges.count == 2 && edges[0] == (0, 1) && edges[1] == (1, 1))
 
+        var context = CheckingContext(registers: try machine.initialCheckingRegisters())
+        var classifiedCallbackErrors = 0
+        #expect(throws: NativeMachineEvaluationError.emptySequence) {
+            try machine.visitValidationOutcomes(checking: &context) { _, _ in
+                throw NativeMachineEvaluationError.emptySequence
+            } onEvaluationFailure: { _, _ in
+                classifiedCallbackErrors += 1
+                return true
+            }
+        }
+        #expect(classifiedCallbackErrors == 0)
+
         let rendered = try MixedCandidateDivisionFailureModel.render()
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
         let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
@@ -273,12 +323,12 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("MixedCandidateDivisionFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let expectedTokens = expected.tokens(viewMode: .sourceAccurate).map(\.text)
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(update, action: action.body,
             program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
 
@@ -343,6 +393,35 @@ struct ChoiceEvaluationFailureTests {
             try machine.successors(for: .pick)
         }
 
+        var context = CheckingContext(registers: try machine.initialCheckingRegisters())
+        var failures: [NativeMachineEvaluationError] = []
+        var successes = 0
+        let enabled = try machine.visitValidationOutcomes(checking: &context) { action, _ in
+            #expect(action == .pick)
+            successes += 1
+            return true
+        } onEvaluationFailure: { action, reason in
+            #expect(action == .pick)
+            failures.append(reason)
+            return true
+        }
+        #expect(!enabled && successes == 0)
+        #expect(failures == [.divisionByZero, .negativeModuloDivisor(-1)])
+
+        var stoppedContext = CheckingContext(registers: try machine.initialCheckingRegisters())
+        var stoppedFailures: [NativeMachineEvaluationError] = []
+        _ = try machine.visitValidationOutcomes(checking: &stoppedContext) { _, _ in true }
+            onEvaluationFailure: { _, reason in
+                stoppedFailures.append(reason)
+                return false
+            }
+        #expect(stoppedFailures == [.divisionByZero])
+        var throwingContext = CheckingContext(registers: try machine.initialCheckingRegisters())
+        #expect(throws: NativeMachineEvaluationError.emptySequence) {
+            try machine.visitValidationOutcomes(checking: &throwingContext) { _, _ in true }
+                onEvaluationFailure: { _, _ in throw NativeMachineEvaluationError.emptySequence }
+        }
+
         let rendered = try EitherDistinctFailuresModel.render()
         let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
         let laterFailure = try #require(definitions.first {
@@ -401,12 +480,17 @@ struct ChoiceEvaluationFailureTests {
             .deletingLastPathComponent()
             .appendingPathComponent("ChoiceEvaluationFailureFixtures.swift")
         let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let branchwiseFixture = fixture.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/UpstreamParity/ValidationModels/BranchwiseConjunctionFailureOrderModel.swift")
+        let branchwiseAuthored = try String(contentsOf: branchwiseFixture, encoding: .utf8)
+        let branchwiseSource = Parser.parse(source: branchwiseAuthored)
         for (name, witnessName) in [
             ("EitherDistinctFailuresModel", "EitherDistinctFailuresSwiftWitness.txt"),
             ("EitherChoiceAfterDivisionFailureModel", "EitherChoiceAfterDivisionFailureSwiftWitness.txt"),
             ("BranchwiseConjunctionFailureOrderModel", "BranchwiseConjunctionFailureOrderSwiftWitness.txt")
         ] {
-            let declaration = try #require(source.statements.compactMap {
+            let owner = name == "BranchwiseConjunctionFailureOrderModel" ? branchwiseSource : source
+            let declaration = try #require(owner.statements.compactMap {
                 $0.item.as(StructDeclSyntax.self)
             }.first { $0.name.text == name })
             let compiled = try TLASpecVerifier.parseAndVerify(declaration)
@@ -415,13 +499,13 @@ struct ChoiceEvaluationFailureTests {
                 $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
             })
             let witness = semanticFixture(witnessName)
-            let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+            let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
                 .statements.first?.item.as(FunctionDeclSyntax.self))
             #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
                 == expected.tokens(viewMode: .sourceAccurate).map(\.text))
             if name == "BranchwiseConjunctionFailureOrderModel" {
                 let action = try #require(compiled.program.behavior.actions.first)
-                let writes = try emitter.actionFunctions(action.body).writes
+                let writes = try emitter.actionFunctions(action).writes
                 try verifyGeneratedActionWriteOutput(update, action: action.body,
                     program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
                 let wrongSource = update.description.replacingOccurrences(
@@ -437,8 +521,250 @@ struct ChoiceEvaluationFailureTests {
                     #expect(diagnostic.path.hasPrefix("native.action.part.")
                         || diagnostic.path.hasPrefix("native.action.alternative."))
                 }
+                try checkOverwrittenBranchCapture(declaration)
+                try checkSharedPrefixBranchCapture(branchwiseAuthored)
             }
         }
+    }
+
+    private func checkOverwrittenBranchCapture(_ source: StructDeclSyntax) throws {
+        let authored = source.description
+        let survivingWrite = "Assign(selected, to: 0)"
+        let displacedWrite = "Assign(selected, to: 4)"
+        try #require(authored.components(separatedBy: survivingWrite).count == 2)
+        let overwritten = authored.replacingOccurrences(of: survivingWrite,
+            with: "\(displacedWrite)\n                    \(survivingWrite)")
+        let variant = try #require(Parser.parse(source: overwritten).statements.first?.item.as(StructDeclSyntax.self))
+        let compiled = try TLASpecVerifier.parseAndVerify(variant)
+        let action = try #require(compiled.program.behavior.actions.first)
+        guard case .or(let left, let right) = action.body else {
+            Issue.record("The compiler lost the authored alternative")
+            return
+        }
+        func binders(_ branch: CompiledActionExpr) -> [BinderID] {
+            var pending = branch
+            var bindings: [BinderID] = []
+            while case .define(let binding, _, let next) = pending {
+                bindings.append(binding)
+                pending = next
+            }
+            return bindings
+        }
+        let earlier = binders(left)
+        let later = binders(right)
+        try #require(earlier.count == 3 && later.count == 2)
+        let selected = try #require(compiled.program.layout.variables.first { $0.declaration.name == "selected" }).id
+        let result = try #require(compiled.program.layout.variables.first { $0.declaration.name == "result" }).id
+        let branches = action.body.orderedAlternativeFailureRegions
+        #expect(branches.map { $0.bindings.map(\.binder) } == [earlier, later])
+        #expect(branches.map { $0.bindings.map(\.target) } == [[selected, selected, result], [selected, result]])
+
+        // Both variants publish the same final frame. Only the first capture's target differs.
+        try #require(overwritten.components(separatedBy: displacedWrite).count == 2)
+        let otherTarget = overwritten.replacingOccurrences(of: displacedWrite, with: "Assign(result, to: 4)")
+        let otherVariant = try #require(Parser.parse(source: otherTarget).statements.first?.item.as(StructDeclSyntax.self))
+        let otherCompiled = try TLASpecVerifier.parseAndVerify(otherVariant)
+        #expect(otherCompiled.program.identity != compiled.program.identity)
+
+        let first = earlier[0]
+        let second = earlier[1]
+        let site = earlier[2].ordinal
+        let firstName = try #require(compiled.program.binderNames[first])
+        let secondName = try #require(compiled.program.binderNames[second])
+        let firstLocal = "_\(firstName)_\(first.ordinal)"
+        let secondLocal = "_\(secondName)_\(second.ordinal)"
+        var emitter = NativeSwiftEmitter(model: compiled)
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates\(action.id.ordinal)"
+        })
+        let nativeEvent = "branch: 0, site: \(site), target: \(result.ordinal), before: "
+            + "[(binding: \(first.ordinal), target: \(selected.ordinal), value: \(firstLocal)), "
+            + "(binding: \(second.ordinal), target: \(selected.ordinal), value: \(secondLocal))], reason: failure"
+        let nativeTokens = visitor.tokens(viewMode: .sourceAccurate).map(\.text).joined(separator: " ")
+        let eventTokens = Parser.parse(source: "_record(\(nativeEvent))")
+            .tokens(viewMode: .sourceAccurate).filter { $0.tokenKind != .endOfFile }
+            .map(\.text).dropFirst(2).dropLast().joined(separator: " ")
+        #expect(nativeTokens.contains(eventTokens))
+        #expect(nativeTokens.contains("let \(firstLocal) = 4"))
+        #expect(nativeTokens.contains("let \(secondLocal) = 0"))
+
+        let module = try compiled.program.renderModule()
+        let otherModule = try otherCompiled.program.renderModule()
+        let relation = try #require(module.renderedModuleSource.split(separator: "\n").first { $0.hasPrefix("pick == ") })
+        #expect(otherModule.renderedModuleSource.split(separator: "\n").first { $0.hasPrefix("pick == ") } == relation)
+        let history = try #require(module.renderedModuleSource.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAActionFailureHistory\(action.id.ordinal) == ")
+        })
+        let divisionReceipt = "branch |-> 0, site |-> \(site), target |-> \(result.ordinal), "
+            + "payload |-> <<\"divisionByZero\">>, before |-> (LET \(firstName) == 4 IN (LET \(secondName) == 0 IN "
+            + "<<[binding |-> \(first.ordinal), target |-> \(selected.ordinal), value |-> \(firstName)], "
+            + "[binding |-> \(second.ordinal), target |-> \(selected.ordinal), value |-> \(secondName)]>>))"
+        #expect(history.contains(divisionReceipt))
+
+        let parts = try emitter.actionFunctions(action)
+        func verify(_ member: DeclSyntax) throws {
+            try verifyGeneratedActionWriteOutput(member, action: action.body, program: compiled.program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+        }
+        try verify(visitor)
+
+        let firstCapture = "(binding: \(first.ordinal), target: \(selected.ordinal), value: \(firstLocal))"
+        let wrongCapture = "(binding: \(first.ordinal), target: \(result.ordinal), value: \(firstLocal))"
+        try #require(firstCapture != wrongCapture)
+        try #require(visitor.description.components(separatedBy: firstCapture).count == 2)
+        let tampered = Parser.parse(source: visitor.description.replacingOccurrences(of: firstCapture, with: wrongCapture))
+        try #require(!tampered.hasError)
+        let wrongVisitor = try #require(tampered.statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verify(wrongVisitor)
+            Issue.record("The generated failure history accepted the wrong earlier assignment target")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.failures."))
+            #expect(diagnostic.actual == "missing or changed assignment failure observation")
+        }
+    }
+
+    private func checkSharedPrefixBranchCapture(_ authored: String) throws {
+        let choice = "                Either {\n"
+        try #require(authored.components(separatedBy: choice).count == 2)
+        let prefixed = authored.replacingOccurrences(of: choice, with: "                Assign(selected, to: 4)\n\(choice)")
+        let syntax = Parser.parse(source: prefixed)
+        try #require(!syntax.hasError)
+        let variant = try #require(syntax.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "BranchwiseConjunctionFailureOrderModel" })
+        let found = try TLASpecVerifier.findSpec(in: variant.memberBlock.members, defaultName: variant.name.text)
+        let literal = try #require(found)
+        let members = variant.memberBlock.members
+        let enums = try TLASpecVerifier.collectEnumVariables(from: members)
+        let parser = ParserSession(sourceTypes: try TLASpecVerifier.sourceTypes(in: members, enums: enums))
+        parser.sourceModelTypeName = variant.name.text
+        let spec = parser.parseSpecClosure(named: literal.name, literal.closure)
+        let (compilation, receipts) = try spec.compileRetainingAtomicBranchContinuations()
+        let program = try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
+        let rendered = try program.renderModule(retainingCaptureGuards: true)
+        let pick = try #require(program.layout.actions.first { $0.declaration.name == "pick" })
+        let action = program[pick.id]
+        guard case .define(let prefix, let value, let continuation) = action.body,
+              case .value(.integer(4)) = value.operation, case .or = continuation else {
+            Issue.record("The compiler lost the single shared assignment before the alternative")
+            return
+        }
+        let selected = try #require(program.layout.variables.first { $0.declaration.name == "selected" }).id
+        let result = try #require(program.layout.variables.first { $0.declaration.name == "result" }).id
+        let definitions = try CheckingSelectionEvidence.branchwiseContinuationDefinitions(
+            authoredSource: prefixed, receipts: receipts, program: program, rendered: rendered)
+            .split(separator: "\n").map(String.init)
+        let sourceRow = TLAValue.record(TLARecord([
+            .init("target", .string("selected")),
+            .init("sourceTerm", .tuple([.tuple([.string("literal"), .int(4)])])),
+            .init("reads", .tuple([])),
+        ]))
+        #expect(definitions.contains("BranchwiseContinuationPrefix == \(TLAValue.tuple([sourceRow]))"))
+        #expect(definitions.contains("BranchwiseScheduledPrefixBindings == <<<<\(prefix.ordinal), \(selected.ordinal)>>>>"))
+
+        let division = "Assign(result, to: 1 / divisor)"
+        try #require(prefixed.components(separatedBy: division).count == 2)
+        let wrongUploadedSource = prefixed.replacingOccurrences(of: division, with: "Assign(result, to: 1 / modulus)")
+        let mismatch = EvidenceFormatError.invalidField(record: "Branchwise selected checks",
+            field: "uploaded continuation assignment")
+        #expect(throws: mismatch) {
+            try CheckingSelectionEvidence.branchwiseContinuationDefinitions(
+                authoredSource: wrongUploadedSource, receipts: receipts, program: program, rendered: rendered)
+        }
+
+        let regions = action.body.orderedAlternativeFailureRegions
+        try #require(regions.map(\.armOrdinal) == [0, 1])
+        try #require(regions.map { $0.bindings.count } == [3, 3])
+        #expect(regions.map { $0.bindings.map(\.target) } == [[selected, selected, result], [selected, selected, result]])
+        #expect(regions.allSatisfy { $0.bindings.filter { $0.binder == prefix }.map(\.target) == [selected]
+            && $0.bindings.first?.binder == prefix })
+
+        let macro = try MacroCompilation(typeName: variant.name.text, program: program)
+        var emitter = NativeSwiftEmitter(model: macro)
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates\(action.id.ordinal)"
+        })
+        let parts = try emitter.actionFunctions(action)
+        func verify(_ member: DeclSyntax) throws {
+            try verifyGeneratedActionWriteOutput(member, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+        }
+        try verify(visitor)
+        let name = try #require(program.binderNames[prefix])
+        let local = "_\(name)_\(prefix.ordinal)"
+        let nativeRow = "(binding: \(prefix.ordinal), target: \(selected.ordinal), value: \(local))"
+        #expect(visitor.description.components(separatedBy: "let \(local) = 4").count == 2)
+        #expect(visitor.description.components(separatedBy: nativeRow).count == 4)
+
+        let history = try #require(rendered.renderedModuleSource.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAActionFailureHistory\(action.id.ordinal) == ")
+        })
+        let events = String(history).components(separatedBy: "[source |-> ").dropFirst()
+        let sites = [(arm: 0, offset: 2), (arm: 1, offset: 1), (arm: 1, offset: 2)]
+        var matched = 0
+        for (arm, offset) in sites {
+            let bindings = regions[arm].bindings
+            let site = bindings[offset]
+            let route = "branch |-> \(arm), site |-> \(site.binder.ordinal), target |-> \(site.target.ordinal),"
+            let actual = events.filter { $0.contains(route) }
+            try #require(!actual.isEmpty)
+            let before = try bindings.prefix(offset).map { binding in
+                let lexical = try #require(program.binderNames[binding.binder])
+                return "[binding |-> \(binding.binder.ordinal), target |-> \(binding.target.ordinal), value |-> \(lexical)]"
+            }.joined(separator: ", ")
+            #expect(actual.allSatisfy { $0.contains("LET \(name) == 4 IN") && $0.contains("<<\(before)>>") })
+            matched += actual.count
+        }
+        #expect(matched == events.count)
+
+        let site = regions[1].bindings[1].binder.ordinal
+        let record = "branch: 1, site: \(site), target: \(selected.ordinal), before: [\(nativeRow)]"
+        try #require(visitor.description.components(separatedBy: record).count == 2)
+        let wrong = "(binding: \(prefix.ordinal), target: \(result.ordinal), value: \(local))"
+        let tampered = Parser.parse(source: visitor.description.replacingOccurrences(of: record,
+            with: record.replacingOccurrences(of: nativeRow, with: wrong)))
+        try #require(!tampered.hasError)
+        let wrongVisitor = try #require(tampered.statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verify(wrongVisitor)
+            Issue.record("The generated failure accepted a wrong shared assignment target")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.failures."))
+            #expect(diagnostic.actual == "missing or changed assignment failure observation")
+        }
+
+        let run = try runExternalGeneratedConsumer(prefixed + #"""
+
+        @main struct ObserveBranchwisePrefix {
+            static func main() throws {
+                let initial = try BranchwiseConjunctionFailureOrderModel.initialMachines()
+                for modulus in [0, 2] {
+                    guard let machine = initial.first(where: { $0.state.divisor == 0 && $0.state.modulus == modulus })
+                    else { fatalError("Missing authored initial state") }
+                    let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
+                        checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { _ in }
+                    guard let history = outcome.orderedActionFailureHistory, outcome.edges == 0,
+                          outcome.completion == .evaluationFailure(.divisionByZero)
+                    else { fatalError("The actual generated machine did not report the reached failures") }
+                    for event in history {
+                        let failure = event.failure
+                        guard failure.reason == .divisionByZero, case .arm(let branch) = failure.location
+                        else { fatalError("Unexpected failure reason or location") }
+                        let captures = failure.before.map { "\($0.binding):\($0.target):\($0.value)" }.joined(separator: ",")
+                        print("modulus=\(modulus) source=\(event.source) action=\(failure.action) branch=\(branch) "
+                            + "site=\(failure.site) target=\(failure.target) before=\(captures)")
+                    }
+                }
+            }
+        }
+        """#)
+        try #require(run.status == 0, Comment(rawValue: run.output))
+        #expect(run.output.split(separator: "\n").map(String.init) == [
+            "modulus=0 source=0 action=0 branch=0 site=2 target=3 before=0:2:4,1:2:0",
+            "modulus=0 source=0 action=0 branch=1 site=3 target=2 before=0:2:4",
+            "modulus=2 source=0 action=0 branch=0 site=2 target=3 before=0:2:4,1:2:0",
+            "modulus=2 source=0 action=0 branch=1 site=4 target=3 before=0:2:4,3:2:1",
+        ])
     }
 
     @Test("A failing candidate retains another candidate's successor in both outputs")
@@ -465,6 +791,7 @@ struct ChoiceEvaluationFailureTests {
         #expect(failures.count == 2 && failures[0].0 == 0 && failures[1].0 == 1)
         #expect(failures.allSatisfy { $0.1 == .noSatisfyingChoice })
         #expect(outcome.completion == .evaluationFailure(.noSatisfyingChoice))
+        #expect(outcome.orderedActionFailureHistory == nil)
 
         let rendered = try CandidateChoiceFailureModel.render()
         let proofInput = semanticFixture("CandidateChoiceFailureModel.tla")
@@ -483,7 +810,7 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("CandidateChoiceFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
             == expected.tokens(viewMode: .sourceAccurate).map(\.text))
@@ -543,7 +870,7 @@ struct ChoiceEvaluationFailureTests {
         let binderPattern = try Regex(#"___binder_SpecParser_[0-9]+_0_2"#)
         let normalized = update.description.replacing(binderPattern, with: "__PROOF_MEMBER__")
         let actualTokens = Parser.parse(source: normalized).tokens(viewMode: .sourceAccurate).map(\.text)
-        let expectedTokens = try Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expectedTokens = try Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
     }
@@ -596,11 +923,11 @@ struct ChoiceEvaluationFailureTests {
         let normalizedSwift = update.description.replacing(swiftBinder, with: "__PROOF_MEMBER__")
         let swiftWitness = semanticFixture("ConditionalChoiceThenModuloFailureSwiftWitness.txt")
         let actualTokens = Parser.parse(source: normalizedSwift).tokens(viewMode: .sourceAccurate).map(\.text)
-        let expectedTokens = try Parser.parse(source: String(contentsOf: swiftWitness, encoding: .utf8))
+        let expectedTokens = try Parser.parse(source: nativeWitnessSource(String(contentsOf: swiftWitness, encoding: .utf8)))
             .tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
 
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(update, action: action.body,
             program: compiled.program, stateFields: emitter.stateMemberNames, parts: parts.writes,
             conditions: parts.conditions)
@@ -797,17 +1124,68 @@ struct ChoiceEvaluationFailureTests {
                 #expect(Set(successors.map(\.selected)) == expectedSelections)
                 let expectedFailure: NativeMachineEvaluationError? = divisor == 0 || modulus == 0
                     ? .divisionByZero : modulus < 0 ? .negativeModuloDivisor(modulus) : nil
-                #expect(failures == (expectedFailure.map { [$0] } ?? []))
+                var expectedFailures: [NativeMachineEvaluationError] = []
+                if divisor == 0 { expectedFailures.append(.divisionByZero) }
+                if modulus < 0 { expectedFailures.append(.negativeModuloDivisor(modulus)) }
+                else if modulus == 0 || divisor == 0 { expectedFailures.append(.divisionByZero) }
+                #expect(failures == expectedFailures)
+                let completeHistory = try #require(outcome.orderedActionFailureHistory)
+                let recordedHistory = completeHistory.filter { $0.source == initialID }.map(\.failure)
+                #expect(recordedHistory.map(\.reason) == failures)
+                if divisor == 0 && modulus <= 0 {
+                    #expect(recordedHistory.map(\.action) == [0, 0])
+                    #expect(recordedHistory.map(\.location) == [.arm(0), .arm(1)])
+                    #expect(recordedHistory.map(\.site) == [1, 2])
+                    #expect(recordedHistory.map(\.target) == [3, 2])
+                    #expect(recordedHistory.map { $0.before.map(\.binding) } == [[0], []])
+                    #expect(recordedHistory.map { $0.before.map(\.target) } == [[2], []])
+                    #expect(recordedHistory.map { $0.before.map(\.value) } == [[0], []])
+                }
                 if let expectedFailure {
                     #expect(outcome.completion == .evaluationFailure(expectedFailure))
                 } else {
                     #expect(outcome.completion == .exhausted)
+                    #expect(completeHistory.isEmpty)
                 }
             }
         }
         let rendered = try BranchwiseConjunctionFailureOrderModel.render()
         let proofInput = semanticFixture("BranchwiseConjunctionFailureOrderModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let spec = BranchwiseConjunctionFailureOrderModel.spec
+        let (authored, schedules) = try spec.compileRetainingAtomicBranchContinuations()
+        let step = try #require(spec.sourceAtomicSteps.first)
+        _ = try #require(schedules[step.model.label.name])
+        let loweredModel = try spec.loweredSourceModel()
+        let lowered = try #require(loweredModel.actions.first { $0.name == step.model.label.name }).body
+        guard case .or(.define(let selection, let selectedValue,
+                                .define(let result, .divide(let dividend, let divisor), let writes)), let other) = lowered else {
+            Issue.record("The real alternative did not retain its division continuation")
+            return
+        }
+        let replacement = StateExpr.int(1)
+        let divisorChanged: Bool = divisor != replacement
+        try #require(divisorChanged)
+        let changed = ActionExpr.or(
+            .define(selection, selectedValue, .define(result, .divide(dividend, replacement), writes)), other)
+        do {
+            _ = try StraightLineAssignmentCheck.checkedAtomicBranchContinuations(
+                step, lowered: changed, stateRoots: Set(loweredModel.variables.map(\.name)),
+                retainingDefinitions: false)
+            Issue.record("A shared fallible continuation accepted a changed divisor in just one arm")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.pick.branchContinuations")
+        }
+        let scenario = try #require(BranchwiseConjunctionFailureOrderModel.validationScenarios().first {
+            $0.name == "Selected"
+        })
+        let configured = try scenario.render()
+        guard case .compiled(let identity, _, _) = configured.tlaBundle.provenance else {
+            Issue.record("The selected render did not retain the native compiler's identity")
+            return
+        }
+        #expect(identity == authored.identity)
+        #expect(configured.tlaBundle.root.tla == rendered.tlaBundle.root.tla)
     }
 
     @Test("A fallible Let value preserves an arithmetic failure in its body")
@@ -892,13 +1270,45 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("EitherBranchDivisionFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expected.tokens(viewMode: .sourceAccurate).map(\.text))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(update, action: action.body,
             program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+        let rootPart = try #require(update.as(FunctionDeclSyntax.self)?.body?.statements.compactMap {
+            $0.item.as(FunctionDeclSyntax.self)
+        }.first { $0.name.text == "_actionPart0" })
+        let rootSource = rootPart.description
+        try #require(rootSource.components(separatedBy: "failures.append(failure)").count == 2)
+        try #require(update.description.components(separatedBy: rootSource).count == 2)
+        let lostFailureSource = update.description.replacingOccurrences(of: rootSource,
+            with: rootSource.replacingOccurrences(of: "failures.append(failure)", with: ""))
+        #expect(lostFailureSource != update.description)
+        let lostFailure = try #require(Parser.parse(source: lostFailureSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(lostFailure, action: action.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("The generated action dropped a reached model failure")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.failures.0")
+        }
+        let classification = " where failure.isModelEvaluationFailure"
+        try #require(rootSource.components(separatedBy: classification).count == 2)
+        let uncheckedSource = update.description.replacingOccurrences(of: rootSource,
+            with: rootSource.replacingOccurrences(of: classification, with: ""))
+        try #require(uncheckedSource != update.description)
+        let unchecked = try #require(Parser.parse(source: uncheckedSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(unchecked, action: action.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("The generated action classified execution limits as model failures")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.failures.0")
+        }
         let reversedOrder = update.description.replacingOccurrences(
             of: "visitAlternatives([false, true]", with: "visitAlternatives([true, false]")
         #expect(reversedOrder != update.description)

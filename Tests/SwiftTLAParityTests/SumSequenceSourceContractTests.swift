@@ -11,7 +11,7 @@ struct SumSequenceSourceContractTests {
                 .init(seq: input, sum: 0, n: 1), configuration: configuration)
             #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
             for _ in 0...input.count {
-                _ = try machine.send(.a)
+                try machine.send(.a)
                 #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
             }
             #expect(machine.state.seq == input)

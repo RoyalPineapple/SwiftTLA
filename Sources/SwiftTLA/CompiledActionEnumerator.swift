@@ -21,6 +21,16 @@ struct CompiledActionEnumerator {
         }
     }
 
+    func isEnabled(_ action: CompiledAction, for argument: CompiledValue) throws -> Bool {
+        guard action.bindings.count == 1, let binding = action.bindings.first else {
+            throw CompiledEvaluationError.unresolvedOperator
+        }
+        let domain = try evaluate(binding.domain, .init())
+        guard case .set(let members) = domain else { throw EvalError.expected(.set, actual: [domain]) }
+        guard members.contains(argument) else { return false }
+        return try !execute(action.body, bindings: CompiledBindings().binding(argument, to: binding.binder)).isEmpty
+    }
+
     private func execute(
         _ action: CompiledActionExpr,
         bindings: CompiledBindings

@@ -1,10 +1,13 @@
+// Two processes acquire and release a lock that grants exclusive access to a critical section.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/Lock.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
 /// The two-process lock example from the PlusCal auxiliary-variables
 /// collection. `l2` explicitly returns to `l0`, mirroring the source loop.
 @TLAModel
-package struct LockModel: Sendable {
+package struct LockModel: ParameterlessGeneratedModel {
     package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
@@ -25,14 +28,14 @@ package struct LockModel: Sendable {
     package static var spec: TLASpec {
         #spec("Lock") {
             Extends(.integers)
-            let Lock = Algorithm(scoped: { scope in
+            Algorithm("Lock") { scope in
                 let lock = scope.sharedVar(initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
                     When(value == 1)
-                    Assign(value, to: 0)
+                    value.set(0)
                 }
                 let release = Macro { (value: MacroParameter<Int>) in
-                    Assign(value, to: 1)
+                    value.set(1)
                 }
 
                 Each(Process.all) { _ in
@@ -52,18 +55,18 @@ package struct LockModel: Sendable {
                 }
 
                 Invariant("TypeOK") {
-                    lock >= 0 && lock <= 1
+                    (0...1).contains(lock)
+                    Process.all.allSatisfy { process in
+                        process.isAt(anyOf: Step.l0, .l1, .cs, .l2)
+                    }
                 }
-            })
-            Lock
+                let holders = Process.all.filter { process in process.isAt(anyOf: Step.cs, .l2) }
+                Invariant("LockInv") {
+                    holders.count <= 1
+                    holders.isEmpty || lock == 0
+                }
+            }
+            Validation("twoProcess", label: "Lock") {}
         }
     }
-}
-
-extension Example {
-    package static let lockTwoProcess = FiniteModelFixture(
-        expectedDistinct: 12,
-        maximumStateLimit: 50_000,
-        spec: LockModel.spec,
-    )
 }

@@ -18,7 +18,7 @@ struct IntegerRangeMembershipModel: Sendable {
                 Assign(result, to: IntRange(lower, through: upper).contains(value))
             }
             Do(Step.large) {
-                Assign(result, to: IntRange(0, through: 1_000_000_000).contains(value))
+                Assign(result, to: IntRange(0, through: 9_223_372_036_854_775_807).contains(value))
             }
             Do(Step.overflow) {
                 Assign(result, to: IntRange(0, through: 9_223_372_036_854_775_807).contains(1 / zero))
@@ -33,7 +33,8 @@ struct IntegerRangeMembershipModel: Sendable {
                 Assign(result, to: IntRange(0, through: 1 / zero).contains(value))
             }
             Do(Step.unionFailure) {
-                Assign(result, to: IntRange(0, through: 1).union(SetExpr<Int>.literal(1 / zero)).contains(zero))
+                Assign(result, to: IntRange(0, through: 9_223_372_036_854_775_807)
+                    .union(SetExpr<Int>.literal(1 / zero)).contains(zero))
             }
         }
     }

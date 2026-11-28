@@ -2,6 +2,103 @@ import SwiftSyntax
 import SwiftTLA
 
 extension NativeSwiftEmitter {
+    func parameterlessRefinementTarget() throws -> [DeclSyntax] {
+        let hidden = program.layout.variables.filter { $0.declaration.origin != .source }
+        if hidden.isEmpty {
+            return try nativeDeclarations("""
+            public typealias Configuration = SwiftTLA.EmptyModelConfiguration
+            public static func _machineForRefinement(_ state: State, configuration: SwiftTLA.EmptyModelConfiguration) throws -> Self {
+                _machineForRefinement(state)
+            }
+            """)
+        }
+        guard hidden.count == 1, let pc = hidden.first, pc.declaration.origin == .programCounter,
+              case .dictionary(let processType, .controlLocation) = program.variableTypes[pc.id] else {
+            throw unsupported("refinement target requires a mapping for every hidden variable")
+        }
+
+        // The application State omits control. RefinementState must supply the whole snapshot.
+        let pcField = try GeneratedMachineAPI.Variable(formalName: pc.formalName, id: pc.id)
+        let fields = model.api.variables + [pcField]
+        var declarations: [String] = []
+        var parameters: [String] = []
+        var identities: [String] = []
+        var assignments: [String] = []
+        var conversions: [String] = []
+        var stateArguments: [String] = []
+        for field in fields {
+            let slot = program.layout.variables[field.id.ordinal]
+            let type = program.variableTypes[field.id]!
+            let name = field.swiftIdentifier
+            let local = "_field\(field.id.ordinal)"
+            let input: String
+            if field.id == pc.id {
+                input = "[\(try swiftType(processType)): Swift.String]"
+            } else if case .dictionary(let key, let value) = type, containsSourceNominal(key) {
+                input = "[\(try swiftType(key)): \(try swiftType(value))]"
+            } else {
+                input = try swiftType(type)
+            }
+            declarations.append("public let \(name): \(input)")
+            parameters.append("\(name) \(local): \(input)")
+            assignments.append("self.\(name) = \(local)")
+            identities.append("\\Self.\(name): .init(swiftName: \(String(reflecting: name)), formalName: \(String(reflecting: slot.formalName)))")
+
+            let storage = try swiftType(type)
+            if field.id == pc.id || input != storage {
+                let value = field.id == pc.id ? "try _location(entry.value)" : "entry.value"
+                conversions.append("""
+                var \(local): \(try swiftType(type)) = [:]
+                for entry in mapped.\(name) {
+                    guard \(local).updateValue(\(value), forKey: entry.key) == nil else {
+                        throw SwiftTLA.TLAStateProjectionDiagnostic.invalidValue(path: \(String(reflecting: slot.formalName)))
+                    }
+                }
+                """)
+                if field.id != pc.id { stateArguments.append("\(field.argumentLabel): \(local)") }
+            } else {
+                stateArguments.append("\(field.argumentLabel): mapped.\(name)")
+            }
+        }
+        let locations = program.layout.controlLocations.map {
+            "case SwiftTLA._NativeString(formalString: \(String(reflecting: $0.formalName))): return .location\($0.id.ordinal)"
+        }
+        return try nativeDeclarations("""
+        public typealias Configuration = SwiftTLA.EmptyModelConfiguration
+        public struct RefinementState: SwiftTLA.GeneratedModelFields {
+            \(declarations.joined(separator: "\n"))
+            public init(\(parameters.joined(separator: ", "))) { \(assignments.joined(separator: "\n")) }
+            public static var fieldIdentities: [PartialKeyPath<Self>: SwiftTLA.GeneratedModelFieldIdentity] {
+                [\(identities.joined(separator: ",\n"))]
+            }
+        }
+        public static func _machineForRefinement(_ mapped: RefinementState, configuration: SwiftTLA.EmptyModelConfiguration) throws -> Self {
+            func _location(_ label: Swift.String) throws -> _ControlLocation {
+                switch SwiftTLA._NativeString(formalString: label) {
+                \(locations.joined(separator: "\n"))
+                default: throw SwiftTLA.TLAStateProjectionDiagnostic.invalidValue(path: \(String(reflecting: pc.formalName)))
+                }
+            }
+            \(conversions.joined(separator: "\n"))
+            return Self(execution: Snapshot(state: State(\(stateArguments.joined(separator: ", "))), \(variable(pc.id)): _field\(pc.id.ordinal)))
+        }
+        """)
+    }
+
+    mutating func generatedRefinementParameters(_ refinement: CompiledGeneratedModelRefinement) throws -> String {
+        try refinement.parameters.map { binding in
+            try generatedRefinementArgument(binding, state: "")
+        }.joined(separator: ", ")
+    }
+
+    private mutating func generatedRefinementArgument(_ binding: CompiledGeneratedModelBinding, state: String) throws -> String {
+        let expression = binding.value.expression
+        let value = try self.expression(expression, state: state)
+        guard binding.projected else { return "\(binding.fieldName): \(value)" }
+        let source = expression.resultType == .modelValue ? try formalValue(value, type: .modelValue) : value
+        return "\(binding.fieldName): try SwiftTLA._NativeMachineOperations.checkedProjection(\(source))"
+    }
+
     func supportsNativeRefinement(_ refinement: CompiledRefinementProgram) -> Bool {
         let abstract = refinement.abstract
         return abstract.layout.variables.allSatisfy { $0.declaration.origin == .source }
@@ -62,23 +159,20 @@ extension NativeSwiftEmitter {
             }
             for refinement in program.generatedRefinements {
                 let target = refinement.targetModelType
-                let parameters = try refinement.parameters.map { binding in
-                    "\(binding.fieldName): \(try expression(binding.value.expression, state: ""))"
-                }.joined(separator: ", ")
+                let parameters = try generatedRefinementParameters(refinement)
                 let state = try refinement.state.map { binding in
-                    let value = try expression(binding.value.expression)
-                    return "\(binding.fieldName): \(binding.projected ? "try _NativeMachineOperations.checkedProjection(\(value))" : value)"
+                    try generatedRefinementArgument(binding, state: "state.")
                 }.joined(separator: ", ")
                 let property = propertyCases[refinement.id]!
                 checks.append("""
                 if checking.contains(.\(property)) {
-                    let abstractConfiguration = try \(target).Configuration(\(parameters))
+                    let abstractConfiguration = \(parameters.isEmpty ? "" : "try ")\(target).Configuration(\(parameters))
                     let failure = try graph.refinementFailure(
                         initialMachines: \(target).initialMachines(configuration: abstractConfiguration),
                         abstractBehavior: .\(refinement.behavior.rawValue)
                     ) { state in
-                        let abstractState = \(target).State(\(state))
-                        return \(target)._machineForRefinement(abstractState, configuration: abstractConfiguration)
+                        let abstractState = \(target).RefinementState(\(state))
+                        return \(parameters.isEmpty ? "try " : "")\(target)._machineForRefinement(abstractState, configuration: abstractConfiguration)
                     }
                     if let failure { failures[.\(property)] = failure }
                 }

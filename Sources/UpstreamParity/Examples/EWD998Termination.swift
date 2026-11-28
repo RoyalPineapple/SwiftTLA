@@ -1,3 +1,6 @@
+// Nodes can send messages to any node. Termination requires every node to be inactive with no messages pending.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/AsyncTerminationDetection.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -5,61 +8,59 @@ import SwiftTLAMacros
 @TLAModel
 package struct EWD998TerminationModel: Sendable {
     private enum Step: String, CaseIterable {
-        case Terminate, SendMsg, RcvMsg, DetectTermination
+        case deactivateNode = "Terminate"
+        case sendMessage = "SendMsg"
+        case receiveMessage = "RcvMsg"
+        case detectTermination = "DetectTermination"
     }
 
     package static var spec: TLASpec {
         #spec("AsyncTerminationDetection") { scope in
             Extends(.naturals)
-            let N = scope.parameter(as: Int.self, in: Int.all)
-            Assume(N > 0)
-            let Node = IntRange(0, through: N - 1)
+            let nodeCount = scope.parameter(tlaName: "N", as: Int.self, in: Int.all)
+            Assume(nodeCount > 0)
+            let nodes = IntRange(0, through: nodeCount - 1)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
-            let pending = scope.sharedVar(initial: Dictionary<Int, Int>.mapping(over: Node) { _ in 0 })
-            let terminated = ForAll(in: Node) { node in !active[node] && pending[node] == 0 }
-            let terminationDetected = scope.sharedVar(in: SetExpr<Bool>.literal(false, terminated))
+                initiallyIn: Functions(from: nodes, to: Bool.all))
+            let pendingMessages = scope.sharedVar(tlaName: "pending", initial: Dictionary<Int, Int>.mapping(over: nodes) { _ in 0 })
+            let terminated = nodes.allSatisfy { node in !active[node] && pendingMessages[node] == 0 }
+            let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
 
-            let TypeOK = Invariant()
-            let Safe = Invariant()
             let Quiescence = Temporal()
             let Live = Temporal()
 
-            Do(Step.Terminate, over: Node) { node in
+            Do(Step.deactivateNode, over: nodes) { node in
                 When(active[node])
-                Assign(active[node], to: false)
+                active[node].set(false)
                 With(SetExpr<Bool>.literal(terminationDetected, terminated)) { detected in
-                    Assign(terminationDetected, to: detected)
+                    terminationDetected.set(detected)
                 }
             }
-            Do(Step.SendMsg, over: Node, Node) { sender, receiver in
+            Do(Step.sendMessage, over: nodes, nodes) { sender, receiver in
                 When(active[sender])
-                Assign(pending[receiver], to: pending[receiver] + 1)
+                pendingMessages[receiver] += 1
             }
-            Do(Step.RcvMsg, over: Node) { node in
-                When(pending[node] > 0)
-                Assign(active[node], to: true)
-                Assign(pending[node], to: pending[node] - 1)
+            Do(Step.receiveMessage, over: nodes) { node in
+                When(pendingMessages[node] > 0)
+                active[node].set(true)
+                pendingMessages[node].set(pendingMessages[node] - 1)
             }
-            let detectTermination = Do(Step.DetectTermination) {
-                When(terminated)
-                Assign(terminationDetected, to: true)
+            let detectTermination = Do(Step.detectTermination, when: terminated) {
+                terminationDetected.set(true)
             }
-            detectTermination
             WeakFairness(detectTermination)
 
-            TypeOK {
-                Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
-                    && ForAll(in: Node) { node in pending[node] >= 0 }
-                    && SetExpr<Bool>.literal(false, true).contains(terminationDetected)
+            Invariant("TypeOK") {
+                Functions(from: nodes, to: Bool.all).contains(active)
+                    && nodes.allSatisfy { node in pendingMessages[node] >= 0 }
+                    && Bool.all.contains(terminationDetected)
             }
-            Safe { !terminationDetected || terminated }
+            Invariant("Safe") { !terminationDetected || terminated }
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
             Live(.leadsTo(terminated, terminationDetected))
-            Constraint(ForAll(in: Node) { node in pending[node] <= 3 })
+            Constraint(nodes.allSatisfy { node in pendingMessages[node] <= 3 })
 
-            let AsyncTerminationDetection = Validation { Bind(N, to: 4) }
-            AsyncTerminationDetection
+            Validation("AsyncTerminationDetection") { Bind(nodeCount, to: 4) }
         }
     }
 }

@@ -68,7 +68,7 @@ struct SeededCounterMachine {
     static var spec: TLASpec {
         #spec("SeededCounterMachine") {
             let seededCounterMachine = Algorithm(label: "SeededCounterMachine", scoped: { scope in
-                let value = scope.sharedVar(_name: "value", in: 0...2)
+                let value = scope.sharedVar(_name: "value", initiallyIn: 0...2)
 
                 While(Step.advance, true) {
                     Either {
@@ -214,7 +214,7 @@ struct GeneratedRangeInitializedAlgorithm {
     static var spec: TLASpec {
         #spec("GeneratedRangeInitializedAlgorithm") {
             let generatedRangeInitializedAlgorithm = Algorithm(label: "GeneratedRangeInitializedAlgorithm", scoped: { scope in
-                let hour = scope.sharedVar(_name: "hour", in: 1...3)
+                let hour = scope.sharedVar(_name: "hour", initiallyIn: 1...3)
                 Each(Node.all) { _ in
                     Do(Step.advance, when: hour < 3) {
                         Assign(hour, to: hour + 1)
@@ -314,7 +314,7 @@ struct GeneratedDependentInitialAlgorithm {
     static var spec: TLASpec {
         #spec("GeneratedDependentInitialAlgorithm") {
             let generatedDependentInitialAlgorithm = Algorithm(label: "GeneratedDependentInitialAlgorithm", scoped: { scope in
-                let seed = scope.sharedVar(_name: "seed", in: SetExpr<Bool>.literal(false, true))
+                let seed = scope.sharedVar(_name: "seed", initiallyIn: SetExpr<Bool>.literal(false, true))
                 let mirrors = scope.sharedVar(_name: "mirrors", initial: Function<Node, Phase>.mapping { node in
                     If(node == Node.left && seed == true, then: Phase.active, else: Phase.inactive)
                 })
@@ -337,7 +337,7 @@ struct GeneratedAlgorithmMachine {
     static var spec: TLASpec {
         #spec("GeneratedAlgorithmMachine") {
             let generatedAlgorithmMachine = Algorithm(label: "GeneratedAlgorithmMachine", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", initial: 1)
+                let count = scope.sharedVar(_name: "pc", initial: 1)
                 Do(Step.tick) {
                     If(count < 12) {
                         Assign(count, to: count + 1)

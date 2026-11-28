@@ -6,15 +6,23 @@ set -euo pipefail
 readonly max_rss_mib=32768
 readonly min_available_mib=768
 readonly poll_seconds=2
-# The native advisory lock waits briefly rather than failing at first collision.
 # The environment override keeps the shell-level contention regression fast.
 readonly lock_wait_seconds="${SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS:-30}"
 
 usage() {
     cat >&2 <<'EOF'
 usage: scripts/local-validation.sh static
-       scripts/local-validation.sh swiftpm-test <test-filter>
+       scripts/local-validation.sh port-build [1|4] [debug|release]
+       scripts/local-validation.sh swiftpm-test <test-filter> [1|4]
        scripts/local-validation.sh xcode-test <test-identifier>
+       scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]]
+       append --also <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]] for each additional independent selection from that packet (two workers)
+       scripts/local-validation.sh proof-tools
+       scripts/local-validation.sh proof-prepare <output-directory> <checked-proof> [ordered-copy-actions]
+       scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion
+       scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion-sil
+       scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion-function
+       scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion-helper
 EOF
     exit 64
 }
@@ -30,16 +38,58 @@ require_positive_integer() {
     [[ "$value" =~ ^[1-9][0-9]*$ ]] || fail "$name must be a positive integer"
 }
 
+validate_proof_selection() {
+    [[ $# -ge 2 && $# -le 5 ]] || usage
+    require_positive_integer first-line "$1"
+    require_positive_integer last-line "$2"
+    [[ "$1" -le "$2" ]] || fail "first-line must not exceed last-line"
+}
+
 [[ "$(uname -s)" == "Darwin" ]] || fail "macOS is required"
 
+parallel_proof=false
 mode="${1:-}"
 case "$mode" in
-    static)
+    port-build)
+        [[ $# -le 3 && "${2-1}" =~ ^(1|4)$ && "${3-debug}" =~ ^(debug|release)$ ]] || usage
+        build_jobs="${2-1}"
+        build_configuration="${3-debug}"
+        ;;
+    static|proof-tools)
         [[ $# -eq 1 ]] || usage
         ;;
-    swiftpm-test|xcode-test)
+    swiftpm-test)
+        [[ ( $# -eq 2 || $# -eq 3 ) && -n "${2:-}" && "$2" != -* && "${3-1}" =~ ^(1|4)$ ]] || usage
+        selector="$2"
+        build_jobs="${3-1}"
+        ;;
+    xcode-test)
         [[ $# -eq 2 && -n "${2:-}" && "${2:-}" != -* ]] || usage
         selector="$2"
+        ;;
+    proof-step)
+        packet="${2:-}"
+        [[ -n "$packet" ]] || usage
+        shift 2
+        proof_arguments=("$packet")
+        while :; do
+            selection=()
+            while [[ $# -gt 0 && "$1" != --also ]]; do
+                selection+=("$1")
+                shift
+            done
+            [[ ${#selection[@]} -ge 2 ]] || usage
+            validate_proof_selection "${selection[@]}"
+            proof_arguments+=("${selection[@]}")
+            [[ $# -gt 0 ]] || break
+            shift
+            proof_arguments+=(--also)
+            parallel_proof=true
+        done
+        ;;
+    proof-prepare)
+        [[ $# -eq 3 || ( $# -eq 4 && "${4:-}" == ordered-copy-actions ) ]] || usage
+        proof_arguments=("${@:2}")
         ;;
     *)
         usage
@@ -47,7 +97,31 @@ case "$mode" in
 esac
 
 readonly common_git_dir="$(git rev-parse --git-common-dir)"
-readonly lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
+readonly worktree_git_dir="$(git rev-parse --absolute-git-dir)"
+readonly product_lock="$worktree_git_dir/swifttla-product-cache.advisory.lock"
+prepare_products=false
+if [[ "$mode" == proof-prepare && "${proof_arguments[1]}" != compiler-expansion* ]]; then
+    prepare_products=true
+    exec 7>>"$product_lock"
+fi
+if [[ "$mode" == xcode-test ]]; then
+    readonly xcode_gate="$common_git_dir/swifttla-xcode-validation.advisory.lock"
+    exec 7>>"$xcode_gate"
+    package_dir="$(pwd -P)"
+    while [[ ! -f "$package_dir/Package.swift" ]]; do
+        parent_dir="$(dirname "$package_dir")"
+        [[ "$parent_dir" != "$package_dir" ]] || fail "xcode-test requires a Swift package directory"
+        package_dir="$parent_dir"
+    done
+    package_key="$(printf '%s' "$package_dir" | shasum -a 256 | cut -d' ' -f1)"
+    readonly lock_file="$common_git_dir/swifttla-xcode-package-$package_key.advisory.lock"
+elif [[ "$mode" == port-build || "$mode" == swiftpm-test ]]; then
+    readonly lock_file="$product_lock"
+elif [[ "$mode" == static ]]; then
+    readonly lock_file="$worktree_git_dir/swifttla-static.advisory.lock"
+else
+    readonly lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
+fi
 require_positive_integer "SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS" "$lock_wait_seconds"
 scratch_dir=""
 build_dir=""
@@ -60,8 +134,23 @@ terminate_group() {
     kill -TERM "-$command_group" 2>/dev/null || true
 }
 
+drain_proof_workers() {
+    [[ "$parallel_proof" == true && -n "$command_group" ]] || return 0
+    local i
+    for i in {1..20}; do
+        kill -0 -- "-$command_group" 2>/dev/null || return 0
+        sleep 0.1
+    done
+    kill -KILL -- "-$command_group" 2>/dev/null || return 0
+    while ps -axo pgid=,stat= | awk -v group="$command_group" '
+        $1 == group && $2 !~ /^Z/ { live=1 }
+        END { exit !live }
+    '; do sleep 0.1; done
+}
+
 cleanup() {
     terminate_group
+    drain_proof_workers
     if [[ -n "$watchdog_pid" ]]; then
         kill "$watchdog_pid" 2>/dev/null || true
         wait "$watchdog_pid" 2>/dev/null || true
@@ -95,30 +184,57 @@ lock_owner_diagnostics() {
     fi
 }
 
+lock_started=$SECONDS
 exec 9>>"$lock_file"
 set +e
-/usr/bin/lockf -s -t "$lock_wait_seconds" 9
+# Block in the kernel. The lock stays on the shell's open file description.
+python3 - "$lock_wait_seconds" "$mode" "$prepare_products" <<'PYTHON'
+import fcntl
+import signal
+import sys
+
+def timeout(signum, frame):
+    sys.exit(timeout_status)
+
+timeout_status = 75
+signal.signal(signal.SIGALRM, timeout)
+signal.alarm(int(sys.argv[1]))
+fcntl.flock(9, fcntl.LOCK_EX)
+if sys.argv[2] == "xcode-test":
+    # Repository-wide exclusive callers must drain every parallel Xcode check.
+    timeout_status = 76
+    fcntl.flock(7, fcntl.LOCK_SH)
+elif sys.argv[3] == "true":
+    timeout_status = 77
+    fcntl.flock(7, fcntl.LOCK_EX)
+PYTHON
 lock_status=$?
 set -e
 if [[ "$lock_status" -ne 0 ]]; then
+    if [[ "$lock_status" -eq 76 ]]; then
+        fail "timed out after ${lock_wait_seconds}s waiting for exclusive Xcode validation to finish ($xcode_gate)"
+    fi
+    if [[ "$lock_status" -eq 77 ]]; then
+        fail "timed out after ${lock_wait_seconds}s waiting for compiler products ($product_lock)"
+    fi
     owner="$(lock_owner_diagnostics)"
     if [[ "$lock_status" -eq 75 ]]; then
         fail "timed out after ${lock_wait_seconds}s waiting for validation lock ($lock_file); ${owner}; lock was not changed"
     fi
-    fail "could not acquire validation lock ($lock_file; lockf status $lock_status); ${owner}; lock was not changed"
+    fail "could not acquire validation lock ($lock_file; flock status $lock_status); ${owner}; lock was not changed"
 fi
 
 printf '%s\n' "$$" > "$lock_file"
 
 tree_rss_mib() {
-    ps -axo pid=,ppid=,rss= | awk -v root="$1" '
-        { parent[$1] = $2; rss[$1] = $3 }
+    ps -axo pid=,ppid=,rss=,pgid= | awk -v root="$1" -v paired="$parallel_proof" '
+        { parent[$1] = $2; rss[$1] = $3; if (paired == "true" && $4 == root) present[$1] = 1 }
         END {
             present[root] = 1
             do {
                 changed = 0
                 for (pid in parent) {
-                    if (present[parent[pid]] && !present[pid]) {
+                    if ((parent[pid] in present) && !(pid in present)) {
                         present[pid] = 1
                         changed = 1
                     }
@@ -138,6 +254,36 @@ reclaimable_memory_mib() {
     printf '%d\n' "$((total_bytes * free_percent / 100 / 1048576))"
 }
 
+acquire_capacity_slot() {
+    local cpus slots slot available file status
+    cpus="$(sysctl -n hw.logicalcpu)"
+    require_positive_integer hw.logicalcpu "$cpus"
+    slots=$((cpus > 1 ? cpus - 1 : 1))
+    while true; do
+        available="$(reclaimable_memory_mib)" || fail "cannot measure host memory for validation admission"
+        for ((slot=1; slot<=slots; slot++)); do
+            if ((available < min_available_mib || (slot > 1 && available < max_rss_mib + min_available_mib))); then
+                break
+            fi
+            file="$common_git_dir/swifttla-xcode-validation-$slot.advisory.lock"
+            exec 8>>"$file"
+            if python3 -c 'import fcntl, sys
+try: fcntl.flock(8, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError: sys.exit(75)'; then
+                printf '%s\n' "$$" > "$file"
+                return
+            else
+                status=$?
+                [[ "$status" -eq 75 ]] || fail "could not acquire validation slot $slot (flock status $status)"
+            fi
+            exec 8>&-
+        done
+        ((SECONDS - lock_started < lock_wait_seconds)) ||
+            fail "timed out waiting for validation capacity ($slots CPU slots, ${available} MiB reclaimable)"
+        sleep 0.25
+    done
+}
+
 watchdog() {
     local rss_mib reclaimable_mib reason
     while kill -0 "$command_pid" 2>/dev/null; do
@@ -147,6 +293,7 @@ watchdog() {
         [[ "$rss_mib" -le "$max_rss_mib" ]] || reason="process-tree-rss"
         [[ "$reclaimable_mib" -ge "$min_available_mib" ]] || reason="reclaimable-memory"
         if [[ -n "$reason" ]]; then
+            if [[ "$parallel_proof" == true ]]; then touch "$scratch_dir/proof-workers-guard-trip"; fi
             terminate_group
             printf '%s\n' \
                 'guard_trip=local-validation' \
@@ -167,24 +314,26 @@ run_guarded() {
         git diff --check
         ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }' \
             .github/workflows/ci.yml .github/workflows/validation-pipeline.yml \
-            .github/workflows/validation-case.yml
+            .github/workflows/validation-case.yml .github/actions/setup-pinned-tlaps/action.yml
+        bash -n scripts/build-pinned-tlaps.sh scripts/check-language-proof-batch.sh scripts/proof-family-inputs.sh scripts/bootstrap-pinned-proof.sh
+        python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/check-initial-proof-step.py").read_text())'
+        python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/prepare-initial-proof.py").read_text())'
+        python3 scripts/prepare-initial-proof.py --self-check
+        bash Tests/Fixtures/LocalValidation/assert_lock.sh
+        ruby Tests/Fixtures/ProofFamily/assert_routing.rb
+        python3 Tests/Fixtures/TLAPSBootstrap/assert_inputs.py
+        python3 "$(dirname "$0")/retain-native-initial-source.py" --self-check
         "$(dirname "$0")/setup-finite-graph-tools.sh" --verify-bridge-sources
         bash "$(dirname "$0")/verify-finite-graph-input-pins.sh"
         return
     fi
 
+    acquire_capacity_slot
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
     export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
-    if [[ "$mode" == "swiftpm-test" ]]; then
-        local cache_root="$common_git_dir/swifttla-local-validation-cache"
-        local worktree_key worktree_cache
+    if [[ "$mode" == port-build || "$mode" == swiftpm-test || "$prepare_products" == true ]]; then
+        local worktree_cache="$worktree_git_dir/swifttla-product-cache"
         local cache_key cache_key_file toolchain_key toolchain_key_file macro_key macro_key_file
-        [[ ! -L "$cache_root" ]] || fail "cache root must not be a symlink"
-        mkdir -p "$cache_root"
-        # SwiftPM build records include checkout paths, so isolate worktree builds.
-        worktree_key="$(git rev-parse --show-toplevel | shasum -a 256 | awk '{print $1}')"
-        [[ "$worktree_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute worktree cache key"
-        worktree_cache="$cache_root/$worktree_key"
         [[ ! -L "$worktree_cache" ]] || fail "worktree cache directory must not be a symlink"
         mkdir -p "$worktree_cache"
         cache_key_file="$worktree_cache/source-key"
@@ -232,7 +381,7 @@ run_guarded() {
         macro_key="$({
             printf '%s\n' 'swiftpm-local-validation-macro-sources-v1'
             git ls-files --cached --others --exclude-standard -z -- \
-                Sources/SwiftTLA Sources/SwiftTLAPlugin Sources/SwiftTLAMacros |
+                Sources/SwiftTLA Sources/SwiftTLAPlugin Sources/SwiftTLAMacros Sources/SwiftTLACompilerSupport |
                 while IFS= read -r -d '' input_path; do
                     if [[ -f "$input_path" && ! -L "$input_path" ]]; then
                         shasum -a 256 -- "$input_path"
@@ -265,16 +414,74 @@ run_guarded() {
     fi
     set -m
     case "$mode" in
+        proof-tools)
+            bash scripts/bootstrap-pinned-proof.sh &
+            ;;
+        proof-step)
+            if [[ "$parallel_proof" == true ]]; then
+                # The scheduler and both workers share the watchdog's process group and repository lock.
+                python3 - "$scratch_dir" "${proof_arguments[@]}" <<'PYTHON' &
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+scratch, packet, *arguments = sys.argv[1:]
+selections = [[]]
+for argument in arguments:
+    if argument == "--also":
+        selections.append([])
+    else:
+        selections[-1].append(argument)
+
+env = os.environ.copy()
+env.pop("TLAPM_SMT_SOLVER", None)
+
+def run_selection(number, selection):
+    temp = Path(scratch) / f"proof-{number}"
+    cache = temp / "cache"
+    cache.mkdir(parents=True)
+    worker_env = dict(env, TMPDIR=str(temp), TLAPM_CACHE_DIR=str(cache))
+    return subprocess.run(
+        [sys.executable, "scripts/check-initial-proof-step.py", "--paired-worker", packet, *selection],
+        env=worker_env, stdin=subprocess.DEVNULL,
+    ).returncode
+
+results = [0] * len(selections)
+with ThreadPoolExecutor(max_workers=2) as workers:
+    pending = {workers.submit(run_selection, index + 1, selection): index
+               for index, selection in enumerate(selections)}
+    for done in as_completed(pending):
+        index = pending[done]
+        results[index] = done.result()
+        if len(results) > 2:
+            print(f"proof-step selection {index + 1}: exit {results[index]}", flush=True)
+
+if len(results) == 2:
+    print(f"proof-step pair: first exit {results[0]}, second exit {results[1]}", flush=True)
+sys.exit(int(any(results)))
+PYTHON
+            else
+                python3 scripts/check-initial-proof-step.py "${proof_arguments[@]}" &
+            fi
+            ;;
+        proof-prepare)
+            python3 scripts/prepare-initial-proof.py "$scratch_dir" "$build_dir" "${proof_arguments[@]}" &
+            ;;
+        port-build)
+            (
+                options=(--configuration "$build_configuration" -Xswiftc -warnings-as-errors --disable-automatic-resolution -j "$build_jobs" --scratch-path "$build_dir")
+                swift build "${options[@]}" --product tlc-validate >&2 || exit $?
+                bin_dir="$(swift build "${options[@]}" --show-bin-path)" || exit $?
+                [[ -x "$bin_dir/tlc-validate" ]] || fail "built tlc-validate missing from $bin_dir"
+                printf '%s\n' "$bin_dir/tlc-validate"
+            ) &
+            ;;
         swiftpm-test)
-            swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j 1 --scratch-path "$build_dir" &
+            swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j "$build_jobs" --scratch-path "$build_dir" &
             ;;
         xcode-test)
-            package_dir="$PWD"
-            while [[ ! -f "$package_dir/Package.swift" ]]; do
-                parent_dir="$(dirname "$package_dir")"
-                [[ "$parent_dir" != "$package_dir" ]] || fail "xcode-test requires a Swift package directory"
-                package_dir="$parent_dir"
-            done
             package_scheme="$(basename "$package_dir")-Package"
             (
                 cd "$package_dir"
@@ -287,16 +494,19 @@ run_guarded() {
     esac
     command_pid=$!
     command_group="$command_pid"
-    watchdog &
+    # The watchdog sleep can outlive its shell during cancellation.
+    watchdog 7>&- 8>&- 9>&- &
     watchdog_pid=$!
     wait "$command_pid" || status=$?
     terminate_group
+    drain_proof_workers
     command_group=""
     wait "$watchdog_pid" 2>/dev/null || true
     watchdog_pid=""
+    if [[ -f "$scratch_dir/proof-workers-guard-trip" ]]; then return 1; fi
     return "$status"
 }
 
 case "$mode" in
-    static|swiftpm-test|xcode-test) run_guarded ;;
+    static|port-build|swiftpm-test|xcode-test|proof-step|proof-tools|proof-prepare) run_guarded ;;
 esac

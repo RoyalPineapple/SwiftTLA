@@ -1,3 +1,6 @@
+// Different smokers compete for the ingredients they need to start smoking.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CigaretteSmokers/CigaretteSmokers.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -47,49 +50,47 @@ package struct CigaretteSmokersModel: Sendable {
                     ])
                 ]))
             Assume(Offers.isSubset(of: Subsets(of: Ingredients))
-                && ForAll(in: Offers) { offer in
-                    offer.cardinality == Ingredients.cardinality - 1
+                && Offers.allSatisfy { offer in
+                    offer.count == Ingredients.count - 1
                 })
 
             let smokers = scope.sharedVar(initial: Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { _ in
                 Smoker.expression(smoking: false)
             })
-            let dealer = scope.sharedVar(in: Offers)
-            let TypeOK = Invariant()
-            let AtMostOne = Invariant()
+            let dealer = scope.sharedVar(initiallyIn: Offers)
 
-            Do(Step.startSmoking) {
-                When(!dealer.isEmpty)
-                Assign(smokers, to: Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { ingredient in
-                    Smoker.expression(smoking:
-                        Set<Ingredient>([]).inserting(ingredient.expr).union(dealer) == Ingredients)
-                })
-                Assign(dealer, to: Set<Ingredient>([]))
+            Do(Step.startSmoking, when: !dealer.isEmpty) {
+                smokers.set(
+                    Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { ingredient in
+                        Smoker.expression(smoking:
+                            Set<Ingredient>([]).inserting(ingredient.expr).union(dealer) == Ingredients)
+                    }
+                )
+                dealer.set(Set<Ingredient>([]))
             }
-            Do(Step.stopSmoking) {
-                When(dealer.isEmpty)
+            Do(Step.stopSmoking, when: dealer.isEmpty) {
                 Let(Select(from: Ingredients) { ingredient in
-                    smokers[ingredient].smoking && ForAll(in: Ingredients) { other in
+                    smokers[ingredient].smoking && Ingredients.allSatisfy { other in
                         !smokers[other].smoking || other == ingredient
                     }
                 }) { ingredient in
-                    Assign(smokers[ingredient].smoking, to: false)
+                    smokers[ingredient].smoking.set(false)
                 }
                 With(Offers) { offer in
-                    Assign(dealer, to: offer)
+                    dealer.set(offer)
                 }
             }
 
-            TypeOK {
+            Invariant("TypeOK") {
                 Functions(from: Ingredients, to: SetExpr<Smoker>.literal(
                     Smoker(smoking: false), Smoker(smoking: true))).contains(smokers)
                     && (Offers.contains(dealer) || dealer.isEmpty)
             }
-            AtMostOne {
-                Ingredients.filtering { ingredient in smokers[ingredient].smoking }.cardinality <= 1
+            Invariant("AtMostOne") {
+                Ingredients.filter { ingredient in smokers[ingredient].smoking }.count <= 1
             }
 
-            let CigaretteSmokers = Validation {
+            Validation("CigaretteSmokers") {
                 Bind(Ingredients, to: Set<Ingredient>([.matches, .paper, .tobacco]))
                 Bind(Offers, to: Set<Set<Ingredient>>([
                     Set<Ingredient>([.matches, .paper]),
@@ -97,8 +98,7 @@ package struct CigaretteSmokersModel: Sendable {
                     Set<Ingredient>([.paper, .tobacco])
                 ]))
             }
-            CigaretteSmokers
-            let APCigaretteSmokers = Validation {
+            Validation("APCigaretteSmokers") {
                 Bind(Ingredients, to: Set<Ingredient>([.apMatches, .apPaper, .apTobacco]))
                 Bind(Offers, to: Set<Set<Ingredient>>([
                     Set<Ingredient>([.apMatches, .apPaper]),
@@ -106,7 +106,6 @@ package struct CigaretteSmokersModel: Sendable {
                     Set<Ingredient>([.apPaper, .apTobacco])
                 ]))
             }
-            APCigaretteSmokers
         }
     }
 }

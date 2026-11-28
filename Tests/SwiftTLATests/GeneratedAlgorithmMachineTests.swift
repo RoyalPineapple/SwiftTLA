@@ -25,8 +25,10 @@ struct GeneratedAlgorithmMachineTests {
     func terminationNameDoesNotHideAction() throws {
         var machine = try SanitizedActionModel.makeMachine()
         #expect(try machine.enabledActions().contains(.Terminating))
-        #expect(try machine.formalCall(for: .Terminating).name == "Terminating")
-        #expect(try machine.send(.Terminating).after.value == 4)
+        let call = try machine.formalCall(for: .Terminating)
+        #expect(call.name == "Terminating")
+        try machine.send(.Terminating)
+        #expect(machine.state.value == 4)
     }
 
     @Test("generated actions accept a case named toInvocation")
@@ -39,9 +41,9 @@ struct GeneratedAlgorithmMachineTests {
         var machine = try GeneratedAlgorithmCounter.makeMachine()
         #expect(machine.state.count == 0)
         let action = GeneratedAlgorithmCounter.Action.increment(process: .left)
-        let transition = try machine.send(action)
-        #expect(transition.before.count == 0)
-        #expect(transition.after.count == 1)
+        let transitionBefore = machine.state
+        try machine.send(action)
+        #expect(transitionBefore.count == 0)
         #expect(machine.state.count == 1)
     }
 
@@ -50,7 +52,8 @@ struct GeneratedAlgorithmMachineTests {
         var machine = try SeededCounterMachine.makeMachine(.init(value: 2))
 
         #expect(machine.state.value == 2)
-        #expect(try machine.send(.advance).after.value == 0)
+        try machine.send(.advance)
+        #expect(machine.state.value == 0)
     }
 
     @Test("a generated machine rejects an initial state outside Init")

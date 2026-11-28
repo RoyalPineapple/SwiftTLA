@@ -20,7 +20,9 @@ struct SetChoiceTests {
             let graph = try scenario.explore(maximumStates: 10)
             #expect(graph.initialStates.count == 1)
             #expect(graph.transitions.count == members.count + 1)
-            #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == (members.count + 1) * members.count)
+            let edgeCount: Int = graph.transitions.values.reduce(0) { $0 + $1.count }
+            let expectedEdgeCount: Int = (members.count + 1) * members.count
+            #expect(edgeCount == expectedEdgeCount)
             #expect(graph.deadlockedStates.count == (members.isEmpty ? 1 : 0))
             for edges in graph.transitions.values {
                 #expect(Set(edges.map { $0.target.state.selected }) == members)
@@ -29,7 +31,7 @@ struct SetChoiceTests {
             var machine = try #require(scenario.initialMachines().first)
             let before = machine.snapshot
             if members.count == 1 {
-                _ = try machine.send(.pick)
+                try machine.send(.pick)
                 #expect(machine.state.selected == 1)
             } else {
                 #expect(throws: GeneratedMachineError.self) { try machine.send(.pick) }

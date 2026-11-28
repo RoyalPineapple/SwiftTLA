@@ -13,7 +13,7 @@ struct CounterView: View {
             Button("Advance") {
                 do {
                     guard var machine else { return }
-                    _ = try machine.send(.advance)
+                    try machine.send(.advance)
                     self.machine = machine
                     diagnostic = ""
                 } catch {

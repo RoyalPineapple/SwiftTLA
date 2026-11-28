@@ -1,3 +1,6 @@
+// A cat moves between boxes while an observer searches for it.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Moving_Cat_Puzzle/Cat.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -11,7 +14,7 @@ package struct CatModel: Sendable {
         package static var defaultValue: Self { .left }
     }
 
-    private enum Step: String, CaseIterable { case Next }
+    private enum Step: String, CaseIterable { case next = "Next" }
 
     package static var spec: TLASpec {
         #spec("Cat") { scope in
@@ -20,21 +23,21 @@ package struct CatModel: Sendable {
             Assume(Number_Of_Boxes >= 2)
             let Boxes = IntRange(1, through: Number_Of_Boxes)
             let Observed_Boxes = IntRange(2, through: Number_Of_Boxes - 1)
-            let cat_box = scope.sharedVar(in: Boxes)
-            let observed_box = scope.sharedVar(in: Observed_Boxes)
-            let direction = scope.sharedVar(in: SetExpr<Direction>.literal(.left, .right))
+            let cat_box = scope.sharedVar(initiallyIn: Boxes)
+            let observed_box = scope.sharedVar(initiallyIn: Observed_Boxes)
+            let direction = scope.sharedVar(initiallyIn: SetExpr<Direction>.literal(.left, .right))
 
-            Do(Step.Next) {
+            Do(Step.next) {
                 With(Boxes) { next in
                     When(next == cat_box + 1 || next == cat_box - 1)
-                    Assign(cat_box, to: next)
+                    cat_box.set(next)
                 }
                 let next_box = If(direction == Direction.right,
                     then: observed_box + 1, else: observed_box - 1)
                 If(Observed_Boxes.contains(next_box)) {
-                    Assign(observed_box, to: next_box)
+                    observed_box.set(next_box)
                 } else: {
-                    Assign(direction, to: If(direction == Direction.right,
+                    direction.set(If(direction == Direction.right,
                         then: Direction.left, else: Direction.right))
                 }
             }
@@ -42,8 +45,8 @@ package struct CatModel: Sendable {
             // cat_box has exactly the Move_Cat relation used by upstream fairness.
             WeakFairnessNext(on: cat_box)
 
-            let TypeOK = Invariant()
-            TypeOK {
+            let typeOK = Invariant("TypeOK")
+            typeOK {
                 Boxes.contains(cat_box)
                     && Observed_Boxes.contains(observed_box)
                     && SetExpr<Direction>.literal(.left, .right).contains(direction)
@@ -51,15 +54,12 @@ package struct CatModel: Sendable {
             let Victory = Temporal()
             Victory(.eventually(observed_box == cat_box))
 
-            let CatEvenBoxes = Validation { Bind(Number_Of_Boxes, to: 6) }
-                .expect(TypeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
-            CatEvenBoxes
-            let CatOddBoxes = Validation { Bind(Number_Of_Boxes, to: 5) }
-                .expect(TypeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
-            CatOddBoxes
-            let APCat = Validation { Bind(Number_Of_Boxes, to: 4) }
-                .checking(only: [TypeOK]).expect(TypeOK, .satisfied).expectDeadlock(.satisfied)
-            APCat
+            Validation("CatEvenBoxes") { Bind(Number_Of_Boxes, to: 6) }
+                .expect(typeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
+            Validation("CatOddBoxes") { Bind(Number_Of_Boxes, to: 5) }
+                .expect(typeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
+            Validation("APCat") { Bind(Number_Of_Boxes, to: 4) }
+                .checking(only: [typeOK]).expect(typeOK, .satisfied).expectDeadlock(.satisfied)
         }
     }
 }

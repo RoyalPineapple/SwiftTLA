@@ -1,3 +1,7 @@
+// Ring processes forward candidate identifiers until a process recognizes its own and becomes
+// leader.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/chang_roberts/ChangRoberts.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -13,48 +17,51 @@ package struct ChangRobertsModel: Sendable {
         package static let finiteValues = allCases
     }
 
-    private enum Step: String, CaseIterable { case n0, n1 }
+    private enum Step: String, CaseIterable {
+        case sendIDIfInitiator = "n0"
+        case processIncomingID = "n1"
+    }
 
     package static var spec: TLASpec {
         #spec("ChangRoberts") { model in
             Extends(.naturals, .sequences)
-            let N = model.parameter(as: Int.self, in: Int.all)
-            let Id = model.parameter(as: [Int].self, in: Sequences(of: Int.all))
-            let Node = IntRange(1, through: N)
-            Assume(N > 0 && Id.count == N
-                && ForAll(in: Node) { node in Id[node] >= 0
-                    && ForAll(in: Node) { other in node == other || Id[node] != Id[other] }
+            let nodeCount = model.parameter(tlaName: "N", as: Int.self, in: Int.all)
+            let nodeIDs = model.parameter(tlaName: "Id", as: [Int].self, in: Sequences(of: Int.all))
+            let nodes = IntRange(1, through: nodeCount)
+            Assume(nodeCount > 0 && nodeIDs.count == nodeCount
+                && nodes.allSatisfy { node in nodeIDs[node] >= 0
+                    && nodes.allSatisfy { other in node == other || nodeIDs[node] != nodeIDs[other] }
                 })
             let TypeOK = Invariant()
             let Correctness = Invariant()
             let Liveness = Temporal()
 
-            let ChangRoberts = Algorithm(scoped: { scope in
-                let msgs = scope.sharedVar(initial: Dictionary<Int, Set<Int>>.mapping(over: Node) { _ in Set<Int>() })
-                let initiator: SharedVariable<[Int: Bool]> = scope.sharedVar(in:
-                    Functions(from: Node, to: Set<Bool>([false, true])))
-                let state = scope.sharedVar(initial: Dictionary<Int, ProcessState>.mapping(over: Node) { node in
+            Algorithm("ChangRoberts") { scope in
+                let messages = scope.sharedVar(tlaName: "msgs", initial: Dictionary<Int, Set<Int>>.mapping(over: nodes) { _ in Set<Int>() })
+                let initiator: SharedVariable<[Int: Bool]> = scope.sharedVar(initiallyIn:
+                    Functions(from: nodes, to: Bool.all))
+                let state = scope.sharedVar(initial: Dictionary<Int, ProcessState>.mapping(over: nodes) { node in
                     If(initiator[node], then: ProcessState.candidate, else: ProcessState.lost)
                 })
 
-                Each(Node, fairness: .weak) { node in
-                    let successor = If(node == N, then: 1, else: node + 1)
-                    Do(Step.n0) {
+                Each(nodes, fairness: .weak) { node in
+                    let successor = If(node == nodeCount, then: 1, else: node + 1)
+                    Do(Step.sendIDIfInitiator) {
                         If(initiator[node]) {
-                            Assign(msgs[successor], to: msgs[successor].inserting(Id[node]))
+                            messages[successor].set(messages[successor].inserting(nodeIDs[node]))
                         }
                     }
-                    While(Step.n1, true) {
-                        With(msgs[node]) { candidate in
-                            Assign(msgs[node], to: msgs[node].removing(candidate))
-                            If(state[node] == ProcessState.lost || candidate < Id[node]) {
-                                Assign(msgs[successor], to: msgs[successor].inserting(candidate))
+                    Loop(Step.processIncomingID) {
+                        With(messages[node]) { candidate in
+                            messages[node].set(messages[node].removing(candidate))
+                            If(state[node] == ProcessState.lost || candidate < nodeIDs[node]) {
+                                messages[successor].set(messages[successor].inserting(candidate))
                                 If(state[node] != ProcessState.lost) {
-                                    Assign(state[node], to: ProcessState.lost)
+                                    state[node].set(ProcessState.lost)
                                 }
                             } else: {
-                                If(candidate == Id[node]) {
-                                    Assign(state[node], to: ProcessState.won)
+                                If(candidate == nodeIDs[node]) {
+                                    state[node].set(ProcessState.won)
                                 }
                             }
                         }
@@ -62,39 +69,36 @@ package struct ChangRobertsModel: Sendable {
                 }
 
                 TypeOK {
-                    msgs.keys == Node && initiator.keys == Node && state.keys == Node
-                    ForAll(in: Node) { node in
+                    messages.keys == nodes && initiator.keys == nodes && state.keys == nodes
+                    nodes.allSatisfy { node in
                         Set<ProcessState>([.candidate, .lost, .won]).contains(state[node])
-                            && ForAll(in: msgs[node]) { message in
-                                Exists(in: Node) { owner in message == Id[owner] }
+                            && messages[node].allSatisfy { message in
+                                nodes.contains { owner in message == nodeIDs[owner] }
                             }
                     }
                 }
                 Correctness {
-                    ForAll(in: Node) { node in
+                    nodes.allSatisfy { node in
                         state[node] != ProcessState.won || (initiator[node]
-                            && ForAll(in: Node) { other in
+                            && nodes.allSatisfy { other in
                                 other == node || (state[other] == ProcessState.lost
-                                    && (!initiator[other] || Id[other] > Id[node]))
+                                    && (!initiator[other] || nodeIDs[other] > nodeIDs[node]))
                             })
                     }
                 }
-                let hasCandidate = Exists(in: Node) { node in state[node] == ProcessState.candidate }
-                let hasWinner = Exists(in: Node) { node in state[node] == ProcessState.won }
+                let hasCandidate = nodes.contains { node in state[node] == ProcessState.candidate }
+                let hasWinner = nodes.contains { node in state[node] == ProcessState.won }
                 Liveness(.conditional(hasCandidate, then: .eventually(hasWinner), else: .always(true)))
-            })
-            ChangRoberts
+            }
 
-            let MCChangRoberts = Validation {
-                Bind(N, to: 3)
-                Bind(Id, to: [1, 2, 3])
+            Validation("MCChangRoberts") {
+                Bind(nodeCount, to: 3)
+                Bind(nodeIDs, to: [1, 2, 3])
             }.checkingDeadlock(false)
-            MCChangRoberts
-            let APChangRoberts = Validation {
-                Bind(N, to: 3)
-                Bind(Id, to: [3, 1, 2])
+            Validation("APChangRoberts") {
+                Bind(nodeCount, to: 3)
+                Bind(nodeIDs, to: [3, 1, 2])
             }.behavior(.initialAndNext).checking(only: [TypeOK, Correctness]).checkingDeadlock(false)
-            APChangRoberts
         }
     }
 }

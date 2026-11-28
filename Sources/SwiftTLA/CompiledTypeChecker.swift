@@ -172,8 +172,15 @@ private enum ExpressionCheckTask {
     case reconcile(CompiledExpression, CompiledExpression, expected: CompiledValueType)
     case finish(expected: CompiledValueType)
     case completeOccurrence(CheckedType)
+    case caseOperands(index: Int, type: CompiledValueType, expected: CompiledValueType)
+    case caseValue(index: Int, expected: CompiledValueType)
     case recordFields(ArraySlice<CompiledRecordEntry>, expected: CompiledValueType)
     case finishRecord(expected: CompiledValueType)
+    case finishTuple(expected: CompiledValueType)
+    case tupleProjectionLiteral(CompiledExpression)
+    case tupleProjectionContext(index: Int, expected: CompiledValueType)
+    case finishTupleAccess(index: Int, expected: CompiledValueType)
+    case finishAssertView(FormalValueShape, expected: CompiledValueType)
     case updateKey(expected: CompiledValueType)
     case updateValue(expected: CompiledValueType)
     case finishUpdate(expected: CompiledValueType)
@@ -186,6 +193,8 @@ private enum ExpressionCheckTask {
     case sequenceContext(element: CompiledValueType, source: CompiledExpression)
     case sequenceValue(CompiledExpression, expected: CompiledValueType)
     case finishSequenceConstruction(expected: CompiledValueType)
+    case membership(expected: CompiledValueType)
+    case finishMembership(expected: CompiledValueType)
     case comparison(expected: CompiledValueType)
     case subset(expected: CompiledValueType)
     case setOperands(CompiledExpression, CompiledExpression, expected: CompiledValueType)
@@ -414,7 +423,10 @@ package struct CompiledTypeChecker: Sendable {
         for property in inputs.semantics.behavior.temporalProperties {
             do {
                 let domainBindings = try property.bindings.map { binding in
-                    try binding.map { try checkOperand($0, expected: .set(bindings[binding.binder] ?? .unknown)) }
+                    let expected = bindings[binding.binder] ?? .unknown
+                    let checked = try binding.map { try checkOperand($0, expected: .set(expected)) }
+                    bindings[binding.binder] = try CompiledValueType.merge(expected, element(checked.domain.resultType))
+                    return checked
                 }
                 let expression = try property.expression.map { predicate in
                     try predicate.map { try checkOperand($0, expected: .bool) }
@@ -568,7 +580,7 @@ package struct CompiledTypeChecker: Sendable {
             bindings[process.binder] = try element(domain.resultType)
             actionBinders.insert(process.binder)
             return try CompiledAuthoredPlusCalProcess(name: process.name, binder: process.binder, swiftType: process.swiftType,
-                domain: domain, fairness: process.fairness,
+                fixedID: process.fixedID.map { try checkOperand($0, expected: member) }, domain: domain, fairness: process.fairness,
                 fairnessExcludedSteps: process.fairnessExcludedSteps,
                 locals: process.locals.map { try checkAuthoredState($0) },
                 steps: process.steps.map { try checkAuthoredStep($0, procedures: plan.procedures) })
@@ -720,15 +732,6 @@ package struct CompiledTypeChecker: Sendable {
         return result
     }
 
-    private mutating func checkMembership(value: CompiledExpression, domain: CompiledExpression, expected: CompiledValueType) throws -> CheckedType {
-        let checkedDomain = try checkOperand(domain, expected: .set(.unknown))
-        let checkedValue = try checkOperand(value)
-        let context = try Self.operandContext(element(checkedDomain.resultType), checkedValue.resultType)
-        let children = try [refineOperand(checkedValue, from: value, expected: context),
-                            refineOperand(checkedDomain, from: domain, expected: .set(context))]
-        return try checkedType(.bool, expected: expected, children: children)
-    }
-
     /// Selects contextual type information without admitting a conversion. Both
     /// expressions must subsequently prove that they can inhabit this shape.
     private static func operandContext(_ lhs: CompiledValueType, _ rhs: CompiledValueType) throws -> CompiledValueType {
@@ -738,11 +741,13 @@ package struct CompiledTypeChecker: Sendable {
         case (.dictionary(let ak, let av), .dictionary(let bk, let bv)):
             return .dictionary(try operandContext(ak, bk), try operandContext(av, bv))
         case (.tuple(let a), .tuple(let b)) where a.count == b.count:
-            return .tuple(try zip(a, b).map { try operandContext($0, $1) })
+            return .tuple(CompiledTupleLayout(try zip(a, b).map { try operandContext($0, $1) }, declaration: a.declaration ?? b.declaration))
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
             return .record(try zip(a, b).map { .init(name: $0.name, type: try operandContext($0.type, $1.type)) })
         case (.oneOf, _), (.union, _): return lhs
         case (_, .oneOf), (_, .union): return rhs
+        case (.named(let wrapped), .named(let optional)) where optional == wrapped + "?": return rhs
+        case (.named(let optional), .named(let wrapped)) where optional == wrapped + "?": return lhs
         case (.named, .named): return try CompiledValueType.merge(lhs, rhs)
         case (.finite, _): return lhs
         case (_, .finite): return rhs
@@ -750,36 +755,6 @@ package struct CompiledTypeChecker: Sendable {
         case (_, .named): return rhs
         default: return try CompiledValueType.merge(lhs, rhs)
         }
-    }
-
-    private mutating func inferProjectionSource(_ value: CompiledExpression, index: Int, expected: CompiledValueType) throws -> CompiledExpression {
-        let members: [CompiledExpression]?
-        switch value.operation {
-        case .tupleLiteral:
-            let expressions = value.children
-             members = expressions
-        case .value(.tuple(let values)): members = values.map(CompiledExpression.value)
-        default: members = nil
-        }
-        if let members {
-            guard index >= 1, index <= members.count else { throw CompiledValueType.diagnostic("tupleAccess", "index outside tuple literal") }
-            let children = try members.enumerated().map { offset, member in
-                try checkOperand(member, expected: offset == index - 1 ? expected : .unknown)
-            }
-            let type = CompiledValueType.tuple(children.map(\.resultType))
-            // A formal tuple value remains a literal; its components supplied the
-            // contextual shape, while expression tuples retain their operands.
-            if case .value = value.operation { return try checkOperand(value, expected: type) }
-            return checkedOccurrence(value,
-                annotation: .init(type: type, computationType: type, children: children))
-        }
-        let source = try checkOperand(value)
-        if case .tuple(var elements) = source.resultType {
-            guard index >= 1, index <= elements.count else { throw CompiledValueType.diagnostic("tupleAccess", "index outside tuple shape") }
-            elements[index - 1] = try projectionStorageType(elements[index - 1], expected: expected)
-            return try refineOperand(source, from: value, expected: .tuple(elements))
-        }
-        return try refineSequence(source, from: value, element: expected)
     }
 
     private func checkedType(
@@ -795,17 +770,6 @@ package struct CompiledTypeChecker: Sendable {
     private func checkedType(_ source: CompiledValueType, expected: CompiledValueType, children: [CompiledExpression]) throws -> CheckedType {
         let checked = try checkedType(source, expected: expected)
         return .init(type: checked.type, computationType: checked.computationType, children: children)
-    }
-
-    private mutating func retaining(_ children: [CompiledExpression], from expressions: [CompiledExpression], in annotation: CheckedType) throws -> CheckedType {
-        guard children.count == annotation.operandContexts.count && children.count == expressions.count else {
-            throw CompiledValueType.diagnostic("checking", "missing checked operands")
-        }
-        let refined = try zip(zip(children, expressions), annotation.operandContexts).map { operand, expected in
-            try refineOperand(operand.0, from: operand.1, expected: expected)
-        }
-        return .init(type: annotation.type, computationType: annotation.computationType,
-            call: annotation.call, children: refined)
     }
 
     private func projectionStorageType(_ source: CompiledValueType, expected: CompiledValueType) throws -> CompiledValueType {
@@ -944,7 +908,7 @@ package struct CompiledTypeChecker: Sendable {
             if values.isEmpty, case .dictionary = expected {
                 result = expected
             } else if case .tuple(let hints) = expected, hints.count == values.count {
-                result = .tuple(try zip(values, hints).map { try literal($0, expected: $1) })
+                result = .tuple(CompiledTupleLayout(try zip(values, hints).map { try literal($0, expected: $1) }, declaration: hints.declaration))
             } else {
                 let hint: CompiledValueType = if case .array(let type) = expected { type } else { .unknown }
                 let types = try values.map { try literal($0, expected: hint) }
@@ -1177,7 +1141,7 @@ package struct CompiledTypeChecker: Sendable {
             catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
             if case .checked(let result) = check { return checkedOccurrence(expression, annotation: result) }
             return try checkWorklist(startingWith: .boundValue(id, check, expected: expected))
-        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except, .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .tuplePrefix, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
+        case .in, .caseExpr, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .tupleLiteral, .assertView, .except, .recordAccess, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .tuplePrefix, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
             return try checkWorklist(startingWith: .check(expression, expected: expected))
         default: break
         }
@@ -1248,19 +1212,15 @@ package struct CompiledTypeChecker: Sendable {
         return .checked(.init(type: checked.type, computationType: result))
     }
 
-    private mutating func inferTupleLiteral(_ expressions: [CompiledExpression], expected: CompiledValueType) throws -> CheckedType {
-        if expressions.isEmpty, case .dictionary = expected {
+    private func tupleLiteralType(_ types: [CompiledValueType], expected: CompiledValueType) throws -> CheckedType {
+        if types.isEmpty, case .dictionary = expected {
             return .init(type: expected, computationType: expected, children: [])
         }
         let result: CompiledValueType
-        let children: [CompiledExpression]
-        if case .tuple(let hints) = expected, hints.count == expressions.count {
-            children = try zip(expressions, hints).map { try checkOperand($0, expected: $1) }
-            result = .tuple(children.map(\.resultType))
+        if case .tuple(let hints) = expected, hints.count == types.count {
+            result = .tuple(CompiledTupleLayout(types, declaration: hints.declaration))
         } else {
             let hint: CompiledValueType = if case .array(let value) = expected { value } else { .unknown }
-            children = try expressions.map { try checkOperand($0, expected: hint) }
-            let types = children.map(\.resultType)
             if expected == .unknown, !types.isEmpty, types.allSatisfy({ $0 == .unknown }) { result = .tuple(types) }
             else if hint == .unknown, let first = types.first, types.contains(where: { $0 != first }) { result = .tuple(types) }
             else { result = .array(try types.reduce(hint, CompiledValueType.merge)) }
@@ -1268,11 +1228,11 @@ package struct CompiledTypeChecker: Sendable {
         let checked = try checkedType(result, expected: expected)
         let operands: [CompiledValueType]
         switch checked.computationType {
-        case .tuple(let types): operands = types
-        case .array(let item): operands = Array(repeating: item, count: expressions.count)
+        case .tuple(let types): operands = types.elements
+        case .array(let item): operands = Array(repeating: item, count: types.count)
         default: throw CompiledValueType.diagnostic("tuple", "expected tuple or sequence representation")
         }
-        return try retaining(children, from: expressions, in: .init(type: checked.type, computationType: checked.computationType, operandContexts: operands))
+        return .init(type: checked.type, computationType: checked.computationType, operandContexts: operands)
     }
 
     private mutating func inferSequenceSelection(_ sequence: CompiledExpression, binder id: BinderID, predicate: CompiledExpression, expected: CompiledValueType) throws -> CheckedType {
@@ -1309,14 +1269,6 @@ package struct CompiledTypeChecker: Sendable {
         return try checkedType(body.resultType, expected: expected, children: [body, accumulator, source])
     }
 
-    private mutating func inferTupleAccess(_ value: CompiledExpression, index: Int, expected: CompiledValueType) throws -> CheckedType {
-        let source = try inferProjectionSource(value, index: index, expected: expected)
-        let result: CompiledValueType
-        if case .tuple(let elements) = source.resultType { result = elements[index - 1] }
-        else { result = try sequenceElementType(source.resultType) }
-        return try checkedType(result, expected: expected, children: [source])
-    }
-
     private mutating func inferDomain(_ function: CompiledExpression, expected: CompiledValueType) throws -> CheckedType {
         let source = try inferDomainSource(function, expected: expected)
         let result: CompiledValueType
@@ -1324,7 +1276,7 @@ package struct CompiledTypeChecker: Sendable {
         case .dictionary(let key, _): result = .set(key)
         case .array, .tuple: result = .set(.int)
         case .record, .nominalRecord: result = .set(.string)
-        case .oneOf(let first, let second) where first.recordFields != nil && second.recordFields != nil:
+        case _ where source.resultType.hasRecordDomain:
             result = .set(.string)
         case .unknown: result = .set(.unknown)
         default: throw CompiledValueType.diagnostic("domain", "unsupported domain shape")
@@ -1394,12 +1346,46 @@ package struct CompiledTypeChecker: Sendable {
                         }
                     }
                     switch expression.operation {
+                    case .caseExpr(let hasOtherwise):
+                        let branchOperands = expression.children.count - (hasOtherwise ? 1 : 0)
+                        guard branchOperands >= 2, branchOperands.isMultiple(of: 2) else {
+                            throw CompiledValueType.diagnostic("case", "expected at least one condition/value branch")
+                        }
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(.caseOperands(index: 0, type: expected, expected: expected))
                     case .recordAccess(_):
                         let source = expression.children[0]
 
                         ancestors.append(expression)
                         operandFrames.append([:])
                         pending.append(contentsOf: [.recordContext(expected: expected), .discard, .retainOperand(0), .check(source, expected: .unknown)])
+                    case .tupleAccess(let index):
+                        let source = expression.children[0]
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(.finishTupleAccess(index: index, expected: expected))
+                        let members: [CompiledExpression]?
+                        switch source.operation {
+                        case .tupleLiteral: members = source.children
+                        case .value(.tuple(let values)): members = values.map(CompiledExpression.value)
+                        default: members = nil
+                        }
+                        if let members {
+                            guard index >= 1, index <= members.count else {
+                                throw CompiledValueType.diagnostic("tupleAccess", "index outside tuple literal")
+                            }
+                            pending.append(.tupleProjectionLiteral(source))
+                            for (offset, member) in members.enumerated().reversed() {
+                                let hint = offset == index - 1 ? expected : .unknown
+                                pending.append(contentsOf: [.discard, .retainOperand(offset), .check(member, expected: hint)])
+                            }
+                        } else {
+                            pending.append(contentsOf: [
+                                .tupleProjectionContext(index: index, expected: expected),
+                                .discard, .retainOperand(0), .check(source, expected: .unknown)
+                            ])
+                        }
                     case .tupleDynamicAccess:
                         let source = expression.children[0]
                         let index = expression.children[1]
@@ -1457,6 +1443,31 @@ package struct CompiledTypeChecker: Sendable {
                         ancestors.append(expression)
                         operandFrames.append([:])
                         pending.append(contentsOf: [.finishRecord(expected: context), .recordFields(record[...], expected: context)])
+                    case .assertView(let shape):
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        let asserted = try inputs.types.resolve(shape)
+                        let value = expression.children[0]
+                        let hint: CompiledValueType = if case .tupleLiteral = value.operation { asserted } else { .unknown }
+                        pending.append(contentsOf: [
+                            .finishAssertView(shape, expected: expected),
+                            .discard, .retainOperand(0), .check(value, expected: hint)
+                        ])
+                    case .tupleLiteral:
+                        let children = expression.children
+                        let contexts: [CompiledValueType]
+                        if case .tuple(let hints) = expected, hints.count == children.count {
+                            contexts = hints.elements
+                        } else {
+                            let hint: CompiledValueType = if case .array(let item) = expected { item } else { .unknown }
+                            contexts = Array(repeating: hint, count: children.count)
+                        }
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(.finishTuple(expected: expected))
+                        for (index, child) in children.enumerated().reversed() {
+                            pending.append(contentsOf: [.discard, .retainOperand(index), .check(child, expected: contexts[index])])
+                        }
                     case .tupleAppend, .tupleConcatenate:
                         let sequence = expression.children[0]
                         let value = expression.children[1]
@@ -1524,6 +1535,14 @@ package struct CompiledTypeChecker: Sendable {
                         pending.append(contentsOf: [
                             .finish(expected: expected), .result(.int),
                             .discard, .retainOperand(0), .check(operand, expected: .int),
+                        ])
+                    case .in:
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [
+                            .membership(expected: expected),
+                            .retainOperand(0), .check(expression.children[0], expected: .unknown),
+                            .retainOperand(1), .check(expression.children[1], expected: .set(.unknown)),
                         ])
                     case .equal, .notEqual, .subset:
                         let lhs = expression.children[0]
@@ -2020,6 +2039,13 @@ package struct CompiledTypeChecker: Sendable {
                     else if expected.unionAlternatives != nil,
                             inputs.types.canProjectRead(left, to: expected),
                             inputs.types.canProjectRead(right, to: expected) { context = expected }
+                    else if case .union = ancestors.last?.operation,
+                            case .set(let a) = left, case .set(let b) = right,
+                            a.resolved, b.resolved,
+                            !inputs.types.canProjectRead(a, to: b), !inputs.types.canProjectRead(b, to: a),
+                            let disjoint = try? CompiledValueType.preservingUnion(a, b, namedDomains: namedDomains) {
+                        context = .set(disjoint)
+                    }
                     else if let common = try? Self.operandContext(left, right) { context = common }
                     else if left.recordFields != nil && right.recordFields != nil {
                         context = try CompiledValueType.preservingUnion(left, right, namedDomains: namedDomains)
@@ -2056,6 +2082,29 @@ package struct CompiledTypeChecker: Sendable {
                         .retainOperand(1), .check(rhs, expected: context),
                         .discard, .retainOperand(0), .check(lhs, expected: context),
                     ])
+                case .membership(let expected):
+                    guard let value = results.popLast(), let domain = results.popLast(),
+                          let expression = ancestors.last, let operands = operandFrames.last else {
+                        throw CompiledValueType.diagnostic("checking", "missing checked membership operands")
+                    }
+                    let context = try Self.operandContext(element(domain), value)
+                    pending.append(.finishMembership(expected: expected))
+                    for (index, target) in [(0, context), (1, CompiledValueType.set(context))].reversed() {
+                        if operands[index]?.resultType != target {
+                            pending.append(contentsOf: [
+                                .discard, .retainOperand(index),
+                                .check(expression.children[index], expected: target),
+                            ])
+                        }
+                    }
+                case .finishMembership(let expected):
+                    guard let operands = operandFrames.last,
+                          let value = operands[0], let domain = operands[1] else {
+                        throw CompiledValueType.diagnostic("checking", "missing refined membership operands")
+                    }
+                    let checked = try checkedType(.bool, expected: expected, children: [value, domain])
+                    results.append(checked.type)
+                    try finish(checked, in: &self, refineOperands: false)
                 case .comparison(let expected), .subset(let expected):
                     guard let context = results.popLast() else {
                         throw CompiledValueType.diagnostic("checking", "missing checked comparison operands")
@@ -2064,6 +2113,35 @@ package struct CompiledTypeChecker: Sendable {
                     let checked = try checkedType(.bool, expected: expected, operandContexts: [context, context])
                     results.append(checked.type)
                     try finish(checked, in: &self)
+                case .caseOperands(let index, let type, let expected):
+                    guard let expression = ancestors.last, case .caseExpr(let hasOtherwise) = expression.operation else {
+                        throw CompiledValueType.diagnostic("case", "missing checked case expression")
+                    }
+                    let branchOperands = expression.children.count - (hasOtherwise ? 1 : 0)
+                    if index == expression.children.count {
+                        let checked = try checkedType(type, expected: expected)
+                        let contexts = expression.children.indices.map {
+                            $0 < branchOperands && $0.isMultiple(of: 2) ? CompiledValueType.bool : checked.computationType
+                        }
+                        results.append(checked.type)
+                        try finish(.init(type: checked.type, computationType: checked.computationType,
+                            operandContexts: contexts), in: &self)
+                    } else if index < branchOperands && index.isMultiple(of: 2) {
+                        pending.append(contentsOf: [
+                            .caseOperands(index: index + 1, type: type, expected: expected),
+                            .discard, .retainOperand(index), .check(expression.children[index], expected: .bool)
+                        ])
+                    } else {
+                        pending.append(contentsOf: [
+                            .caseValue(index: index + 1, expected: expected),
+                            .retainOperand(index), .check(expression.children[index], expected: type)
+                        ])
+                    }
+                case .caseValue(let index, let expected):
+                    guard let type = results.popLast() else {
+                        throw CompiledValueType.diagnostic("case", "missing checked case value")
+                    }
+                    pending.append(.caseOperands(index: index, type: type, expected: expected))
                 case .finish(let expected):
                     guard let result = results.popLast(), let expression = ancestors.last else {
                         throw CompiledValueType.diagnostic("checking", "missing checked expression type")
@@ -2137,6 +2215,53 @@ package struct CompiledTypeChecker: Sendable {
                     let checked = try checkedType(result, expected: expected, operandContexts: [source.resultType])
                     results.append(checked.type)
                     try finish(checked, in: &self)
+                case .tupleProjectionLiteral(let source):
+                    guard let operands = operandFrames.last else {
+                        throw CompiledValueType.diagnostic("tupleAccess", "missing checked tuple literal")
+                    }
+                    let children = operands.sorted { $0.key < $1.key }.map(\.value)
+                    let type = CompiledValueType.tuple(children.map(\.resultType))
+                    operandFrames[operandFrames.count - 1] = [:]
+                    if case .value = source.operation {
+                        // Keep a formal tuple value as a literal after resolving its contextual member types.
+                        pending.append(contentsOf: [.discard, .retainOperand(0), .check(source, expected: type)])
+                    } else {
+                        operandFrames[operandFrames.count - 1][0] = checkedOccurrence(source,
+                            annotation: .init(type: type, computationType: type, children: children))
+                    }
+                case .tupleProjectionContext(let index, let expected):
+                    guard let expression = ancestors.last, let source = operandFrames.last?[0] else {
+                        throw CompiledValueType.diagnostic("tupleAccess", "missing checked tuple source")
+                    }
+                    let context: CompiledValueType
+                    if case .tuple(var elements) = source.resultType {
+                        guard index >= 1, index <= elements.count else {
+                            throw CompiledValueType.diagnostic("tupleAccess", "index outside tuple shape")
+                        }
+                        elements[index - 1] = try projectionStorageType(elements[index - 1], expected: expected)
+                        context = .tuple(elements)
+                    } else {
+                        context = try sequenceContext(source.resultType, element: expected)
+                    }
+                    if source.resultType != context {
+                        pending.append(contentsOf: [.discard, .retainOperand(0), .check(expression.children[0], expected: context)])
+                    }
+                case .finishTupleAccess(let index, let expected):
+                    guard let source = operandFrames.last?[0] else {
+                        throw CompiledValueType.diagnostic("tupleAccess", "missing checked tuple source")
+                    }
+                    let result: CompiledValueType
+                    if case .tuple(let elements) = source.resultType {
+                        guard index >= 1, index <= elements.count else {
+                            throw CompiledValueType.diagnostic("tupleAccess", "index outside tuple shape")
+                        }
+                        result = elements[index - 1]
+                    } else {
+                        result = try sequenceElementType(source.resultType)
+                    }
+                    let checked = try checkedType(result, expected: expected, children: [source])
+                    results.append(checked.type)
+                    try finish(checked, in: &self, refineOperands: false)
                 case .finishSequenceOperation(let expected):
                     guard let expression = ancestors.last, let operands = operandFrames.last, let source = operands[0] else {
                         throw CompiledValueType.diagnostic("sequence", "missing checked sequence source")
@@ -2222,7 +2347,7 @@ package struct CompiledTypeChecker: Sendable {
                     }
                     let keyType: CompiledValueType
                     switch source.resultType {
-                    case .array: keyType = .int
+                    case .array, .tuple: keyType = .int
                     case .dictionary(let domain, _): keyType = domain
                     case .record, .nominalRecord: keyType = .string
                     case .unknown: keyType = .unknown
@@ -2236,6 +2361,11 @@ package struct CompiledTypeChecker: Sendable {
                     let valueType: CompiledValueType
                     switch source.resultType {
                     case .array(let item), .dictionary(_, let item): valueType = item
+                    case .tuple(let slots):
+                        guard case .value(.integer(let index)) = key.operation, index > 0, index <= slots.count else {
+                            throw CompiledValueType.diagnostic("except", "expected a constant tuple index within the declared slots")
+                        }
+                        valueType = slots[index - 1]
                     case .record(let fields), .nominalRecord(_, let fields):
                         if case .value(.string(let name)) = key.operation {
                             valueType = fields.first { $0.name == name }?.type ?? .unknown
@@ -2259,7 +2389,7 @@ package struct CompiledTypeChecker: Sendable {
                     switch source.resultType {
                     case .array: result = .array(value.resultType)
                     case .dictionary(let domain, _): result = .dictionary(domain, value.resultType)
-                    case .record, .nominalRecord: result = source.resultType
+                    case .record, .nominalRecord, .tuple: result = source.resultType
                     case .unknown: result = .dictionary(key.resultType, value.resultType)
                     default: throw CompiledValueType.diagnostic("except", "unsupported update shape \(source.resultType.swiftType)")
                     }
@@ -2297,6 +2427,27 @@ package struct CompiledTypeChecker: Sendable {
                         })
                     } else { result = .record(fields.sorted { $0.name < $1.name }) }
                     let checked = try checkedType(result, expected: expected, operandContexts: operandContexts)
+                    results.append(checked.type)
+                    try finish(checked, in: &self)
+                case .finishAssertView(let shape, let expected):
+                    guard let source = operandFrames.last?[0] else {
+                        throw CompiledValueType.diagnostic("view", "missing checked view operand")
+                    }
+                    let asserted = try inputs.types.declaredView(shape, in: source.resultType) ?? inputs.types.resolve(shape)
+                    let checked = try checkedType(asserted, expected: expected)
+                    results.append(checked.type)
+                    try finish(checked, in: &self, refineOperands: false)
+                case .finishTuple(let expected):
+                    guard let tuple = ancestors.last, let operands = operandFrames.last else {
+                        throw CompiledValueType.diagnostic("checking", "missing checked tuple")
+                    }
+                    let types = try tuple.children.indices.map { index in
+                        guard let child = operands[index] else {
+                            throw CompiledValueType.diagnostic("checking", "missing checked operand")
+                        }
+                        return child.resultType
+                    }
+                    let checked = try tupleLiteralType(types, expected: expected)
                     results.append(checked.type)
                     try finish(checked, in: &self)
                 case .sequenceContext(let element, let expression):
@@ -2399,27 +2550,6 @@ package struct CompiledTypeChecker: Sendable {
         return .init(type: checked.type, computationType: type, operandContexts: operands)
     }
 
-    private mutating func inferCases(_ first: CompiledCaseBranch, rest: [CompiledCaseBranch], otherwise: CompiledExpression?, expected: CompiledValueType) throws -> CheckedType {
-        var type = expected
-        var children: [CompiledExpression] = []
-        for branch in [first] + rest {
-            children.append(try checkOperand(branch.condition, expected: .bool))
-            let value = try checkOperand(branch.value, expected: type)
-            children.append(value)
-            type = value.resultType
-        }
-        if let otherwise {
-            let value = try checkOperand(otherwise, expected: type)
-            children.append(value)
-            type = value.resultType
-        }
-        let checked = try checkedType(type, expected: expected)
-        let operands = ([first] + rest).flatMap { _ in [CompiledValueType.bool, checked.computationType] }
-            + (otherwise == nil ? [] : [checked.computationType])
-        let expressions = ([first] + rest).flatMap { [$0.condition, $0.value] } + (otherwise.map { [$0] } ?? [])
-        return try retaining(children, from: expressions, in: .init(type: checked.type, computationType: checked.computationType, operandContexts: operands))
-    }
-
     private mutating func inferResolved(_ expression: CompiledExpression, expected: CompiledValueType = .unknown) throws -> CheckedType {
         if expected.unionAlternatives != nil, let checked = try checkUnionConstructor(expression, expected: expected) {
             return checked
@@ -2440,16 +2570,6 @@ package struct CompiledTypeChecker: Sendable {
         case .checkingLevel: return try checkedType(.int, expected: expected)
         case .checkingDiameter: return try checkedType(.int, expected: expected)
         case .integerSet: return try checkedType(.set(.int), expected: expected)
-        case .assertView(let shape):
-            let value = expression.children[0]
-            result = try inputs.types.resolve(shape)
-            let source: CompiledExpression
-            if case .tupleLiteral = value.operation {
-                source = try checkOperand(value, expected: result)
-            } else {
-                source = try checkOperand(value)
-            }
-            return try checkedType(result, expected: expected, children: [source])
         case .nextState:
             let source = try checkOperand(expression.children[0], expected: expected)
             return try checkedType(source.resultType, expected: expected, children: [source])
@@ -2457,6 +2577,10 @@ package struct CompiledTypeChecker: Sendable {
             let value = try checkOperand(expression.children[0])
             let predicate = try checkOperand(expression.children[1], expected: .bool)
             return try checkedType(.bool, expected: expected, children: [value, predicate])
+        case .printReturning:
+            let value = try checkOperand(expression.children[0])
+            let result = try checkOperand(expression.children[1], expected: expected)
+            return try checkedType(result.resultType, expected: expected, children: [value, result])
         case .printT:
             let value = try checkOperand(expression.children[0])
             return try checkedType(.bool, expected: expected, children: [value])
@@ -2468,12 +2592,15 @@ package struct CompiledTypeChecker: Sendable {
             if inputs.types.canProjectRead(existing, to: expected) { return .init(type: expected, computationType: existing) }
             else { result = try CompiledValueType.merge(existing, expected); variables[id] = result }
         case .controlLocation: result = .controlLocation
-        case .enabledAction: result = .bool
-        case .in:
-            let value = expression.children[0]
-            let domain = expression.children[1]
-
-            return try checkMembership(value: value, domain: domain, expected: expected)
+        case .enabledAction(let id):
+            guard let argument = expression.children.first else { result = .bool; break }
+            let parameters = inputs.semantics.behavior.actions[id.ordinal].bindings
+            guard parameters.count == 1, let parameter = parameters.first else {
+                throw CompiledValueType.diagnostic("isEnabled(for:)", "expected a step with one action parameter")
+            }
+            let domain = try checkOperand(parameter.domain, expected: .set(bindings[parameter.binder] ?? .unknown))
+            let value = try checkOperand(argument, expected: element(domain.resultType))
+            return try checkedType(.bool, expected: expected, children: [value])
         case .randomSubset:
             let count = try checkOperand(expression.children[0], expected: .int)
             let domain = try checkOperand(expression.children[1], expected: expected == .unknown ? .set(.unknown) : expected)
@@ -2513,24 +2640,10 @@ package struct CompiledTypeChecker: Sendable {
             let sequence = expression.children[2]
 
             return try inferFold(parameters: parameters, body: body, initial: initial, sequence: sequence, expected: expected)
-        case .tupleLiteral:
-            let expressions = expression.children
-             return try inferTupleLiteral(expressions, expected: expected)
-        case .tupleAccess(let index):
-            let value = expression.children[0]
-
-            return try inferTupleAccess(value, index: index, expected: expected)
         case .domain:
             let function = expression.children[0]
 
             return try inferDomain(function, expected: expected)
-        case .caseExpr(let hasOtherwise):
-            let branches = stride(from: 0, to: expression.children.count - (hasOtherwise ? 1 : 0), by: 2).map { CompiledCaseBranch(condition: expression.children[$0], value: expression.children[$0 + 1]) }
-            let first = branches[0]
-            let rest = Array(branches.dropFirst())
-            let otherwise = hasOtherwise ? expression.children.last : nil
-
-            return try inferCases(first, rest: rest, otherwise: otherwise, expected: expected)
         default: throw CompiledValueType.diagnostic("expression", "expression is outside the native machine subset: \(expression.diagnosticName)")
         }
         return try checkedType(result, expected: expected)

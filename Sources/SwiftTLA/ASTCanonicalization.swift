@@ -22,7 +22,11 @@ func nativeTypeKey(_ type: CompiledValueType) -> String {
     case .dictionary(let key, let value): return typeKeyNode("dictionary", [nativeTypeKey(key), nativeTypeKey(value)])
     case .record(let members): return typeKeyNode("record", fields(members))
     case .nominalRecord(let name, let members): return typeKeyNode("nominalRecord", [name] + fields(members))
-    case .tuple(let elements): return typeKeyNode("tuple", elements.map(nativeTypeKey))
+    case .tuple(let elements):
+        if let declaration = elements.declaration {
+            return typeKeyNode("nominalTuple", [declaration.name] + zip(declaration.labels, elements).map { typeKeyNode($0.0, [nativeTypeKey($0.1)]) })
+        }
+        return typeKeyNode("tuple", elements.map(nativeTypeKey))
     }
 }
 
@@ -42,20 +46,41 @@ private func typeValueKey(_ value: CompiledValue) -> String {
     }
 }
 
+private func typeValueKey(_ value: TLAValue) -> String {
+    switch value {
+    case .int(let value): return typeKeyNode("int", [String(value)])
+    case .bool(let value): return typeKeyNode("bool", [String(value)])
+    case .string(let value): return typeKeyNode("string", [value])
+    case .constant(let value): return typeKeyNode("constant", [value])
+    case .set(let values): return typeKeyNode("set", values.sorted().map(typeValueKey))
+    case .tuple(let values): return typeKeyNode("tuple", values.map(typeValueKey))
+    case .record(let record):
+        return typeKeyNode("record", record.fields.map { typeKeyNode("field", [$0.name, typeValueKey($0.value)]) })
+    case .function(let values):
+        return typeKeyNode("function", values.keys.sorted().map { typeKeyNode("entry", [typeValueKey($0), typeValueKey(values[$0]!)]) })
+    }
+}
+
 func alphaKey(_ action: ActionExpr) -> String {
     alphaKey(action, bindingNames: [])
 }
 
-func alphaKey(_ action: ActionExpr, bindingNames: [String], preservingEvaluation: Bool = false) -> String {
+func alphaKey(_ action: ActionExpr, bindingNames: [String], preservingEvaluation: Bool = false,
+              displacedAssignmentTargets: [String: String] = [:]) -> String {
     var next = 0
     var environment: [String: String] = [:]
     for name in bindingNames {
         let (_, extended) = fresh(name, environment: environment, next: &next)
         environment = extended
     }
-    if preservingEvaluation { return actionKey(action, environment: environment, next: &next) }
+    if preservingEvaluation {
+        return actionKey(action, environment: environment, next: &next, displacedAssignmentTargets: displacedAssignmentTargets)
+    }
     let branches = ActionNormalization.branches(of: action) { semanticStateBranches($0).map(ActionExpr.guard_) }
-    return "or[\(branches.map { actionKey($0, environment: environment, next: &next) }.joined(separator: ","))]"
+    let keys = branches.map {
+        actionKey($0, environment: environment, next: &next, displacedAssignmentTargets: displacedAssignmentTargets)
+    }
+    return "or[\(keys.joined(separator: ","))]"
 }
 
 /// Splits only disjunctions that occur inside a Boolean guard. Swift can group
@@ -137,7 +162,8 @@ private enum ActionAssociativeOperation: String {
     case or
 }
 
-private func actionKey(_ action: ActionExpr, environment: [String: String], next: inout Int) -> String {
+private func actionKey(_ action: ActionExpr, environment: [String: String], next: inout Int,
+                       displacedAssignmentTargets: [String: String]) -> String {
     var tasks = [ActionKeyTask.expression(action, environment: environment)]
     var parts: [String] = []
     while let task = tasks.popLast() {
@@ -166,7 +192,8 @@ private func actionKey(_ action: ActionExpr, environment: [String: String], next
             case .define(let variable, let value, let body):
                 let valueKey = state(value)
                 let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-                tasks.append(.finish(1) { "define(\(canonical),\(valueKey),\($0[0]))" })
+                let displaced = displacedAssignmentTargets[variable].map { "," + typeKeyNode("assignmentTarget", [$0]) } ?? ""
+                tasks.append(.finish(1) { "define(\(canonical),\(valueKey),\($0[0])\(displaced))" })
                 tasks.append(.expression(body, environment: extended))
             case .ifElse(let condition, let then, let otherwise):
                 let conditionKey = state(condition)
@@ -416,7 +443,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
                 }
                 schedule(operands, environment: environment) { "\(operation)[\($0.joined(separator: ","))]" }
             case .sourceIssue(let issue): parts.append("sourceIssue(\(issue))")
-            case .value(let value): parts.append("value(\(value))")
+            case .value(let value): parts.append("value(\(typeValueKey(value)))")
             case .integerSet: parts.append("integerSet")
             case .variable(let name): parts.append("var(\(environment[name] ?? name))")
             case .parameter(let reference): parts.append("parameter(\(reference.name))")
@@ -471,7 +498,11 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .choose(let set, let variable, let predicate, let preferredType):
                 tasks.append(.bind(.choose(preferredType), variable: variable, body: predicate, environment: environment))
                 tasks.append(.expression(set, environment: environment))
-            case .enabledAction(let name): parts.append("enabled(\(name))")
+            case .enabledAction(let name, let argument):
+                if let argument { schedule("enabled[\(name)]", [argument], environment: environment) }
+                else { parts.append("enabled(\(name))") }
+            case .printReturning(let value, let result):
+                schedule([value, result], environment: environment) { "print(\($0[0]),\($0[1]))" }
             case .printT(let value):
                 schedule([value], environment: environment) { "printT(\($0[0]))" }
             case .foldFunction(let operation, let initial, let sequence):

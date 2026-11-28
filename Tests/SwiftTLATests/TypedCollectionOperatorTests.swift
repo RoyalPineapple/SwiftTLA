@@ -65,18 +65,22 @@ private enum PartialFiniteDomain: String, FiniteTLAValueDomain {
 
 @TLAModel
 private struct TypedCollectionGeneratedModel {
-    enum Step: String, CaseIterable { case keepEvenSquares }
+    enum Step: String, CaseIterable { case keepEvenSquares, emptyMembership }
 
     static var spec: TLASpec {
         #spec("TypedCollectionGeneratedModel") { scope in
             let typedCollectionGeneratedModel = Algorithm(label: "TypedCollectionGeneratedModel", scoped: { algorithm in
                 let values = algorithm.sharedVar(_name: "values", initial: IntRange(1, through: 4))
+                let empty = algorithm.sharedVar(_name: "empty", initial: [Int]())
                 Do(Step.keepEvenSquares) {
                     Assign(values, to:
                         values.expr
                             .filtering { value in value.expr % 2 == 0 }
                             .mapping { value in value.expr * value.expr }
                     )
+                }
+                Do(Step.emptyMembership) {
+                    When(empty.contains(1 / empty.count))
                 }
             })
             typedCollectionGeneratedModel
@@ -86,27 +90,43 @@ private struct TypedCollectionGeneratedModel {
 
 @TLAModel
 private struct TypedQuantifierGeneratedModel {
-    enum Step: String, CaseIterable { case findEven, allPositive, emptyAll, emptyAny }
+    enum Step: String, CaseIterable { case findEven, allPositive, emptyAll, emptyAny, updateMembers, falseBeforeError, firstError }
 
     static var spec: TLASpec {
         #spec("TypedQuantifierGeneratedModel") { scope in
             let typedQuantifierGeneratedModel = Algorithm(label: "TypedQuantifierGeneratedModel", scoped: { algorithm in
                 let result = algorithm.sharedVar(_name: "result", initial: false)
+                let members = algorithm.sharedVar(_name: "members", initial: Set<Int>())
+                let divisors = algorithm.sharedVar(_name: "divisors", initial: [1, 0, -1, 1])
                 Do(Step.findEven) {
-                    Assign(result, to: Exists(in: IntRange(1, through: 4)) { value in
+                    Assign(result, to: IntRange(1, through: 4).contains { value in
                         value.expr % 2 == 0
                     })
                 }
                 Do(Step.allPositive) {
-                    Assign(result, to: ForAll(in: IntRange(1, through: 4)) { value in
+                    Assign(result, to: IntRange(1, through: 4).allSatisfy { value in
                         value.expr > 0
                     })
                 }
                 Do(Step.emptyAll) {
-                    Assign(result, to: ForAll(in: IntRange(2, through: 1)) { value in value.expr < 0 })
+                    Assign(result, to: IntRange(2, through: 1).allSatisfy { value in value.expr < 0 })
                 }
                 Do(Step.emptyAny) {
-                    Assign(result, to: Exists(in: IntRange(2, through: 1)) { value in value.expr >= 0 })
+                    Assign(result, to: IntRange(2, through: 1).contains(where: { value in value.expr >= 0 }))
+                }
+                Do(Step.updateMembers) {
+                    members.insert(1)
+                    members.formUnion(IntRange(1, through: 5).filter({ $0 <= 3 }))
+                    members.remove(2)
+                    members.remove(4)
+                    result.set(members.count == 2 && members.contains(1) && members.contains(3)
+                        && divisors.count(where: { $0 == 1 }) == 2)
+                }
+                Do(Step.falseBeforeError) {
+                    result.set(divisors.allSatisfy { divisor in 1 % divisor.expr != 0 })
+                }
+                Do(Step.firstError) {
+                    result.set(divisors.allSatisfy { divisor in 1 % divisor.expr == 0 })
                 }
             })
             typedQuantifierGeneratedModel
@@ -121,7 +141,7 @@ private struct ZeroBasedSequenceGeneratedModel {
     static var spec: TLASpec {
         #spec("ZeroBasedSequenceGeneratedModel") {
             let zeroBasedSequenceGeneratedModel = Algorithm(label: "ZeroBasedSequenceGeneratedModel", scoped: { scope in
-                let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
+                let input = scope.sharedVar(_name: "input", initiallyIn: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(0, 1),
                     lengths: 1...2
                 ))
@@ -336,10 +356,10 @@ private struct FoldGeneratedModel {
     @Test("Native collection access uses contextual enum keys and values")
     func contextualCollectionAccessExecutesNatively() throws {
         var machine = try ContextualCollectionModel.makeMachine()
-        _ = try machine.send(.update)
+        try machine.send(.update)
         #expect(machine.state.table[.first] == .second)
         #expect(machine.state.table[.second] == .first)
-        _ = try machine.send(.read)
+        try machine.send(.read)
         #expect(machine.state.selected == .second)
     }
 
@@ -521,10 +541,12 @@ private struct FoldGeneratedModel {
     func generatedMachineUsesTypedCollectionOperators() throws {
 
         var machine = try TypedCollectionGeneratedModel.makeMachine()
-        let transition = try machine.send(.keepEvenSquares)
+        let transitionBefore = machine.state
+        try machine.send(.keepEvenSquares)
 
-        #expect(transition.before.values == [1, 2, 3, 4])
-        #expect(transition.after.values == [4, 16])
+        #expect(transitionBefore.values == [1, 2, 3, 4])
+        #expect(machine.state.values == [4, 16])
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) { try machine.send(.emptyMembership) }
         #expect(try TypedCollectionGeneratedModel.spec.compile().render().tlaBundle.tla.contains("keepEvenSquares"))
     }
 
@@ -567,6 +589,28 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(ordered) == .int(3))
     }
 
+    @Test("Sequence membership finds a value at any position and evaluates the argument on an empty sequence")
+    func sequenceContainsValue() throws {
+        let queue = Expr<[Int]>(.variable("__element"))
+        let request = Expr<Int>(.variable("__index"))
+        for values in [[], [3, 5, 3]] {
+            for sought in [3, 5, 7] {
+                let ordinary = values.contains(sought)
+                #expect(try compiledValue(queue.contains(request).stateExpr, values: [
+                    ("__element", .tuple(values.map(TLAValue.int))), ("__index", .int(sought))
+                ]) == .bool(ordinary))
+            }
+        }
+        let invalid = Expr<Int>(.integerDivide(.int(1), .int(0)))
+        #expect(throws: EvalError.divisionByZero) {
+            try compiledValue(Expr<[Int]>(.tupleLiteral([])).contains(invalid).stateExpr)
+        }
+        let invalidQueue = Expr<[Int]>(.tuplePrefix(.tupleLiteral([]), .int(1)))
+        #expect(throws: EvalError.indexOutOfBounds(1, 0)) {
+            try compiledValue(invalidQueue.contains(invalid).stateExpr)
+        }
+    }
+
     @Test("Sequence prefixes preserve position and render as SubSeq")
     func sequencePrefixIsPositional() throws {
         let values = TupleExpr<Int>.literal(2, 1, 2)
@@ -595,10 +639,10 @@ private struct FoldGeneratedModel {
     @Test("generated machines preserve formal fold behavior")
     func generatedMachineUsesFormalFold() throws {
         var machine = try FoldGeneratedModel.makeMachine()
-        let transition = try machine.send(.sum)
+        try machine.send(.sum)
         let compilation = try FoldGeneratedModel.spec.compile()
 
-        #expect(transition.after.total == 6)
+        #expect(machine.state.total == 6)
         #expect(try compilation.render().tlaBundle.tla.contains("FoldFunction(LAMBDA"))
         #expect(try compilation.render().plusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
         #expect(try compilation.render().tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
@@ -610,8 +654,9 @@ private struct FoldGeneratedModel {
         let bundle = try FoldGeneratedModel.spec.compile().render().tlaBundle
         #expect(bundle.tla.contains("SumFunctionOnSet("))
         #expect(bundle.imports.map(\.name) == ["Folds", "Functions"])
-        _ = try machine.send(.sum)
-        #expect(try machine.send(.sumFunction).after.functionTotal == 3)
+        try machine.send(.sum)
+        try machine.send(.sumFunction)
+        #expect(machine.state.functionTotal == 3)
     }
 
     @Test("the bundled KeyValueStore Util module preserves its upstream imports")
@@ -681,9 +726,9 @@ private struct FoldGeneratedModel {
         var machine = try ZeroBasedSequenceGeneratedModel.makeMachine(
             .init(input: input, table: table)
         )
-        let transition = try machine.send(.writeFirst)
-        let tableValue = try #require(transition.after.table[0])
-        let inputValue = try #require(transition.after.input[0])
+        try machine.send(.writeFirst)
+        let tableValue = try #require(machine.state.table[0])
+        let inputValue = try #require(machine.state.input[0])
         #expect(tableValue == inputValue)
         #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().render().tlaBundle.tla.contains("0.."))
     }
@@ -719,11 +764,30 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(hasEven.raw) == .bool(true))
         #expect(try compiledValue(everyPositive.raw) == .bool(true))
 
+        for (values, expected) in [([], true), ([4, 4], true), ([4, 4, -2], false)] {
+            let everyPositive = values.expr.allSatisfy { element in element.expr > 0 }
+            #expect(try compiledValue(everyPositive.raw) == .bool(expected))
+        }
+
+        let nativeCount = [1, 0, -1, 1].count(where: { $0 == 1 })
+        #expect(nativeCount == 2)
+
         var machine = try TypedQuantifierGeneratedModel.makeMachine()
-        #expect(try machine.send(.findEven).after.result)
-        #expect(try machine.send(.allPositive).after.result)
-        #expect(try machine.send(.emptyAll).after.result)
-        #expect(try !machine.send(.emptyAny).after.result)
+        try machine.send(.findEven)
+        #expect(machine.state.result)
+        try machine.send(.allPositive)
+        #expect(machine.state.result)
+        try machine.send(.emptyAll)
+        #expect(machine.state.result)
+        try machine.send(.emptyAny)
+        #expect(!machine.state.result)
+        try machine.send(.updateMembers)
+        #expect(machine.state.result)
+        try machine.send(.falseBeforeError)
+        #expect(!machine.state.result)
+        let beforeFailure = machine.state
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) { try machine.send(.firstError) }
+        #expect(machine.state == beforeFailure)
         #expect(try TypedQuantifierGeneratedModel.spec.compile().render().tlaBundle.tla.contains("\\E"))
     }
 }

@@ -6,15 +6,25 @@ configuration. It is not a place to invent a friendlier algorithm.
 
 ## Choose the authoring form from the upstream source
 
-1. Read the upstream `.tla` and `.cfg` first.
+1. Read the upstream `.tla` and `.cfg` first. Start each port with a brief description
+   of the published model and a link to its source at the revision in the corpus inventory.
+   Keep the examples directory for faithful ports.
 2. If the source contains a PlusCal algorithm, port it with the scoped DSL:
    `#spec`, `Algorithm`, `Each`, and labeled `Do` blocks. Preserve the shared
    variables, process family, atomic labels, fairness, and formal properties.
+   When its published translation has a single repeated action and no control state,
+   a parameterized `Do` can express that action directly. Keep the same argument
+   domain and keep internal choices inside the action.
 3. If the source is direct TLA+, use the typed `#spec` vocabulary directly.
    Do not manufacture an `Algorithm` around it.
 4. If an upstream construct is unsupported, implement its compiler support before declaring the port complete.
    Do not replace it with raw `TLAValue`, `StateExpr`, `ActionExpr`, or Swift control flow.
    Do not simplify the upstream algorithm or disable its checks.
+
+Apply these rules when revisiting older ports too. Compare the Swift declarations
+with the published state variables, `Init`, action boundaries in `Next`, and the
+checks selected by the configuration. Preserve observable control locations and
+fairness. Use familiar Swift spelling where the correspondence stays clear.
 
 ## Typed authoring rules
 
@@ -38,7 +48,7 @@ configuration. It is not a place to invent a friendlier algorithm.
 | `process (p \in S)` | `Each(S) { p in ... }` |
 | labeled atomic code | `Do(Label.foo) { ... }` |
 | `await P` | `When(P)` |
-| `x := e` | `Assign(x, to: e)` |
+| `x := e` | `x.set(e)`, or `x += amount` for an integer increment |
 | `if` / `either` | `If` / `Either` |
 | `with` / choice | `With` / `Choose` |
 | `Seq(S)` in a finite TLC model | `Sequences(of: S, lengths: 0...n)` |
@@ -78,6 +88,7 @@ Do not run TLC locally.
 
 ## Names and source mapping
 
+- Prefer lower camel case for Swift bindings. A step enum raw value preserves an upstream label, and `Invariant("TypeOK")` preserves an upstream property name. Use `label:` for display text.
 - Keep upstream variable names, module names, action labels, and invariant
   names unless the lowerer necessarily creates internal labels.
 - File names are PascalCase. Fixture names retain the upstream model name.

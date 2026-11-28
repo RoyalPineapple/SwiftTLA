@@ -13,47 +13,43 @@ public struct TwoBuckets: Sendable {
         #spec { scope in
             let three = scope.sharedVar(initial: 0)
             let five = scope.sharedVar(initial: 0)
-            let Capacity = Invariant()
 
-            Do(Step.fillThree) {
-                When(three < 3)
-                Assign(three, to: 3)
+            Do(Step.fillThree, when: three < 3) {
+                three.set(3)
             }
-            Do(Step.fillFive) {
-                When(five < 5)
-                Assign(five, to: 5)
+            Do(Step.fillFive, when: five < 5) {
+                five.set(5)
             }
-            Do(Step.emptyThree) {
-                When(three > 0)
-                Assign(three, to: 0)
+            Do(Step.emptyThree, when: three > 0) {
+                three.set(0)
             }
-            Do(Step.emptyFive) {
-                When(five > 0)
-                Assign(five, to: 0)
+            Do(Step.emptyFive, when: five > 0) {
+                five.set(0)
             }
-            Do(Step.pourThreeIntoFive) {
-                When(three > 0 && five < 5)
+            Do(Step.pourThreeIntoFive, when: three > 0 && five < 5) {
                 If(three + five <= 5) {
-                    Assign(five, to: five + three)
-                    Assign(three, to: 0)
+                    five += three
+                    three.set(0)
                 } else: {
                     let amount = 5 - five
-                    Assign(three, to: three - amount)
-                    Assign(five, to: 5)
+                    three.set(three - amount)
+                    five.set(5)
                 }
             }
-            Do(Step.pourFiveIntoThree) {
-                When(five > 0 && three < 3)
+            Do(Step.pourFiveIntoThree, when: five > 0 && three < 3) {
                 If(three + five <= 3) {
-                    Assign(three, to: three + five)
-                    Assign(five, to: 0)
+                    three += five
+                    five.set(0)
                 } else: {
                     let amount = 3 - three
-                    Assign(five, to: five - amount)
-                    Assign(three, to: 3)
+                    five.set(five - amount)
+                    three.set(3)
                 }
             }
-            Capacity { three >= 0 && three <= 3 && five >= 0 && five <= 5 }
+            Invariant("Capacity") {
+                (0...3).contains(three)
+                (0...5).contains(five)
+            }
         }
     }
 }

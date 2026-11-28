@@ -3,13 +3,18 @@ import SwiftTLAMacros
 
 @TLAModel
 struct DependentRecordSetModel {
-    struct Pair: Hashable, Sendable { let first: Int; let second: Int }
+    struct Pair: Hashable, Sendable {
+        let first: Int
+        let second: Int
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.first == rhs.first }
+        func hash(into hasher: inout Hasher) { hasher.combine(first) }
+    }
     enum Step: String, CaseIterable { case stay }
 
     static var spec: TLASpec {
         #spec("DependentRecordSetModel") { scope in
             let maximum = scope.parameter(as: Int.self, in: 0...4)
-            let pair = scope.sharedVar(in: Set<Int>([0, 1, 2, 3, 4]).filtering {
+            let pair = scope.sharedVar(initiallyIn: Set<Int>([0, 1, 2, 3, 4]).filtering {
                 $0 <= maximum
             }.flatMapping { first in
                 IntRange(0, through: first).mapping {

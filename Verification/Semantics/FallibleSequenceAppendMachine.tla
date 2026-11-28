@@ -14,6 +14,7 @@ __SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)
 Init ==
   /\ values = <<1>>
   /\ length \in 1..2
+  /\ (IF (length >= (-2 * 1000000000 - 147483648) /\ length <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE length \in ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)..((9 * 1000000000 + 223372036) * 1000000000 + 854775807))
 
 Next == append
 

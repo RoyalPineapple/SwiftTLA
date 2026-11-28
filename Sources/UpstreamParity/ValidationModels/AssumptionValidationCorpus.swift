@@ -1,3 +1,4 @@
+import Foundation
 import SwiftTLA
 
 private struct AssumptionModelRegistration: Sendable {
@@ -6,6 +7,18 @@ private struct AssumptionModelRegistration: Sendable {
 }
 
 private let assumptionModels: [AssumptionModelRegistration] = [
+    .init(id: "reachability-assumptions", scenarios: {
+        try ReachabilityAssumptions.validationScenarios().map { $0 as any AssumptionValidationScenario }
+    }),
+    .init(id: "car-talk-puzzle", scenarios: {
+        try CarTalkPuzzleModel.validationScenarios().map { $0 as any AssumptionValidationScenario }
+    }),
+    .init(id: "print-values", scenarios: {
+        try PrintValuesModel.validationScenarios().map { $0 as any AssumptionValidationScenario }
+    }),
+    .init(id: "simple-math", scenarios: {
+        try SimpleMathModel.validationScenarios().map { $0 as any AssumptionValidationScenario }
+    }),
     .init(id: "sums-even", scenarios: {
         try SumsEvenModel.validationScenarios().map { $0 as any AssumptionValidationScenario }
     }),
@@ -24,11 +37,11 @@ func assumptionValidationScenarios(for id: String) throws -> [any AssumptionVali
 }
 
 package func assumptionValidationScenarios() throws -> [(id: String, scenario: any AssumptionValidationScenario)] {
-    try assumptionModels.flatMap { model in
-        let scenarios = try model.scenarios()
-        guard !scenarios.isEmpty else {
-            throw EvidenceFormatError.invalidField(record: model.id, field: "no scenarios")
-        }
-        return scenarios.enumerated().map { ("\(model.id)-\($0.offset)", $0.element) }
+    let root = try RetainedFiles.projectRoot(URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+    let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
+        from: Data(contentsOf: root.appendingPathComponent("Verification/FiniteGraph/cases.json")))
+    return try manifest.cases.compactMap { declaration in
+        guard let scenario = try declaration.resolveAssumptionScenario() else { return nil }
+        return (declaration.id, scenario)
     }
 }

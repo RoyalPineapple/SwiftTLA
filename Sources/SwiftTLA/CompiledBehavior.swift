@@ -11,14 +11,22 @@ package struct CompiledBehavior: Sendable {
     package let enabledActionIndices: [Int]
     /// Transitive ENABLED dependencies, excluding the action itself.
     package let enabledActionDependencies: [ActionID: Set<ActionID>]
-    package let invariants: [CompiledStatePredicate]
-    package let reachabilityProperties: [CompiledStatePredicate]
-    package let temporalProperties: [CompiledTemporal<CompiledStateQuery>]
+    package private(set) var invariants: [CompiledStatePredicate]
+    package private(set) var reachabilityProperties: [CompiledStatePredicate]
+    package private(set) var temporalProperties: [CompiledTemporal<CompiledStateQuery>]
     package let fairness: [CompiledFairnessCondition]
     package let fairnessProfiles: [CompiledFairnessProfile]
     package let constraint: CompiledStateQuery?
     package let actionConstraint: CompiledStateQuery?
     package let assume: CompiledStateQuery?
+
+    mutating func resolvePropertyNames(_ names: [PropertyID: String]) {
+        invariants = invariants.map { .init(id: $0.id, name: names[$0.id]!, predicate: $0.predicate) }
+        reachabilityProperties = reachabilityProperties.map { .init(id: $0.id, name: names[$0.id]!, predicate: $0.predicate) }
+        temporalProperties = temporalProperties.map {
+            .init(id: $0.id, name: names[$0.id]!, expression: $0.expression, bindings: $0.bindings)
+        }
+    }
 
     package func map(
         _ transform: (CompiledExpression) throws -> CompiledExpression

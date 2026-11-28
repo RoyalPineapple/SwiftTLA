@@ -1,13 +1,24 @@
 import SwiftTLA
+import SwiftTLACompilerSupport
 import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
+
+func requestedTLAName(_ call: FunctionCallExprSyntax, declaration: String) throws(SourceParseDiagnostic) -> String? {
+    let arguments = call.arguments.filter { $0.label?.text == "tlaName" }
+    guard let argument = arguments.first else { return nil }
+    guard arguments.count == 1, let name = argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
+        throw .init(message: "Declaration '\(declaration)' requires one literal tlaName; received \(argument.expression.trimmedDescription).", source: argument)
+    }
+    return name
+}
 
 extension ParserSession {
     // MARK: - Unified spec builder parser
 
     func parseSpecClosure(named name: String, _ closure: ClosureExprSyntax) -> TLASpec {
         var components = TLASpec(name: name, variables: [], actions: [], invariants: [])
+        components.sourceSpecDefaultDeadlockWitness = true
         stateDeclarationOffsets = [:]
         actionDeclarationOffsets = [:]
         propertyDeclarationOffsets = [:]
@@ -21,7 +32,11 @@ extension ParserSession {
         sourceScope = .empty
         let declarationScope = closureParameterNames(in: closure).first
         if let declarationScope { sourceScope = sourceScope.extendingCheckingScope(declarationScope) }
-        for statement in closure.statements {
+        var directCopyLexicalSource: DirectCopyLexicalSource?
+        var declarationFailed = false
+        for (statement, binding) in specBuilderItems(in: closure) {
+            if binding != nil && declarationFailed { continue }
+            declarationFailed = false
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
                 parseBuilderCall(fc, into: &components)
@@ -55,8 +70,11 @@ extension ParserSession {
                 components.actions.append(action)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
-                      let algorithm = specBindings.algorithms[reference.baseName.sourceIdentifierName] {
-                components.sourceAlgorithms.append(algorithm)
+                      let bound = specBindings.algorithms[reference.baseName.sourceIdentifierName] {
+                components.sourceAlgorithms.append(bound.algorithm)
+                if closure.signature?.capture == nil {
+                    directCopyLexicalSource = bound.copySyntax?.registered(at: binding ?? reference.baseName, in: closure)
+                }
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let validation = specBindings.validations[reference.baseName.sourceIdentifierName] {
@@ -69,16 +87,18 @@ extension ParserSession {
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let symmetry = specBindings.symmetries[reference.baseName.sourceIdentifierName] {
                 symmetryDeclarations.append(symmetry)
-                symmetryDeclarationOffsets.append(reference.positionAfterSkippingLeadingTrivia.utf8Offset)
+                symmetryDeclarationOffsets.append((binding ?? reference.baseName).positionAfterSkippingLeadingTrivia.utf8Offset)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &components)
             } else if case .decl(let decl) = statement.item,
                       let varDecl = decl.as(VariableDeclSyntax.self) {
+                let diagnosticCount = components.diagnostics.count
                 parseLocalDeclaration(
                     varDecl,
                     into: &components,
                     declarationScope: declarationScope
                 )
+                declarationFailed = components.diagnostics.count > diagnosticCount
             } else {
                 components.diagnostics.append(.init(
                     message: "Specification body contains an unsupported item.",
@@ -96,6 +116,7 @@ extension ParserSession {
         components.symmetrySets = symmetryDeclarations.map { $0.resolved() }
         components.extendsModules = canonicalStandardModules(components.extendsModules)
         components.algorithmPhase = components.sourceAlgorithms.isEmpty ? .lowered : .source
+        registeredDirectCopyLexicalSource = components.sourceAlgorithms.count == 1 ? directCopyLexicalSource : nil
         return components
     }
 
@@ -105,7 +126,7 @@ extension ParserSession {
         declarationScope: String? = nil
     ) {
         for binding in declaration.bindings {
-            guard let sourceName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+            guard let bindingToken = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier,
                   let initializer = binding.initializer?.value
             else {
                 components.diagnostics.append(.init(
@@ -114,8 +135,10 @@ extension ParserSession {
                 ))
                 continue
             }
+            let sourceName = bindingToken.sourceIdentifierName
             guard let call = initializer.as(FunctionCallExprSyntax.self) else {
-                if let value = decodeTypedFacadeValue(initializer, scope: sourceScope) {
+                if let value = decodeTypedFacadeValue(initializer, scope: sourceScope,
+                    requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation)) {
                     sourceScope = sourceScope.extending(binding: sourceName, to: value,
                         shape: typedFacadeValueType(initializer, scope: sourceScope))
                 } else {
@@ -196,7 +219,7 @@ extension ParserSession {
                 do {
                     let displayLabel = try declarationDisplayLabel(call, kind: "parameter")
                     let shape = try sourceTypeResolver.resolve(typeName)
-                    let reference = ParameterReference(name: sourceName, displayLabel: displayLabel,
+                    let reference = ParameterReference(name: sourceName, tlaName: try requestedTLAName(call, declaration: sourceName), displayLabel: displayLabel,
                         sourceOffset: binding.positionAfterSkippingLeadingTrivia.utf8Offset,
                         sourceLength: binding.trimmedDescription.utf8.count)
                     components.parameters.append(.init(reference: reference, swiftType: typeName, domain: domain))
@@ -209,6 +232,16 @@ extension ParserSession {
             } else if ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo", "Temporal", "Refinement"].contains(compilerGrammarName(in: call.calledExpression) ?? "") {
                 guard declaration.bindingSpecifier.text == "let", specBindings.properties[sourceName] == nil else {
                     components.diagnostics.append(.init(message: "A property handle requires a unique let binding.", source: binding))
+                    continue
+                }
+                if compilerGrammarName(in: call.calledExpression) == "Invariant", call.trailingClosure == nil,
+                   call.arguments.count == 1, call.arguments.first?.label == nil {
+                    guard let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+                          !name.isEmpty else {
+                        components.diagnostics.append(.init(message: "An invariant name requires a nonempty string literal.", source: binding))
+                        continue
+                    }
+                    specBindings.properties[sourceName] = InvariantHandle(name: name)
                     continue
                 }
                 if call.arguments.allSatisfy({ $0.label?.text == "label" }), call.trailingClosure == nil,
@@ -249,6 +282,8 @@ extension ParserSession {
                     } else {
                         parseRefinement(call, named: sourceName, into: &parsed)
                     }
+                } else if compilerGrammarName(in: call.calledExpression) == "Invariant", call.arguments.isEmpty {
+                    parseStateProperty(call, into: &parsed, boundName: sourceName)
                 } else {
                     parseBuilderCall(call, into: &parsed)
                 }
@@ -363,8 +398,9 @@ extension ParserSession {
                     ))
                     continue
                 }
-                if let algorithm = parseAlgorithm(call, into: &components, boundName: sourceName) {
-                    specBindings.algorithms[sourceName] = algorithm
+                if let parsed = parseAlgorithm(call, into: &components, boundName: sourceName) {
+                    let copySyntax = parsed.copyEvents.map { DirectCopyParserSyntax(binding: bindingToken, events: $0) }
+                    specBindings.algorithms[sourceName] = (parsed.algorithm, copySyntax)
                 }
             } else if let constructor = resolveVarCall(call, in: declarationScope) {
                 if constructor.name == "SharedVar", declaration.bindingSpecifier.text != "let" {
@@ -374,7 +410,8 @@ extension ParserSession {
                 parseVariableBinding(binding, call: call, constructor: constructor, into: &components)
             } else if let value = decodeTypedFacadeValue(
                 ExprSyntax(call),
-                scope: sourceScope
+                scope: sourceScope,
+                requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation)
             ) {
                 sourceScope = sourceScope.extending(binding: sourceName, to: value,
                     shape: typedFacadeValueType(ExprSyntax(call), scope: sourceScope))
@@ -448,8 +485,27 @@ extension ParserSession {
             return
         }
 
+        if var condition = forStmt.whereClause?.condition {
+            while let tuple = condition.as(TupleExprSyntax.self), tuple.elements.count == 1,
+                  let element = tuple.elements.first, element.label == nil {
+                condition = element.expression
+            }
+            if let literal = condition.as(BooleanLiteralExprSyntax.self), literal.literal.text == "false" {
+                return
+            }
+            if let reference = condition.as(DeclReferenceExprSyntax.self),
+               case .value(.bool(false))? = sourceScope.value(for: reference) {
+                return
+            }
+        }
         let body = forStmt.body.statements
         for i in range {
+            if let condition = forStmt.whereClause?.condition,
+               case .bool(false)? = decodeSwiftScalarValue(condition,
+                    scope: sourceScope.extending(binding: pattern, to: .int(i), shape: .int)) {
+                continue
+            }
+            // shortcut: opaque, non-scalar or trapping filters still need source-outcome lowering.
             for bodyStmt in body {
                 guard case .expr(let expr) = bodyStmt.item,
                       let fc = expr.as(FunctionCallExprSyntax.self)
@@ -486,12 +542,12 @@ extension ParserSession {
         into components: inout TLASpec
     ) {
         guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName else { return }
+        let domain = fc.arguments.first { $0.label?.text == (constructor.name == "SharedVar" ? "initiallyIn" : "in") }
         let existingVariableCount = components.variables.count
         defer {
             if components.variables.count > existingVariableCount,
                let variable = components.variables.last {
                 recordStateDeclaration(named: variable.name, at: binding)
-                let domain = fc.arguments.first { $0.label?.text == "in" }
                 let initial = domain ?? fc.arguments.first { $0.label?.text == "initial" }
                     ?? fc.arguments.dropFirst().first
                 let valueType: CompiledValueType?
@@ -512,15 +568,14 @@ extension ParserSession {
                     ))
                     valueType = nil
                 }
+                let stateType = sourceTypeResolver.normalizedStateType(variable.generatedSwiftType, resolved: valueType)
                 components.variables[components.variables.count - 1] = .init(
                     name: variable.name, initialization: variable.initialization,
-                    displayLabel: variable.displayLabel,
-                    generatedSwiftType: variable.generatedSwiftType,
-                    resolvedValueType: variable.generatedSwiftType == nil ? valueType : nil,
+                    tlaName: variable.tlaName, displayLabel: variable.displayLabel,
+                    generatedSwiftType: stateType.spelling,
+                    resolvedValueType: stateType.resolved,
                     origin: variable.origin)
-                sourceScope = sourceScope.extending(binding: patternName,
-                    to: .variable(variable.name),
-                    shape: valueType)
+                sourceScope = sourceScope.declaringField(patternName, root: variable.name, shape: valueType)
             }
         }
 
@@ -543,7 +598,9 @@ extension ParserSession {
 
         if callName == "SharedVar" {
             let displayLabel: String?
+            let tlaName: String?
             do {
+                tlaName = try requestedTLAName(fc, declaration: patternName)
                 displayLabel = try declarationDisplayLabel(fc, kind: "state")
             } catch {
                 components.diagnostics.append(error)
@@ -562,17 +619,17 @@ extension ParserSession {
                 ))
                 return
             }
-            if let range = args.first(where: { $0.label?.text == "in" })?.expression,
+            if let range = domain?.expression,
                let domain = finiteStateVariableDomain(range, declaredElementType: varTypeName, scope: sourceScope) {
                 components.variables.append(.init(name: name, initialization: .memberOf(domain.expression),
-                    displayLabel: displayLabel, generatedSwiftType: varTypeName ?? domain.elementType, origin: .source))
+                    tlaName: tlaName, displayLabel: displayLabel, generatedSwiftType: varTypeName ?? domain.elementType, origin: .source))
             } else if let value = args.first(where: { $0.label?.text == "initial" })?.expression,
                       let initial = decodeTypedFacadeValue(value, scope: sourceScope, expectedEnumType: varTypeName) {
                 components.variables.append(.init(name: name, initialization: .expression(initial),
-                    displayLabel: displayLabel, generatedSwiftType: varTypeName ?? initialValueTypeName(from: value), origin: .source))
+                    tlaName: tlaName, displayLabel: displayLabel, generatedSwiftType: varTypeName ?? initialValueTypeName(from: value), origin: .source))
             } else {
-                if let input = args.first(where: { $0.label?.text == "initial" || $0.label?.text == "in" }) {
-                    let kind = input.label?.text == "in" ? "domain" : "initializer"
+                if let input = domain ?? args.first(where: { $0.label?.text == "initial" }) {
+                    let kind = domain == nil ? "initializer" : "domain"
                     components.diagnostics.append(.init(
                         message: "State '\(patternName)' has an unsupported \(kind) expression.",
                         source: input.expression,
@@ -743,6 +800,16 @@ extension ParserSession {
               let elementType = declaredElementType ?? setExpressionElementTypeName(expression)
                 ?? resolvedElement.flatMap({ $0.resolved ? $0.swiftType : nil })
         else { return nil }
+        // An eager Swift Set<Int> denotes one closed value in the typed builder.
+        if resolvedElement == .int,
+           let constructor = expression.as(FunctionCallExprSyntax.self),
+           isSwiftCollectionConstructor(constructor, named: "Set"),
+           constructor.arguments.count == 1, let argument = constructor.arguments.first,
+           argument.expression.is(ArrayExprSyntax.self),
+           let members = finiteDomain(argument.expression), !members.isEmpty,
+           members.allSatisfy({ if case .int = $0 { return true }; return false }) {
+            return (expression: .value(.set(Set(members))), elementType: elementType)
+        }
         return (expression: decoded, elementType: elementType)
     }
 
@@ -845,7 +912,12 @@ extension ParserSession {
               element.label == nil {
             expression = element.expression
         }
-        if let call = expression.as(FunctionCallExprSyntax.self), let record = nominalRecordType(call.calledExpression) {
+        if let array = expression.as(ArrayExprSyntax.self), let first = array.elements.first,
+           let element = initialValueTypeName(from: first.expression),
+           array.elements.allSatisfy({ initialValueTypeName(from: $0.expression) == element }) {
+            return "Array<\(element)>"
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self), let record = nominalStructType(call.calledExpression) {
             return record.swiftType
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
@@ -874,13 +946,19 @@ extension ParserSession {
            let type = typedFacadeType(member.base), type.name == "PartialFunction" {
             return type.renderedSourceName
         }
-        if expression.is(IntegerLiteralExprSyntax.self) { return "Int" }
-        if expression.is(BooleanLiteralExprSyntax.self) { return "Bool" }
-        if expression.is(StringLiteralExprSyntax.self) { return "String" }
+        if expression.is(IntegerLiteralExprSyntax.self) || SourceIntegerLiteral.value(expression) != nil {
+            return sourceTypeResolver.normalizedStateType("Swift.Int", resolved: .int).spelling
+        }
+        if expression.is(BooleanLiteralExprSyntax.self) {
+            return sourceTypeResolver.normalizedStateType("Swift.Bool", resolved: .bool).spelling
+        }
+        if expression.is(StringLiteralExprSyntax.self) {
+            return sourceTypeResolver.normalizedStateType("Swift.String", resolved: .string).spelling
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.arguments.isEmpty,
            call.trailingClosure == nil,
-           let constructor = typedFacadeType(call.calledExpression) {
+           let constructor = typedFacadeType(call.calledExpression),
+           call.arguments.isEmpty || constructor.name == "SetExpr" {
             switch constructor.name {
             case "SetExpr", "TupleExpr", "ZeroBasedSequence":
                 return constructor.renderedSourceName
@@ -961,6 +1039,30 @@ extension ParserSession {
             ))
             return
         }
+        if let propertyName = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
+           let handle = specBindings.properties[propertyName] as? TemporalPropertyHandle,
+           call.arguments.first?.label?.text == "forEach" {
+            guard call.arguments.count == 1, let domainSyntax = call.arguments.first?.expression,
+                  let domain = decodeTypedFacadeValue(domainSyntax, scope: sourceScope),
+                  let closure = call.trailingClosure, call.additionalTrailingClosures.isEmpty,
+                  closure.statements.count == 1, case .expr(let body) = closure.statements.first?.item else {
+                components.diagnostics.append(.init(message: "A temporal property for each member requires one domain and one condition.", source: call))
+                return
+            }
+            let parameters = closureParameterNames(in: closure)
+            let binder = generatedBinderName(line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
+            let scope = sourceScope.extending(binding: parameters.first ?? "$0", to: .variable(binder),
+                shape: typedFacadeValueType(domainSyntax, scope: sourceScope)?.selectedElement)
+            guard parameters.count == 1 || closure.signature?.parameterClause == nil,
+                  let condition = decodeTemporalCondition(body, scope: scope) else {
+                components.diagnostics.append(.init(message: "The temporal condition must use a single domain member.", source: closure))
+                return
+            }
+            recordTemporalDeclaration(named: propertyName, at: call)
+            components.temporalProperties.append(.init(name: propertyName, expr: condition,
+                bindings: [.init(name: binder, domain: domain, generatedSwiftType: nil)], reference: handle.reference))
+            return
+        }
         if let temporal = parseBoundTemporal(call, scope: sourceScope) {
             registerProperty(temporal, into: &components)
             return
@@ -1005,8 +1107,8 @@ extension ParserSession {
                 components.sourceAtomicSteps.append(step)
             }
         case "Algorithm":
-            if let algorithm = parseAlgorithm(call, into: &components) {
-                components.sourceAlgorithms.append(algorithm)
+            if let parsed = parseAlgorithm(call, into: &components) {
+                components.sourceAlgorithms.append(parsed.algorithm)
             }
         case "Variable":
             let existingVariable = call.arguments.first.flatMap { parsedVariableName($0.expression) }
@@ -1190,12 +1292,31 @@ extension ParserSession {
         case "Instance":
             parseFormalModuleInstance(call, into: &components)
         case "Refinement":
-            parseRefinement(call, into: &components)
+            if let first = call.arguments.first, first.label == nil, call.trailingClosure != nil,
+               let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue, !name.isEmpty {
+                var declaration = call
+                declaration.arguments = LabeledExprListSyntax(call.arguments.dropFirst())
+                if let property = parseGeneratedModelRefinement(declaration, named: name, into: &components) {
+                    registerProperty(property, into: &components)
+                }
+            } else {
+                parseRefinement(call, into: &components)
+            }
         case "Symmetry":
+            if call.arguments.count == 2, let first = call.arguments.first, first.label == nil,
+               let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue, !name.isEmpty {
+                var declaration = call
+                declaration.arguments = LabeledExprListSyntax(call.arguments.dropFirst())
+                if let symmetry = parseSymmetry(declaration, named: name, into: &components) {
+                    symmetryDeclarations.append(symmetry)
+                    symmetryDeclarationOffsets.append(first.positionAfterSkippingLeadingTrivia.utf8Offset)
+                }
+                return
+            }
             components.diagnostics.append(.init(
-                message: "Symmetry requires an immutable named let binding and a registration reference.",
+                message: "Symmetry requires a named let binding or an inline literal name.",
                 source: call,
-                expected: "let TxId = Symmetry(Set(Transaction.all)); TxId"
+                expected: "let TxId = Symmetry(Set(Transaction.all))"
             ))
         default:
             components.diagnostics.append(.init(
@@ -1234,22 +1355,35 @@ extension ParserSession {
         named bindingName: String,
         into components: inout TLASpec
     ) -> SymmetrySetDecl? {
+        func setParameter(_ expression: ExprSyntax) -> ParameterReference? {
+            guard let name = expression.as(DeclReferenceExprSyntax.self),
+                  case .parameter(let reference)? = sourceScope.value(for: name),
+                  case .set(let member)? = sourceScope.shape(for: name), member.resolved else { return nil }
+            return reference
+        }
+        if let first = call.arguments.first(where: { $0.label?.text == "independently" }) {
+            let arguments = call.arguments.filter { $0.label?.text != "_name" }
+            guard arguments.count == 2, let last = arguments.last, last.label == nil,
+                  let a = setParameter(first.expression), let b = setParameter(last.expression) else {
+                components.diagnostics.append(.init(message: "Independent symmetry requires two typed set parameters.", source: call))
+                return nil
+            }
+            return .init(bindingName, domain: .independentParameters(a, b))
+        }
         guard call.arguments.filter({ $0.label == nil }).count == 1,
               let valuesSyntax = call.arguments.first(where: { $0.label == nil })?.expression
         else {
             components.diagnostics.append(.init(
                 message: "Symmetry requires a finite domain or a typed set parameter.",
                 source: call,
-                expected: "let TxId = Symmetry(Set(Transaction.all)); TxId, or Symmetry(typedSetParameter)"
+                expected: "let TxId = Symmetry(Set(Transaction.all)), or Symmetry(typedSetParameter)"
             ))
             return nil
         }
         if let values = parseSymmetryValues(valuesSyntax) {
             return .init(bindingName, Set(values))
         }
-        if let parameter = valuesSyntax.as(DeclReferenceExprSyntax.self),
-           case .parameter(let reference)? = sourceScope.value(for: parameter),
-           case .set(let member)? = sourceScope.shape(for: parameter), member.resolved {
+        if let reference = setParameter(valuesSyntax) {
             return .init(bindingName, domain: .parameter(reference))
         }
         components.diagnostics.append(.init(
@@ -1271,7 +1405,7 @@ extension ParserSession {
             components.diagnostics.append(.init(message: "A property label requires one nonempty string literal without interpolation.", source: call))
             return
         }
-        let explicitName = call.arguments.first { $0.label?.text == "_name" }?
+        let explicitName = call.arguments.first { $0.label == nil || $0.label?.text == "_name" }?
             .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
         guard let name = bindingName ?? explicitName, !name.isEmpty,
               let instanceSyntax = call.arguments.first(where: { $0.label?.text == "instance" })?.expression,
@@ -1281,7 +1415,7 @@ extension ParserSession {
             components.diagnostics.append(.init(
                 message: "Refinement requires a declared Instance binding.",
                 source: call,
-                expected: "let C = Instance(\"C\", of: Module.module); C; let Refines = Refinement(instance: C, operator: .spec, mappings: mappings); Refines",
+                expected: "let C = Instance(\"C\", of: Module.module); Refinement(\"Refines\", instance: C, operator: .spec, mappings: mappings)",
                 nextSafeAction: "Declare the instance in this specification, then pass that binding to Refinement."
             ))
             return
@@ -1420,7 +1554,7 @@ extension ParserSession {
         if let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
            let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
            let parameters = parseFormalParameters(parametersSyntax),
-           let body = decodeTypedFacadeValue(bodySyntax, scope: .empty) ?? decodeStateExpr(bodySyntax) {
+           let body = decodeTypedFacadeValue(bodySyntax, scope: sourceScope) ?? decodeStateExpr(bodySyntax) {
             return FormalOperatorDefinition(name: name, parameters: parameters, body: body,
                 plusCalPhase: phase, plusCalDependencies: dependencies)
         }
@@ -1440,7 +1574,7 @@ extension ParserSession {
               typeWitnesses.allSatisfy({ isMetatype($0.expression) })
         else { return nil }
         var formalParameters: [FormalParameter] = []
-        var scope = TypedFacadeScope.empty
+        var scope = sourceScope
         for (index, pair) in zip(parameters, typeWitnesses).enumerated() {
             guard let metatype = pair.1.expression.as(MemberAccessExprSyntax.self),
                   let typeSyntax = metatype.base else { return nil }
@@ -1839,12 +1973,7 @@ extension ParserSession {
     }
 
     func closureParameterNames(in closure: ClosureExprSyntax) -> [String] {
-        guard let parameters = closure.signature?.parameterClause else { return [] }
-        switch parameters {
-        case .simpleInput(let list): return list.map { $0.name.sourceIdentifierName }
-        case .parameterClause(let clause):
-            return clause.parameters.map { $0.secondName?.sourceIdentifierName ?? $0.firstName.sourceIdentifierName }
-        }
+        ModelSpecificationSyntax.parameterNames(in: closure)
     }
 
     func finiteDomain(_ expression: ExprSyntax) -> [TLAValue]? {
@@ -1865,9 +1994,10 @@ extension ParserSession {
     func parseStateProperty(
         _ call: FunctionCallExprSyntax,
         into components: inout TLASpec,
-        reachability: Bool = false
+        reachability: Bool = false,
+        boundName: String? = nil
     ) {
-        guard let name = extractStringArg(call, index: 0), let closure = call.trailingClosure else {
+        guard let name = boundName ?? extractStringArg(call, index: 0), let closure = call.trailingClosure else {
             components.diagnostics.append(.init(
                 message: "State property declaration requires a name and a supported predicate.",
                 source: call

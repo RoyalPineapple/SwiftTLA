@@ -57,14 +57,15 @@ struct StructuredAlgorithmTests {
     @Test("record-valued map updates survive #spec, lowering, and generated state")
     func generatedStateRetainsNestedTypedRecordUpdate() throws {
         var machine = try StructuredCarModel.makeMachine()
-        let transition = try machine.send(.open(process: .north))
+        let transitionBefore = machine.state
+        try machine.send(.open(process: .north))
 
-        #expect(transition.before.cars[.north]?.floor == 1)
-        #expect(transition.before.cars[.north]?.door == .closed)
-        #expect(transition.after.cars[.north]?.floor == 1)
-        #expect(transition.after.cars[.north]?.door == .open)
-        #expect(transition.after.cars[.south]?.floor == 2)
-        #expect(transition.after.cars[.south]?.door == .closed)
+        #expect(transitionBefore.cars[.north]?.floor == 1)
+        #expect(transitionBefore.cars[.north]?.door == .closed)
+        #expect(machine.state.cars[.north]?.floor == 1)
+        #expect(machine.state.cars[.north]?.door == .open)
+        #expect(machine.state.cars[.south]?.floor == 2)
+        #expect(machine.state.cars[.south]?.door == .closed)
     }
 
     @Test("function comprehensions retain typed record values through lowering and evaluation")

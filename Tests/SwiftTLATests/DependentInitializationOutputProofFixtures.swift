@@ -8,8 +8,8 @@ struct DependentInitializationOutputProofModel {
     static var spec: TLASpec {
         #spec("DependentInitializationOutputProofModel") { scope in
             let proof = Algorithm(label: "DependentInitializationOutputProofModel", scoped: { scope in
-                let seed = scope.sharedVar(in: 0...1)
-                let choice = scope.sharedVar(in: If(seed == 0,
+                let seed = scope.sharedVar(initiallyIn: 0...1)
+                let choice = scope.sharedVar(initiallyIn: If(seed == 0,
                     then: SetExpr<Int>.literal(0),
                     else: SetExpr<Int>.literal(0, 1)))
                 Do(Step.finish) {

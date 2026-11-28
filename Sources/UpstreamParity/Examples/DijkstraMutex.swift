@@ -1,3 +1,6 @@
+// Processes coordinate entry to a critical section using Dijkstra’s mutual exclusion algorithm.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/dijkstra-mutex/DijkstraMutex.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -59,17 +62,17 @@ package struct DijkstraMutexModel: Sendable {
             let DeadlockFree = LeadsTo()
             let StarvationFree = LeadsTo()
             let DeadlockFreedom = LeadsTo()
-            let Mutex = Algorithm(scoped: { scope in
+            Algorithm("Mutex") { scope in
                 let b = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
                 let c = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
-                let k = scope.sharedVar(in: Proc)
+                let k = scope.sharedVar(initiallyIn: Proc)
 
-                Each(Proc, fairness: .weak, scoped: { selfID, scope in
+                Each(Proc, fairness: .weak) { selfID, scope in
                     let temp = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.first(.notAssigned)
                     )
 
                     Do(Label.li0) {
-                        Assign(b, to: b.updating(selfID, to: false))
+                        b.set(b.updating(selfID, to: false))
                     }
 
                     Do(Label.li1) {
@@ -81,16 +84,13 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li2) {
-                        Assign(c, to: c.updating(selfID, to: true))
+                        c.set(c.updating(selfID, to: true))
                     }
 
                     Do(Label.li3a) {
-                        Assign(
-                            temp,
-                            to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(
+                        temp.set(OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(
                                 OneOf<Process, Set<Process>>.first(k.expr)
-                            )
-                        )
+                            ))
                     }
 
                     Do(Label.li3b) {
@@ -104,7 +104,7 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li3c) {
-                        Assign(k, to: selfID.expr)
+                        k.set(selfID.expr)
                     }
 
                     Do(Label.li3d) {
@@ -112,14 +112,11 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li4a) {
-                        Assign(c, to: c.updating(selfID, to: false))
-                        Assign(
-                            temp,
-                            to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
+                        c.set(c.updating(selfID, to: false))
+                        temp.set(OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
                                 Proc.removing(selfID)
                             )
-                        )
-                        )
+                        ))
                     }
 
                     Do(Label.li4b) {
@@ -127,13 +124,10 @@ package struct DijkstraMutexModel: Sendable {
                         let remaining = active.assuming(Set<Process>.self)
                         If(!remaining.isEmpty) {
                             With(remaining) { process in
-                                Assign(
-                                    temp,
-                                    to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
+                                temp.set(OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
                                         remaining.removing(process)
                                     )
-                                )
-                                )
+                                ))
                                 If(!c[process]) {
                                     Goto(Label.li1)
                                 } else: {
@@ -146,39 +140,35 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.critical) { Skip() }
-                    Do(Label.li5) { Assign(c, to: c.updating(selfID, to: true)) }
-                    Do(Label.li6) { Assign(b, to: b.updating(selfID, to: true)) }
+                    Do(Label.li5) { c.set(c.updating(selfID, to: true)) }
+                    Do(Label.li6) { b.set(b.updating(selfID, to: true)) }
                     Do(Label.nonCritical) { Goto(Label.li0) }
                     DeadlockFree(
                         At(Label.li0, selfID),
-                        Exists(in: Proc) { member in At(Label.critical, member) }
+                        Proc.contains { member in At(Label.critical, member) }
                     )
                     StarvationFree(At(Label.li0, selfID), At(Label.critical, selfID))
                     DeadlockFreedom(
                         !At(Label.li5, selfID) && !At(Label.li6, selfID) && !At(Label.nonCritical, selfID),
-                        Exists(in: Proc) { member in At(Label.critical, member) }
+                        Proc.contains { member in At(Label.critical, member) }
                     )
-                })
+                }
 
                 MutualExclusion {
-                    ForAll(in: Proc) { first in
-                        ForAll(in: Proc) { second in
+                    Proc.allSatisfy { first in
+                        Proc.allSatisfy { second in
                             first == second || !(At(Label.critical, first) && At(Label.critical, second))
                         }
                     }
                 }
-            })
-            Mutex
+            }
             let NonCriticalMayStutter = FairnessProfile(excluding: [Label.nonCritical])
-            NonCriticalMayStutter
-            let Safety4Processors = Validation {
+            Validation("Safety4Processors") {
                 Bind(Proc, to: Set<Process>([.one, .two, .three, .four]))
             }.checking(only: [MutualExclusion])
-            Safety4Processors
-            let Liveness3Processors = Validation {
+            Validation("Liveness3Processors") {
                 Bind(Proc, to: Set<Process>([.one, .two, .three]))
             }.usingFairness(NonCriticalMayStutter).checking(only: [MutualExclusion, DeadlockFreedom])
-            Liveness3Processors
         }
     }
 }

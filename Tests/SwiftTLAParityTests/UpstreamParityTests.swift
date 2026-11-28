@@ -6,9 +6,16 @@ import Testing
 struct UpstreamParityTests {
     @Test("two-process Lock generated machine explores its complete bounded graph")
     func lockGeneratedGraph() throws {
-        let graph = try ReachabilityGraph(initialMachines: LockModel.initialMachines(), maximumStates: 100)
-        #expect(graph.transitions.count == Example.lockTwoProcess.expectedDistinct)
-        #expect(graph.safetyViolations.isEmpty)
+        let scenario = try #require(LockModel.validationScenarios().first)
+        let run = try NativeScenarioRun(scenario, maximumStates: 100)
+        try run.validateExpectations()
+        let graph = try #require(run.native.graph)
+        #expect(graph.isComplete)
+        #expect(graph.graph.initialStateKeys.count == 1)
+        #expect(graph.graph.states.count == 12)
+        #expect(graph.graph.edges.count == 20)
+        #expect(run.native.checks.properties == ["TypeOK": .satisfied, "LockInv": .satisfied])
+        #expect(run.native.checks.deadlock == .satisfied)
     }
 
     @Test("HourClock TLA+ module is TLC-shaped")
@@ -73,9 +80,9 @@ struct UpstreamParityTests {
                         continue
                     }
                     try #require(successors.count == 1)
-                    let transition = try next.send(action)
-                    #expect(transition.before == machine.state)
-                    #expect(transition.after == successor.state)
+                    let transitionBefore = next.state
+                    try next.send(action)
+                    #expect(transitionBefore == machine.state)
                     #expect(next.state == successor.state)
                     edges.insert(Edge(source: machine.snapshot, action: action, target: next.snapshot))
                     pending.append(next)
@@ -132,9 +139,10 @@ struct UpstreamParityTests {
                         #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try sent.send(action) }
                         #expect(sent.snapshot == machine.snapshot)
                     case 1:
-                        let transition = try sent.send(action)
-                        #expect(transition.before == machine.state)
-                        #expect(transition.after == candidates[0].state)
+                        let transitionBefore = sent.state
+                        try sent.send(action)
+                        #expect(transitionBefore == machine.state)
+                        #expect(sent.state == candidates[0].state)
                         #expect(sent.snapshot == candidates[0].snapshot)
                     default:
                         #expect(throws: GeneratedMachineError.ambiguousAction) { try sent.send(action) }
@@ -165,7 +173,7 @@ struct UpstreamParityTests {
             Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]),
         ] {
             let initial = try DijkstraMutexModel.initialMachines(
-                configuration: DijkstraMutexModel.Configuration(Proc: population))
+                configuration: DijkstraMutexModel.Configuration(Proc: .init(population)))
             let members = Set(population.map(\.tlaValue))
             let flags = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, TLAValue.bool(true)) }))
             let controls = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, TLAValue.string("Li0")) }))
@@ -200,7 +208,7 @@ struct UpstreamParityTests {
         })
         let scenario = try #require(DijkstraMutexModel.validationScenarios().first)
         #expect(scenario.name == "Safety4Processors")
-        #expect(scenario.configuration.Proc == Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]))
+        #expect(scenario.configuration.Proc == [.one, .two, .three, .four])
         #expect(scenario.behavior == .specification)
         #expect(scenario.checking.properties == [.MutualExclusion])
         #expect(scenario.checking.checkDeadlock)
@@ -235,7 +243,7 @@ struct UpstreamParityTests {
         let scenario = try #require(DijkstraMutexModel.validationScenarios().first {
             $0.name == "Liveness3Processors"
         })
-        #expect(scenario.configuration.Proc == Set<DijkstraMutexModel.Process>([.one, .two, .three]))
+        #expect(scenario.configuration.Proc == [.one, .two, .three])
         #expect(scenario.behavior == .specification)
         #expect(scenario.checking.properties == [.MutualExclusion, .DeadlockFreedom])
         #expect(scenario.checking.checkDeadlock)
@@ -276,7 +284,11 @@ struct UpstreamParityTests {
 
     @Test("bounded Consensus fixture retains terminal deadlocks and temporal progress")
     func consensusGeneratedChecking() throws {
-        let graph = try ReachabilityGraph(initialMachines: ConsensusModel.initialMachines(), maximumStates: 100)
+        let scenario = try #require(ConsensusModel.validationScenarios().first)
+        let published = try scenario.explore(maximumStates: 100)
+        #expect(published.safetyViolations.isEmpty)
+        #expect(published.temporalResults[.Success]?.status == .satisfied)
+        let graph = try ReachabilityGraph(initialMachines: scenario.initialMachines(), maximumStates: 100)
         #expect(graph.transitions.count == Example.consensus.expectedDistinct)
         #expect(graph.safetyViolations.count == 3)
         #expect(graph.safetyViolations.values.allSatisfy { $0 == [.deadlock] })
@@ -286,7 +298,7 @@ struct UpstreamParityTests {
     @Test("Reachable bounded source port checks its generated machine")
     func reachableBoundedPort() throws {
         let graph = try ReachabilityGraph(
-            initialMachines: ReachableModel.initialMachines(),
+            initialMachines: ReachableModel.initialMachines(configuration: .init(nodes: [.n1, .n2, .n3, .n4], start: .n1)),
             maximumStates: Example.reachable.maximumStateLimit
         )
         #expect(graph.transitions.count == Example.reachable.expectedDistinct)
@@ -295,8 +307,9 @@ struct UpstreamParityTests {
 
     @Test("Parallel Reachable bounded source port checks its generated machine")
     func parallelReachableBoundedPort() throws {
+        let scenario = try #require(ParallelReachableModel.validationScenarios().first)
         let graph = try ReachabilityGraph(
-            initialMachines: ParallelReachableModel.initialMachines(),
+            initialMachines: scenario.initialMachines(),
             maximumStates: Example.parallelReachable.maximumStateLimit
         )
         #expect(graph.transitions.count == Example.parallelReachable.expectedDistinct)

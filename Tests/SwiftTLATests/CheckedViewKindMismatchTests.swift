@@ -7,6 +7,52 @@ import SwiftSyntax
 
 @Suite("Checked view kind mismatch")
 struct CheckedViewKindMismatchTests {
+    @Test("A tuple viewed as a sequence preserves field order and checks every element")
+    func tupleSequenceView() throws {
+        var machine = try CheckedTupleSequence.makeMachine()
+        try machine.send(.copy)
+        #expect(machine.state.items == [.first(3), .second(true)])
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noMatchingCase) {
+            try machine.send(.copyIntegers)
+        }
+        #expect(machine.snapshot == before)
+    }
+
+    @Test("Only total field checks on a stable record can use record-set membership")
+    func recordMembershipPreservesReachedFailures() throws {
+        let shape = FormalValueShape.record([.init(name: "tag", shape: .finite(typeName: "Tag", values: [.int(1)])),
+            .init(name: "balance", shape: .integer)])
+        func predicate(_ balance: CompiledValueType, group: Bool) throws -> String {
+            let source = CompiledValueType.record([.init(name: "tag", type: .int), .init(name: "balance", type: balance)])
+            return try shape.predicate(for: "r", sourceType: source, recordInput: group ? source : nil)
+        }
+        #expect(try predicate(.int, group: true).contains(#"r \in [tag: {1}, balance: Int]"#))
+        let fields = CompiledValueType.record([.init(name: "tag", type: .int), .init(name: "balance", type: .int)])
+        let distinctKeys = CompiledValueType.oneOf(.record([.init(name: "other", type: .unknown)]), fields)
+        #expect(try shape.predicate(for: "r", sourceType: distinctKeys, recordInput: distinctKeys)
+            .contains(#"r \in [tag: {1}, balance: Int]"#))
+        let uncertain = CompiledValueType.oneOf(.dictionary(.string, .unknown), fields)
+        #expect(try shape.predicate(for: "r", sourceType: uncertain, recordInput: uncertain)
+            == shape.predicate(for: "r", sourceType: uncertain))
+        // A rejected tag must still short-circuit a potentially invalid integer membership.
+        #expect(try predicate(.unknown, group: true) == predicate(.unknown, group: false))
+        #expect(try !predicate(.int, group: false).contains("balance: Int"))
+    }
+
+    @Test("A checked record may carry variants distinguished by their field names")
+    func checkedRecordVariants() {
+        let debit = FormalValueShape.record([.init(name: "amount", shape: .integer)])
+        let credit = FormalValueShape.record([.init(name: "account", shape: .string)])
+        let payload = FormalValueShape.union(debit, credit)
+        let envelope = FormalValueShape.record([.init(name: "block", shape: payload)])
+        #expect(envelope.isSupported)
+        #expect(envelope.accepts(CompiledValue(formal: .record(["block": .record(["amount": .int(1)])]))))
+        #expect(envelope.accepts(CompiledValue(formal: .record(["block": .record(["account": .string("a")])]))))
+        #expect(!envelope.accepts(CompiledValue(formal: .record(["block": .record(["previous": .int(1)])]))))
+        #expect(!FormalValueShape.union(debit, .sequence(.integer)).isSupported)
+    }
+
     @Test("Nested collection views reject disjoint member kinds without partial predicates")
     func nestedCollectionViewsRemainTotal() throws {
         let set = try FormalValueShape.set(.sequence(.integer))
@@ -50,7 +96,8 @@ struct CheckedViewKindMismatchTests {
         let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/IncompatibleCheckedRecordView.tla")
             .standardizedFileURL
-        #expect(source == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expectedProofModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(source == expectedProofModule)
         let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)
         #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
     }
@@ -130,7 +177,7 @@ struct CheckedViewKindMismatchTests {
         })
         let swiftInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("NestedCheckedSequenceViewSwiftVisitor.txt")
-        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
@@ -176,7 +223,7 @@ struct CheckedViewKindMismatchTests {
         })
         let swiftInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("NestedCheckedSetViewSwiftVisitor.txt")
-        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }

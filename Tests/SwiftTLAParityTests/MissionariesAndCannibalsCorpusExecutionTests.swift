@@ -29,7 +29,8 @@ struct MissionariesAndCannibalsCorpusExecutionTests {
                 ? [.m1, .m2, .m3, .c1, .c2, .c3]
                 : [.apM1, .apM2, .apM3, .apC1, .apC2, .apC3]
             #expect(initial.state.bank_of_boat == .E)
-            #expect(initial.state.who_is_on_bank[.E] == people)
+            let initialEast = try #require(initial.state.who_is_on_bank[.E])
+            #expect(initialEast == .init(people))
             #expect(initial.state.who_is_on_bank[.W] == [])
             let sample = try #require(people.first)
             #expect(sample.tlaValue == (scenario.name == "MissionariesAndCannibals"
@@ -42,7 +43,7 @@ struct MissionariesAndCannibalsCorpusExecutionTests {
                 #expect(successor.state.bank_of_boat == .W)
                 #expect((1...2).contains(west.count))
                 #expect(east.isDisjoint(with: west))
-                #expect(east.union(west) == people)
+                #expect(east.union(west) == .init(people))
                 for bank in [east, west] {
                     let missionaries = bank.filter { $0.rawValue.hasPrefix("m") }.count
                     let cannibals = bank.count - missionaries

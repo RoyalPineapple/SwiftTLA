@@ -10,10 +10,10 @@ struct SwiftStringFormalEncodingTests {
         var machine = try StringLiteralModel.makeMachine()
         let actions = try machine.enabledActions()
         #expect(actions.count == 1)
-        _ = try machine.send(try #require(actions.first))
+        try machine.send(try #require(actions.first))
 
         let expected = "quote\" slash\\ newline\n return\r tab\t form\u{c} é"
-        #expect(machine.state.text == expected)
+        #expect(machine.state.text.formalString.utf8.elementsEqual(expected.utf8))
         guard case .string(let projected) = try machine.formalProjection(of: machine.snapshot).value(for: token) else {
             Issue.record("Expected a formal string state")
             return

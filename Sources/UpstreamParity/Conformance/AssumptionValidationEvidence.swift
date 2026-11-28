@@ -50,7 +50,7 @@ package enum AssumptionValidationEvidence {
         let report = NativeAssumptionReport(
             schema: "swifttla.native-assumption", caseID: id, scenario: scenario.name,
             verdict: evaluation.satisfied ? .satisfied : .violated,
-            evaluatedValues: try evaluation.evaluatedValues.map { try CanonicalValue($0).canonicalEncoding },
+            evaluatedValues: try evaluation.prints.map { try encodePrint($0, canonicalize: { try CanonicalValue($0) }) },
             moduleSHA256: SHA256.hex(Data(rendered.tlaBundle.tla.utf8)),
             cfgSHA256: SHA256.hex(Data(rendered.tlaBundle.cfg.utf8)))
         try write(report, in: directory, name: "report.json")
@@ -207,7 +207,7 @@ package enum AssumptionValidationEvidence {
             bundle: reference, id: id, maximumStates: maximumStates, timeout: timeout,
             tools: tools, pin: pin, workRoot: work, retained: referenceOutput,
             invocation: .propertyCheck, renderedActions: [], process: process,
-            captureEvaluations: true)
+            captureEvaluations: true, referenceCache: .readThrough)
         let left = try verdict(generated, id: id)
         let right = try verdict(upstream, id: id)
         let generatedSHA = SHA256.hex(Data(rendered.tlaBundle.tla.utf8))
@@ -259,9 +259,19 @@ package enum AssumptionValidationEvidence {
         }
     }
 
+    private static func encodePrint<Value>(_ event: AssumptionPrint<Value>,
+        canonicalize: (Value) throws -> CanonicalValue) rethrows -> String {
+        switch event {
+        case .value(let value):
+            return try canonicalize(value).canonicalEncoding
+        case .returning(let value, let result):
+            return try "print:" + CanonicalValue.tuple([canonicalize(value), canonicalize(result)]).canonicalEncoding
+        }
+    }
+
     private static func capturedValues(in directory: URL) throws -> [String] {
         try TLCEvaluationOutput(reading: directory.appendingPathComponent("tlc-evaluation.bin"))
-            .values.map(\.canonicalEncoding)
+            .prints.map { encodePrint($0, canonicalize: { $0 }) }
     }
 
     private static func verifyProcess(_ url: URL, id: String, verdict: ValidationVerdict,

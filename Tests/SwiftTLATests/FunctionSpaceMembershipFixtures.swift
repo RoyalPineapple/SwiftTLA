@@ -10,7 +10,7 @@ struct ConfiguredFunctionDomainModel {
             let size = scope.parameter(as: Int.self, in: 0...2)
             let total = Invariant()
             let worker = Algorithm(label: "Worker", scoped: { algorithm in
-                let values = algorithm.sharedVar(in: Functions(
+                let values = algorithm.sharedVar(initiallyIn: Functions(
                     from: IntRange(0, through: size - 1), to: Set<Int>([0, 1])))
                 Do(Step.keep) { Assign(values, to: values) }
                 total { Functions(from: IntRange(0, through: size - 1), to: Set<Int>([0, 1])).contains(values) }

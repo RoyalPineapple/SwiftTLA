@@ -1,3 +1,30 @@
+package struct DirectCopySource: Codable, Equatable, Sendable {
+    package struct Copy: Codable, Equatable, Sendable {
+        package let target: String
+        package let read: String
+    }
+
+    package struct Row: Codable, Equatable, Sendable {
+        package let label: String
+        package let copies: [Copy]
+    }
+
+    package let algorithm: String
+    package let fields: Set<String>
+    package let rows: [Row]
+
+    private enum CodingKeys: String, CodingKey {
+        case algorithm, fields, rows
+    }
+
+    package func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(algorithm, forKey: .algorithm)
+        try values.encode(fields.sorted(), forKey: .fields)
+        try values.encode(rows, forKey: .rows)
+    }
+}
+
 package struct AlgorithmModel: Sendable {
     package let name: String
     package let displayLabel: String?
@@ -86,8 +113,18 @@ package struct AlgorithmModel: Sendable {
 
     /// Resolves ordered reads and writes before execution and export diverge.
     func resolvingAtomicSteps() -> AlgorithmModel {
+        resolvingAtomicSteps(retainingScalarCopyRoutes: false).model
+    }
+
+    func resolvingAtomicSteps(
+        retainingScalarCopyRoutes: Bool, retainingSequentialAssignmentTargets: Bool = false
+    ) -> (model: AlgorithmModel, scalarCopies: [String: StraightLineAssignmentCheck.ScalarCopyReceipt],
+          assignmentTargets: [String: [String: String]]) {
         var usedBindings = authoredIdentifiers
         var nextBinding = 0
+        let scalarRoots = orderedIntCopyRoots
+        var scalarCopies: [String: StraightLineAssignmentCheck.ScalarCopyReceipt] = [:]
+        var assignmentTargets: [String: [String: String]] = [:]
 
         func binding() -> String {
             while true {
@@ -102,10 +139,29 @@ package struct AlgorithmModel: Sendable {
         func component(_ value: AlgorithmComponentModel) -> AlgorithmComponentModel {
             switch value {
             case .step(let step):
-                return .step(.init(label: step.label, statements: scheduleAtomicStatements(step.statements, binding: binding),
-                    loopCondition: step.loopCondition))
+                let record: ((String, String) -> Void)? = retainingSequentialAssignmentTargets && scalarRoots != nil
+                    ? { name, target in assignmentTargets[step.label.name, default: [:]][name] = target }
+                    : nil
+                if let scalarRoots, let plan = scheduleDirectScalarCopies(step.statements, roots: scalarRoots,
+                    binding: binding, recordAssignment: record) {
+                    if retainingScalarCopyRoutes { scalarCopies[step.label.name] = plan.receipt }
+                    return .step(.init(label: step.label, statements: plan.statements, loopCondition: step.loopCondition))
+                }
+                var displacedTargets: [String: String] = [:]
+                let controlledLoop = processes.isEmpty && procedures.isEmpty
+                    && step.loopCondition != nil && step.loopCondition != .value(.bool(true))
+                    && step.loopCondition != .value(.bool(false))
+                let recordScheduled = record.map { record in
+                    { (name: String, assignment: ScheduledAtomicAssignment) in record(name, assignment.target) }
+                }
+                let statements = scheduleAtomicStatements(step.statements, binding: binding, recordAssignment: recordScheduled,
+                    retainingDisabledTargets: controlledLoop) {
+                    displacedTargets[$0] = $1
+                }
+                return .step(.init(label: step.label, statements: statements, loopCondition: step.loopCondition,
+                    displacedAssignmentTargets: displacedTargets))
             case .process(let process):
-                return .process(.init(typeName: process.typeName, name: process.name, domain: process.domain,
+                return .process(.init(typeName: process.typeName, name: process.name, population: process.population,
                     fairness: process.fairness, components: process.components.map(component),
                     resolvedElementType: process.resolvedElementType,
                     fairnessExcludedLabels: process.fairnessExcludedLabels))
@@ -116,8 +172,33 @@ package struct AlgorithmModel: Sendable {
                 return value
             }
         }
-        return .init(name: name, sequentialFairness: sequentialFairness,
+        let resolved = AlgorithmModel(name: name, sequentialFairness: sequentialFairness,
             components: components.map(component))
+        return (resolved, scalarCopies, assignmentTargets)
+    }
+
+    package var directScalarCopyInput: DirectCopySource? {
+        let steps = sequentialSteps
+        guard let roots = orderedIntCopyRoots, !steps.isEmpty,
+              components.count == roots.count + steps.count else { return nil }
+        var rows: [DirectCopySource.Row] = []
+        for step in steps {
+            guard let copies = directScalarCopyOperands(step.statements, roots: roots) else { return nil }
+            rows.append(.init(label: step.label.name, copies: copies))
+        }
+        return DirectCopySource(algorithm: name, fields: roots, rows: rows)
+    }
+
+    private var orderedIntCopyRoots: Set<String>? {
+        guard processes.isEmpty, procedures.isEmpty, sequentialSteps.allSatisfy({ $0.loopCondition == nil }) else { return nil }
+        var roots: Set<String> = []
+        for component in components {
+            guard case .shared(let state) = component else { continue }
+            guard state.swiftTypeName == "Int",
+                  state.resolvedValueType == nil || state.resolvedValueType == .int,
+                  roots.insert(state.root).inserted else { return nil }
+        }
+        return roots.isEmpty ? nil : roots
     }
 
     func plusCalProjection() -> AlgorithmModel {
@@ -154,7 +235,7 @@ package struct AlgorithmModel: Sendable {
             .init(
                 root: value.root,
                 initialization: initialization(value.initialization),
-                displayLabel: value.displayLabel,
+                tlaName: value.tlaName, displayLabel: value.displayLabel,
                 swiftTypeName: value.swiftTypeName,
                 resolvedValueType: value.resolvedValueType
             )
@@ -189,7 +270,7 @@ package struct AlgorithmModel: Sendable {
                     .init(
                         typeName: process.typeName,
                         name: process.name,
-                        domain: expression(process.domain),
+                        population: process.population.map(expression),
                         fairness: process.fairness,
                         components: process.components.map(component),
                         resolvedElementType: process.resolvedElementType,
@@ -239,6 +320,38 @@ package struct AlgorithmModel: Sendable {
             sequentialFairness: sequentialFairness,
             components: components.map(component)
         )
+    }
+}
+
+/// The structural source witness emitted by `#spec` for straight-line Int algorithms.
+public enum _OrderedIntSourceComponent: Sendable {
+    case variable(root: String, initialization: VariableInitialization)
+    case step(label: String, assignments: [(root: String, value: StateExpr)])
+}
+
+extension AlgorithmModel {
+    package func matchesOrderedIntSource(_ expected: [_OrderedIntSourceComponent]) -> Bool {
+        guard components.count == expected.count else { return false }
+        for (source, actual) in zip(expected, components) {
+            switch (source, actual) {
+            case (.variable(let root, let initialization), .shared(let state)):
+                guard state.root == root, state.initialization == initialization else { return false }
+                if case .value = initialization {
+                    guard state.swiftTypeName == "Int" else { return false }
+                } else {
+                    guard state.swiftTypeName == nil || state.swiftTypeName == "Int" else { return false }
+                }
+            case (.step(let label, let assignments), .step(let step)):
+                guard step.label.name == label, step.loopCondition == nil,
+                      step.statements.count == assignments.count else { return false }
+                for (source, actual) in zip(assignments, step.statements) {
+                    guard case .set(.root(let root), let value) = actual,
+                          root == source.root, value == source.value else { return false }
+                }
+            default: return false
+            }
+        }
+        return true
     }
 }
 
@@ -304,6 +417,7 @@ internal struct AuthoredPlusCalProcessPlan: Sendable {
     let name: String
     let owner: ControlOwner
     let swiftType: String
+    let fixedID: StateExpr?
     let domain: StateExpr
     let fairness: AlgorithmFairness
     let fairnessExcludedLabels: [AlgorithmLabelModel]
@@ -314,6 +428,7 @@ internal struct AuthoredPlusCalProcessPlan: Sendable {
         self.name = name
         self.owner = owner
         swiftType = process.typeName
+        fixedID = process.population.fixedID
         domain = process.domain
         fairness = process.fairness
         fairnessExcludedLabels = process.fairnessExcludedLabels
@@ -358,6 +473,7 @@ internal struct CompiledAuthoredPlusCalProcess: Sendable {
     let name: String
     let binder: BinderID
     let swiftType: String
+    let fixedID: CompiledExpression?
     let domain: CompiledExpression
     let fairness: AlgorithmFairness
     let fairnessExcludedSteps: Set<ControlLocationID>
@@ -433,9 +549,11 @@ package enum InvalidAlgorithmComponent: String, Sendable {
     case genericFairness
     case assumption
     case parameterizedStep
+    case unknownStateField
 
     package var expectedPlacement: String {
         switch self {
+        case .unknownStateField: "a whole generated State field"
         case .genericFairness:
             "Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness"
         case .assumption:
@@ -447,6 +565,7 @@ package enum InvalidAlgorithmComponent: String, Sendable {
 
     package var actualPlacement: String {
         switch self {
+        case .unknownStateField: "unregistered state key path"
         case .genericFairness: "generic fairness declaration inside Algorithm"
         case .assumption: "Assume declaration inside Algorithm"
         case .parameterizedStep: "parameterized Do inside Algorithm"
@@ -455,6 +574,7 @@ package enum InvalidAlgorithmComponent: String, Sendable {
 
     package var nextSafeAction: String {
         switch self {
+        case .unknownStateField: "Use a direct key path to a generated state field."
         case .genericFairness: "Move the fairness requirement to Algorithm or Each."
         case .assumption: "Move the assumption outside Algorithm."
         case .parameterizedStep: "Declare independent actions outside Algorithm, or use Each for processes and With for local choices."
@@ -505,11 +625,36 @@ package struct AlgorithmProcedureParameterModel: Sendable {
     }
 }
 
+package enum AlgorithmProcessPopulation: Sendable {
+    case family(StateExpr)
+    case fixed(StateExpr)
+
+    var domain: StateExpr {
+        switch self {
+        case .family(let set): set
+        case .fixed(let id): .setLiteral([id])
+        }
+    }
+
+    var fixedID: StateExpr? {
+        guard case .fixed(let id) = self else { return nil }
+        return id
+    }
+
+    func map(_ transform: (StateExpr) -> StateExpr) -> Self {
+        switch self {
+        case .family(let set): .family(transform(set))
+        case .fixed(let id): .fixed(transform(id))
+        }
+    }
+}
+
 package struct AlgorithmProcessModel: Sendable {
     package let typeName: String
     package let name: String?
     package let resolvedElementType: CompiledValueType?
-    package let domain: StateExpr
+    package let population: AlgorithmProcessPopulation
+    package var domain: StateExpr { population.domain }
     package let fairness: AlgorithmFairness
     package let fairnessExcludedLabels: [AlgorithmLabelModel]
     package let components: [AlgorithmComponentModel]
@@ -521,13 +666,13 @@ package struct AlgorithmProcessModel: Sendable {
         }
     }
 
-    package init(typeName: String, name: String? = nil, domain: StateExpr, fairness: AlgorithmFairness,
+    package init(typeName: String, name: String? = nil, population: AlgorithmProcessPopulation, fairness: AlgorithmFairness,
         components: [AlgorithmComponentModel], resolvedElementType: CompiledValueType? = nil,
         fairnessExcludedLabels: [AlgorithmLabelModel] = []) {
         self.typeName = typeName
         self.name = name
         self.resolvedElementType = resolvedElementType
-        self.domain = domain
+        self.population = population
         self.fairness = fairness
         self.fairnessExcludedLabels = fairnessExcludedLabels
         self.components = components
@@ -543,6 +688,7 @@ package enum AlgorithmFairness: Sendable {
 package struct AlgorithmStateModel: Sendable {
     package let root: String
     package let initialization: VariableInitialization
+    package let tlaName: String?
     package let displayLabel: String?
     package let swiftTypeName: String?
     package let resolvedValueType: CompiledValueType?
@@ -551,13 +697,14 @@ package struct AlgorithmStateModel: Sendable {
     package init(
         root: String,
         initialization: VariableInitialization,
-        displayLabel: String? = nil,
+        tlaName: String? = nil, displayLabel: String? = nil,
         swiftTypeName: String? = nil,
         resolvedValueType: CompiledValueType? = nil,
         exposed: Bool = false
     ) {
         self.root = root
         self.initialization = initialization.normalized
+        self.tlaName = tlaName
         self.displayLabel = displayLabel
         self.swiftTypeName = swiftTypeName
         self.resolvedValueType = resolvedValueType
@@ -571,11 +718,18 @@ package struct AlgorithmStepModel: Sendable {
     /// A labeled PlusCal `while` loop. A true condition returns to `label`; a
     /// false condition advances to the following step.
     package let loopCondition: StateExpr?
+    let displacedAssignmentTargets: [String: String]
 
     package init(label: AlgorithmLabelModel, statements: [AlgorithmStatementModel], loopCondition: StateExpr? = nil) {
+        self.init(label: label, statements: statements, loopCondition: loopCondition, displacedAssignmentTargets: [:])
+    }
+
+    init(label: AlgorithmLabelModel, statements: [AlgorithmStatementModel], loopCondition: StateExpr?,
+         displacedAssignmentTargets: [String: String]) {
         self.label = label
         self.statements = statements
         self.loopCondition = loopCondition
+        self.displacedAssignmentTargets = displacedAssignmentTargets
     }
 }
 
@@ -599,7 +753,7 @@ package indirect enum AlgorithmLValueModel: Sendable, Equatable {
         }
     }
 
-    var expression: StateExpr {
+    package var expression: StateExpr {
         switch self {
         case .root(let root): .variable(root)
         case .function(let base, let key): .functionApply(base.expression, key)
@@ -627,6 +781,22 @@ package struct AlgorithmAssignmentModel: Sendable, Equatable {
 }
 
 package indirect enum AlgorithmStatementModel: Sendable, Equatable {
+    package static func guardedChoice(
+        _ first: [Self], _ second: [Self], remaining: [[Self]]
+    ) -> Self {
+        var branches = [first, second] + remaining
+        let right = branches.removeLast()
+        var choice = Self.either(branches.removeLast(), right)
+        for branch in branches.reversed() {
+            choice = .either(branch, [choice])
+        }
+        return choice
+    }
+
+    package static func copyField(target: String, source: String) -> Self {
+        .set(target: .root(target), value: .variable(source))
+    }
+
     case rejected(AlgorithmDiagnosticCode)
     case when(StateExpr)
     case assert(StateExpr)
@@ -644,35 +814,123 @@ package indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case skip
 }
 
+private func directScalarCopyOperands(
+    _ statements: [AlgorithmStatementModel], roots: Set<String>
+) -> [DirectCopySource.Copy]? {
+    guard !statements.isEmpty else { return nil }
+    var copies: [DirectCopySource.Copy] = []
+    for statement in statements {
+        guard case .set(.root(let target), .variable(let read)) = statement,
+              roots.contains(target), roots.contains(read) else { return nil }
+        copies.append(.init(target: target, read: read))
+    }
+    return copies
+}
+
+private func scheduleDirectScalarCopies(
+    _ statements: [AlgorithmStatementModel], roots: Set<String>, binding: () -> String,
+    recordAssignment: ((String, String) -> Void)?
+) -> (statements: [AlgorithmStatementModel], receipt: StraightLineAssignmentCheck.ScalarCopyReceipt)? {
+    typealias Reference = StraightLineAssignmentCheck.ScalarCopyReceipt.Reference
+    guard let copies = directScalarCopyOperands(statements, roots: roots) else { return nil }
+
+    var writes = Dictionary(uniqueKeysWithValues: roots.map { ($0, Reference.state($0)) })
+    var reads: [Reference] = []
+    var binders: [String] = []
+    for copy in copies {
+        // The RHS uses the previous route even when it reads its own target.
+        reads.append(writes[copy.read, default: .state(copy.read)])
+        let name = binding()
+        binders.append(name)
+        recordAssignment?(name, copy.target)
+        writes[copy.target] = .capture(binders.count)
+    }
+
+    func expression(_ reference: Reference) -> StateExpr {
+        switch reference {
+        case .state(let root): .variable(root)
+        case .capture(let position): .variable(binders[position - 1])
+        }
+    }
+
+    let assignments = copies.enumerated().compactMap { offset, copy -> AlgorithmAssignmentModel? in
+        let position = offset + 1
+        guard writes[copy.target] == .capture(position) else { return nil }
+        return .init(target: .root(copy.target), value: .variable(binders[offset]))
+    }
+    var body: [AlgorithmStatementModel] = [.parallel(assignments)]
+    for (name, read) in zip(binders, reads).reversed() {
+        body = [.letBinding(variable: name, value: expression(read), body)]
+    }
+    return (body, .init(reads: reads, writes: writes))
+}
+
+package struct ScheduledAtomicBindingWrite: Sendable {
+    package let predecessor: String?
+    package let target: String
+    package let binding: String
+}
+
+package struct ScheduledAtomicAssignment: Sendable {
+    let update: ScheduledAtomicBindingWrite
+    let incomingBindings: [String: StateExpr]
+
+    var target: String { update.target }
+}
+
 func scheduleAtomicStatements(
-    _ statements: [AlgorithmStatementModel], binding: () -> String
+    _ statements: [AlgorithmStatementModel], binding: () -> String,
+    recordAssignment: ((String, ScheduledAtomicAssignment) -> Void)? = nil, retainingDisabledTargets: Bool = false,
+    displace: (String, String) -> Void
 ) -> [AlgorithmStatementModel] {
     // Snapshot each write where it occurs, then publish one assignment per
     // root at the end of the atomic branch. PlusCal labels require that form.
+    struct Replacements {
+        var bindings: [String: StateExpr] = [:]
+        var lastWrite: ScheduledAtomicBindingWrite?
+
+        func recording(_ update: ScheduledAtomicBindingWrite) -> Self {
+            var result = self
+            result.bindings[update.target] = .variable(update.binding)
+            result.lastWrite = update
+            return result
+        }
+    }
+
     func schedule(
         _ values: [AlgorithmStatementModel],
         assignments: [AlgorithmAssignmentModel] = [],
-        replacements: [String: StateExpr] = [:]
+        replacements: Replacements = .init()
     ) -> [AlgorithmStatementModel] {
         let finalWrites = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
         guard let statement = values.first else { return finalWrites }
         let suffix = Array(values.dropFirst())
         func expression(_ value: StateExpr) -> StateExpr {
-            StateExpr.substituteVariables(replacements, in: value)
+            StateExpr.substituteVariables(replacements.bindings, in: value)
         }
         func continued(_ body: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
             schedule(body + suffix, assignments: assignments, replacements: replacements)
         }
         switch statement {
         case .set(let target, let value):
-            let name = binding()
+            let update = ScheduledAtomicBindingWrite(predecessor: replacements.lastWrite?.binding,
+                target: target.root, binding: binding())
             let updated = expression(target.assigning(value))
-            let pending = assignments.filter { $0.target.root != target.root }
-                + [.init(target: .root(target.root), value: .variable(name))]
-            var next = replacements
-            next[target.root] = .variable(name)
-            return [.letBinding(variable: name, value: updated,
+            let next = replacements.recording(update)
+            recordAssignment?(update.binding, .init(update: update, incomingBindings: replacements.bindings))
+            if case .variable(let capture)? = replacements.bindings[update.target] {
+                displace(capture, update.target)
+            }
+            let pending = assignments.filter { $0.target.root != update.target }
+                + [.init(target: .root(update.target), value: .variable(update.binding))]
+            return [.letBinding(variable: update.binding, value: updated,
                 schedule(suffix, assignments: pending, replacements: next))]
+        case .when(.value(.bool(false))) where retainingDisabledTargets:
+            // The guard drops the pending writes, but checked captures before it can still fail.
+            for assignment in assignments {
+                if case .variable(let capture) = assignment.value { displace(capture, assignment.target.root) }
+            }
+            return [statement] + continued([])
         case .when, .assert, .skip, .rejected:
             return [statement.mappingExpressions(expression)] + continued([])
         case .letBinding(let variable, let value, let body):

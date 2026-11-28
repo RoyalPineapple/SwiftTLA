@@ -264,6 +264,7 @@ extension CompiledExpression {
                 visit(binding.value, scope: binding.scope)
             case .enabledAction(let action):
                 enabledActions.insert(action)
+                for argument in expression.children { visit(argument, scope: scope) }
             case .stateVariable(let variable):
                 variables.insert(variable)
             case .operatorReference(let id):
@@ -358,6 +359,22 @@ package indirect enum CompiledActionExpr: Sendable {
 }
 
 extension CompiledActionExpr {
+    /// The update visitor for one fully bound action calls its continuation zero or one times.
+    package var emitsAtMostOneCandidate: Bool {
+        var pending = [self]
+        while let node = pending.popLast() {
+            switch node {
+            case .assign, .unchanged, .guard_: break
+            case .define(_, _, let body): pending.append(body)
+            case .and(let left, let right), .ifElse(_, let left, let right):
+                pending.append(right)
+                pending.append(left)
+            case .existsAction, .or: return false
+            }
+        }
+        return true
+    }
+
     func verifyBranchwiseContinuation(at path: String) throws {
         var pending: [(CompiledActionExpr, Bool)] = [(self, false)]
         while let (node, withinConjunctionLeft) = pending.popLast() {
@@ -505,17 +522,21 @@ package struct CompiledFairnessCondition: Sendable {
     package let scope: Scope
     package let isStrong: Bool
     package let projection: CompiledExpression?
+    package let preserved: CompiledExpression?
     package let enabledActions: Set<ActionID>
 
-    package init(scope: Scope, isStrong: Bool, projection: CompiledExpression? = nil, enabledActions: Set<ActionID> = []) {
+    package init(scope: Scope, isStrong: Bool, projection: CompiledExpression? = nil,
+                 preserved: CompiledExpression? = nil, enabledActions: Set<ActionID> = []) {
         self.scope = scope
         self.isStrong = isStrong
         self.projection = projection
+        self.preserved = preserved
         self.enabledActions = enabledActions
     }
 
     package func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
-        try .init(scope: scope, isStrong: isStrong, projection: projection.map(transform), enabledActions: enabledActions)
+        try .init(scope: scope, isStrong: isStrong, projection: projection.map(transform),
+                  preserved: preserved.map(transform), enabledActions: enabledActions)
     }
 }
 
@@ -618,7 +639,7 @@ package struct CompiledOperators: Sendable {
 }
 
 package struct CompiledSemantics: Sendable {
-    package let behavior: CompiledBehavior
+    package var behavior: CompiledBehavior
     package var operators: CompiledOperators
     let formalModuleReplacements: [CompiledFormalModuleReplacement]
     let moduleInstances: [CompiledModuleInstance]

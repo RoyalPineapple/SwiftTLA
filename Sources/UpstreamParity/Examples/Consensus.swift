@@ -1,7 +1,10 @@
+// A single step chooses one proposed value and later steps cannot choose a different one.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byzpaxos/Consensus.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The published PlusCal consensus safety model.
+/// The three-value PlusCal consensus model from the Byzantine Paxos example.
 ///
 /// The model states the core safety boundary: one nondeterministically
 /// selected value may be chosen, and every execution preserves that choice.
@@ -9,7 +12,7 @@ import SwiftTLAMacros
 /// scoped `with`.
 @TLAModel
 package struct ConsensusModel: Sendable {
-    package enum Value: String, CaseIterable, FiniteTLAValueDomain {
+    package enum Choice: String, CaseIterable, FiniteTLAValueDomain {
         case one = "v1"
         case two = "v2"
         case three = "v3"
@@ -17,40 +20,44 @@ package struct ConsensusModel: Sendable {
         package static var defaultValue: Self { .one }
         package static let finiteValues = allCases
 
-        package var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
-        case choose = "lbl"
+        // TLC exposes the translated single loop body as Next.
+        case choose = "Next"
     }
 
     package static var spec: TLASpec {
-        #spec("Consensus") {
+        #spec("Consensus") { configuration in
             Extends(.finiteSets)
             Extends(.integers)
-            let Consensus = Algorithm(fairness: .weak, scoped: { scope in
-                let chosen = scope.sharedVar(initial: SetExpr<Value>())
+            let Value = configuration.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.one, .two]), Set([.one, .two, .three])]))
+            Algorithm("Consensus", fairness: .weak) { scope in
+                let chosen = scope.sharedVar(initial: Set<Choice>())
 
                 let choose = Macro {
                     When(chosen.isEmpty)
-                    With(Value.all) { value in
-                        Assign(chosen, to: chosen.inserting(value))
+                    With(Value) { value in
+                        chosen.insert(value)
                     }
                 }
 
-                While(Step.choose, true) {
+                Loop(Step.choose) {
                     choose()
                 }
 
-                Invariant("TypeOK") {
-                    chosen.isSubset(of: SetExpr<Value>.literal(.one, .two, .three))
-                }
+                let wellTyped = chosen.isSubset(of: Value)
+                Invariant("TypeOK") { wellTyped }
                 Invariant("Inv") {
-                    chosen.cardinality <= 1
+                    wellTyped
+                    chosen.count <= 1
                 }
                 Eventually("Success", !chosen.isEmpty)
-            })
-            Consensus
+            }
+            Validation("published", label: "Consensus") {
+                Bind(Value, to: Set<Choice>([.one, .two, .three]))
+            }.checkingDeadlock(false)
         }
     }
 }

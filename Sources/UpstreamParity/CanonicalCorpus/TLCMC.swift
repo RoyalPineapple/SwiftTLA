@@ -1,3 +1,6 @@
+// The fixture models workers taking graph states off a queue and exploring their successors.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TLC/TLCMC.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -37,7 +40,7 @@ package struct TLCMCModel: Sendable {
     package static var spec: TLASpec {
         #spec("TLCMC") {
             Extends(.integers, .sequences)
-            let ModelChecker = Algorithm(fairness: .weak, scoped: { scope in
+            Algorithm("ModelChecker", fairness: .weak) { scope in
                 let initialStates = SetExpr<Node>.literal(.one, .two)
                 let violations = SetExpr<Node>.literal(.four)
                 let transitionTargets = Function<Node, SetExpr<Node>>.literal(
@@ -46,7 +49,7 @@ package struct TLCMCModel: Sendable {
                     (.three, SetExpr<Node>.literal(.four)),
                     (.four, SetExpr<Node>.literal(.three))
                 )
-                let frontier = scope.sharedVar(in: SetExpr<TupleExpr<Node>>.literal(
+                let frontier = scope.sharedVar(initiallyIn: SetExpr<TupleExpr<Node>>.literal(
                         TupleExpr<Node>.literal(Node.one, Node.two),
                         TupleExpr<Node>.literal(Node.two, Node.one)
                     )
@@ -63,12 +66,12 @@ package struct TLCMCModel: Sendable {
 
                 While(Step.scanInitialStates, initialIndex <= frontier.expr.count) {
                     let initial = frontier.expr.at(initialIndex.expr)
-                    Assign(currentState, to: SearchNode.first(initial))
-                    Assign(closed, to: closed.inserting(initial))
-                    Assign(levels, to: levels.overriding(initial, with: 0))
-                    Assign(initialIndex, to: initialIndex + 1)
+                    currentState.set(SearchNode.first(initial))
+                    closed.insert(initial)
+                    levels.set(levels.overriding(initial, with: 0))
+                    initialIndex += 1
                     If(violations.contains(initial)) {
-                        Assign(counterexample, to: TupleExpr<Node>.literal(initial))
+                        counterexample.set(TupleExpr<Node>.literal(initial))
                         Goto(Step.trace)
                     }
                 }
@@ -78,16 +81,16 @@ package struct TLCMCModel: Sendable {
                 }
 
                 Do(Step.dequeue) {
-                    If(frontier.expr.count == 0) {
+                    If(frontier.expr.isEmpty) {
                         Stop()
                     } else: {
                         let current = frontier.at(1)
                         let nonSelfSuccessors = transitionTargets[current].removing(current)
-                        Assign(currentState, to: SearchNode.first(current))
-                        Assign(frontier, to: frontier.expr.removing(at: 1))
-                        Assign(successors, to: nonSelfSuccessors.subtracting(closed.expr))
-                        If(nonSelfSuccessors.cardinality == 0) {
-                            Assign(counterexample, to: TupleExpr<Node>.literal(current))
+                        currentState.set(SearchNode.first(current))
+                        frontier.set(frontier.expr.removing(at: 1))
+                        successors.set(nonSelfSuccessors.subtracting(closed.expr))
+                        If(nonSelfSuccessors.isEmpty) {
+                            counterexample.set(TupleExpr<Node>.literal(current))
                             Goto(Step.trace)
                         } else: {
                             Goto(Step.exploreSuccessors)
@@ -101,16 +104,13 @@ package struct TLCMCModel: Sendable {
                     } else: {
                         With(successors) { successor in
                             let current = currentState.expr.assuming(Node.self)
-                            Assign(successors, to: successors.removing(successor.expr))
-                            Assign(closed, to: closed.inserting(successor.expr))
-                            Assign(frontier, to: frontier.expr.appending(successor.expr))
-                            Assign(
-                                predecessorEdges,
-                                to: predecessorEdges.expr.appending(Pair<Node, Node>.literal(current, successor.expr))
-                            )
-                            Assign(levels, to: levels.overriding(successor.expr, with: levels[current] + 1))
+                            successors.remove(successor.expr)
+                            closed.insert(successor.expr)
+                            frontier.set(frontier.expr.appending(successor.expr))
+                            predecessorEdges.set(predecessorEdges.expr.appending(Pair<Node, Node>.literal(current, successor.expr)))
+                            levels.set(levels.overriding(successor.expr, with: levels[current] + 1))
                             If(violations.contains(successor)) {
-                                Assign(counterexample, to: TupleExpr<Node>.literal(current, successor.expr))
+                                counterexample.set(TupleExpr<Node>.literal(current, successor.expr))
                                 Goto(Step.trace)
                             } else: {
                                 Goto(Step.exploreSuccessors)
@@ -119,7 +119,7 @@ package struct TLCMCModel: Sendable {
                     }
                 }
 
-                While(Step.trace, true) {
+                Loop(Step.trace) {
                     If(initialStates.contains(counterexample.expr.head())) {
                         Assert(counterexample.expr.count > 0)
                         Stop()
@@ -128,10 +128,7 @@ package struct TLCMCModel: Sendable {
                             .selecting { edge in edge.second() == counterexample.at(1) }
                             .at(1)
                             .first()
-                        Assign(
-                            counterexample,
-                            to: TupleExpr<Node>.literal(predecessor).concatenating(counterexample.expr)
-                        )
+                        counterexample.set(TupleExpr<Node>.literal(predecessor).concatenating(counterexample.expr))
                         Goto(Step.trace)
                     }
                 }
@@ -140,10 +137,8 @@ package struct TLCMCModel: Sendable {
                     closed.expr.isSubset(of: SetExpr<Node>.literal(.one, .two, .three, .four))
                 }
                 Invariant("BFSLevel") { initialIndex >= 1 }
-            })
-            ModelChecker
-            let TLCMC = Validation {}.checking(only: [])
-            TLCMC
+            }
+            Validation("TLCMC") {}.checking(only: [])
         }
     }
 }

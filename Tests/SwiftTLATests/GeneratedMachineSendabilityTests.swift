@@ -38,7 +38,6 @@ public struct ExplicitlyTransferableCounter: Sendable {
         requireSendable(TransferableCounter.self)
         requireSendable(TransferableCounter.State.self)
         requireSendable(TransferableCounter.Action.self)
-        requireSendable(TransferableCounter.Transition.self)
         requireSendable(TransferableCounter.Snapshot.self)
         requireSendable(TransferableCounter.CheckingRegisters.self)
         requireSendable(TransferableCounter.Property.self)
@@ -47,6 +46,7 @@ public struct ExplicitlyTransferableCounter: Sendable {
         requireSendable(ScenarioExpectations.Configuration.self)
         requireSendable(ScenarioExpectations.ValidationScenario.self)
         var machine = try TransferableCounter.makeMachine()
-        #expect(try machine.send(.advance).after.count == 1)
+        try machine.send(.advance)
+        #expect(machine.state.count == 1)
     }
 }

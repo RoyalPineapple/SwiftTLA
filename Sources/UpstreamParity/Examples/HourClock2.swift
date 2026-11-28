@@ -1,23 +1,23 @@
+// This clock computes the next hour with modular arithmetic in the Apalache example.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/HourClock/APHourClock2.tla
+
 import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-package struct HourClock2Model: Sendable {
-    package enum Step: String, CaseIterable { case HCnxt2 }
+package struct HourClock2Model: ParameterlessGeneratedModel {
+    package enum Step: String, CaseIterable { case tick = "HCnxt2" }
 
     package static var spec: TLASpec {
         #spec("HourClock2") {
-            let HCini = Invariant()
-            let Clock = Algorithm(scoped: { scope in
-                let hr = scope.sharedVar(in: 1...12)
-                While(Step.HCnxt2, true) {
-                    Assign(hr, to: hr % 12 + 1)
+            Algorithm("Clock") { scope in
+                let hr = scope.sharedVar(initiallyIn: 1...12)
+                Loop(Step.tick) {
+                    hr.set(hr % 12 + 1)
                 }
-                HCini { hr >= 1 && hr <= 12 }
-            })
-            Clock
-            let apUpstream = Validation(label: "AP Upstream") {}
-            apUpstream
+                Invariant("HCini") { (1...12).contains(hr) }
+            }
+            Validation("apUpstream", label: "AP Upstream") {}
         }
     }
 }

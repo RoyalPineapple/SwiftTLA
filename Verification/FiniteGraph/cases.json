@@ -2,6 +2,117 @@
   "schema": "FiniteGraphCases",
   "cases": [
     {
+      "id": "turing-paxos-consensus",
+      "sourceModel": "turing-paxos-consensus",
+      "scenario": "published",
+      "module": "turing-paxos-consensus/MCConsensus.tla",
+      "configuration": "turing-paxos-consensus/MCConsensus.cfg",
+      "imports": [
+        "turing-paxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCConsensus",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/MCConsensus.tla",
+        "sha256": "5d253478994e142ec1e8576f1d339a5bca18b563fef4a447ed2f0bff902bc8e4"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "5d253478994e142ec1e8576f1d339a5bca18b563fef4a447ed2f0bff902bc8e4",
+      "cfgSHA256": "aaf88c6a64c71a5999fad00e74d4c6cbc8d177c3c6190371acae33ddd4e4b949",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-hour-clock-composing",
+      "sourceModel": "hour-clock",
+      "scenario": "Upstream",
+      "module": "ap-hour-clock-composing/APHourClock.tla",
+      "configuration": "ap-hour-clock-composing/APHourClock.cfg",
+      "imports": [
+        "ap-hour-clock-composing/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APHourClock",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Composing/APHourClock.tla",
+        "sha256": "b1ee6db9d303720f5302b73dee332afb1c9f11c29a86a7a4254c45cc895381c6"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b1ee6db9d303720f5302b73dee332afb1c9f11c29a86a7a4254c45cc895381c6",
+      "cfgSHA256": "1cae199360d6c8767bee3192ff11211d5fd091d1e3332957d55bab1dda8dd133",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-hour-clock-liveness",
+      "sourceModel": "hour-clock",
+      "scenario": "Upstream",
+      "module": "ap-hour-clock-liveness/APHourClock.tla",
+      "configuration": "ap-hour-clock-liveness/APHourClock.cfg",
+      "imports": [
+        "ap-hour-clock-liveness/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APHourClock",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Liveness/APHourClock.tla",
+        "sha256": "566751e84f3f8783b1e37b3ca978d75583af104713234000c2cc890d28f7cf54"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "566751e84f3f8783b1e37b3ca978d75583af104713234000c2cc890d28f7cf54",
+      "cfgSHA256": "1cae199360d6c8767bee3192ff11211d5fd091d1e3332957d55bab1dda8dd133",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "ap-channel",
       "sourceModel": "channel",
       "scenario": "APChannel",
@@ -273,6 +384,581 @@
       "moduleSHA256": "505c7e02bec386dd24cd1b0f33e16cbc1b7fe02edda7dd63689ad4172d01c2ac",
       "cfgSHA256": "72a84107ba0b85a38578590f2e9d4456cbed88a3cfcd8b4276ca2036843556ef",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "acp-nb",
+      "sourceModel": "acp-nb",
+      "scenario": "twoParticipants",
+      "module": "acp/ACP_NB_TLC.tla",
+      "configuration": "acp/ACP_NB_TLC.cfg",
+      "imports": [
+        "acp/ACP_NB.tla",
+        "acp/ACP_SB.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "ACP_NB_TLC",
+          "importedModule": "ACP_NB"
+        },
+        {
+          "importingModule": "ACP_NB",
+          "importedModule": "ACP_SB"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/acp/ACP_NB_TLC.tla",
+        "sha256": "f6b1fa054abc998a6601064d7339bdaeb9ce2f3825410ea068227db7122ecc43"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f6b1fa054abc998a6601064d7339bdaeb9ce2f3825410ea068227db7122ecc43",
+      "cfgSHA256": "141d9501efb5d97473e639c70d37134bdfb5241f11acdbed55ae0965c51cb96e",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "acp-nb-wrong",
+      "sourceModel": "acp-nb",
+      "scenario": "earlyDecision",
+      "module": "acp/ACP_NB_WRONG_TLC.tla",
+      "configuration": "acp/ACP_NB_WRONG_TLC.cfg",
+      "imports": [
+        "acp/ACP_SB.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "ACP_NB_WRONG_TLC",
+          "importedModule": "ACP_SB"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/acp/ACP_NB_WRONG_TLC.tla",
+        "sha256": "a0eed90eda36ab2ceeb324f5dfe211bcea3951bdeccf978db32cb1a4ccb1bd4d"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "a0eed90eda36ab2ceeb324f5dfe211bcea3951bdeccf978db32cb1a4ccb1bd4d",
+      "cfgSHA256": "f592b1932ae7209302bb9165f2a44e47933bf26205fb1e2d879c49897f05cd71",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "acp-sb",
+      "sourceModel": "acp-sb",
+      "scenario": "simpleBroadcast",
+      "module": "acp/ACP_SB_TLC.tla",
+      "configuration": "acp/ACP_SB_TLC.cfg",
+      "imports": [
+        "acp/ACP_SB.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "ACP_SB_TLC",
+          "importedModule": "ACP_SB"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/acp/ACP_SB_TLC.tla",
+        "sha256": "fc5e9d4cc4312e03eaf73288683c24a8e755f467f2da63ce56a7c48cd97c8cb1"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "fc5e9d4cc4312e03eaf73288683c24a8e755f467f2da63ce56a7c48cd97c8cb1",
+      "cfgSHA256": "c3192ca50e1182d77d0d3a1d8050345cecdb93d208562abb141296c4df41061e",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "two-phase-btm",
+      "sourceModel": "two-phase-btm",
+      "scenario": "threeManagers",
+      "module": "two-phase-btm/2PCwithBTM.tla",
+      "configuration": "two-phase-btm/2PCwithBTM.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/2PCwithBTM.tla",
+        "sha256": "ea518313d91f44080ddd8a062439e24be52c6851173952558436124f35227198"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "ea518313d91f44080ddd8a062439e24be52c6851173952558436124f35227198",
+      "cfgSHA256": "3da95f63bdd374311f671f5cda8c0504517fa910811f7491ac9c96482c3a55d7",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "transaction-two-phase",
+      "sourceModel": "transaction-two-phase",
+      "scenario": "threeManagers",
+      "module": "transaction-two-phase/TwoPhase.tla",
+      "configuration": "transaction-two-phase/TwoPhase.cfg",
+      "imports": [
+        "tcommit/TCommit.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "TwoPhase",
+          "importedModule": "TCommit"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/TwoPhase.tla",
+        "sha256": "e6e72ed0097cca55e80b97af33c3bc54792a504bcbdf639d6d9c666f49c17817"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e6e72ed0097cca55e80b97af33c3bc54792a504bcbdf639d6d9c666f49c17817",
+      "cfgSHA256": "6f443b596657a26c817ee130a89c0ba84aa1cd06a60d07db449d06382de4fd87",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "tcommit",
+      "sourceModel": "tcommit",
+      "scenario": "threeManagers",
+      "module": "tcommit/TCommit.tla",
+      "configuration": "tcommit/TCommit.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/TCommit.tla",
+        "sha256": "98974d8c5ee007f4f62188737c20c7dcdb05af099cc53a59c8b8651331fd925d"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "98974d8c5ee007f4f62188737c20c7dcdb05af099cc53a59c8b8651331fd925d",
+      "cfgSHA256": "a896b1bb937ac8fee372e6bc05029c1ffae64acbac7ca58b02e097c40862c415",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "simple-allocator",
+      "sourceModel": "simple-allocator",
+      "scenario": "published",
+      "module": "simple-allocator/SimpleAllocator.tla",
+      "configuration": "simple-allocator/SimpleAllocator.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/allocator/SimpleAllocator.tla",
+        "sha256": "39180889fb44ea7cbba47e97c2fa727a54c43f8f7ff983caf61d67eb0a2db0e3"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "39180889fb44ea7cbba47e97c2fa727a54c43f8f7ff983caf61d67eb0a2db0e3",
+      "cfgSHA256": "584308b2df46126ebb5423d58186ec149ae5048c348b6cb48f052fb3ec5305ca",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "paxos-mc-consensus",
+      "sourceModel": "paxos-mc-consensus",
+      "scenario": "published",
+      "module": "paxos-mc-consensus/MCConsensus.tla",
+      "configuration": "paxos-mc-consensus/MCConsensus.cfg",
+      "imports": [
+        "paxos-mc-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCConsensus",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Paxos/MCConsensus.tla",
+        "sha256": "13dafc53b46105ad249952d400fed103b5066a455db1925140bb73dec631fd46"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "13dafc53b46105ad249952d400fed103b5066a455db1925140bb73dec631fd46",
+      "cfgSHA256": "1620b91d86fa51daafc390875d0029e8f16ac39f9559a9ef85396dcc801e7b28",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "btree-kvstore",
+      "sourceModel": "btree-kvstore",
+      "scenario": "published",
+      "module": "btree-kvstore/kvstore.tla",
+      "configuration": "btree-kvstore/kvstore.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/btree/kvstore.tla",
+        "sha256": "c1131a8591f91c110f2a739dc91d20564542ac6f201d5b76be581e485cfbb376"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c1131a8591f91c110f2a739dc91d20564542ac6f201d5b76be581e485cfbb376",
+      "cfgSHA256": "7b0120df31cb29eb12fa2a8a6f3b7e355921e58268b4d27384c1a94978e7246a",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "allocator-refinement",
+      "sourceModel": "scheduling-allocator",
+      "scenario": "refinement",
+      "module": "scheduling-allocator/AllocatorRefinement.tla",
+      "configuration": "scheduling-allocator/AllocatorRefinement.cfg",
+      "imports": [
+        "scheduling-allocator/SchedulingAllocator.tla",
+        "simple-allocator/SimpleAllocator.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "AllocatorRefinement",
+          "importedModule": "SchedulingAllocator"
+        },
+        {
+          "importingModule": "AllocatorRefinement",
+          "importedModule": "SimpleAllocator"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/allocator/AllocatorRefinement.tla",
+        "sha256": "7c3900880a1a6235440d37818e43e9a2d818af4645b2bca1964a144adc95fb74"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "7c3900880a1a6235440d37818e43e9a2d818af4645b2bca1964a144adc95fb74",
+      "cfgSHA256": "685ae012385ee06d906b81eb716b0342de9a985c610edef48ee3e4cba487242f",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "scheduling-allocator",
+      "sourceModel": "scheduling-allocator",
+      "scenario": "published",
+      "module": "scheduling-allocator/SchedulingAllocator.tla",
+      "configuration": "scheduling-allocator/SchedulingAllocator.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/allocator/SchedulingAllocator.tla",
+        "sha256": "2079cbb8770147eff672f1f3fddd759064e63c0e2c31bfa6a08de57d2d3bac79"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "2079cbb8770147eff672f1f3fddd759064e63c0e2c31bfa6a08de57d2d3bac79",
+      "cfgSHA256": "48f07c633652ba7fe8509fc8950f04789efb5491e56119923623de91375a11b6",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "voucher-life-cycle",
+      "sourceModel": "voucher-life-cycle",
+      "scenario": "published",
+      "module": "voucher-life-cycle/VoucherLifeCycle.tla",
+      "configuration": "voucher-life-cycle/VoucherLifeCycle.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherLifeCycle.tla",
+        "sha256": "6eadee511ab80cc35f389104c8b558677ba5572ce621422a0f0ffdebdc72505f"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "6eadee511ab80cc35f389104c8b558677ba5572ce621422a0f0ffdebdc72505f",
+      "cfgSHA256": "51c27e2b132c95a167abc28a23c9e0c2368f609f2f0b728dbfeff199e7d81d9a",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "byzpaxos-consensus",
+      "sourceModel": "byzpaxos-consensus",
+      "scenario": "published",
+      "module": "byzpaxos-consensus/Consensus.tla",
+      "configuration": "byzpaxos-consensus/Consensus.cfg",
+      "imports": [
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byzpaxos/Consensus.tla",
+        "sha256": "5b877e93b31c982e80b1443127bc2c50c090d7f8d729d468f3b42849315205bf"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "5b877e93b31c982e80b1443127bc2c50c090d7f8d729d468f3b42849315205bf",
+      "cfgSHA256": "b565780a83d15ee93ae45529170484cefe56d948318b25389c68b5442fd0a34c",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "spanning",
+      "sourceModel": "spanning",
+      "scenario": "broadcast",
+      "module": "spanning/MC_spanning.tla",
+      "configuration": "spanning/MC_spanning.cfg",
+      "imports": [
+        "spanning/spanning.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC_spanning",
+          "importedModule": "spanning"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/spanning/MC_spanning.tla",
+        "sha256": "08e4703ccdcf45be11aaacb91971bf0bcbd69adc8e27b227e7085189df2d6bc5"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "08e4703ccdcf45be11aaacb91971bf0bcbd69adc8e27b227e7085189df2d6bc5",
+      "cfgSHA256": "a97ff67b862219417ee44f435538b2976b693bcb72c5774191a30b473905d009",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "token-ring",
+      "sourceModel": "token-ring",
+      "scenario": "sixNodes",
+      "module": "token-ring/TokenRing.tla",
+      "configuration": "token-ring/TokenRing.cfg",
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd426/TokenRing.tla",
+        "sha256": "e13841dfa43b3bd65a35d53c0c7c02bf8de42bb6864bd202ba30b724b33a056f"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e13841dfa43b3bd65a35d53c0c7c02bf8de42bb6864bd202ba30b724b33a056f",
+      "cfgSHA256": "8dcdfc79502bc6074033e444e96adb838b89224a53a00a4d21fac94a7a70c740",
+      "timeoutSeconds": 600,
+      "imports": [],
+      "dependencies": []
+    },
+    {
+      "id": "auxiliary-lock",
+      "sourceModel": "auxiliary-lock",
+      "scenario": "twoProcess",
+      "module": "auxiliary-lock/Lock.tla",
+      "configuration": "auxiliary-lock/Lock.cfg",
+      "imports": [
+        "boulanger/TLAPS.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Lock",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/Lock.tla",
+        "sha256": "f10562642cb5d9cb6a3d3912d93917fa692a97ab9a879fa3b3f2c7989098765f"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f10562642cb5d9cb6a3d3912d93917fa692a97ab9a879fa3b3f2c7989098765f",
+      "cfgSHA256": "1fa7fbd2d3841eb52c2e787ae8cef56d734ec5b69d73382f0005bdf2e80c2c98",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "peterson-safety",
+      "sourceModel": "peterson-safety",
+      "scenario": "safety",
+      "module": "auxiliary-lock/Peterson.tla",
+      "configuration": "auxiliary-lock/PetersonSafety.cfg",
+      "imports": [
+        "auxiliary-lock/Lock.tla",
+        "boulanger/TLAPS.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Peterson",
+          "importedModule": "Lock"
+        },
+        {
+          "importingModule": "Peterson",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Lock",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/Peterson.tla",
+        "sha256": "0cad3a0a34bdf495606aa0b3a27d58d2a6568b4d1a4fe4bdc4b45d723a90cba7"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0cad3a0a34bdf495606aa0b3a27d58d2a6568b4d1a4fe4bdc4b45d723a90cba7",
+      "cfgSHA256": "ca5f0da785fe7991b59526f4d039455916b366036245d168e34186769c75fbf7",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "peterson-published",
+      "sourceModel": "peterson-safety",
+      "scenario": "published",
+      "module": "auxiliary-lock/Peterson.tla",
+      "configuration": "auxiliary-lock/Peterson.cfg",
+      "imports": [
+        "auxiliary-lock/Lock.tla",
+        "boulanger/TLAPS.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Peterson",
+          "importedModule": "Lock"
+        },
+        {
+          "importingModule": "Peterson",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Lock",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/Peterson.tla",
+        "sha256": "0cad3a0a34bdf495606aa0b3a27d58d2a6568b4d1a4fe4bdc4b45d723a90cba7"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0cad3a0a34bdf495606aa0b3a27d58d2a6568b4d1a4fe4bdc4b45d723a90cba7",
+      "cfgSHA256": "59b3e1aee1c1bb778175d5a3dbe968934228c58e9b757f2ee29d142cad63c055",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "auxiliary-lockhs",
+      "sourceModel": "auxiliary-lockhs",
+      "scenario": "published",
+      "module": "auxiliary-lock/LockHS.tla",
+      "configuration": "auxiliary-lock/LockHS.cfg",
+      "imports": [
+        "auxiliary-lock/Lock.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "auxiliary-lock/Stuttering.tla",
+        "auxiliary-lock/Peterson.tla",
+        "boulanger/TLAPS.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "LockHS",
+          "importedModule": "Lock"
+        },
+        {
+          "importingModule": "LockHS",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "LockHS",
+          "importedModule": "Stuttering"
+        },
+        {
+          "importingModule": "LockHS",
+          "importedModule": "Peterson"
+        },
+        {
+          "importingModule": "Peterson",
+          "importedModule": "Lock"
+        },
+        {
+          "importingModule": "Peterson",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Lock",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/locks_auxiliary_vars/LockHS.tla",
+        "sha256": "a34543670fc7fb46332624aa46ab6f350b67de5f0ffb59ec0b1c50cfe3500d10"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "a34543670fc7fb46332624aa46ab6f350b67de5f0ffb59ec0b1c50cfe3500d10",
+      "cfgSHA256": "cc57190fa6da336bc232d649869eb95825361634241b7013411da85660d8fc44",
+      "timeoutSeconds": 600
     },
     {
       "id": "binary-search",
@@ -595,20 +1281,44 @@
       "timeoutSeconds": 60
     },
     {
-      "id": "multicar-elevator",
+      "id": "elevator-safety-small",
       "sourceModel": "multicar-elevator",
-      "scenario": "MultiCarElevator",
-      "module": "multicar-elevator/MultiCarElevator.tla",
-      "configuration": "multicar-elevator/MultiCarElevator.cfg",
+      "scenario": "ElevatorSafetySmall",
+      "module": "multicar-elevator/Elevator.tla",
+      "configuration": "multicar-elevator/ElevatorSafetySmall.cfg",
       "imports": [],
       "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiCarElevator/Elevator.tla",
+        "sha256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203"
+      },
       "exploration": {
         "maximumStateLimit": 100000,
         "symmetryReduction": "disabled"
       },
-      "moduleSHA256": "af971fe32f8e8fe62e39985201894929beb0e85c99504d6db56350701bcaead5",
-      "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593",
-      "timeoutSeconds": 60
+      "moduleSHA256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203",
+      "cfgSHA256": "9032b54c14239b6f1a4bd17695a64c8b0d383fb29eb4625c749a2f4381379fb3",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "elevator-liveness-medium",
+      "sourceModel": "multicar-elevator",
+      "scenario": "ElevatorLivenessMedium",
+      "module": "multicar-elevator/Elevator.tla",
+      "configuration": "multicar-elevator/ElevatorLivenessMedium.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiCarElevator/Elevator.tla",
+        "sha256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203",
+      "cfgSHA256": "3e6d67656512a5d2e4795c7de9c13d510096608e506c56f31f0fa4eb618d9290",
+      "timeoutSeconds": 600
     },
     {
       "id": "tlcmc-graph-1",
@@ -1304,6 +2014,107 @@
       "timeoutSeconds": 300
     },
     {
+      "id": "ap-barrier",
+      "sourceModel": "barrier",
+      "scenario": "APBarrier",
+      "module": "barrier/APBarrier.tla",
+      "configuration": "barrier/APBarrier.cfg",
+      "imports": [
+        "barrier/Barrier.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APBarrier",
+          "importedModule": "Barrier"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/barriers/APBarrier.tla",
+        "sha256": "09e60969912d06bdbb88e391d821acb8e29718f78e6a15352a758ea826f4090a"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "09e60969912d06bdbb88e391d821acb8e29718f78e6a15352a758ea826f4090a",
+      "cfgSHA256": "f540df1090b1ca0986763b26a2ccffb133f15b991fa777b43b9127f4200c5a29",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "barrier",
+      "sourceModel": "barrier",
+      "scenario": "Barrier",
+      "module": "barrier/Barrier.tla",
+      "configuration": "barrier/Barrier.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/barriers/Barrier.tla",
+        "sha256": "e4a28b2900e3769602e700c3d474e5ac2147a1187ce80ef2f365a029abc5c220"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e4a28b2900e3769602e700c3d474e5ac2147a1187ce80ef2f365a029abc5c220",
+      "cfgSHA256": "493424bad25906d0c8202fc727fec04cec8edba8e09ab89ebab06a577e54d6e1",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "ap-readers-writers",
+      "sourceModel": "readers-writers",
+      "scenario": "APReadersWriters",
+      "module": "readers-writers/APReadersWriters.tla",
+      "configuration": "readers-writers/APReadersWriters.cfg",
+      "imports": [
+        "readers-writers/ReadersWriters.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APReadersWriters",
+          "importedModule": "ReadersWriters"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ReadersWriters/APReadersWriters.tla",
+        "sha256": "4274771776b2ec3d521dbdec8daa9f38fa36cef9975dee9c9a179813cf5f85be"
+      },
+      "exploration": {
+        "maximumStateLimit": 25000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "4274771776b2ec3d521dbdec8daa9f38fa36cef9975dee9c9a179813cf5f85be",
+      "cfgSHA256": "72b96918d7256397680646894ccb8f5f45b44f47759ac9351970339609f0924e",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "readers-writers",
+      "sourceModel": "readers-writers",
+      "scenario": "MC",
+      "module": "readers-writers/MC.tla",
+      "configuration": "readers-writers/MC.cfg",
+      "imports": [
+        "readers-writers/ReadersWriters.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC",
+          "importedModule": "ReadersWriters"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ReadersWriters/MC.tla",
+        "sha256": "ebaa5772aab4758cfc62d249dcae493c60008ced982f428764212feb14a33366"
+      },
+      "exploration": {
+        "maximumStateLimit": 25000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "ebaa5772aab4758cfc62d249dcae493c60008ced982f428764212feb14a33366",
+      "cfgSHA256": "71c402125bae63c3ac0cf685d990282ab50f8b360f1cfdc8749ad9c1a33f636f",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "single-lane-bridge-0",
       "sourceModel": "single-lane-bridge",
       "scenario": "MC",
@@ -1583,6 +2394,3096 @@
       "moduleSHA256": "592100b6baef4ec24cca79c97bdb5c7b83e7f7b7f2174b7a12a3591c69a6786c",
       "cfgSHA256": "63ab878b931a5e20e455805d08ea5e0e8acf54429041a6b3667713fba71237c4",
       "timeoutSeconds": 5400
+    },
+    {
+      "id": "voucher-issue",
+      "sourceModel": "voucher-issue",
+      "scenario": "published",
+      "module": "voucher-issue/VoucherIssue.tla",
+      "configuration": "voucher-issue/VoucherIssue.cfg",
+      "imports": [
+        "voucher-life-cycle/VoucherLifeCycle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoucherIssue",
+          "importedModule": "VoucherLifeCycle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherIssue.tla",
+        "sha256": "d399e0a3159de507a0c034d942b0ae9ca7a1e7400bc1c4fcf9b193e5a63cc0e5"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "d399e0a3159de507a0c034d942b0ae9ca7a1e7400bc1c4fcf9b193e5a63cc0e5",
+      "cfgSHA256": "0644be728325f601c65e30ebb4b3eace22b4dab1add7428a1c81b83ec4e740d6",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "voucher-cancel",
+      "sourceModel": "voucher-cancel",
+      "scenario": "published",
+      "module": "voucher-cancel/VoucherCancel.tla",
+      "configuration": "voucher-cancel/VoucherCancel.cfg",
+      "imports": [
+        "voucher-life-cycle/VoucherLifeCycle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoucherCancel",
+          "importedModule": "VoucherLifeCycle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherCancel.tla",
+        "sha256": "8be98e04430febfdd779ccb6ace0d97d4a98e04a41a1ec204311c68ecf222a95"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "8be98e04430febfdd779ccb6ace0d97d4a98e04a41a1ec204311c68ecf222a95",
+      "cfgSHA256": "a4a1e44c4efae9fa606b230cf51009c82b301ca9807c99c032058f926b12d939",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "voucher-redeem",
+      "sourceModel": "voucher-redeem",
+      "scenario": "published",
+      "module": "voucher-redeem/VoucherRedeem.tla",
+      "configuration": "voucher-redeem/VoucherRedeem.cfg",
+      "imports": [
+        "voucher-life-cycle/VoucherLifeCycle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoucherRedeem",
+          "importedModule": "VoucherLifeCycle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherRedeem.tla",
+        "sha256": "ddda749e9049f736c2ddaeb4acbacc93b7c8f4bff890700a06e4d32e0e73827a"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "ddda749e9049f736c2ddaeb4acbacc93b7c8f4bff890700a06e4d32e0e73827a",
+      "cfgSHA256": "43e68c47811174fefed84e7cd93a9fecae7f26e68f84c30497677fafbfe7d00e",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "voucher-transfer",
+      "sourceModel": "voucher-transfer",
+      "scenario": "published",
+      "module": "voucher-transfer/VoucherTransfer.tla",
+      "configuration": "voucher-transfer/VoucherTransfer.cfg",
+      "imports": [
+        "voucher-life-cycle/VoucherLifeCycle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoucherTransfer",
+          "importedModule": "VoucherLifeCycle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byihive/VoucherTransfer.tla",
+        "sha256": "0a645d46eec0b818d69924811dcd96589ac6c4d02eee2e82fc99a45c436832b8"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0a645d46eec0b818d69924811dcd96589ac6c4d02eee2e82fc99a45c436832b8",
+      "cfgSHA256": "51f4fbdc23756006b2b5e48b452f107281ebdb52482e0a6b3c40739d73817b80",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "barriers",
+      "sourceModel": "barriers",
+      "scenario": "published",
+      "module": "barriers/Barriers.tla",
+      "configuration": "barriers/Barriers.cfg",
+      "imports": [
+        "barrier/Barrier.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Barriers",
+          "importedModule": "Barrier"
+        },
+        {
+          "importingModule": "Barriers",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Barriers",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/barriers/Barriers.tla",
+        "sha256": "34883b1e21d7b3c3fb02e5343844fa29f8663f9e602da0b3fc3f50653abc68ee"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "34883b1e21d7b3c3fb02e5343844fa29f8663f9e602da0b3fc3f50653abc68ee",
+      "cfgSHA256": "de809a0a59aa9267c59705cbae0128a59f494fd2b1dc2bba105b2373e7671dee",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "ap-live-hour-clock",
+      "sourceModel": "hour-clock",
+      "scenario": "Upstream",
+      "module": "ap-live-hour-clock/APLiveHourClock.tla",
+      "configuration": "ap-live-hour-clock/APLiveHourClock.cfg",
+      "imports": [
+        "ap-live-hour-clock/LiveHourClock.tla",
+        "ap-live-hour-clock/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APLiveHourClock",
+          "importedModule": "LiveHourClock"
+        },
+        {
+          "importingModule": "LiveHourClock",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Liveness/APLiveHourClock.tla",
+        "sha256": "c9ee67ef8357b9912750a63a869ce1183b8ca27405a8dca8c6c423a0accf82ec"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c9ee67ef8357b9912750a63a869ce1183b8ca27405a8dca8c6c423a0accf82ec",
+      "cfgSHA256": "855482d3cbc6d03523a24ccb539c69cf98a9edeb70dfb18af5436b1339b27554",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "span-tree",
+      "sourceModel": "span-tree",
+      "scenario": "Upstream",
+      "module": "span-tree/SpanTree.tla",
+      "configuration": "span-tree/SpanTree.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/SpanTree.tla",
+        "sha256": "528cbe07f16d42e73aac18ff0bdf679c6adc5498f8bac92772a87ae5ea7a9456"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "528cbe07f16d42e73aac18ff0bdf679c6adc5498f8bac92772a87ae5ea7a9456",
+      "cfgSHA256": "a2fbc51a44e8e1429549b8a19028e9ba1a04795c0793d50cb03b2904c1401d4c",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "span-tree-four",
+      "sourceModel": "span-tree-test",
+      "scenario": "Upstream",
+      "module": "span-tree-four/SpanTreeTest.tla",
+      "configuration": "span-tree-four/SpanTreeTest4Nodes.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/SpanTreeTest.tla",
+        "sha256": "474ae020a81dc380a89b829366db79698eaaca6afb9cafb6579748d2838c6e5c"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "474ae020a81dc380a89b829366db79698eaaca6afb9cafb6579748d2838c6e5c",
+      "cfgSHA256": "c60475ed3e88944ebf8e17d9b13eae3e49bf8cc8311ef4fee88938b48ad6047a",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "span-tree-five",
+      "sourceModel": "span-tree-test",
+      "scenario": "FiveNodes",
+      "module": "span-tree-four/SpanTreeTest.tla",
+      "configuration": "span-tree-four/SpanTreeTest5Nodes.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/SpanTreeTest.tla",
+        "sha256": "474ae020a81dc380a89b829366db79698eaaca6afb9cafb6579748d2838c6e5c"
+      },
+      "exploration": {
+        "maximumStateLimit": 2000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "474ae020a81dc380a89b829366db79698eaaca6afb9cafb6579748d2838c6e5c",
+      "cfgSHA256": "32452f3bb5419e3259deab683ca0dfd3138445137f4fb9c04c3ca4ee2143c9a9",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "ab-correctness",
+      "sourceModel": "ab-correctness",
+      "scenario": "Upstream",
+      "module": "ab-correctness/ABCorrectness.tla",
+      "configuration": "ab-correctness/ABCorrectness.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/TLC/ABCorrectness.tla",
+        "sha256": "90c960c490f9fa66e919cc025cc4f31e3036be4949f78484799874a27ac6054b"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "90c960c490f9fa66e919cc025cc4f31e3036be4949f78484799874a27ac6054b",
+      "cfgSHA256": "14d30d71a685e45968132c5dd1af1939dccc5986ede12fce3e219a28054cabad",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "mc-inner-fifo",
+      "sourceModel": "mc-inner-fifo",
+      "scenario": "Upstream",
+      "module": "mc-inner-fifo/MCInnerFIFO.tla",
+      "configuration": "mc-inner-fifo/MCInnerFIFO.cfg",
+      "imports": [
+        "mc-inner-fifo/InnerFIFOInstanced.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCInnerFIFO",
+          "importedModule": "InnerFIFOInstanced"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/FIFO/MCInnerFIFO.tla",
+        "sha256": "0307ab77efcefd78af6a5ddd2d6f382419a2b1e79112f5f16941ad83315936d7"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0307ab77efcefd78af6a5ddd2d6f382419a2b1e79112f5f16941ad83315936d7",
+      "cfgSHA256": "ec13fb4aabb7e9eddab25e86cec302b553d544ce341263eb67cd17a8f7ceab79",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-span-tree",
+      "sourceModel": "ap-span-tree",
+      "scenario": "Upstream",
+      "module": "ap-span-tree/APSpanTree.tla",
+      "configuration": "ap-span-tree/APSpanTree.cfg",
+      "imports": [
+        "ap-span-tree/SpanTree.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APSpanTree",
+          "importedModule": "SpanTree"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpanningTree/APSpanTree.tla",
+        "sha256": "f6fa8aa77034860d216b28db437f1ccd3ff6867054dd80e0ef67f7ffd47f7cd0"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f6fa8aa77034860d216b28db437f1ccd3ff6867054dd80e0ef67f7ffd47f7cd0",
+      "cfgSHA256": "f2995ef404cae7710361166c6ffb05f9838fcc235daab67cd6bfdc87365a9a49",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "mc-alternating-bit",
+      "sourceModel": "mc-alternating-bit",
+      "scenario": "Upstream",
+      "module": "mc-alternating-bit/MCAlternatingBit.tla",
+      "configuration": "mc-alternating-bit/MCAlternatingBit.cfg",
+      "imports": [
+        "mc-alternating-bit/AlternatingBit.tla",
+        "mc-alternating-bit/ABCorrectness.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCAlternatingBit",
+          "importedModule": "AlternatingBit"
+        },
+        {
+          "importingModule": "MCAlternatingBit",
+          "importedModule": "ABCorrectness"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/TLC/MCAlternatingBit.tla",
+        "sha256": "b97edf65c80c0d0a116d1016fc2a95bf51a2e008bb1768bde2c52e828f08785a"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b97edf65c80c0d0a116d1016fc2a95bf51a2e008bb1768bde2c52e828f08785a",
+      "cfgSHA256": "190795a2fe770b019c73ca8b7c6e97901eccfbb7915cde72ec4bdfe46afe78fb",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "mc-inner-serial",
+      "sourceModel": "mc-inner-serial",
+      "scenario": "Upstream",
+      "module": "mc-inner-serial/MCInnerSerial.tla",
+      "configuration": "mc-inner-serial/MCInnerSerial.cfg",
+      "imports": [
+        "mc-inner-serial/InnerSerial.tla",
+        "mc-inner-serial/RegisterInterface.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCInnerSerial",
+          "importedModule": "InnerSerial"
+        },
+        {
+          "importingModule": "InnerSerial",
+          "importedModule": "RegisterInterface"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.tla",
+        "sha256": "4b0322e0e3795bd1e63201b4876ac7b84e8acbe4fe56308ea7d57b64b084dc28"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "4b0322e0e3795bd1e63201b4876ac7b84e8acbe4fe56308ea7d57b64b084dc28",
+      "cfgSHA256": "ca70ba8f305c4759112511237a65dc42cd0da53d5bce1be69880c19e192ae630",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "mc-internal-memory",
+      "sourceModel": "mc-internal-memory",
+      "scenario": "Upstream",
+      "module": "mc-internal-memory/MCInternalMemory.tla",
+      "configuration": "mc-internal-memory/MCInternalMemory.cfg",
+      "imports": [
+        "mc-internal-memory/InternalMemory.tla",
+        "mc-internal-memory/MemoryInterface.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCInternalMemory",
+          "importedModule": "InternalMemory"
+        },
+        {
+          "importingModule": "InternalMemory",
+          "importedModule": "MemoryInterface"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.tla",
+        "sha256": "67deb792930526267e556009d41a4eb6bf9ce663d6224d8c745b67acb2faffe2"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "67deb792930526267e556009d41a4eb6bf9ce663d6224d8c745b67acb2faffe2",
+      "cfgSHA256": "f25a41db5f6d7c2e1644a19595b8b72ca48b2b1ae654d28f9f8ad05a41b9eb98",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "mc-live-internal-memory",
+      "sourceModel": "mc-internal-memory",
+      "scenario": "Live",
+      "module": "mc-live-internal-memory/MCLiveInternalMemory.tla",
+      "configuration": "mc-live-internal-memory/MCLiveInternalMemory.cfg",
+      "imports": [
+        "mc-live-internal-memory/LiveInternalMemory.tla",
+        "mc-live-internal-memory/InternalMemory.tla",
+        "mc-live-internal-memory/MemoryInterface.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCLiveInternalMemory",
+          "importedModule": "LiveInternalMemory"
+        },
+        {
+          "importingModule": "LiveInternalMemory",
+          "importedModule": "InternalMemory"
+        },
+        {
+          "importingModule": "InternalMemory",
+          "importedModule": "MemoryInterface"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.tla",
+        "sha256": "46b09f1b84b763e366cc98a7af4a072b4371c5cdd06ef5396ebba49233490af8"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "46b09f1b84b763e366cc98a7af4a072b4371c5cdd06ef5396ebba49233490af8",
+      "cfgSHA256": "7c78a0ad30883f1f292981a03a98cbe41ea5e01ddfcd4db604e73f19b3c4ee4e",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "simple-math-0",
+      "sourceModel": "simple-math",
+      "scenario": "Upstream",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "simple-math/SimpleMath.tla",
+      "configuration": "simple-math/SimpleMath.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/SimpleMath/SimpleMath.tla",
+        "sha256": "2fc09bd878a02b2e756b149b364352cc5c738d1266ca0323479baa2fcf6e95cd"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "2fc09bd878a02b2e756b149b364352cc5c738d1266ca0323479baa2fcf6e95cd",
+      "cfgSHA256": "d74105971509736e380040d40c08e52e544004fb314452c2f488513de895c06a",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "print-values-0",
+      "sourceModel": "print-values",
+      "scenario": "Upstream",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "print-values/PrintValues.tla",
+      "configuration": "print-values/PrintValues.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.tla",
+        "sha256": "3b71af5a55d460f6580dc26e66ff537b22f6d0e2d2cfe0924e5376597aafd080"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "3b71af5a55d460f6580dc26e66ff537b22f6d0e2d2cfe0924e5376597aafd080",
+      "cfgSHA256": "3bc8a6308f224fca254461dd1f02f6d8118f3c4f80561eb48553fbcc1afa9f0e",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "published-hour-clock-2",
+      "sourceModel": "published-hour-clock-2",
+      "scenario": "Upstream",
+      "module": "hour-clock/HourClock2.tla",
+      "configuration": "hour-clock/HourClock2.cfg",
+      "imports": [
+        "hour-clock/HourClock.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "HourClock2",
+          "importedModule": "HourClock"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/HourClock/HourClock2.tla",
+        "sha256": "dfbb3e62e0ad33edec7d7dd5db8eba8a57f18778bf7c3adf1e5e4fe8dd6b69ca"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "dfbb3e62e0ad33edec7d7dd5db8eba8a57f18778bf7c3adf1e5e4fe8dd6b69ca",
+      "cfgSHA256": "5ea057d4e02ac8f55b36f0b7a17f9ea23acbbe5d5696e98404197cf2a9e798fc",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-mc-inner-fifo",
+      "sourceModel": "mc-inner-fifo",
+      "scenario": "APMCInnerFIFO",
+      "module": "mc-inner-fifo/APMCInnerFIFO.tla",
+      "configuration": "mc-inner-fifo/APMCInnerFIFO.cfg",
+      "imports": [
+        "mc-inner-fifo/MCInnerFIFO.tla",
+        "mc-inner-fifo/InnerFIFOInstanced.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APMCInnerFIFO",
+          "importedModule": "MCInnerFIFO"
+        },
+        {
+          "importingModule": "MCInnerFIFO",
+          "importedModule": "InnerFIFOInstanced"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.tla",
+        "sha256": "fb588810f2c4ada66cfb2f1b3547685f93e446aa95fe183455eb7a84093be36f"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "fb588810f2c4ada66cfb2f1b3547685f93e446aa95fe183455eb7a84093be36f",
+      "cfgSHA256": "1806923e7c779eae03bd3a1ec1d284fd429e2f641c1dd3327bafa2b0d5c5bd61",
+      "timeoutSeconds": 120,
+      "comparisonMode": "decisive-counterexample"
+    },
+    {
+      "id": "ap-spanning",
+      "sourceModel": "ap-spanning",
+      "scenario": "APspanning",
+      "module": "spanning/APspanning.tla",
+      "configuration": "spanning/APspanning.cfg",
+      "imports": [
+        "spanning/spanning.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APspanning",
+          "importedModule": "spanning"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/spanning/APspanning.tla",
+        "sha256": "40fe5524348094ba798effb2c0abd80c91f089f5f6b1aa62cac8a85547888c13"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "40fe5524348094ba798effb2c0abd80c91f089f5f6b1aa62cac8a85547888c13",
+      "cfgSHA256": "e62536c56344905f04964b168b002ec635bf980025a851e3e654c62197505285",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "glowing-clean",
+      "sourceModel": "glowing-clean",
+      "scenario": "Upstream",
+      "module": "glowing-raccoon/clean.tla",
+      "configuration": "glowing-raccoon/clean.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/clean.tla",
+        "sha256": "48ba67d167d158f4e34238e13b135ad83cb705ea12d842c0a3506ff851990d73"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "48ba67d167d158f4e34238e13b135ad83cb705ea12d842c0a3506ff851990d73",
+      "cfgSHA256": "2b7080287e3d0b68acc3c9c6ee647ab8f9d5814cb7899a88d7c5c12ead8bd3d8",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "glowing-ap-clean",
+      "sourceModel": "glowing-clean",
+      "scenario": "APclean",
+      "module": "glowing-raccoon/APclean.tla",
+      "configuration": "glowing-raccoon/APclean.cfg",
+      "imports": [
+        "glowing-raccoon/clean.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APclean",
+          "importedModule": "clean"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/APclean.tla",
+        "sha256": "d11d3186ab9403c013dc12b78935021f769f9aba036047cf801a04a676a88d70"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "d11d3186ab9403c013dc12b78935021f769f9aba036047cf801a04a676a88d70",
+      "cfgSHA256": "b3ab8d4f26222781edb189df79e8d01fbe5cb9afbaadc73e47c2e4535eb0d57b",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "glowing-stages",
+      "sourceModel": "glowing-stages",
+      "scenario": "Upstream",
+      "module": "glowing-raccoon/stages.tla",
+      "configuration": "glowing-raccoon/stages.cfg",
+      "imports": [
+        "glowing-raccoon/clean.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "stages",
+          "importedModule": "clean"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/stages.tla",
+        "sha256": "dcd17e4a4d968f8cdae866b673052219afb88b9af0055cb24c1f75670bdf3a17"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "dcd17e4a4d968f8cdae866b673052219afb88b9af0055cb24c1f75670bdf3a17",
+      "cfgSHA256": "dc42ba24d36df34cea3ec40dfafbf383856049683b66a0a851d43233f652d5fe",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "glowing-ap-stages",
+      "sourceModel": "glowing-stages",
+      "scenario": "APstages",
+      "module": "glowing-raccoon/APstages.tla",
+      "configuration": "glowing-raccoon/APstages.cfg",
+      "imports": [
+        "glowing-raccoon/stages.tla",
+        "glowing-raccoon/clean.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APstages",
+          "importedModule": "stages"
+        },
+        {
+          "importingModule": "stages",
+          "importedModule": "clean"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/APstages.tla",
+        "sha256": "1a977e6718c316b30e8b570db81dda842535d463e05de46e5bbe413a34058a7f"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "1a977e6718c316b30e8b570db81dda842535d463e05de46e5bbe413a34058a7f",
+      "cfgSHA256": "4820d9245365ce6cac8db4338d78acd68dc711c4f00c20bd3d1d2d37f3b6112d",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "glowing-product",
+      "sourceModel": "glowing-product",
+      "scenario": "Upstream",
+      "module": "glowing-raccoon/product.tla",
+      "configuration": "glowing-raccoon/product.cfg",
+      "imports": [
+        "glowing-raccoon/stages.tla",
+        "glowing-raccoon/clean.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "product",
+          "importedModule": "stages"
+        },
+        {
+          "importingModule": "stages",
+          "importedModule": "clean"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/glowingRaccoon/product.tla",
+        "sha256": "f6e7d141ed63230da2703f595cc13c9aa11e1b8278228029acb04f5355e8acad"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f6e7d141ed63230da2703f595cc13c9aa11e1b8278228029acb04f5355e8acad",
+      "cfgSHA256": "9f8dce46e2023484234a474d200481a4822d88adebb8ab012bb1469c7ff186c2",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-tcommit",
+      "sourceModel": "tcommit",
+      "scenario": "APTCommit",
+      "module": "tcommit/APTCommit.tla",
+      "configuration": "tcommit/APTCommit.cfg",
+      "imports": [
+        "tcommit/TCommit.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APTCommit",
+          "importedModule": "TCommit"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/APTCommit.tla",
+        "sha256": "c7bc5fb5728f34cc86a0f338205dca12864ffd7e6a89b561b2faea2f80ef74c0"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c7bc5fb5728f34cc86a0f338205dca12864ffd7e6a89b561b2faea2f80ef74c0",
+      "cfgSHA256": "1e5d8f155fabdc26629214b3e0b6b37380986a08ae708593e840a2a6530d8349",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-token-ring",
+      "sourceModel": "token-ring",
+      "scenario": "APTokenRing",
+      "module": "token-ring/APTokenRing.tla",
+      "configuration": "token-ring/APTokenRing.cfg",
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd426/APTokenRing.tla",
+        "sha256": "0b2f2e0ec93a3d9ae34575883f75fefd9303ca59b42c82c0a0dcf16612565724"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0b2f2e0ec93a3d9ae34575883f75fefd9303ca59b42c82c0a0dcf16612565724",
+      "cfgSHA256": "e96675fa2462e4760ccddd47e0021a42949a2246a0f6fee7aceb4eb2947e6947",
+      "timeoutSeconds": 600,
+      "imports": [
+        "token-ring/TokenRing.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APTokenRing",
+          "importedModule": "TokenRing"
+        }
+      ]
+    },
+    {
+      "id": "turing-paxos-voting",
+      "sourceModel": "turing-paxos-voting",
+      "scenario": "published",
+      "module": "turing-paxos-consensus/MCVoting.tla",
+      "configuration": "turing-paxos-consensus/MCVoting.cfg",
+      "imports": [
+        "turing-paxos-consensus/Voting.tla",
+        "turing-paxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCVoting",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/MCVoting.tla",
+        "sha256": "ae2a1c05f63e8e49ff6b330410bb65b5ee8090b1e8528d398281d46a25236abc"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "ae2a1c05f63e8e49ff6b330410bb65b5ee8090b1e8528d398281d46a25236abc",
+      "cfgSHA256": "f54a258a36d38b839260cf27a2f986163baa5be829bb96b88216b3025cf0216a",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "turing-paxos-tiny",
+      "sourceModel": "turing-paxos-tiny",
+      "scenario": "tiny",
+      "module": "turing-paxos-consensus/MCPaxos.tla",
+      "configuration": "turing-paxos-consensus/MCPaxosTiny.cfg",
+      "imports": [
+        "turing-paxos-consensus/Paxos.tla",
+        "turing-paxos-consensus/Voting.tla",
+        "turing-paxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCPaxos",
+          "importedModule": "Paxos"
+        },
+        {
+          "importingModule": "Paxos",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
+        "sha256": "b923b4753fe9dbf250d46e4fed0472b91f1e79056c80660d7268b0e3e5eabecd"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b923b4753fe9dbf250d46e4fed0472b91f1e79056c80660d7268b0e3e5eabecd",
+      "cfgSHA256": "c0ad171f9cda7abe84a6a2f1cc4b5b408d419f2d47843d79134590eb0efb4af1",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "car-talk-puzzle-1",
+      "sourceModel": "car-talk-puzzle",
+      "scenario": "Arithmetic",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "car-talk-puzzle-1/MC.tla",
+      "configuration": "car-talk-puzzle-1/MC.cfg",
+      "imports": [
+        "car-talk-puzzle-1/CarTalkPuzzle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC",
+          "importedModule": "CarTalkPuzzle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_1/MC.tla",
+        "sha256": "8ab5978a5b30bf5441128aa73faa7ca0053091668f1184d0d4e1a3e114923f77"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "8ab5978a5b30bf5441128aa73faa7ca0053091668f1184d0d4e1a3e114923f77",
+      "cfgSHA256": "d9086990bab69dfba2d38eeb720cc334fadbb6774d31975f1f76c4994f36dd51",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "car-talk-puzzle-2",
+      "sourceModel": "car-talk-puzzle",
+      "scenario": "AllSolutions",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "car-talk-puzzle-2/MC.tla",
+      "configuration": "car-talk-puzzle-2/MC.cfg",
+      "imports": [
+        "car-talk-puzzle-2/CarTalkPuzzle.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC",
+          "importedModule": "CarTalkPuzzle"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_2/MC.tla",
+        "sha256": "606a965959c3002132ae96bc203ef86e8c2b1412ccd9737676e47a07a5ac7418"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "606a965959c3002132ae96bc203ef86e8c2b1412ccd9737676e47a07a5ac7418",
+      "cfgSHA256": "86e1b803ac8f847615cd60f5a83f4ba3dc8b94518e0a75cd102e837abcf37f07",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "ap-acp-sb",
+      "sourceModel": "acp-sb",
+      "scenario": "APACP_SB",
+      "module": "acp/APACP_SB.tla",
+      "configuration": "acp/APACP_SB.cfg",
+      "imports": [
+        "acp/ACP_SB.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APACP_SB",
+          "importedModule": "ACP_SB"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/acp/APACP_SB.tla",
+        "sha256": "90e34d935e521e19974ff9d35f55f31f8934b96242fd32fd410d7b0c87f09b27"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "90e34d935e521e19974ff9d35f55f31f8934b96242fd32fd410d7b0c87f09b27",
+      "cfgSHA256": "517623bccc510b7904b3685f17e511618aa98860880efadfcf0c8fa1de9590ac",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "turing-paxos-small",
+      "sourceModel": "turing-paxos-tiny",
+      "scenario": "small",
+      "module": "turing-paxos-consensus/MCPaxos.tla",
+      "configuration": "turing-paxos-consensus/MCPaxosSmall.cfg",
+      "imports": [
+        "turing-paxos-consensus/Paxos.tla",
+        "turing-paxos-consensus/Voting.tla",
+        "turing-paxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCPaxos",
+          "importedModule": "Paxos"
+        },
+        {
+          "importingModule": "Paxos",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
+        "sha256": "b923b4753fe9dbf250d46e4fed0472b91f1e79056c80660d7268b0e3e5eabecd"
+      },
+      "exploration": {
+        "maximumStateLimit": 250000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b923b4753fe9dbf250d46e4fed0472b91f1e79056c80660d7268b0e3e5eabecd",
+      "cfgSHA256": "337dbd8b7423c553ef2bf74573be3b5b44c0d3ccee4427af1c50d92f3d80c4a0",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "byzpaxos-voteproof",
+      "sourceModel": "byzpaxos-voteproof",
+      "scenario": "published",
+      "module": "byzpaxos-consensus/VoteProof.tla",
+      "configuration": "byzpaxos-consensus/VoteProof.cfg",
+      "imports": [
+        "byzpaxos-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoteProof",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "VoteProof",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "VoteProof",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "VoteProof",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "VoteProof",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byzpaxos/VoteProof.tla",
+        "sha256": "89f9ca0345801ed0834542c1332bc2b6bb3feb9a95da40d750793e8948d696da"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "89f9ca0345801ed0834542c1332bc2b6bb3feb9a95da40d750793e8948d696da",
+      "cfgSHA256": "5b0d03e72f8141ae48d179ebba5b5a64867071941a324a0bb73f8a2283eafb7d",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-german-control",
+      "sourceModel": "ap-german-control",
+      "scenario": "Upstream",
+      "module": "german-protocol/APGermanControl.tla",
+      "configuration": "german-protocol/APGermanControl.cfg",
+      "imports": [
+        "german-protocol/GermanControl.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APGermanControl",
+          "importedModule": "GermanControl"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/APGermanControl.tla",
+        "sha256": "036775f601fc1ecd258ee9154f251f91757ae3173d1a95446bfb5c365788b66f"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "036775f601fc1ecd258ee9154f251f91757ae3173d1a95446bfb5c365788b66f",
+      "cfgSHA256": "83fd498d17ba7ffd82ad0e349b446371b2ca39691cb89c952db1bff042dca635",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-german-mutex",
+      "sourceModel": "ap-german-mutex",
+      "scenario": "Upstream",
+      "module": "german-protocol/APGermanCMPWithMutex.tla",
+      "configuration": "german-protocol/APGermanCMPWithMutex.cfg",
+      "imports": [
+        "german-protocol/GermanCMPWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APGermanCMPWithMutex",
+          "importedModule": "GermanCMPWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/APGermanCMPWithMutex.tla",
+        "sha256": "a38d5bf745bcedc4b5d759927e800e212962687aa10e468dbae196d84d94e7ae"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "a38d5bf745bcedc4b5d759927e800e212962687aa10e468dbae196d84d94e7ae",
+      "cfgSHA256": "57d65fbf96851eb2175a0185a82ab0ff1defea18b11f762a4a0e3bec2cc924b7",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-german-data",
+      "sourceModel": "ap-german-data",
+      "scenario": "Upstream",
+      "module": "german-protocol/APGermanData.tla",
+      "configuration": "german-protocol/APGermanData.cfg",
+      "imports": [
+        "german-protocol/GermanData.tla",
+        "german-protocol/GermanControl.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APGermanData",
+          "importedModule": "GermanData"
+        },
+        {
+          "importingModule": "GermanData",
+          "importedModule": "GermanControl"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/APGermanData.tla",
+        "sha256": "35ce7ae00bffee9c43ffe9b36de1d3383c7b2c65809b4686fdb84c309d488a7a"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "35ce7ae00bffee9c43ffe9b36de1d3383c7b2c65809b4686fdb84c309d488a7a",
+      "cfgSHA256": "9fadf76c3a66a8fa807bf77a5c5d276e7a1dae385b64201acb5e41800075f687",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "disruptor-spmc",
+      "sourceModel": "disruptor-spmc",
+      "scenario": "Upstream",
+      "module": "disruptor/MCDisruptor_SPMC.tla",
+      "configuration": "disruptor/MCDisruptor_SPMC.cfg",
+      "imports": [
+        "disruptor/Disruptor_SPMC.tla",
+        "disruptor/RingBuffer.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCDisruptor_SPMC",
+          "importedModule": "Disruptor_SPMC"
+        },
+        {
+          "importingModule": "Disruptor_SPMC",
+          "importedModule": "RingBuffer"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Disruptor/MCDisruptor_SPMC.tla",
+        "sha256": "be3f2a2d60d4a6067b2d815822570a2f8c163b2b9b3a06b43d9a7c1f3eec4e39"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "be3f2a2d60d4a6067b2d815822570a2f8c163b2b9b3a06b43d9a7c1f3eec4e39",
+      "cfgSHA256": "54a8668fa7ca5b6aacfb5f00f0d864d366daa8b0b51366d4ef74609d7a9e754e",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "disruptor-mpmc",
+      "sourceModel": "disruptor-mpmc",
+      "scenario": "Upstream",
+      "module": "disruptor/MCDisruptor_MPMC.tla",
+      "configuration": "disruptor/MCDisruptor_MPMC.cfg",
+      "imports": [
+        "disruptor/Disruptor_MPMC.tla",
+        "disruptor/RingBuffer.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCDisruptor_MPMC",
+          "importedModule": "Disruptor_MPMC"
+        },
+        {
+          "importingModule": "Disruptor_MPMC",
+          "importedModule": "RingBuffer"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Disruptor/MCDisruptor_MPMC.tla",
+        "sha256": "def6ddaeb2a8bb3995421722e007e1d9b889502a8d8bd92a55f51289a1633e75"
+      },
+      "exploration": {
+        "maximumStateLimit": 125000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "def6ddaeb2a8bb3995421722e007e1d9b889502a8d8bd92a55f51289a1633e75",
+      "cfgSHA256": "536a5a14deb08f933d9091a213991d634bd2f2cccf0f92e25f22fefe273b1b44",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "disruptor-mpmc-liveliness",
+      "sourceModel": "disruptor-mpmc",
+      "scenario": "LivelinessCheck",
+      "module": "disruptor/MCDisruptor_MPMC.tla",
+      "configuration": "disruptor/MCDisruptor_MPMC_liveliness.cfg",
+      "imports": [
+        "disruptor/Disruptor_MPMC.tla",
+        "disruptor/RingBuffer.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCDisruptor_MPMC",
+          "importedModule": "Disruptor_MPMC"
+        },
+        {
+          "importingModule": "Disruptor_MPMC",
+          "importedModule": "RingBuffer"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Disruptor/MCDisruptor_MPMC.tla",
+        "sha256": "def6ddaeb2a8bb3995421722e007e1d9b889502a8d8bd92a55f51289a1633e75"
+      },
+      "exploration": {
+        "maximumStateLimit": 15000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "def6ddaeb2a8bb3995421722e007e1d9b889502a8d8bd92a55f51289a1633e75",
+      "cfgSHA256": "5bea496c83bd65d69485969c53697e601b46f8bb854256f806e2041047c67610",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "sliding-puzzles",
+      "sourceModel": "sliding-puzzles",
+      "scenario": "Upstream",
+      "comparisonMode": "exhaustive",
+      "module": "sliding-puzzles/SlidingPuzzles.tla",
+      "configuration": "sliding-puzzles/SlidingPuzzles.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SlidingPuzzles/SlidingPuzzles.tla",
+        "sha256": "df0d6a46542a0b1aa7cdb5141923df2ea3770d241e4ca5afde0cb5c2234e76fd"
+      },
+      "exploration": {
+        "maximumStateLimit": 30000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "df0d6a46542a0b1aa7cdb5141923df2ea3770d241e4ca5afde0cb5c2234e76fd",
+      "cfgSHA256": "d2f036ba8283a1251147761577de2f25d6c1a19aa6e40800628c658a50442a16",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "slush-small",
+      "sourceModel": "slush",
+      "scenario": "SlushSmall",
+      "module": "slush/Slush.tla",
+      "configuration": "slush/SlushSmall.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SlushProtocol/Slush.tla",
+        "sha256": "95303e105352d257abfd17feb6363948f728364a0aa47b043e43fd4118e3b16f"
+      },
+      "exploration": {
+        "maximumStateLimit": 300000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "95303e105352d257abfd17feb6363948f728364a0aa47b043e43fd4118e3b16f",
+      "cfgSHA256": "61aff32a7e3d47874166d83bbdaf8216dc0f7b5692b6018696fbfb5b52104ba1",
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "slush-medium",
+      "sourceModel": "slush",
+      "scenario": "SlushMedium",
+      "module": "slush/Slush.tla",
+      "configuration": "slush/SlushMedium.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SlushProtocol/Slush.tla",
+        "sha256": "95303e105352d257abfd17feb6363948f728364a0aa47b043e43fd4118e3b16f"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "95303e105352d257abfd17feb6363948f728364a0aa47b043e43fd4118e3b16f",
+      "cfgSHA256": "a1d8e84f641f39bbed55bdf2f1574329bca8cc1c915668a119ca0feb302b3688",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "hanoi-five",
+      "sourceModel": "tower-of-hanoi",
+      "scenario": "FiveDisks",
+      "comparisonMode": "exhaustive",
+      "module": "tower-of-hanoi/MC.tla",
+      "configuration": "tower-of-hanoi/MC.cfg",
+      "imports": [
+        "tower-of-hanoi/Hanoi.tla",
+        "tower-of-hanoi/Bits.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC",
+          "importedModule": "Hanoi"
+        },
+        {
+          "importingModule": "Hanoi",
+          "importedModule": "Bits"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/MC.tla",
+        "sha256": "e1500033dd4411fb24382a9e8cb41e5384d2fc77cd731704b69d94c7d1638975"
+      },
+      "exploration": {
+        "maximumStateLimit": 300,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e1500033dd4411fb24382a9e8cb41e5384d2fc77cd731704b69d94c7d1638975",
+      "cfgSHA256": "90fb52e8c94535219094efde3e852faa78920ebe3f6870828020790ee860646f",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-flash-mutex",
+      "sourceModel": "flash-with-mutex",
+      "scenario": "APFlashWithMutex",
+      "module": "flash-protocol/APFlashWithMutex.tla",
+      "configuration": "flash-protocol/APFlashWithMutex.cfg",
+      "imports": [
+        "flash-protocol/FlashWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APFlashWithMutex",
+          "importedModule": "FlashWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/FlashProtocol/APFlashWithMutex.tla",
+        "sha256": "d90063f6a9aef1cf51f9b1bb451460487b2d38e7e82d68a0d4eaf48cfc83106a"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "d90063f6a9aef1cf51f9b1bb451460487b2d38e7e82d68a0d4eaf48cfc83106a",
+      "cfgSHA256": "24068575cb139969f2f2ae88f8160d44bf280fbf02647032d933a84828be0b40",
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "flash-mutex",
+      "sourceModel": "flash-with-mutex",
+      "scenario": "MCFlashWithMutex",
+      "module": "flash-protocol/MCFlashWithMutex.tla",
+      "configuration": "flash-protocol/MCFlashWithMutex.cfg",
+      "imports": [
+        "flash-protocol/FlashWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCFlashWithMutex",
+          "importedModule": "FlashWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/FlashProtocol/MCFlashWithMutex.tla",
+        "sha256": "09cc038be1a3ff7beb58e2e985d77d4e4f42c7745f5fca329855d61538f92e0b"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "09cc038be1a3ff7beb58e2e985d77d4e4f42c7745f5fca329855d61538f92e0b",
+      "cfgSHA256": "64b702393058643b9265efef919f1b7d10b34b4110658e96714158cb2adf5b94",
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "german-control",
+      "sourceModel": "ap-german-control",
+      "scenario": "MCGermanControl",
+      "module": "german-protocol/MCGermanControl.tla",
+      "configuration": "german-protocol/MCGermanControl.cfg",
+      "imports": [
+        "german-protocol/GermanControl.tla",
+        "german-protocol/GermanCMPWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCGermanControl",
+          "importedModule": "GermanControl"
+        },
+        {
+          "importingModule": "MCGermanControl",
+          "importedModule": "GermanCMPWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/MCGermanControl.tla",
+        "sha256": "754db90c80cae36bc3bb8f1e0b47024eaf2857a435da5bfd99703f65325a279b"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "754db90c80cae36bc3bb8f1e0b47024eaf2857a435da5bfd99703f65325a279b",
+      "cfgSHA256": "228d86e39a15fdcb76980a8fc9f6dbcc261049e14e3ce5ca2efff716549963dd",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "german-data",
+      "sourceModel": "ap-german-data",
+      "scenario": "MCGermanData",
+      "module": "german-protocol/MCGermanData.tla",
+      "configuration": "german-protocol/MCGermanData.cfg",
+      "imports": [
+        "german-protocol/GermanData.tla",
+        "german-protocol/GermanControl.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCGermanData",
+          "importedModule": "GermanData"
+        },
+        {
+          "importingModule": "GermanData",
+          "importedModule": "GermanControl"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/MCGermanData.tla",
+        "sha256": "53974773eece7a194407cb100d37c4592915e380b0b539aa2655495a1201a2ee"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "53974773eece7a194407cb100d37c4592915e380b0b539aa2655495a1201a2ee",
+      "cfgSHA256": "f02c40cb783e7a2b26ba796d5ecce39f33acc907d8ce7efc1e829c9976df1ca9",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "german-mutex",
+      "sourceModel": "ap-german-mutex",
+      "scenario": "MCGermanCMPWithMutex",
+      "module": "german-protocol/MCGermanCMPWithMutex.tla",
+      "configuration": "german-protocol/MCGermanCMPWithMutex.cfg",
+      "imports": [
+        "german-protocol/GermanCMPWithMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCGermanCMPWithMutex",
+          "importedModule": "GermanCMPWithMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GermanProtocol/MCGermanCMPWithMutex.tla",
+        "sha256": "6d14d6cfda26b8ff37b367e49302800f4b0fc368960a1597a64eab6cbb0b0657"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "6d14d6cfda26b8ff37b367e49302800f4b0fc368960a1597a64eab6cbb0b0657",
+      "cfgSHA256": "81ec679d1d535f1498d88803a63eb4624bd406f19af3828d18286d6900a6e127",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "tcp-mctcp",
+      "sourceModel": "tcp",
+      "scenario": "Upstream",
+      "module": "tcp/MCtcp.tla",
+      "configuration": "tcp/MCtcp.cfg",
+      "imports": [
+        "tcp/tcp.tla",
+        "tcp/SequencesExt.tla",
+        "die-hardest/FiniteSetsExt.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCtcp",
+          "importedModule": "tcp"
+        },
+        {
+          "importingModule": "tcp",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/tcp/MCtcp.tla",
+        "sha256": "7b8b8167e2bd0ab8991168afd4a1c057906939ffb6166cd93ea283fe002c606e"
+      },
+      "exploration": {
+        "maximumStateLimit": 5000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "7b8b8167e2bd0ab8991168afd4a1c057906939ffb6166cd93ea283fe002c606e",
+      "cfgSHA256": "bcff6863df5e5bb08459ce22596c03ab988dd28fea3cfd5b0be2266ea0ca6876",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "nano-small",
+      "sourceModel": "nano-blockchain",
+      "scenario": "Small",
+      "module": "nano-blockchain/MCNano.tla",
+      "configuration": "nano-blockchain/MCNanoSmall.cfg",
+      "imports": [
+        "nano-blockchain/Nano.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCNano",
+          "importedModule": "Nano"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/NanoBlockchain/MCNano.tla",
+        "sha256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48",
+      "cfgSHA256": "b8ebca7e99b81409fa4831e4ec7304a613324f4dd969ff279002a9c2c2532198",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "nano-medium",
+      "sourceModel": "nano-blockchain",
+      "scenario": "Medium",
+      "module": "nano-blockchain/MCNano.tla",
+      "configuration": "nano-blockchain/MCNanoMedium.cfg",
+      "imports": [
+        "nano-blockchain/Nano.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCNano",
+          "importedModule": "Nano"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/NanoBlockchain/MCNano.tla",
+        "sha256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48",
+      "cfgSHA256": "94be8f566f926f3e7b64228afee39d6c654c55e9cc30fe2f56ce243b7f34330c",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "nano-large",
+      "sourceModel": "nano-blockchain",
+      "scenario": "Large",
+      "module": "nano-blockchain/MCNano.tla",
+      "configuration": "nano-blockchain/MCNanoLarge.cfg",
+      "imports": [
+        "nano-blockchain/Nano.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCNano",
+          "importedModule": "Nano"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/NanoBlockchain/MCNano.tla",
+        "sha256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48"
+      },
+      "exploration": {
+        "maximumStateLimit": 120130844,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48",
+      "cfgSHA256": "da1cf666fb693335057fc9e93d4a56b2b2f7ea244410dabe09bf7351d0f395d1",
+      "timeoutSeconds": 28800
+    },
+    {
+      "id": "mc-reachable",
+      "sourceModel": "misra-reachable",
+      "scenario": "Upstream",
+      "module": "misra-reachability/MCReachable.tla",
+      "configuration": "misra-reachability/MCReachable.cfg",
+      "imports": [
+        "misra-reachability/Reachable.tla",
+        "misra-reachability/Reachability.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCReachable",
+          "importedModule": "Reachable"
+        },
+        {
+          "importingModule": "Reachable",
+          "importedModule": "Reachability"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MisraReachability/MCReachable.tla",
+        "sha256": "51b25788a688f63bf28788530e0b7884d635ae1feb69b4def405b126af80a7b1"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "51b25788a688f63bf28788530e0b7884d635ae1feb69b4def405b126af80a7b1",
+      "cfgSHA256": "0801b570810e2902b41e8ebcf564d713dc075d6d158805d2e8f09fef0d8fb9ae",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "bosco-bosco",
+      "sourceModel": "bosco",
+      "scenario": "FourProcesses",
+      "module": "bosco/bosco.tla",
+      "configuration": "bosco/bosco.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bosco/bosco.tla",
+        "sha256": "a2b9f8564b658992f036dadaeb5acdc8ba8b79ba1262400ca3217721796f7fd8"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "a2b9f8564b658992f036dadaeb5acdc8ba8b79ba1262400ca3217721796f7fd8",
+      "cfgSHA256": "f741200793a0fe4c09aab8275476a1ad6f49ef597db3c9de7c823b257af94e84",
+      "timeoutSeconds": 28800
+    },
+    {
+      "id": "bosco-apbosco",
+      "sourceModel": "bosco",
+      "scenario": "FourProcesses",
+      "module": "bosco/APbosco.tla",
+      "configuration": "bosco/APbosco.cfg",
+      "imports": [
+        "bosco/bosco.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APbosco",
+          "importedModule": "bosco"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bosco/APbosco.tla",
+        "sha256": "be3a14daab5b7c0402aa7acf50f0841c073382ce69bb3b3138a2d626e73db47c"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "be3a14daab5b7c0402aa7acf50f0841c073382ce69bb3b3138a2d626e73db47c",
+      "cfgSHA256": "57d21f0e97a0e5afdcad23833d4b5356cc9210c004019d48d793b749377ab718",
+      "timeoutSeconds": 28800
+    },
+    {
+      "id": "ap-par-reach",
+      "sourceModel": "ap-par-reach",
+      "scenario": "APParReach",
+      "module": "misra-reachability/APParReach.tla",
+      "configuration": "misra-reachability/APParReach.cfg",
+      "imports": [
+        "misra-reachability/ParReach.tla",
+        "misra-reachability/Reachable.tla",
+        "misra-reachability/Reachability.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APParReach",
+          "importedModule": "ParReach"
+        },
+        {
+          "importingModule": "ParReach",
+          "importedModule": "Reachable"
+        },
+        {
+          "importingModule": "ParReach",
+          "importedModule": "Reachability"
+        },
+        {
+          "importingModule": "Reachable",
+          "importedModule": "Reachability"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MisraReachability/APParReach.tla",
+        "sha256": "332a28d6cce37977f41f0738da3037683a45b33225f364f4575c9354730c0caa"
+      },
+      "exploration": {
+        "maximumStateLimit": 5000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "332a28d6cce37977f41f0738da3037683a45b33225f364f4575c9354730c0caa",
+      "cfgSHA256": "f90ea4628f6abef0821b2d064cf4c2115c706483114c6bd0b7b10004525ced62",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "multipaxos-smr-multipaxos-mc-small",
+      "sourceModel": "multipaxos-smr",
+      "scenario": "Small",
+      "module": "multipaxos-smr/MultiPaxos_MC.tla",
+      "configuration": "multipaxos-smr/MultiPaxos_MC_small.cfg",
+      "imports": [
+        "multipaxos-smr/MultiPaxos.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MultiPaxos_MC",
+          "importedModule": "MultiPaxos"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiPaxos-SMR/MultiPaxos_MC.tla",
+        "sha256": "de29fa4029bb0f678ce5b325faa273397a18b91f867d72cf20f3b6dd9925beee"
+      },
+      "exploration": {
+        "maximumStateLimit": 2100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "de29fa4029bb0f678ce5b325faa273397a18b91f867d72cf20f3b6dd9925beee",
+      "cfgSHA256": "0cc59be82d3e1e06f850ca272582b6982a06f75fe6f8d14ad36d1c207d50e24b",
+      "timeoutSeconds": 28800
+    },
+    {
+      "id": "mc-par-reach",
+      "sourceModel": "misra-parallel-reachable",
+      "scenario": "Upstream",
+      "module": "misra-reachability/MCParReach.tla",
+      "configuration": "misra-reachability/MCParReach.cfg",
+      "imports": [
+        "misra-reachability/ParReach.tla",
+        "misra-reachability/Reachability.tla",
+        "misra-reachability/Reachable.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCParReach",
+          "importedModule": "ParReach"
+        },
+        {
+          "importingModule": "ParReach",
+          "importedModule": "Reachable"
+        },
+        {
+          "importingModule": "ParReach",
+          "importedModule": "Reachability"
+        },
+        {
+          "importingModule": "Reachable",
+          "importedModule": "Reachability"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MisraReachability/MCParReach.tla",
+        "sha256": "8669e2c4bd80d5be177e8331a0c5415c605ef3bb5d7f7ec0651a7194b7f67f81"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "8669e2c4bd80d5be177e8331a0c5415c605ef3bb5d7f7ec0651a7194b7f67f81",
+      "cfgSHA256": "31cff92508be2d2b8bb092759108e276cbc459a6d7e4a9a73a10dbc3d3b7767f",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "bcastbyz-bcastbyz",
+      "sourceModel": "byzantine-broadcast",
+      "scenario": "Broadcast",
+      "module": "bcastbyz/bcastByz.tla",
+      "configuration": "bcastbyz/bcastByz.cfg",
+      "imports": [
+        "kvsnap/Functions.tla",
+        "bcastbyz/FunctionTheorems.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "loop-invariance/SequenceTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Folds.tla",
+        "loop-invariance/WellFoundedInduction.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FunctionTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "FunctionTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "SequenceTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bcastByz/bcastByz.tla",
+        "sha256": "c0238947351cce5debb0543f11cde2b0ed7e84fb7b3339651cd0750e639e6a7d"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c0238947351cce5debb0543f11cde2b0ed7e84fb7b3339651cd0750e639e6a7d",
+      "cfgSHA256": "90ac6bd18e6915719b2cc425544ed3fb8a01ef91887f8901d2709eaaa75e0fea",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "bcastbyz-bcastbyznobcast",
+      "sourceModel": "byzantine-broadcast",
+      "scenario": "NoBroadcast",
+      "module": "bcastbyz/bcastByz.tla",
+      "configuration": "bcastbyz/bcastByzNoBcast.cfg",
+      "imports": [
+        "kvsnap/Functions.tla",
+        "bcastbyz/FunctionTheorems.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "loop-invariance/SequenceTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Folds.tla",
+        "loop-invariance/WellFoundedInduction.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FunctionTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "FunctionTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "SequenceTheorems"
+        },
+        {
+          "importingModule": "bcastByz",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bcastByz/bcastByz.tla",
+        "sha256": "c0238947351cce5debb0543f11cde2b0ed7e84fb7b3339651cd0750e639e6a7d"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c0238947351cce5debb0543f11cde2b0ed7e84fb7b3339651cd0750e639e6a7d",
+      "cfgSHA256": "a46b651b082cbe4b6f47d24c7f596944a17124d889bd227ba5aff3c90180e793",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "yoyo-mcyoyonopruning",
+      "sourceModel": "yoyo-no-pruning",
+      "scenario": "Upstream",
+      "module": "yoyo/MCYoYoNoPruning.tla",
+      "configuration": "yoyo/MCYoYoNoPruning.cfg",
+      "imports": [
+        "yoyo/YoYoNoPruning.tla",
+        "yoyo/UndirectedGraphs.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Folds.tla",
+        "kvsnap/Functions.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "YoYoNoPruning",
+          "importedModule": "UndirectedGraphs"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "MCYoYoNoPruning",
+          "importedModule": "YoYoNoPruning"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/YoYo/MCYoYoNoPruning.tla",
+        "sha256": "fe7df0862a86e31dc9d5dd783fd88ac442c8b5bd7e07550741c85fadda857a38"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "fe7df0862a86e31dc9d5dd783fd88ac442c8b5bd7e07550741c85fadda857a38",
+      "cfgSHA256": "86e031979880f25bf4cc1130c7d17e2f1e4b4b1771125708330a527e90c0ba12",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "yoyo-mcyoyopruning",
+      "sourceModel": "yoyo-pruning",
+      "scenario": "Upstream",
+      "module": "yoyo/MCYoYoPruning.tla",
+      "configuration": "yoyo/MCYoYoPruning.cfg",
+      "imports": [
+        "yoyo/YoYoPruning.tla",
+        "yoyo/UndirectedGraphs.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Folds.tla",
+        "kvsnap/Functions.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "YoYoPruning",
+          "importedModule": "UndirectedGraphs"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "MCYoYoPruning",
+          "importedModule": "YoYoPruning"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/YoYo/MCYoYoPruning.tla",
+        "sha256": "f34a24d781f9a0580f2377678e38b2084e13d29f5acc3066b97b579097ffe85e"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f34a24d781f9a0580f2377678e38b2084e13d29f5acc3066b97b579097ffe85e",
+      "cfgSHA256": "5c43728261d1a6902b5e4b1fc4ba65d99a0c08c73902919c79d995cb9e11efa2",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "cf1s-folklore-cf1s-folklore",
+      "sourceModel": "one-step-byzantine-consensus",
+      "scenario": "Upstream",
+      "module": "cf1s-folklore/cf1s_folklore.tla",
+      "configuration": "cf1s-folklore/cf1s_folklore.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/cf1s-folklore/cf1s_folklore.tla",
+        "sha256": "50dec6842e4af32c020bf0d72dd2c7b11cc89b574218aa206c23c04ad3d1e7e2"
+      },
+      "exploration": {
+        "maximumStateLimit": 2500000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "50dec6842e4af32c020bf0d72dd2c7b11cc89b574218aa206c23c04ad3d1e7e2",
+      "cfgSHA256": "7d0a10cbdee6feff4759fdbfd28f08ff3aefae05d665a03177486d787bcf8af8",
+      "timeoutSeconds": 7200
+    },
+    {
+      "id": "mc-lamport-mutex",
+      "sourceModel": "lamport-distributed-mutex",
+      "scenario": "Upstream",
+      "module": "lamport-mutex/MCLamportMutex.tla",
+      "configuration": "lamport-mutex/MCLamportMutex.cfg",
+      "imports": [
+        "lamport-mutex/LamportMutex.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCLamportMutex",
+          "importedModule": "LamportMutex"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/lamport_mutex/MCLamportMutex.tla",
+        "sha256": "2ebf6f863f504f76cfcb4a3bc8228aae1c5a896e7f2f8d046f8ab763656ccca8"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "2ebf6f863f504f76cfcb4a3bc8228aae1c5a896e7f2f8d046f8ab763656ccca8",
+      "cfgSHA256": "b91d46fb0a2f3af22fa65147c4c971d5cb9e42d141f63ad9035aa30cad51d118",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "ewd998-ewd998small",
+      "sourceModel": "safra-termination",
+      "scenario": "Small",
+      "module": "ewd998/EWD998.tla",
+      "configuration": "ewd998/EWD998Small.cfg",
+      "imports": [
+        "kvsnap/Functions.tla",
+        "ewd998/AsyncTerminationDetection.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "EWD998",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "EWD998",
+          "importedModule": "AsyncTerminationDetection"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998.tla",
+        "sha256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8"
+      },
+      "exploration": {
+        "maximumStateLimit": 2000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8",
+      "cfgSHA256": "f0869ebeddcdec5b0208014218a946532c01fdb34130579acff081ed6e883f2a",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "keyvaluestore-mckvssafetysmall",
+      "sourceModel": "transactional-key-value-store",
+      "scenario": "Small",
+      "module": "transactional-key-value-store/MCKVS.tla",
+      "configuration": "transactional-key-value-store/MCKVSSafetySmall.cfg",
+      "imports": [
+        "transactional-key-value-store/KeyValueStore.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCKVS",
+          "importedModule": "KeyValueStore"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/KeyValueStore/MCKVS.tla",
+        "sha256": "4d66a40abeb29558b473770b736dc1bd16c841d9ac847b4644b36cd47d8c8962"
+      },
+      "exploration": {
+        "maximumStateLimit": 4000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "4d66a40abeb29558b473770b736dc1bd16c841d9ac847b4644b36cd47d8c8962",
+      "cfgSHA256": "2360ddff6cac82d84a7077e35cd5e77e7acf81a5d37fc37bc10f335082854103",
+      "timeoutSeconds": 7200
+    },
+    {
+      "id": "nbacg-guer01-nbacg-guer01",
+      "sourceModel": "guerraoui-atomic-commit",
+      "scenario": "Upstream",
+      "module": "guerraoui-atomic-commit/nbacg_guer01.tla",
+      "configuration": "guerraoui-atomic-commit/nbacg_guer01.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/nbacg_guer01/nbacg_guer01.tla",
+        "sha256": "01beedb7aa321e51e626d11fd71298113c56995173569a9814be599f5943703d"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "01beedb7aa321e51e626d11fd71298113c56995173569a9814be599f5943703d",
+      "cfgSHA256": "b1199492ce23f3cbbd4d06d3df6461c52df20de86808a4335747867c8968d717",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "ap-nbacg-guer01",
+      "sourceModel": "guerraoui-atomic-commit",
+      "scenario": "AP",
+      "module": "guerraoui-atomic-commit/APnbacg_guer01.tla",
+      "configuration": "guerraoui-atomic-commit/APnbacg_guer01.cfg",
+      "imports": [
+        "guerraoui-atomic-commit/nbacg_guer01.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APnbacg_guer01",
+          "importedModule": "nbacg_guer01"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/nbacg_guer01/APnbacg_guer01.tla",
+        "sha256": "0e7528e77217c97ad63ad2387cee2044f307d9becc20ecd5d46ff7887ba55c4a"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0e7528e77217c97ad63ad2387cee2044f307d9becc20ecd5d46ff7887ba55c4a",
+      "cfgSHA256": "90dfb8e21116b74fe50c9de3c0420cb5c50fefba28dd2ee5ce2637ae8da68a65",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "nbacc-ray97-nbacc-ray97",
+      "sourceModel": "raynal-atomic-commit",
+      "scenario": "Upstream",
+      "module": "raynal-atomic-commit/nbacc_ray97.tla",
+      "configuration": "raynal-atomic-commit/nbacc_ray97.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/nbacc_ray97/nbacc_ray97.tla",
+        "sha256": "c763b946f4135a439c67daa5b3d4ce55977726855b8af8198e453fc795c2f353"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c763b946f4135a439c67daa5b3d4ce55977726855b8af8198e453fc795c2f353",
+      "cfgSHA256": "dc4f86156dab28a6b053805dade4dc803f851c681083d540bfdae2928d2e7871",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "paxos-mcvoting",
+      "sourceModel": "turing-paxos-voting",
+      "scenario": "MCVoting",
+      "module": "paxos-voting/MCVoting.tla",
+      "configuration": "paxos-voting/MCVoting.cfg",
+      "imports": [
+        "paxos-voting/Voting.tla",
+        "paxos-mc-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCVoting",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Paxos/MCVoting.tla",
+        "sha256": "c38f90e525e236ddc8a4d64af7b20c43dcfa0729476e69735aa795ca07f341b9"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c38f90e525e236ddc8a4d64af7b20c43dcfa0729476e69735aa795ca07f341b9",
+      "cfgSHA256": "1b750ba2066b7711194c82da5b9e2788b77812bd39b35015b0f96c3eadffd3b9",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "paxos-mcpaxos",
+      "sourceModel": "turing-paxos-tiny",
+      "scenario": "MCPaxos",
+      "module": "paxos-singleton/MCPaxos.tla",
+      "configuration": "paxos-singleton/MCPaxos.cfg",
+      "imports": [
+        "paxos-singleton/Paxos.tla",
+        "paxos-voting/Voting.tla",
+        "paxos-mc-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCPaxos",
+          "importedModule": "Paxos"
+        },
+        {
+          "importingModule": "Paxos",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Paxos/MCPaxos.tla",
+        "sha256": "4bfd984ceba025ea50abeda3a54ea74acb7dbba3380c44afba87a9130cade3ee"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "4bfd984ceba025ea50abeda3a54ea74acb7dbba3380c44afba87a9130cade3ee",
+      "cfgSHA256": "a6ffd0be786ea1110c0454bb1c79ffd72425882b81b59a406ee510ec6f29d7d0",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "simplifiedfastpaxos-paxos",
+      "sourceModel": "simplifiedfastpaxos-paxos",
+      "scenario": "published",
+      "module": "simplified-fast-paxos/Paxos.tla",
+      "configuration": "simplified-fast-paxos/Paxos.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SimplifiedFastPaxos/Paxos.tla",
+        "sha256": "1f2a6d31e00be1839081c9f170f84acbe852fe07bb1669a0dcae1af5dfc9f6a9"
+      },
+      "exploration": {
+        "maximumStateLimit": 4000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "1f2a6d31e00be1839081c9f170f84acbe852fe07bb1669a0dcae1af5dfc9f6a9",
+      "cfgSHA256": "f36014d1a06fd49c78b1549a8429d954eedf81568d10d74f5db6ddfb84495b96",
+      "timeoutSeconds": 1200
+    },
+    {
+      "id": "transaction-commit-paxoscommit",
+      "sourceModel": "transaction-commit-paxoscommit",
+      "scenario": "published",
+      "module": "paxos-commit-published/PaxosCommit.tla",
+      "configuration": "paxos-commit-published/PaxosCommit.cfg",
+      "imports": [
+        "tcommit/TCommit.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "PaxosCommit",
+          "importedModule": "TCommit"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/PaxosCommit.tla",
+        "sha256": "95ae4ea62bc1767f233a9e66d21ca6233ccf2464a4f8fd9fabea0fc5c15aebcd"
+      },
+      "exploration": {
+        "maximumStateLimit": 2000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "95ae4ea62bc1767f233a9e66d21ca6233ccf2464a4f8fd9fabea0fc5c15aebcd",
+      "cfgSHA256": "74bf19b2c60ca34ed5e4a09651964c1d81992d30537ff8a20080dbcd66307ba4",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "elevator-liveness-large",
+      "sourceModel": "multicar-elevator",
+      "scenario": "ElevatorLivenessLarge",
+      "module": "multicar-elevator/Elevator.tla",
+      "configuration": "multicar-elevator/ElevatorLivenessLarge.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiCarElevator/Elevator.tla",
+        "sha256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203",
+      "cfgSHA256": "f41449494507bb7def26453fd0bfc46a3928b6436de0da8d6aa888a13aed410c",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "elevator-safety-medium",
+      "sourceModel": "multicar-elevator",
+      "scenario": "ElevatorSafetyMedium",
+      "module": "multicar-elevator/Elevator.tla",
+      "configuration": "multicar-elevator/ElevatorSafetyMedium.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiCarElevator/Elevator.tla",
+        "sha256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203",
+      "cfgSHA256": "4ec5881c4d61bd2f605d81c52125d1b76de22bf08ed7bbe848de4b35aeb44372",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "checkpoint-coordination",
+      "sourceModel": "checkpoint-coordination",
+      "scenario": "Upstream",
+      "module": "checkpoint-coordination/MCCheckpointCoordination.tla",
+      "configuration": "checkpoint-coordination/MCCheckpointCoordination.cfg",
+      "imports": [
+        "checkpoint-coordination/CheckpointCoordination.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCCheckpointCoordination",
+          "importedModule": "CheckpointCoordination"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CheckpointCoordination/MCCheckpointCoordination.tla",
+        "sha256": "b8ec0a17e4a3558e11635b4958872d2d3d02847ffe79a0a592fbc61fb6b10d4c"
+      },
+      "exploration": {
+        "maximumStateLimit": 6000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b8ec0a17e4a3558e11635b4958872d2d3d02847ffe79a0a592fbc61fb6b10d4c",
+      "cfgSHA256": "4fa3ed90387d2aa93b98d7423ac365ad22b85da109004bda9819135bcb35d5bf",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "checkpoint-coordination-failure",
+      "sourceModel": "checkpoint-coordination",
+      "scenario": "IncorrectLease",
+      "module": "checkpoint-coordination/MCCheckpointCoordination.tla",
+      "configuration": "checkpoint-coordination/MCCheckpointCoordinationFailure.cfg",
+      "imports": [
+        "checkpoint-coordination/CheckpointCoordination.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCCheckpointCoordination",
+          "importedModule": "CheckpointCoordination"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CheckpointCoordination/MCCheckpointCoordination.tla",
+        "sha256": "b8ec0a17e4a3558e11635b4958872d2d3d02847ffe79a0a592fbc61fb6b10d4c"
+      },
+      "exploration": {
+        "maximumStateLimit": 8000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b8ec0a17e4a3558e11635b4958872d2d3d02847ffe79a0a592fbc61fb6b10d4c",
+      "cfgSHA256": "6027131ece0b948438c64b766eafbd88444c51486a074ad6e64b8eab8d98178e",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "keyvaluestore-mckvsnap",
+      "sourceModel": "kvsnap",
+      "scenario": "MCKVsnap",
+      "module": "kvsnap/MCKVsnap.tla",
+      "configuration": "kvsnap-published/MCKVsnap.cfg",
+      "imports": [
+        "kvsnap/KVsnap.tla",
+        "kvsnap/ClientCentric.tla",
+        "kvsnap/Util.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCKVsnap",
+          "importedModule": "KVsnap"
+        },
+        {
+          "importingModule": "KVsnap",
+          "importedModule": "Util"
+        },
+        {
+          "importingModule": "KVsnap",
+          "importedModule": "ClientCentric"
+        },
+        {
+          "importingModule": "ClientCentric",
+          "importedModule": "Util"
+        },
+        {
+          "importingModule": "Util",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/KeyValueStore/MCKVsnap.tla",
+        "sha256": "c500a1abde66e13467cdb882071601e9b1442487c47510348ded4e86b34e9329"
+      },
+      "exploration": {
+        "maximumStateLimit": 250000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c500a1abde66e13467cdb882071601e9b1442487c47510348ded4e86b34e9329",
+      "cfgSHA256": "8c54531aa6a4fe427076801f8a94d51ed2ef5a8209a71eafd9ca92c462ff5d1b",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "bcastfolklore",
+      "sourceModel": "folklore-broadcast",
+      "scenario": "Upstream",
+      "module": "folklore-broadcast/bcastFolklore.tla",
+      "configuration": "folklore-broadcast/bcastFolklore.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bcastFolklore/bcastFolklore.tla",
+        "sha256": "1a5daf85a82219184ce6531d1b7600bf5dfc15dd04d98a75d06cf8109496ddd3"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "1a5daf85a82219184ce6531d1b7600bf5dfc15dd04d98a75d06cf8109496ddd3",
+      "cfgSHA256": "2c919ef223d3eb8a7e59a4a7f5f3ce89bf27f22e3656c9d25c27e979f31e8147",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "yoyo-all-graphs",
+      "referenceCommunityModules": true,
+      "sourceModel": "yoyo",
+      "scenario": "Upstream",
+      "module": "yoyo/YoYoAllGraphs.tla",
+      "configuration": "yoyo/YoYoAllGraphs.cfg",
+      "imports": [
+        "yoyo/UndirectedGraphs.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Folds.tla",
+        "kvsnap/Functions.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "YoYoAllGraphs",
+          "importedModule": "UndirectedGraphs"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/YoYo/YoYoAllGraphs.tla",
+        "sha256": "20cd0e15e4644f7f320eb598ed4b769ff406e2a2598c47bb897630afa4bca3d4"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "20cd0e15e4644f7f320eb598ed4b769ff406e2a2598c47bb897630afa4bca3d4",
+      "cfgSHA256": "aa756ff107520de5d40358725aaa61af5aa23d6247c9f89782f65c3537c51af0",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "tlc-test-mc-reachability",
+      "referenceCommunityModules": true,
+      "sourceModel": "test-mc-reachability",
+      "scenario": "Upstream",
+      "module": "test-mc-reachability/TestMCReachability.tla",
+      "configuration": "test-mc-reachability/TestMCReachability.cfg",
+      "imports": [
+        "test-mc-reachability/StateGraphs.tla",
+        "test-mc-reachability/MCReachability.tla",
+        "ewd840/IOUtils.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "TestMCReachability",
+          "importedModule": "StateGraphs"
+        },
+        {
+          "importingModule": "TestMCReachability",
+          "importedModule": "MCReachability"
+        },
+        {
+          "importingModule": "StateGraphs",
+          "importedModule": "IOUtils"
+        },
+        {
+          "importingModule": "IOUtils",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TLC/TestMCReachability.tla",
+        "sha256": "cf5d2ec158de5f0c3253ff62f22b569ffa867612aa6c1d473d04bab4ca32b81e"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "cf5d2ec158de5f0c3253ff62f22b569ffa867612aa6c1d473d04bab4ca32b81e",
+      "cfgSHA256": "09dc41a1d6208c3161b61e57b3c07ad49df2a319b6a5c92f0a3b034037ea4e16",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "sailfish-1",
+      "sourceModel": "sailfish",
+      "scenario": "ThreeNodes",
+      "module": "dag-consensus/TLCSailfish1.tla",
+      "configuration": "dag-consensus/TLCSailfish1.cfg",
+      "imports": [
+        "dag-consensus/Sailfish.tla",
+        "dag-consensus/BlockDag.tla",
+        "dag-consensus/Utils.tla",
+        "dag-consensus/Digraph.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "TLCSailfish1",
+          "importedModule": "Sailfish"
+        },
+        {
+          "importingModule": "Sailfish",
+          "importedModule": "BlockDag"
+        },
+        {
+          "importingModule": "BlockDag",
+          "importedModule": "Utils"
+        },
+        {
+          "importingModule": "BlockDag",
+          "importedModule": "Digraph"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/dag-consensus/TLCSailfish1.tla",
+        "sha256": "065bcdb952c4d2b94d2a58d7f9d3009206f1c79f80437d83c6c7142b6f0333d0"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "065bcdb952c4d2b94d2a58d7f9d3009206f1c79f80437d83c6c7142b6f0333d0",
+      "cfgSHA256": "52b3ce7ce5ca649d44a38ff98e6f5772ad39b33e22e0af6df6d1174e9aff9e16",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "tlc-test-graphs",
+      "referenceCommunityModules": true,
+      "sourceModel": "test-graphs-workers",
+      "scenario": "Upstream",
+      "module": "test-mc-reachability/TestGraphs.tla",
+      "configuration": "test-mc-reachability/TestGraphs.cfg",
+      "imports": [
+        "test-mc-reachability/StateGraphs.tla",
+        "test-mc-reachability/TLCMC.tla",
+        "test-mc-reachability/MCReachability.tla",
+        "ewd840/IOUtils.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "TestGraphs",
+          "importedModule": "StateGraphs"
+        },
+        {
+          "importingModule": "TestGraphs",
+          "importedModule": "TLCMC"
+        },
+        {
+          "importingModule": "TLCMC",
+          "importedModule": "MCReachability"
+        },
+        {
+          "importingModule": "StateGraphs",
+          "importedModule": "IOUtils"
+        },
+        {
+          "importingModule": "IOUtils",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TLC/TestGraphs.tla",
+        "sha256": "444e8430c69b0598c5f6580f5ce7e4f9304ddb269211c35f997cfeff13063cf3"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "444e8430c69b0598c5f6580f5ce7e4f9304ddb269211c35f997cfeff13063cf3",
+      "cfgSHA256": "7d83c9e783b2812119276a5db94adfaae508149f9ec482e4e5a32ad7778c730b",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "misra-reachability-all",
+      "sourceModel": "reachability-assumptions",
+      "scenario": "AllGraphs",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "misra-reachability/MCReachabilityTest.tla",
+      "configuration": "misra-reachability/MCReachabilityTestAllGraphs.cfg",
+      "imports": [
+        "misra-reachability/ReachabilityTest.tla",
+        "misra-reachability/ReachabilityProofs.tla",
+        "misra-reachability/Reachability.tla",
+        "boulanger/TLAPS.tla",
+        "loop-invariance/NaturalsInduction.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCReachabilityTest",
+          "importedModule": "ReachabilityTest"
+        },
+        {
+          "importingModule": "ReachabilityTest",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "ReachabilityTest",
+          "importedModule": "ReachabilityProofs"
+        },
+        {
+          "importingModule": "ReachabilityProofs",
+          "importedModule": "Reachability"
+        },
+        {
+          "importingModule": "ReachabilityProofs",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "ReachabilityProofs",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MisraReachability/MCReachabilityTest.tla",
+        "sha256": "7827f14e60d73f88687ca2e05dd28d829e88366742e3afa05198751013494ef7"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "7827f14e60d73f88687ca2e05dd28d829e88366742e3afa05198751013494ef7",
+      "cfgSHA256": "8169f2eba98d41a2e3fc1b05b681f22c66ed7239fb197215e1593793e549bd60",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "btree-bounded",
+      "sourceModel": "bounded-btree",
+      "scenario": "Upstream",
+      "module": "bounded-btree/MCbtree.tla",
+      "configuration": "bounded-btree/MCbtree.cfg",
+      "imports": [
+        "bounded-btree/btree.tla",
+        "bounded-btree/kvstore.tla",
+        "bounded-btree/Relation.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCbtree",
+          "importedModule": "btree"
+        },
+        {
+          "importingModule": "btree",
+          "importedModule": "kvstore"
+        },
+        {
+          "importingModule": "btree",
+          "importedModule": "Relation"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/btree/MCbtree.tla",
+        "sha256": "64655fd6391422f27607da0c3d36617066249c68687d984bdb1113bc98f83ac3"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "64655fd6391422f27607da0c3d36617066249c68687d984bdb1113bc98f83ac3",
+      "cfgSHA256": "e7122e42b7ee004fcf7b9f80602143b0e72909b45df6e797ea89017d8a16079c",
+      "timeoutSeconds": 3600
     }
   ]
 }

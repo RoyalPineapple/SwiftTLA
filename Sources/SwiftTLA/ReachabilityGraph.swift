@@ -15,6 +15,9 @@ public protocol StateMachine: Sendable {
     func hasSameConfiguration(as other: Self) -> Bool
     /// Explicit conversions used by independent validation and export.
     func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection
+    /// Returns false when capture should use the ordinary validated projection.
+    @_documentation(visibility: internal)
+    func _visitFormalProjection<Sink: _NativeProjectionSink>(of snapshot: Snapshot, into sink: inout Sink) throws -> Bool
     /// Reconstructs an independently sampled initial state at the formal JSON boundary.
     func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self?
     func formalCall(for action: Action) throws -> FormalActionCall
@@ -38,6 +41,8 @@ public protocol StateMachine: Sendable {
     func refinementFailures(in graph: inout ReachabilityGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func validationRefinementFailures(in graph: inout MachineValidationGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
+    /// Finds a successor of an application action by its complete execution snapshot.
+    func successor(for action: Action, matching target: Snapshot) throws -> Self?
     /// Grounded action invocations, including disabled ones, in generated order.
     func actionCandidates() throws -> [Action]
     func initialCheckingRegisters() throws -> CheckingRegisters
@@ -52,12 +57,17 @@ public protocol StateMachine: Sendable {
         checking context: inout CheckingContext<CheckingRegisters>,
         _ visit: (Action, Self) throws -> Bool
     ) throws -> Bool
-    /// Visits successes and evaluation failures without discarding later actions.
+    /// Visits successes and model failures without discarding later actions. Execution limits throw.
     func visitValidationOutcomes(
         checking context: inout CheckingContext<CheckingRegisters>,
         _ visit: (Action, Self) throws -> Bool,
         onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool
     ) throws -> Bool
+}
+
+extension StateMachine {
+    @_documentation(visibility: internal)
+    public func _visitFormalProjection<Sink: _NativeProjectionSink>(of snapshot: Snapshot, into sink: inout Sink) throws -> Bool { false }
 }
 
 /// A generated machine whose immutable model parameters are represented by a
@@ -71,6 +81,11 @@ public struct GeneratedModelFieldIdentity: Hashable, Sendable {
         self.swiftName = swiftName
         self.formalName = formalName
     }
+
+    var sourceName: String {
+        guard swiftName.hasPrefix("`"), swiftName.hasSuffix("`") else { return swiftName }
+        return String(swiftName.dropFirst().dropLast())
+    }
 }
 
 public protocol GeneratedModelFields: Sendable {
@@ -80,13 +95,61 @@ public protocol GeneratedModelFields: Sendable {
 public protocol ConfiguredGeneratedModel: StateMachine {
     associatedtype Configuration: Hashable & GeneratedModelFields
     associatedtype State: Hashable & GeneratedModelFields
+    associatedtype RefinementState: GeneratedModelFields = State
     var state: State { get }
     static func initialMachines(configuration: Configuration) throws -> [Self]
     static func makeMachine(_ initial: State, configuration: Configuration) throws -> Self
     static func render(configuration: Configuration) throws -> RenderedSpecification
 }
 
+public struct EmptyModelConfiguration: Hashable, GeneratedModelFields {
+    public init() {}
+    public static var fieldIdentities: [PartialKeyPath<Self>: GeneratedModelFieldIdentity] { [:] }
+}
+
+/// A generated machine that can be linked without binding any model parameters.
+public protocol ParameterlessGeneratedModel: ConfiguredGeneratedModel where Configuration == EmptyModelConfiguration {
+    static func initialMachines() throws -> [Self]
+    static func makeMachine(_ initial: State) throws -> Self
+    static func render() throws -> RenderedSpecification
+}
+
+extension ParameterlessGeneratedModel {
+    public static func initialMachines(configuration: Configuration) throws -> [Self] { try initialMachines() }
+    public static func makeMachine(_ initial: State, configuration: Configuration) throws -> Self { try makeMachine(initial) }
+    public static func render(configuration: Configuration) throws -> RenderedSpecification { try render() }
+}
+
 extension StateMachine {
+    public func successor(for action: Action, matching target: Snapshot) throws -> Self? {
+        try successors().first { $0.action == action && $0.machine.snapshot == target }?.machine
+    }
+
+    /// Replays the recorded actions from this snapshot and configuration using application transitions.
+    public func replay(_ witness: SafetyCounterexample<Self>) throws -> Self {
+        guard let start = witness.trace.first, start.action == nil, start.state == snapshot,
+              hasSameConfiguration(as: witness.configurationSource) else {
+            throw ExplorationError.replayMismatch(step: 0)
+        }
+        var current = self
+        for index in witness.trace.indices.dropFirst() {
+            let step = witness.trace[index]
+            guard let action = step.action,
+                  let next = try current.successor(for: action, matching: step.state) else {
+                throw ExplorationError.replayMismatch(step: index)
+            }
+            current = next
+        }
+        return current
+    }
+
+    /// Checks the selected properties and optional deadlocks from this machine's current snapshot.
+    /// Exceeding the state budget throws `ExplorationError.stateLimitExceeded`.
+    public func check(properties: Set<Property>, checkDeadlock: Bool, maximumStates: Int) throws -> NativeCheckResult<Self> {
+        try ReachabilityGraph.check(initialMachines: [self], maximumStates: maximumStates,
+            checking: ModelChecks(properties: properties, checkDeadlock: checkDeadlock))
+    }
+
     public func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self? { nil }
 
     public static var hasActionConstraint: Bool { false }
@@ -130,9 +193,10 @@ extension StateMachine {
                 }
                 found = found || actionFound
                 if !keepGoing { return found }
-            } catch let failure as MachineActionEvaluationFailure<Action> where !callbackFailed {
+            } catch let failure as MachineActionEvaluationFailure<Action>
+                where !callbackFailed && failure.reason.isModelEvaluationFailure {
                 if try !onEvaluationFailure(failure.action, failure.reason) { return found }
-            } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+            } catch let reason as NativeMachineEvaluationError where !callbackFailed && reason.isModelEvaluationFailure {
                 if try !onEvaluationFailure(action, reason) { return found }
             }
         }
@@ -152,6 +216,8 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case assumptionViolated
     case configurationMismatch
     case traceTargetNotReachable
+    /// Zero identifies the starting snapshot. Subsequent indices identify action destinations.
+    case replayMismatch(step: Int)
     case unsupportedRefinement(String)
     case undeclaredReachabilityProperty(String)
     case unsupportedValidationProperty(String)
@@ -174,6 +240,7 @@ public struct SafetyCounterexample<Machine: StateMachine>: Sendable {
     public let violations: [SafetyViolation<Machine.Property>]
     public let trace: [(action: Machine.Action?, state: Machine.Snapshot)]
     public let checking: ModelChecks<Machine.Property>
+    let configurationSource: Machine
 
     public var unevaluatedProperties: Set<Machine.Property> {
         checking.properties.subtracting(violations.compactMap {
@@ -209,7 +276,9 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     public private(set) var refinementFailures: [Machine.Property: RefinementFailure<Machine.Snapshot, Machine.Action>] = [:]
     public private(set) var temporalResults: [Machine.Property: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] = [:]
     private var checker: LivenessChecker<Machine.Snapshot, Machine.Action, Int>?
-    private let selectedFairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?
+    private let selectedFairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]
+    private let fairnessEnabledness: [Int: [Machine.Snapshot: Bool]]
+    private let fairnessFailure: (any Error)?
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
     public let checking: ModelChecks<Machine.Property>
@@ -269,8 +338,18 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         let checking = checking ?? ModelChecks(properties: Set(Machine.Property.allCases), checkDeadlock: Machine.checksDeadlock)
         self.checking = checking
         self.behavior = behavior
-        selectedFairness = fairness
         let properties = try initialMachine.temporalProperties(checking: checking.properties)
+        var scopes: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = []
+        var fairnessFailure: (any Error)?
+        // Later refinement queries still need the original raw enabledness.
+        if behavior == .specification {
+            do { scopes = try fairness ?? initialMachine.fairnessConditions() }
+            catch { fairnessFailure = error }
+        }
+        selectedFairness = scopes
+        var enabledness = Dictionary(uniqueKeysWithValues: scopes.indices.map {
+            ($0, [Machine.Snapshot: Bool]())
+        })
         machine = initialMachine
         var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
         var pending: [Machine] = []
@@ -303,7 +382,8 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
                   from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard stopOnViolation, !failures.isEmpty else { return }
             throw NativeCheckStopped(counterexample: SafetyCounterexample<Machine>(
-                violations: failures, trace: path(to: snapshot, from: predecessor), checking: checking))
+                violations: failures, trace: path(to: snapshot, from: predecessor), checking: checking,
+                configurationSource: initialMachine))
         }
         func checkDiscoveredState(_ machine: Machine, atLevel level: Int,
                                   from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
@@ -333,6 +413,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         func recordBoundaryViolations(_ machine: Machine, atLevel level: Int, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
             try recordReachability(machine, from: predecessor)
+            guard !stopOnViolation else { return }
             let failures = try machine.violatedInvariants(checking: checking.properties, atLevel: level).map(SafetyViolation.invariant)
             guard !failures.isEmpty, violations[machine.snapshot] == nil else { return }
             violations[machine.snapshot] = failures
@@ -373,8 +454,12 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             }
             let machine = currentLayer.removeLast()
             try Task.checkCancellation()
-            let successors = try machine.successors(checking: &context)
-            var failures = try machine.violatedInvariants(checking: checking.properties, atLevel: context.level).map(SafetyViolation.invariant)
+            var successors = try machine.successors(checking: &context)
+            // In decisive mode discovery already checked this snapshot at its expansion level.
+            var failures: [SafetyViolation<Machine.Property>] = []
+            if !stopOnViolation {
+                failures = try machine.violatedInvariants(checking: checking.properties, atLevel: context.level).map(SafetyViolation.invariant)
+            }
             if successors.isEmpty {
                 deadlockedStates.insert(machine.snapshot)
                 if checking.checkDeadlock { failures.append(.deadlock) }
@@ -383,26 +468,40 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             try stop(machine.snapshot, failures: failures)
             let (successorLevel, overflow) = context.level.addingReportingOverflow(1)
             guard !overflow else { throw ExplorationError.levelOverflow }
-            let retained = try successors.filter { successor in
+            // Fairness observes all enabled actions, including successors excluded by a constraint.
+            let enabledSuccessors = fairnessFailure == nil && !scopes.isEmpty ? successors : []
+            try successors.removeAll { successor in
                 try checkDiscoveredState(successor.machine, atLevel: successorLevel, from: (machine.snapshot, successor.action))
                 guard try machine.satisfiesActionConstraint(to: successor.machine, checking: &context) else {
                     try recordBoundaryViolations(successor.machine, atLevel: successorLevel,
                         from: (machine.snapshot, successor.action))
-                    return false
+                    return true
                 }
                 guard try successor.machine.satisfiesStateConstraint() else {
                     try recordBoundaryViolations(successor.machine, atLevel: successorLevel, from: (machine.snapshot, successor.action))
-                    return false
+                    return true
                 }
-                return true
+                return false
             }
-            let edges = try retained.map { successor in
+            let edges = try successors.map { successor in
                 (action: successor.action,
                  target: try discover(successor.machine, from: (machine.snapshot, successor.action)))
             }
             transitions[machine.snapshot] = edges
+            if fairnessFailure == nil {
+                do {
+                    for (scope, condition) in scopes.enumerated() {
+                        enabledness[scope, default: [:]][machine.snapshot] = try enabledSuccessors.contains {
+                            try condition.matches($0.action) && (condition.changes?(machine.snapshot,
+                                $0.machine.snapshot) ?? (machine.snapshot != $0.machine.snapshot))
+                        }
+                    }
+                } catch { fairnessFailure = error }
+            }
         }
         self.transitions = transitions
+        fairnessEnabledness = enabledness
+        self.fairnessFailure = fairnessFailure
         self.predecessors = predecessors
         safetyViolations = violations
         self.deadlockedStates = deadlockedStates
@@ -412,7 +511,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         })
         if !properties.isEmpty {
             let checker = try temporalChecker()
-            let fairness = behavior == .specification ? try (selectedFairness ?? initialMachine.fairnessConditions()) : []
+            let fairness = selectedFairness
             temporalResults = try properties.mapValues {
                 try checker.analyze($0, initialStates: Array(initialStates), renderScope: { fairness[$0].name })
             }
@@ -467,13 +566,14 @@ extension ReachabilityGraph {
     }
 
     mutating func temporalChecker() throws -> LivenessChecker<Machine.Snapshot, Machine.Action, Int> {
+        if let fairnessFailure { throw fairnessFailure }
         if let checker { return checker }
         let snapshots = Array(transitions.keys)
         let stateOrder = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map { ($0.element, $0.offset) })
         let actionNames = Dictionary(uniqueKeysWithValues: Set(transitions.values.flatMap { $0.map(\.action) }).map {
             ($0, String(describing: $0))
         })
-        let fairness = behavior == .specification ? try (selectedFairness ?? machine.fairnessConditions()) : []
+        let fairness = selectedFairness
         let progress: [[Machine.Snapshot: Set<Machine.Snapshot>]?] = try fairness.map { condition in
             guard let changes = condition.changes else { return nil }
             return try Dictionary(uniqueKeysWithValues: transitions.map { source, successors in
@@ -496,7 +596,8 @@ extension ReachabilityGraph {
                 return projected[source]?.contains(target) == true
             },
             actionOrder: { actionNames[$0]! < actionNames[$1]! },
-            stateOrder: { stateOrder[$0]! < stateOrder[$1]! }
+            stateOrder: { stateOrder[$0]! < stateOrder[$1]! },
+            enabledness: fairnessEnabledness
         )
         self.checker = checker
         return checker

@@ -150,8 +150,11 @@ struct ImportedModuleConfigurationTests {
         }
     }
 
-    @Test("refinement instances retain independent imported module configurations")
-    func isolatesRefinementConfigurations() throws {
+    @Test("refinement instances retain independent imported module configurations", arguments: [
+        ("First", "Second", "First", "Second"), ("TRUE", "TRUE_1", "TRUE_2", "TRUE_1"),
+        ("WF_First", "_WF_First", "_WF_First_1", "_WF_First"), ("Len", "Spec", "Len_1", "Spec_1")
+    ])
+    func isolatesRefinementConfigurations(firstName: String, secondName: String, firstFormal: String, secondFormal: String) throws {
         let value = Var<Int>("value", 0)
         let abstract = TLASpec("Abstract") {
             Parameter("Limit")
@@ -160,8 +163,8 @@ struct ImportedModuleConfigurationTests {
             Variable(value)
             Action("stay") { value.stays }
         }
-        let first = Instance("First", of: abstract)
-        let second = Instance("Second", of: abstract)
+        let first = Instance(firstName, of: abstract)
+        let second = Instance(secondName, of: abstract)
         let root = TLASpec("Root") {
             Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 1))
             Variable(value)
@@ -176,6 +179,7 @@ struct ImportedModuleConfigurationTests {
             ])
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: root.compile()))
+        #expect(program.layout.moduleInstances.map(\.namespace) == [firstName, secondName])
         let rendered = try program.renderModule()
         #expect(rendered.configuration.declarations.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
         for (index, bound) in [2, 3].enumerated() {
@@ -187,8 +191,10 @@ struct ImportedModuleConfigurationTests {
             #expect(module.tla.contains("\(owner)__Import0"))
             #expect(rendered.imports.contains { $0.name == "\(owner)__Import0" })
         }
-        #expect(rendered.renderedModuleSource.contains("Root__Refinement0__Configuration0 == First!ZSequencesNat"))
-        #expect(rendered.renderedModuleSource.contains("Root__Refinement1__Configuration0 == Second!ZSequencesNat"))
+        #expect(rendered.renderedModuleSource.contains("\(firstFormal) == INSTANCE Root__Refinement0"))
+        #expect(rendered.renderedModuleSource.contains("\(secondFormal) == INSTANCE Root__Refinement1"))
+        #expect(rendered.renderedModuleSource.contains("Root__Refinement0__Configuration0 == \(firstFormal)!ZSequencesNat"))
+        #expect(rendered.renderedModuleSource.contains("Root__Refinement1__Configuration0 == \(secondFormal)!ZSequencesNat"))
         let bundle = TLAModuleBundle(root: .init(name: "Root", tla: rendered.renderedModuleSource),
             imports: rendered.imports,
             provenance: .compiled(identity: program.identity, ownership: [

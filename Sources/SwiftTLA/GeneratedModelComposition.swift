@@ -3,13 +3,22 @@ import Foundation
 public struct GeneratedModelParameterBinding<Configuration: GeneratedModelFields>: Sendable {
     package let fieldName: String
     package let source: StateExpr
+    package let projected: Bool
 }
 
 public func Bind<Configuration: GeneratedModelFields, Value: TLAValueType>(
     _ target: KeyPath<Configuration, Value>, to source: some TypedExpression<Value>, _fieldName: String = ""
 ) -> GeneratedModelParameterBinding<Configuration> {
     let identity = Configuration.fieldIdentities[target]
-    return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr)
+    return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: false)
+}
+
+/// Binds a parameter across distinct Swift types that represent the same complete formal value.
+public func Bind<Configuration: GeneratedModelFields, Target: TLAValueType, Source: TLAValueType>(
+    _ target: KeyPath<Configuration, Target>, projecting source: some TypedExpression<Source>, _fieldName: String = ""
+) -> GeneratedModelParameterBinding<Configuration> {
+    let identity = Configuration.fieldIdentities[target]
+    return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: true)
 }
 
 @resultBuilder
@@ -56,7 +65,7 @@ public struct GeneratedModelInstance<Model: ConfiguredGeneratedModel>: Generated
     package let bindings: [GeneratedModelParameterBinding<Model.Configuration>]
     package let targetModelType: String
     package var fieldBindings: [GeneratedModelFieldBinding] {
-        bindings.map { .init(fieldName: $0.fieldName, source: $0.source) }
+        bindings.map { .init(fieldName: $0.fieldName, source: $0.source, projected: $0.projected) }
     }
 
     package init(name: String, targetModelType: String,
@@ -95,7 +104,7 @@ public func Map<State: GeneratedModelFields, Concrete: GeneratedModelFields, Val
 ) -> GeneratedModelStateMapping<State> {
     let targetIdentity = State.fieldIdentities[target]
     let sourceIdentity = Concrete.fieldIdentities[source]
-    let value = sourceIdentity.map { StateExpr.variable($0.formalName) }
+    let value = sourceIdentity.map { StateExpr.variable($0.sourceName) }
         ?? .sourceIssue(.formalDeclaration(kind: "generated state field", name: nil,
             problem: "unregistered concrete key path"))
     return .init(fieldName: targetIdentity?.swiftName ?? _fieldName, source: value, projected: false)
@@ -111,6 +120,13 @@ public func Map<State: GeneratedModelFields, Target: TLAValueType, Source: TLAVa
     return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: true)
 }
 
+/// Uses the target key path to infer the type of the checked formal projection.
+public func Map<State: GeneratedModelFields, Target: TLAValueType, Source: TLAValueType>(
+    _ target: KeyPath<State, Target>, projecting source: some TypedExpression<Source>, _fieldName: String = ""
+) -> GeneratedModelStateMapping<State> {
+    Map(target, from: source, projecting: Target.self, _fieldName: _fieldName)
+}
+
 /// Projects a generated concrete field with the same complete formal value as the abstract field.
 public func Map<State: GeneratedModelFields, Concrete: GeneratedModelFields,
     Target: TLAValueType, Source: TLAValueType>(
@@ -119,7 +135,7 @@ public func Map<State: GeneratedModelFields, Concrete: GeneratedModelFields,
 ) -> GeneratedModelStateMapping<State> {
     let targetIdentity = State.fieldIdentities[target]
     let sourceIdentity = Concrete.fieldIdentities[source]
-    let value = sourceIdentity.map { StateExpr.variable($0.formalName) }
+    let value = sourceIdentity.map { StateExpr.variable($0.sourceName) }
         ?? .sourceIssue(.formalDeclaration(kind: "generated state field", name: nil,
             problem: "unregistered concrete key path"))
     return .init(fieldName: targetIdentity?.swiftName ?? _fieldName, source: value, projected: true)
@@ -163,14 +179,14 @@ public struct GeneratedModelRefinement<Model: ConfiguredGeneratedModel>: Generat
     public let reference: PropertyReference
     public let behavior: ModelBehavior
     package let instance: GeneratedModelInstance<Model>
-    package let mappings: [GeneratedModelStateMapping<Model.State>]
+    package let mappings: [GeneratedModelStateMapping<Model.RefinementState>]
     package var instanceName: String { instance.name }
     package var fieldMappings: [GeneratedModelFieldBinding] {
         mappings.map { .init(fieldName: $0.fieldName, source: $0.source, projected: $0.projected) }
     }
 
     package init(name: String, label: String?, instance: GeneratedModelInstance<Model>, behavior: ModelBehavior,
-        mappings: [GeneratedModelStateMapping<Model.State>]) {
+        mappings: [GeneratedModelStateMapping<Model.RefinementState>]) {
         self.name = name
         reference = .init(name: name, displayLabel: label)
         self.behavior = behavior
@@ -180,9 +196,17 @@ public struct GeneratedModelRefinement<Model: ConfiguredGeneratedModel>: Generat
 }
 
 public func Refinement<Model: ConfiguredGeneratedModel>(
+    _ name: String, instance: GeneratedModelInstance<Model>, behavior: ModelBehavior = .specification,
+    label: String? = nil,
+    @GeneratedModelStateMappingBuilder<Model.RefinementState> _ mappings: () -> [GeneratedModelStateMapping<Model.RefinementState>]
+) -> GeneratedModelRefinement<Model> {
+    .init(name: name, label: label, instance: instance, behavior: behavior, mappings: mappings())
+}
+
+public func Refinement<Model: ConfiguredGeneratedModel>(
     _name: String = "", instance: GeneratedModelInstance<Model>, behavior: ModelBehavior = .specification,
     label: String? = nil,
-    @GeneratedModelStateMappingBuilder<Model.State> _ mappings: () -> [GeneratedModelStateMapping<Model.State>]
+    @GeneratedModelStateMappingBuilder<Model.RefinementState> _ mappings: () -> [GeneratedModelStateMapping<Model.RefinementState>]
 ) -> GeneratedModelRefinement<Model> {
     .init(name: _name, label: label, instance: instance, behavior: behavior, mappings: mappings())
 }

@@ -10,7 +10,7 @@ private enum NativeCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "Usage: tlc-validate native list | native run --case <id-or-all> --output <directory> --maximum-states <positive-integer>"
+            return "Usage: tlc-validate native list | native run --case <id-or-all> --output <directory> --maximum-states <positive-integer> | native <prepare-selection|prepare-branchwise-selection> --authored-source <swift-file> --output <directory> | native prepare-compiler-stack-seed --authored-source <swift-file> --native-source <swift-file> --operations <swift-file> --output <directory>"
         case .unknownScenario(let id): return "unknown scenario: \(id)"
         case .outputExists(let path): return "output already exists: \(path)"
         }
@@ -19,6 +19,48 @@ private enum NativeCommandError: Error, CustomStringConvertible {
 
 func runNative(arguments: [String]) -> Never {
     do {
+        if let command = arguments.first, ["prepare-arithmetic-send", "prepare-catalog-send"].contains(command) {
+            guard arguments.count == 9, arguments[1] == "--native-source", arguments[3] == "--operations",
+                  arguments[5] == "--checking", arguments[7] == "--output" else {
+                throw NativeCommandError.usage
+            }
+            let output = URL(fileURLWithPath: arguments[8])
+            let binding = try nativePublicSendBinding(
+                String(contentsOf: URL(fileURLWithPath: arguments[2]), encoding: .utf8),
+                operations: String(contentsOf: URL(fileURLWithPath: arguments[4]), encoding: .utf8),
+                checking: String(contentsOf: URL(fileURLWithPath: arguments[6]), encoding: .utf8),
+                module: output.deletingPathExtension().lastPathComponent,
+                binding: command == "prepare-catalog-send" ? "CatalogSendBinding" : "ArithmeticSendBinding")
+            try binding.write(to: output, options: .withoutOverwriting)
+            exit(0)
+        }
+        if arguments.first == "verify-member-tokens" {
+            guard arguments.count == 5, arguments[1] == "--compiled-members", arguments[3] == "--attached-members"
+            else { throw NativeCommandError.usage }
+            try verifyNativeMemberTokens(
+                compiled: String(contentsOf: URL(fileURLWithPath: arguments[2]), encoding: .utf8),
+                attached: String(contentsOf: URL(fileURLWithPath: arguments[4]), encoding: .utf8))
+            exit(0)
+        }
+        if arguments.first == "prepare-compiler-stack-seed" {
+            guard arguments.count == 9, arguments[1] == "--authored-source",
+                  arguments[3] == "--native-source", arguments[5] == "--operations", arguments[7] == "--output"
+            else { throw NativeCommandError.usage }
+            try CompilerStackSeedEvidence.prepare(
+                authoredSource: String(contentsOf: URL(fileURLWithPath: arguments[2]), encoding: .utf8),
+                nativeSource: String(contentsOf: URL(fileURLWithPath: arguments[4]), encoding: .utf8),
+                operations: String(contentsOf: URL(fileURLWithPath: arguments[6]), encoding: .utf8),
+                to: URL(fileURLWithPath: arguments[8]))
+            exit(0)
+        }
+        if let command = arguments.first, ["prepare-selection", "prepare-branchwise-selection"].contains(command) {
+            guard arguments.count == 5, arguments[1] == "--authored-source",
+                  arguments[3] == "--output" else { throw NativeCommandError.usage }
+            try CheckingSelectionEvidence.prepare(
+                authoredSource: Data(contentsOf: URL(fileURLWithPath: arguments[2])),
+                to: URL(fileURLWithPath: arguments[4]), branchwise: command == "prepare-branchwise-selection")
+            exit(0)
+        }
         let scenarios = try modelValidationScenarios()
         let assumptions = try assumptionValidationScenarios()
         if arguments == ["list"] {

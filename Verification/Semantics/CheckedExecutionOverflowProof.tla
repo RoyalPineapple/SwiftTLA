@@ -49,7 +49,9 @@ EmittedFailures ==
 
 THEOREM EmittedInitMatchesSource ==
     Init <=> SourceInit
-    BY DEF Init, SourceInit
+    PROOF
+    <1>0. USE SwiftIntBounds DEF SwiftIntBounds
+    <1>. QED BY SMT DEF Init, SourceInit
 
 THEOREM CompiledStepAndFailureMatchSource ==
     /\ (CompiledStep <=> SourceStep)

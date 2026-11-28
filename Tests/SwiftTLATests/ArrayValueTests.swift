@@ -6,6 +6,30 @@ import SwiftSyntax
 @testable import SwiftTLAPlugin
 
 struct ArrayValueTests {
+    @Test("array search stops at the first matching element or reached predicate error")
+    func searchesInOrder() throws {
+        for (input, expected) in [([], false), ([2, 2], false), ([2, 1, 0], true)] {
+            var machine = try ArrayPredicateSearchMachine.makeMachine(configuration: .init(input: input))
+            try machine.send(.search)
+            #expect(machine.state.found == expected)
+            let predicate = input.expr.contains { divisor in 1 % divisor == 0 }
+            #expect(try compiledValue(predicate.stateExpr) == .bool(expected))
+        }
+
+        let failures: [([Int], NativeMachineEvaluationError, EvalError)] = [
+            ([2, 0, -1, 1], .divisionByZero, .divisionByZero),
+            ([2, -1, 0, 1], .negativeModuloDivisor(-1), .negativeModuloDivisor(-1))
+        ]
+        for (input, nativeError, formalError) in failures {
+            var machine = try ArrayPredicateSearchMachine.makeMachine(configuration: .init(input: input))
+            let before = machine.snapshot
+            #expect(throws: nativeError) { try machine.send(.search) }
+            #expect(machine.snapshot == before)
+            let predicate = input.expr.contains { divisor in 1 % divisor == 0 }
+            #expect(throws: formalError) { try compiledValue(predicate.stateExpr) }
+        }
+    }
+
     @Test("injective choices compose directly with ordinary Swift array expressions")
     func injectiveSequenceUsesArray() {
         let values = Set<Int>([1, 2]).expr
@@ -48,7 +72,8 @@ struct ArrayValueTests {
         #expect(try compiledValue(Fold(values.expr, startingWith: 0) { value, sum in value + sum }.stateExpr) == .int(5))
         let parser = ParserSession()
         let literal: ExprSyntax = "Array<Int>([2, 1, 2])"
-        #expect(parser.decodeTypedFacadeValue(literal, scope: .empty) == .tupleLiteral([.int(2), .int(1), .int(2)]))
+        let parsed = try #require(parser.decodeTypedFacadeValue(literal, scope: .empty))
+        #expect(try compiledValue(parsed) == .tuple([.int(2), .int(1), .int(2)]))
     }
 
     @Test("array configuration and native operations preserve ordinary Swift state and nominal members")
@@ -62,13 +87,13 @@ struct ArrayValueTests {
             let choices: [ArrayValueMachine.Choice] = machine.state.choices
             #expect(choices == [.one, .two, .one])
             let expected = scenario.configuration.input + [3]
-            _ = try machine.send(.adopt)
+            try machine.send(.adopt)
             #expect(machine.state.row == expected)
             #expect(try machine.formalProjection(of: machine.snapshot).value(for: row)
                 == .tuple(expected.map(TLAValue.int)))
-            _ = try machine.send(.remove)
+            try machine.send(.remove)
             #expect(machine.state.row == Array(expected.dropFirst()))
-            _ = try machine.send(.select)
+            try machine.send(.select)
             #expect(machine.state.row == expected.dropFirst().filter { $0 != 2 })
             let graph = try scenario.explore(maximumStates: 20)
             #expect(graph.safetyViolations.isEmpty)
@@ -82,8 +107,10 @@ struct ArrayValueTests {
         var machine = try ArrayAppendReadMachine.makeMachine()
         #expect(machine.state.sequence.isEmpty)
         #expect(machine.state.result == 0)
-        #expect(try machine.send(.push).after.sequence == [42])
-        #expect(try machine.send(.pop).after.result == 42)
+        try machine.send(.push)
+        #expect(machine.state.sequence == [42])
+        try machine.send(.pop)
+        #expect(machine.state.result == 42)
 
         let graph = try ReachabilityGraph(
             initialMachines: ArrayAppendReadMachine.initialMachines(), maximumStates: 10)
@@ -141,7 +168,7 @@ struct ArrayValueTests {
         })
         let swiftProofInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("GeneratedSequenceIndexFailureSwiftVisitor.txt")
-        let expectedVisitor = try String(contentsOf: swiftProofInput, encoding: .utf8)
+        let expectedVisitor = nativeWitnessSource(try String(contentsOf: swiftProofInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
@@ -203,7 +230,7 @@ struct ArrayValueTests {
                 "_NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)")
         ] {
             let visitor = try #require(visitors.first { $0.name.text == name })
-            let expected = try String(contentsOf: proofDirectory.appendingPathComponent(file), encoding: .utf8)
+            let expected = nativeWitnessSource(try String(contentsOf: proofDirectory.appendingPathComponent(file), encoding: .utf8))
             #expect(tokens(visitor.description) == tokens(expected))
             let unchecked = visitor.description.replacingOccurrences(of: checkedCall, with: "_sequenceValue")
             #expect(unchecked != visitor.description)
@@ -283,8 +310,8 @@ struct ArrayValueTests {
                 Issue.record("Unexpected generated action visitor: \(visitor.name.text)")
                 return
             }
-            let expected = try String(contentsOf: proofInput.deletingLastPathComponent()
-                .appendingPathComponent(name), encoding: .utf8)
+            let expected = nativeWitnessSource(try String(contentsOf: proofInput.deletingLastPathComponent()
+                .appendingPathComponent(name), encoding: .utf8))
             #expect(tokens(visitor.description) == tokens(expected))
         }
         #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))

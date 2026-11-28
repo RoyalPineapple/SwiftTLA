@@ -3,6 +3,11 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
 extension ModelMacro: ExtensionMacro {
+    static func isParameterlessRefinementTarget(_ declaration: some DeclGroupSyntax) -> Bool {
+        let parents = declaration.as(StructDeclSyntax.self)?.inheritanceClause?.inheritedTypes
+        return parents?.contains { $0.type.trimmedDescription.split(separator: ".").last == "ParameterlessGeneratedModel" } == true
+    }
+
     public static func expansion(
         of node: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
@@ -15,7 +20,7 @@ extension ModelMacro: ExtensionMacro {
         guard declaration.is(StructDeclSyntax.self), !protocols.isEmpty,
               let model = try? TLASpecVerifier.parseAndVerify(declaration),
               !model.program.layout.variables.isEmpty else { return [] }
-        if model.program.layout.parameters.isEmpty {
+        if model.program.layout.parameters.isEmpty && !isParameterlessRefinementTarget(declaration) {
             return [try ExtensionDeclSyntax("extension \(type): SwiftTLA.StateMachine {}")]
         }
         return [try ExtensionDeclSyntax("extension \(type): SwiftTLA.StateMachine, SwiftTLA.ConfiguredGeneratedModel {}")]

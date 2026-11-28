@@ -1,12 +1,11 @@
 # Test targets
 
 All local test execution goes through `scripts/local-validation.sh`, which
-takes the repository-wide lock, isolates build artifacts, and stops unsafe
+locks the resources each command writes, isolates build artifacts, and stops unsafe
 memory pressure. Hosted CI remains the admission authority; local runs are
 diagnostic.
 
-`SwiftTLATests` is the fast semantic-core target. It has no dependency on
-`UpstreamParity`; use it for parser, scope, operator, simultaneous-update,
+`SwiftTLATests` is the fast semantic-core target. Use it for parser, scope, operator, simultaneous-update,
 structured-value, runtime, and generated-machine work:
 
 ```sh
@@ -14,10 +13,37 @@ structured-value, runtime, and generated-machine work:
 ```
 
 The filter matches suite and test identifiers the way `swift test --filter`
-does. SwiftPM still builds every test target before running the selected
-suites. The wrapper keeps SwiftPM's incremental build cache under the common
-Git directory and records a source-content key; it retains the repository-wide
-lock and memory guard. Per-run scratch files stay outside the working tree.
+does. Pass a final `4` to use four compiler jobs on a large build, for example
+`./scripts/local-validation.sh swiftpm-test "FormalOperatorTests" 4`. The default
+is one compiler job. Both settings use the same cache lock and memory watchdog.
+SwiftPM still builds every test target before running the selected
+suites. The wrapper keeps SwiftPM's incremental build cache in the worktree’s Git
+directory and records a source-content key. Product builds and tests share
+that cache lock. Other worktrees and proof jobs can run concurrently within
+the host capacity and memory guards. Per-run scratch files stay outside the
+working tree.
+
+For independent proof selections on the same retained packet, list each additional
+range after `--also` in one `proof-step` command. Two workers take ranges in order
+as they become free. Run a parent after its required child proofs pass.
+
+During the corpus migration, build the validation CLI once per batch:
+
+```sh
+cli="$(./scripts/local-validation.sh port-build)" || exit 1
+"$cli" native list
+```
+
+This builds the debug `tlc-validate` product and its dependencies in the
+same guarded cache. To trial four compiler jobs on a batch, pass
+`port-build 4`. The default is one job. Both use the same lock and memory
+watchdog. Before compiling, check each configuration against its pinned TLC
+capture. Record its selected properties, expected outcome and deadlock setting.
+For an exhaustive graph comparison, the state limit must cover all reachable
+states in the original. Build output goes to stderr. Stdout gives the executable
+path. Use that executable for each case with separate output directories.
+Finish comparisons before another build replaces the executable, or retain a
+copy for the batch. Run focused tests before publication. Remove this mode and its documentation when the migration ends.
 
 `SwiftTLAParityTests` contains the slower upstream corpus, finite-graph,
 and temporal/symmetry conformance checks:
