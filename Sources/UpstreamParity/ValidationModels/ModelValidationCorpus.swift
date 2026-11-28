@@ -36,6 +36,7 @@ private let fixtureModelRegistrations: [ModelRegistration] = [
 ]
 
 private let upstreamModelRegistrations: [ModelRegistration] = [
+    .init(id: "bounded-btree", scenarios: { try BoundedBTree.validationScenarios() }),
     .init(id: "test-graphs-workers", scenarios: { try OrderedGraphChecker.validationScenarios() }),
     .init(id: "sailfish", scenarios: { try SailfishConsensus.validationScenarios() }),
     .init(id: "test-mc-reachability", scenarios: { try AbstractGraphChecker.validationScenarios() }),

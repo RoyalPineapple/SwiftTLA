@@ -3679,7 +3679,9 @@
           "path": "specifications/btree/MCbtree.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/BoundedBTree.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -3688,10 +3690,16 @@
           "module": "specifications/btree/MCbtree.tla",
           "configuration": "specifications/btree/MCbtree.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/BoundedBTree.swift",
+              "scenario": "Upstream",
+              "caseID": "btree-bounded"
+            }
+          ],
           "evidence": []
         },
         {

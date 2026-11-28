@@ -5447,6 +5447,43 @@
       "moduleSHA256": "7827f14e60d73f88687ca2e05dd28d829e88366742e3afa05198751013494ef7",
       "cfgSHA256": "8169f2eba98d41a2e3fc1b05b681f22c66ed7239fb197215e1593793e549bd60",
       "timeoutSeconds": 1800
+    },
+    {
+      "id": "btree-bounded",
+      "sourceModel": "bounded-btree",
+      "scenario": "Upstream",
+      "module": "bounded-btree/MCbtree.tla",
+      "configuration": "bounded-btree/MCbtree.cfg",
+      "imports": [
+        "bounded-btree/btree.tla",
+        "bounded-btree/kvstore.tla",
+        "bounded-btree/Relation.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCbtree",
+          "importedModule": "btree"
+        },
+        {
+          "importingModule": "btree",
+          "importedModule": "kvstore"
+        },
+        {
+          "importingModule": "btree",
+          "importedModule": "Relation"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/btree/MCbtree.tla",
+        "sha256": "64655fd6391422f27607da0c3d36617066249c68687d984bdb1113bc98f83ac3"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "64655fd6391422f27607da0c3d36617066249c68687d984bdb1113bc98f83ac3",
+      "cfgSHA256": "e7122e42b7ee004fcf7b9f80602143b0e72909b45df6e797ea89017d8a16079c",
+      "timeoutSeconds": 3600
     }
   ]
 }

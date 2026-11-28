@@ -1242,12 +1242,22 @@ extension NativeSwiftEmitter {
             "\(binder($0.binder)): \(try swiftType(program.bindingTypes[$0.binder]!))"
         }.joined(separator: ", ")
         let parts = try actionFunctions(action)
-        let declaration = DeclSyntax(stringLiteral: """
+        let source = """
         private static func _visitUpdates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
                                                    _ _emit: (_Updates) throws -> Void) throws -> [NativeMachineEvaluationError] {
             \(parts.source)
         }
-        """)
+        """
+        // SwiftParser defaults to 20 levels in Debug and 256 in Release. Generated visitors use the Release limit in both.
+        var parser = Parser(source, maximumNestingLevel: 256)
+        let file = SourceFileSyntax.parse(from: &parser)
+        guard !file.hasError, file.statements.count == 1,
+              let declaration = file.statements.first?.item.as(DeclSyntax.self) else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native.action.visitor.\(action.id.ordinal)", expected: "one valid Swift declaration",
+                actual: file.hasMaximumNestingLevelOverflow ? "parser nesting limit exceeded" : "invalid generated Swift",
+                nextSafeAction: "Report this native code generation failure.")
+        }
         try verifyGeneratedActionWriteOutput(declaration, action: action.body, program: program,
             stateFields: stateMemberNames, parts: parts.writes, conditions: parts.conditions,
             requireScalarLeaves: isTotalScalarAssignment(action.body)
