@@ -171,7 +171,15 @@ for i in $(seq 1 300); do
 done
 [ ! -f hold ] && echo xcode-probe-ran
 STUB
-chmod +x "$tmp/bin/"{sysctl,memory_pressure,xcodebuild}
+# A busy process in an unrelated tree must not consume a validation job's RSS allowance.
+cat > "$tmp/bin/ps" <<'STUB'
+#!/bin/sh
+/bin/ps "$@" || exit $?
+if [ "$*" = "-axo pid=,ppid=,rss=,pgid=" ]; then
+    printf '%s\n' '900000 1 41943040 900000' '900001 900000 1024 900000'
+fi
+STUB
+chmod +x "$tmp/bin/"{sysctl,memory_pressure,xcodebuild,ps}
 probe_pids=()
 for n in 1 2 3 4; do
     mkdir "$repo/pkg$n"

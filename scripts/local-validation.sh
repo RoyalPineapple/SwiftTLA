@@ -234,7 +234,7 @@ tree_rss_mib() {
             do {
                 changed = 0
                 for (pid in parent) {
-                    if (present[parent[pid]] && !present[pid]) {
+                    if ((parent[pid] in present) && !(pid in present)) {
                         present[pid] = 1
                         changed = 1
                     }
