@@ -4,10 +4,10 @@ import SwiftTLA
 
 /// Capture the published inputs before a model or Swift validation scenario exists.
 func runReference(arguments: [String]) throws {
-    guard arguments.count >= 9, ["capture", "compare"].contains(arguments[0]), arguments[1] == "--case",
+    guard arguments.count >= 9, ["capture", "compare", "compare-witness"].contains(arguments[0]), arguments[1] == "--case",
           arguments[3] == "--module", arguments[5] == "--config", arguments[7] == "--output",
           arguments[2].range(of: "^[a-z0-9_-]+$", options: .regularExpression) != nil else {
-        throw ValidationCLIError.invalidManifest("reference capture --case <id> --module <root.tla> --config <model.cfg> --output <new-directory> [--native <evidence-directory>] [Importer=path/to/Import.tla ...]")
+        throw ValidationCLIError.invalidManifest("reference <capture|compare|compare-witness> --case <id> --module <root.tla> --config <model.cfg> --output <new-directory> [--native <evidence-directory>] [Importer=path/to/Import.tla ...]")
     }
     let fm = FileManager.default
     let output = URL(fileURLWithPath: arguments[8], isDirectory: true)
@@ -28,6 +28,7 @@ func runReference(arguments: [String]) throws {
     }
     var imports: [URL] = []
     var edges: [TLAModuleBundle.ModuleDependency] = []
+    let supplementalJar = try referenceCommunityJar(for: arguments[2], projectRoot: root, toolsRoot: toolsRoot)
     for argument in arguments.dropFirst(comparing ? 11 : 9) {
         let parts = argument.split(separator: "=", maxSplits: 1)
         guard parts.count == 2 else { throw ValidationCLIError.invalidManifest("expected Importer=path/to/Import.tla") }
@@ -39,12 +40,23 @@ func runReference(arguments: [String]) throws {
     let bundle = try TLCProcessRequest.declaredBundle(root: URL(fileURLWithPath: arguments[4]),
         configuration: URL(fileURLWithPath: arguments[6]), imports: imports, dependencies: edges)
     try fm.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let timeout = TimeInterval(env["SWIFTTLA_REFERENCE_TIMEOUT_SECONDS"] ?? "600") ?? 0
+    guard timeout.isFinite, timeout > 0, timeout <= 86_400 else {
+        throw ValidationCLIError.invalidManifest("reference timeout must be positive and at most 24 hours")
+    }
     let outcome = try GeneratedTLCOracle.run(bundle: bundle, id: arguments[2], maximumStates: 10_000_000,
-        timeout: 600, tools: tools, pin: pin, workRoot: output.deletingLastPathComponent(),
+        timeout: timeout, tools: tools, pin: pin, workRoot: output.deletingLastPathComponent(),
         retained: output, invocation: .finiteGraph, renderedActions: [], process: TLCProcessAdapter(),
-        referenceCache: comparing ? .requireHit : .readThrough)
+        supplementalJar: supplementalJar, referenceCache: comparing ? .requireHit : .readThrough)
     print("reference \(arguments[2]): \(outcome)")
     if case .failed = outcome { throw UpstreamTLCParityError.invalidOutcome(String(describing: outcome)) }
+    if arguments[0] == "compare-witness" {
+        guard outcome == .safetyViolation,
+              let entry = try modelValidationScenarios().first(where: { $0.id == arguments[2] }) else {
+            throw ValidationCLIError.invalidManifest("expected an upstream safety violation and a registered scenario")
+        }
+        try compareReferenceWitness(entry.scenario, id: arguments[2], directory: output, tools: tools, pin: pin, timeout: timeout)
+    }
     if comparing {
         guard outcome == .completed, let scenario = try modelValidationScenarios().first(where: { $0.id == arguments[2] }) else {
             throw ValidationCLIError.invalidManifest("complete TLC reference and registered native case required")
@@ -56,4 +68,24 @@ func runReference(arguments: [String]) throws {
         if let difference { throw ValidationCLIError.invalidManifest("graph mismatch: " + difference) }
         print("native/reference initial states and labeled graph: exact")
     }
+}
+
+private func referenceCommunityJar(for caseID: String, projectRoot: URL, toolsRoot: URL) throws -> PinnedTLCModuleJar? {
+    struct Lock: Decodable {
+        struct Jar: Decodable { let sha256: String }
+        let schema: String
+        let jar: Jar
+    }
+    let inputs = projectRoot.appendingPathComponent("Verification/FiniteGraph")
+    let registryURL = inputs.appendingPathComponent("cases.json")
+    guard FileManager.default.fileExists(atPath: registryURL.path),
+          try decode(FiniteGraphManifest.self, at: registryURL).cases.contains(where: { $0.id == caseID && $0.referenceCommunityModules })
+    else { return nil }
+    let lock = try decode(Lock.self, at: inputs.appendingPathComponent("community-modules.json"))
+    guard lock.schema == "PinnedCommunityModules" else {
+        throw ValidationCLIError.invalidManifest("expected the pinned Community Modules release")
+    }
+    let jar = try PinnedTLCModuleJar(url: toolsRoot.appendingPathComponent("downloads/CommunityModules-deps.jar"), sha256: lock.jar.sha256)
+    try jar.validate()
+    return jar
 }

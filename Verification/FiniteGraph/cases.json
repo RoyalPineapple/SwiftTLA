@@ -4770,6 +4770,683 @@
       "moduleSHA256": "0e7528e77217c97ad63ad2387cee2044f307d9becc20ecd5d46ff7887ba55c4a",
       "cfgSHA256": "90dfb8e21116b74fe50c9de3c0420cb5c50fefba28dd2ee5ce2637ae8da68a65",
       "timeoutSeconds": 600
+    },
+    {
+      "id": "nbacc-ray97-nbacc-ray97",
+      "sourceModel": "raynal-atomic-commit",
+      "scenario": "Upstream",
+      "module": "raynal-atomic-commit/nbacc_ray97.tla",
+      "configuration": "raynal-atomic-commit/nbacc_ray97.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/nbacc_ray97/nbacc_ray97.tla",
+        "sha256": "c763b946f4135a439c67daa5b3d4ce55977726855b8af8198e453fc795c2f353"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c763b946f4135a439c67daa5b3d4ce55977726855b8af8198e453fc795c2f353",
+      "cfgSHA256": "dc4f86156dab28a6b053805dade4dc803f851c681083d540bfdae2928d2e7871",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "paxos-mcvoting",
+      "sourceModel": "turing-paxos-voting",
+      "scenario": "MCVoting",
+      "module": "paxos-voting/MCVoting.tla",
+      "configuration": "paxos-voting/MCVoting.cfg",
+      "imports": [
+        "paxos-voting/Voting.tla",
+        "paxos-mc-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCVoting",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Paxos/MCVoting.tla",
+        "sha256": "c38f90e525e236ddc8a4d64af7b20c43dcfa0729476e69735aa795ca07f341b9"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c38f90e525e236ddc8a4d64af7b20c43dcfa0729476e69735aa795ca07f341b9",
+      "cfgSHA256": "1b750ba2066b7711194c82da5b9e2788b77812bd39b35015b0f96c3eadffd3b9",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "paxos-mcpaxos",
+      "sourceModel": "turing-paxos-tiny",
+      "scenario": "MCPaxos",
+      "module": "paxos-singleton/MCPaxos.tla",
+      "configuration": "paxos-singleton/MCPaxos.cfg",
+      "imports": [
+        "paxos-singleton/Paxos.tla",
+        "paxos-voting/Voting.tla",
+        "paxos-mc-consensus/Consensus.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "boulanger/TLAPS.tla",
+        "kvsnap/Functions.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCPaxos",
+          "importedModule": "Paxos"
+        },
+        {
+          "importingModule": "Paxos",
+          "importedModule": "Voting"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "Consensus"
+        },
+        {
+          "importingModule": "Voting",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "Consensus",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Paxos/MCPaxos.tla",
+        "sha256": "4bfd984ceba025ea50abeda3a54ea74acb7dbba3380c44afba87a9130cade3ee"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "4bfd984ceba025ea50abeda3a54ea74acb7dbba3380c44afba87a9130cade3ee",
+      "cfgSHA256": "a6ffd0be786ea1110c0454bb1c79ffd72425882b81b59a406ee510ec6f29d7d0",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "simplifiedfastpaxos-paxos",
+      "sourceModel": "simplifiedfastpaxos-paxos",
+      "scenario": "published",
+      "module": "simplified-fast-paxos/Paxos.tla",
+      "configuration": "simplified-fast-paxos/Paxos.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SimplifiedFastPaxos/Paxos.tla",
+        "sha256": "1f2a6d31e00be1839081c9f170f84acbe852fe07bb1669a0dcae1af5dfc9f6a9"
+      },
+      "exploration": {
+        "maximumStateLimit": 4000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "1f2a6d31e00be1839081c9f170f84acbe852fe07bb1669a0dcae1af5dfc9f6a9",
+      "cfgSHA256": "f36014d1a06fd49c78b1549a8429d954eedf81568d10d74f5db6ddfb84495b96",
+      "timeoutSeconds": 1200
+    },
+    {
+      "id": "transaction-commit-paxoscommit",
+      "sourceModel": "transaction-commit-paxoscommit",
+      "scenario": "published",
+      "module": "paxos-commit-published/PaxosCommit.tla",
+      "configuration": "paxos-commit-published/PaxosCommit.cfg",
+      "imports": [
+        "tcommit/TCommit.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "PaxosCommit",
+          "importedModule": "TCommit"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/transaction_commit/PaxosCommit.tla",
+        "sha256": "95ae4ea62bc1767f233a9e66d21ca6233ccf2464a4f8fd9fabea0fc5c15aebcd"
+      },
+      "exploration": {
+        "maximumStateLimit": 2000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "95ae4ea62bc1767f233a9e66d21ca6233ccf2464a4f8fd9fabea0fc5c15aebcd",
+      "cfgSHA256": "74bf19b2c60ca34ed5e4a09651964c1d81992d30537ff8a20080dbcd66307ba4",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "elevator-liveness-large",
+      "sourceModel": "multicar-elevator",
+      "scenario": "ElevatorLivenessLarge",
+      "module": "multicar-elevator/Elevator.tla",
+      "configuration": "multicar-elevator/ElevatorLivenessLarge.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiCarElevator/Elevator.tla",
+        "sha256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203",
+      "cfgSHA256": "f41449494507bb7def26453fd0bfc46a3928b6436de0da8d6aa888a13aed410c",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "elevator-safety-medium",
+      "sourceModel": "multicar-elevator",
+      "scenario": "ElevatorSafetyMedium",
+      "module": "multicar-elevator/Elevator.tla",
+      "configuration": "multicar-elevator/ElevatorSafetyMedium.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiCarElevator/Elevator.tla",
+        "sha256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c44366dbf4f4bdef30edade0c8a2faf75fd37b2b7aeb1c04b24e80eb40ed2203",
+      "cfgSHA256": "4ec5881c4d61bd2f605d81c52125d1b76de22bf08ed7bbe848de4b35aeb44372",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "checkpoint-coordination",
+      "sourceModel": "checkpoint-coordination",
+      "scenario": "Upstream",
+      "module": "checkpoint-coordination/MCCheckpointCoordination.tla",
+      "configuration": "checkpoint-coordination/MCCheckpointCoordination.cfg",
+      "imports": [
+        "checkpoint-coordination/CheckpointCoordination.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCCheckpointCoordination",
+          "importedModule": "CheckpointCoordination"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CheckpointCoordination/MCCheckpointCoordination.tla",
+        "sha256": "b8ec0a17e4a3558e11635b4958872d2d3d02847ffe79a0a592fbc61fb6b10d4c"
+      },
+      "exploration": {
+        "maximumStateLimit": 6000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b8ec0a17e4a3558e11635b4958872d2d3d02847ffe79a0a592fbc61fb6b10d4c",
+      "cfgSHA256": "4fa3ed90387d2aa93b98d7423ac365ad22b85da109004bda9819135bcb35d5bf",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "checkpoint-coordination-failure",
+      "sourceModel": "checkpoint-coordination",
+      "scenario": "IncorrectLease",
+      "module": "checkpoint-coordination/MCCheckpointCoordination.tla",
+      "configuration": "checkpoint-coordination/MCCheckpointCoordinationFailure.cfg",
+      "imports": [
+        "checkpoint-coordination/CheckpointCoordination.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCCheckpointCoordination",
+          "importedModule": "CheckpointCoordination"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CheckpointCoordination/MCCheckpointCoordination.tla",
+        "sha256": "b8ec0a17e4a3558e11635b4958872d2d3d02847ffe79a0a592fbc61fb6b10d4c"
+      },
+      "exploration": {
+        "maximumStateLimit": 8000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b8ec0a17e4a3558e11635b4958872d2d3d02847ffe79a0a592fbc61fb6b10d4c",
+      "cfgSHA256": "6027131ece0b948438c64b766eafbd88444c51486a074ad6e64b8eab8d98178e",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "keyvaluestore-mckvsnap",
+      "sourceModel": "kvsnap",
+      "scenario": "MCKVsnap",
+      "module": "kvsnap/MCKVsnap.tla",
+      "configuration": "kvsnap-published/MCKVsnap.cfg",
+      "imports": [
+        "kvsnap/KVsnap.tla",
+        "kvsnap/ClientCentric.tla",
+        "kvsnap/Util.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCKVsnap",
+          "importedModule": "KVsnap"
+        },
+        {
+          "importingModule": "KVsnap",
+          "importedModule": "Util"
+        },
+        {
+          "importingModule": "KVsnap",
+          "importedModule": "ClientCentric"
+        },
+        {
+          "importingModule": "ClientCentric",
+          "importedModule": "Util"
+        },
+        {
+          "importingModule": "Util",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/KeyValueStore/MCKVsnap.tla",
+        "sha256": "c500a1abde66e13467cdb882071601e9b1442487c47510348ded4e86b34e9329"
+      },
+      "exploration": {
+        "maximumStateLimit": 250000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c500a1abde66e13467cdb882071601e9b1442487c47510348ded4e86b34e9329",
+      "cfgSHA256": "8c54531aa6a4fe427076801f8a94d51ed2ef5a8209a71eafd9ca92c462ff5d1b",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "bcastfolklore",
+      "sourceModel": "folklore-broadcast",
+      "scenario": "Upstream",
+      "module": "folklore-broadcast/bcastFolklore.tla",
+      "configuration": "folklore-broadcast/bcastFolklore.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bcastFolklore/bcastFolklore.tla",
+        "sha256": "1a5daf85a82219184ce6531d1b7600bf5dfc15dd04d98a75d06cf8109496ddd3"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "1a5daf85a82219184ce6531d1b7600bf5dfc15dd04d98a75d06cf8109496ddd3",
+      "cfgSHA256": "2c919ef223d3eb8a7e59a4a7f5f3ce89bf27f22e3656c9d25c27e979f31e8147",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "yoyo-all-graphs",
+      "referenceCommunityModules": true,
+      "sourceModel": "yoyo",
+      "scenario": "Upstream",
+      "module": "yoyo/YoYoAllGraphs.tla",
+      "configuration": "yoyo/YoYoAllGraphs.cfg",
+      "imports": [
+        "yoyo/UndirectedGraphs.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Folds.tla",
+        "kvsnap/Functions.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "YoYoAllGraphs",
+          "importedModule": "UndirectedGraphs"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "UndirectedGraphs",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/YoYo/YoYoAllGraphs.tla",
+        "sha256": "20cd0e15e4644f7f320eb598ed4b769ff406e2a2598c47bb897630afa4bca3d4"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "20cd0e15e4644f7f320eb598ed4b769ff406e2a2598c47bb897630afa4bca3d4",
+      "cfgSHA256": "aa756ff107520de5d40358725aaa61af5aa23d6247c9f89782f65c3537c51af0",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "tlc-test-mc-reachability",
+      "referenceCommunityModules": true,
+      "sourceModel": "test-mc-reachability",
+      "scenario": "Upstream",
+      "module": "test-mc-reachability/TestMCReachability.tla",
+      "configuration": "test-mc-reachability/TestMCReachability.cfg",
+      "imports": [
+        "test-mc-reachability/StateGraphs.tla",
+        "test-mc-reachability/MCReachability.tla",
+        "ewd840/IOUtils.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "TestMCReachability",
+          "importedModule": "StateGraphs"
+        },
+        {
+          "importingModule": "TestMCReachability",
+          "importedModule": "MCReachability"
+        },
+        {
+          "importingModule": "StateGraphs",
+          "importedModule": "IOUtils"
+        },
+        {
+          "importingModule": "IOUtils",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TLC/TestMCReachability.tla",
+        "sha256": "cf5d2ec158de5f0c3253ff62f22b569ffa867612aa6c1d473d04bab4ca32b81e"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "cf5d2ec158de5f0c3253ff62f22b569ffa867612aa6c1d473d04bab4ca32b81e",
+      "cfgSHA256": "09dc41a1d6208c3161b61e57b3c07ad49df2a319b6a5c92f0a3b034037ea4e16",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "sailfish-1",
+      "sourceModel": "sailfish",
+      "scenario": "ThreeNodes",
+      "module": "dag-consensus/TLCSailfish1.tla",
+      "configuration": "dag-consensus/TLCSailfish1.cfg",
+      "imports": [
+        "dag-consensus/Sailfish.tla",
+        "dag-consensus/BlockDag.tla",
+        "dag-consensus/Utils.tla",
+        "dag-consensus/Digraph.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "TLCSailfish1",
+          "importedModule": "Sailfish"
+        },
+        {
+          "importingModule": "Sailfish",
+          "importedModule": "BlockDag"
+        },
+        {
+          "importingModule": "BlockDag",
+          "importedModule": "Utils"
+        },
+        {
+          "importingModule": "BlockDag",
+          "importedModule": "Digraph"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/dag-consensus/TLCSailfish1.tla",
+        "sha256": "065bcdb952c4d2b94d2a58d7f9d3009206f1c79f80437d83c6c7142b6f0333d0"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "065bcdb952c4d2b94d2a58d7f9d3009206f1c79f80437d83c6c7142b6f0333d0",
+      "cfgSHA256": "52b3ce7ce5ca649d44a38ff98e6f5772ad39b33e22e0af6df6d1174e9aff9e16",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "tlc-test-graphs",
+      "referenceCommunityModules": true,
+      "sourceModel": "test-graphs-workers",
+      "scenario": "Upstream",
+      "module": "test-mc-reachability/TestGraphs.tla",
+      "configuration": "test-mc-reachability/TestGraphs.cfg",
+      "imports": [
+        "test-mc-reachability/StateGraphs.tla",
+        "test-mc-reachability/TLCMC.tla",
+        "test-mc-reachability/MCReachability.tla",
+        "ewd840/IOUtils.tla",
+        "yoyo/SequencesExt.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla",
+        "die-hardest/FiniteSetsExt.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "TestGraphs",
+          "importedModule": "StateGraphs"
+        },
+        {
+          "importingModule": "TestGraphs",
+          "importedModule": "TLCMC"
+        },
+        {
+          "importingModule": "TLCMC",
+          "importedModule": "MCReachability"
+        },
+        {
+          "importingModule": "StateGraphs",
+          "importedModule": "IOUtils"
+        },
+        {
+          "importingModule": "IOUtils",
+          "importedModule": "SequencesExt"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "Folds"
+        },
+        {
+          "importingModule": "SequencesExt",
+          "importedModule": "FiniteSetsExt"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetsExt",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TLC/TestGraphs.tla",
+        "sha256": "444e8430c69b0598c5f6580f5ce7e4f9304ddb269211c35f997cfeff13063cf3"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "444e8430c69b0598c5f6580f5ce7e4f9304ddb269211c35f997cfeff13063cf3",
+      "cfgSHA256": "7d83c9e783b2812119276a5db94adfaae508149f9ec482e4e5a32ad7778c730b",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "misra-reachability-all",
+      "sourceModel": "reachability-assumptions",
+      "scenario": "AllGraphs",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "misra-reachability/MCReachabilityTest.tla",
+      "configuration": "misra-reachability/MCReachabilityTestAllGraphs.cfg",
+      "imports": [
+        "misra-reachability/ReachabilityTest.tla",
+        "misra-reachability/ReachabilityProofs.tla",
+        "misra-reachability/Reachability.tla",
+        "boulanger/TLAPS.tla",
+        "loop-invariance/NaturalsInduction.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCReachabilityTest",
+          "importedModule": "ReachabilityTest"
+        },
+        {
+          "importingModule": "ReachabilityTest",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "ReachabilityTest",
+          "importedModule": "ReachabilityProofs"
+        },
+        {
+          "importingModule": "ReachabilityProofs",
+          "importedModule": "Reachability"
+        },
+        {
+          "importingModule": "ReachabilityProofs",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "ReachabilityProofs",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MisraReachability/MCReachabilityTest.tla",
+        "sha256": "7827f14e60d73f88687ca2e05dd28d829e88366742e3afa05198751013494ef7"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "7827f14e60d73f88687ca2e05dd28d829e88366742e3afa05198751013494ef7",
+      "cfgSHA256": "8169f2eba98d41a2e3fc1b05b681f22c66ed7239fb197215e1593793e549bd60",
+      "timeoutSeconds": 1800
     }
   ]
 }

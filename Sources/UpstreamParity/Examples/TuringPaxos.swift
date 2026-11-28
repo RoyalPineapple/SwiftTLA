@@ -1,4 +1,5 @@
 // Paxos processes exchange prepares, promises, proposals, and acceptances to agree on a value.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Paxos/MCPaxos.tla
 // https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/Paxos.tla
 
 import SwiftTLA
@@ -45,11 +46,11 @@ package struct TuringPaxosModel: Sendable {
         #spec("TuringPaxos") { scope in
             Extends(.integers, .finiteSets)
             let MaxBallot = scope.parameter(as: Int.self, in: 1...2)
-            let values = scope.parameter(as: Set<Atom>.self, in: Set<Set<Atom>>([Set([.v1, .v2])]))
+            let values = scope.parameter(as: Set<Atom>.self, in: Set<Set<Atom>>([Set([.v1, .v2]), Set([.v1])]))
             let ballots = IntRange(0, through: MaxBallot)
-            let acceptors = scope.parameter(as: Set<Atom>.self, in: Set<Set<Atom>>([Set([.a1, .a2, .a3])]))
+            let acceptors = scope.parameter(as: Set<Atom>.self, in: Set<Set<Atom>>([Set([.a1, .a2, .a3]), Set([.a1])]))
             let quorums = scope.parameter(as: Set<Set<Atom>>.self, in: Set<Set<Set<Atom>>>([
-                Set<Set<Atom>>([[Atom.a1, Atom.a2], [Atom.a1, Atom.a3], [Atom.a2, Atom.a3]])
+                Set<Set<Atom>>([[Atom.a1, Atom.a2], [Atom.a1, Atom.a3], [Atom.a2, Atom.a3]]), Set<Set<Atom>>([[Atom.a1]])
             ]))
             let None = scope.parameter(as: Atom.self, in: Set<Atom>([Atom.none]))
             let maxBal = scope.sharedVar(initial: Dictionary<Atom, Int>.mapping(over: acceptors) { _ in -1 })
@@ -139,29 +140,77 @@ package struct TuringPaxosModel: Sendable {
             let acceptedProposals = accepts.allSatisfy { m in
                 maxVBal[m.acc] >= m.bal && proposals.contains { proposal in proposal.bal == m.bal && proposal.val == m.val }
             }
-            Invariant("Inv") { typeOK && consistentMax && validPromises && safeProposals && consistentProposals && acceptedProposals }
+            let votingTypes = votes.keys == acceptors.expr && maxBal.keys == acceptors.expr && acceptors.allSatisfy { a in
+                IntRange(-1, through: MaxBallot).contains(maxBal[a])
+                    && votes[a].allSatisfy { vote in ballots.contains(vote.first()) && values.contains(vote.second()) }
+            }
+            let votesSafe = acceptors.allSatisfy { (a: WithValue<Atom>) in
+                votes[a].allSatisfy { (vote: WithValue<Pair<Int, Atom>>) in
+                    IntRange(0, through: vote.first() - 1).allSatisfy { (c: WithValue<Int>) in
+                        quorums.contains { (quorum: WithValue<Set<Atom>>) in
+                            quorum.allSatisfy { (member: WithValue<Atom>) in
+                                votes[member].contains(Pair<Int, Atom>.literal(c, vote.second()))
+                                    || (maxBal[member] > c && !votes[member].contains { (prior: WithValue<Pair<Int, Atom>>) in prior.first() == c })
+                            }
+                        }
+                    }
+                }
+            }
+            let oneValuePerBallot = ballots.allSatisfy { b in
+                values.filter { v in
+                    acceptors.contains { a in votes[a].contains(Pair<Int, Atom>.literal(b, v)) }
+                }.count <= 1
+            }
+            let publishedMax = acceptors.allSatisfy { a in
+                If(maxVBal[a] == -1, then: maxVal[a] == None,
+                    else: votes[a].contains(Pair<Int, Atom>.literal(maxVBal[a], maxVal[a])))
+            }
+            let Inv1 = Invariant()
+            Inv1 { typeOK }
+            let Inv2 = Invariant()
+            Inv2 { publishedMax }
+            let Inv3 = Invariant()
+            Inv3 { validPromises && safeProposals && consistentProposals }
+            let Inv4 = Invariant()
+            Inv4 { votingTypes && votesSafe && oneValuePerBallot }
+            let Inv = Invariant()
+            Inv { typeOK && consistentMax && validPromises && safeProposals && consistentProposals && acceptedProposals }
             let voting = Instance(of: TuringVotingModel.self) {
                 Bind(\.MaxBallot, to: MaxBallot)
+                Bind(\.acceptors, projecting: acceptors)
                 Bind(\.values, projecting: values)
+                Bind(\.quorums, projecting: quorums)
             }
-            Refinement("prop_1560336937635612000", instance: voting) {
+            let prop_1560336937635612000 = Refinement(instance: voting) {
                 Map(\.votes, projecting: votes)
                 Map(\.maxBal, projecting: maxBal)
             }
+            let VotingSpecBar = Refinement(instance: voting, behavior: .initialAndNext) {
+                Map(\.votes, projecting: votes)
+                Map(\.maxBal, projecting: maxBal)
+            }
+            let memberSymmetry = Symmetry(independently: acceptors, values)
+            Validation("MCPaxos") {
+                Bind(MaxBallot, to: 1)
+                Bind(acceptors, to: Set<Atom>([.a1]))
+                Bind(quorums, to: Set<Set<Atom>>([[Atom.a1]]))
+                Bind(None, to: Atom.none)
+                Bind(values, to: Set<Atom>([.v1]))
+            }.checking(only: [Inv1, Inv2, Inv3, Inv4, VotingSpecBar]).usingSymmetry(memberSymmetry)
             Validation("tiny") {
                 Bind(MaxBallot, to: 1)
                 Bind(acceptors, to: Set<Atom>([.a1, .a2, .a3]))
                 Bind(quorums, to: Set<Set<Atom>>([[Atom.a1, Atom.a2], [Atom.a1, Atom.a3], [Atom.a2, Atom.a3]]))
                 Bind(None, to: Atom.none)
                 Bind(values, to: Set<Atom>([.v1, .v2]))
-            }
+            }.checking(only: [Inv, prop_1560336937635612000])
             Validation("small") {
                 Bind(MaxBallot, to: 2)
                 Bind(acceptors, to: Set<Atom>([.a1, .a2, .a3]))
                 Bind(quorums, to: Set<Set<Atom>>([[Atom.a1, Atom.a2], [Atom.a1, Atom.a3], [Atom.a2, Atom.a3]]))
                 Bind(None, to: Atom.none)
                 Bind(values, to: Set<Atom>([.v1, .v2]))
-            }
+            }.checking(only: [Inv, prop_1560336937635612000])
         }
     }
 }

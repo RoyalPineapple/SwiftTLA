@@ -36,6 +36,15 @@ private let fixtureModelRegistrations: [ModelRegistration] = [
 ]
 
 private let upstreamModelRegistrations: [ModelRegistration] = [
+    .init(id: "test-graphs-workers", scenarios: { try OrderedGraphChecker.validationScenarios() }),
+    .init(id: "sailfish", scenarios: { try SailfishConsensus.validationScenarios() }),
+    .init(id: "test-mc-reachability", scenarios: { try AbstractGraphChecker.validationScenarios() }),
+    .init(id: "yoyo", scenarios: { try YoYoAllGraphsModel.validationScenarios() }),
+    .init(id: "folklore-broadcast", scenarios: { try FolkloreBroadcastModel.validationScenarios() }),
+    .init(id: "checkpoint-coordination", scenarios: { try CheckpointCoordinationModel.validationScenarios() }),
+    .init(id: "raynal-atomic-commit", scenarios: { try RaynalAtomicCommitModel.validationScenarios() }),
+    .init(id: "simplifiedfastpaxos-paxos", scenarios: { try SimplifiedPaxosModel.validationScenarios() }),
+    .init(id: "transaction-commit-paxoscommit", scenarios: { try PaxosCommitModel.validationScenarios() }),
     .init(id: "byzantine-broadcast", scenarios: { try ByzantineBroadcastModel.validationScenarios() }),
     .init(id: "yoyo-no-pruning", scenarios: { try YoYoNoPruningModel.validationScenarios() }),
     .init(id: "yoyo-pruning", scenarios: { try YoYoPruningModel.validationScenarios() }),

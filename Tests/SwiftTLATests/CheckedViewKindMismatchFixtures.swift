@@ -85,3 +85,21 @@ struct NestedCheckedSetView {
         }
     }
 }
+
+@TLAModel
+struct CheckedTupleSequence {
+    enum Step: String, CaseIterable { case copy, copyIntegers }
+    typealias Item = OneOf<Int, Bool>
+    typealias Items = [Item]
+
+    static var spec: TLASpec {
+        #spec("CheckedTupleSequence") { scope in
+            let number = scope.sharedVar(initial: 3)
+            let items = scope.sharedVar(initial: [Item]())
+            let integers = scope.sharedVar(initial: [Int]())
+            let pair = Pair<Int, Bool>.literal(number, true)
+            Do(Step.copy) { items.set(pair.assuming(Items.self)) }
+            Do(Step.copyIntegers) { integers.set(pair.assuming(Array<Int>.self)) }
+        }
+    }
+}

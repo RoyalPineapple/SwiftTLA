@@ -190,7 +190,7 @@ extension NativeSwiftEmitter {
         }
     }
 
-    private func formalLiteral(_ value: CompiledValue) throws -> String {
+    func formalLiteral(_ value: CompiledValue) throws -> String {
         renderedLiteral(try value.rendered(using: program.layout))
     }
 

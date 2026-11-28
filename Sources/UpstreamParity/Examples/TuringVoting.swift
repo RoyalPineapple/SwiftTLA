@@ -1,4 +1,6 @@
 // Acceptors raise ballots and vote under quorum rules that preserve agreement.
+// The two published Voting configurations share these actions, with different ballot bounds and symmetry.
+// https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Paxos/MCVoting.tla
 // https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/PaxosHowToWinATuringAward/Voting.tla
 
 import SwiftTLA
@@ -29,11 +31,11 @@ package struct TuringVotingModel: Sendable {
             Extends(.integers, .finiteSets)
             let MaxBallot = scope.parameter(as: Int.self, in: 1...2)
             let ballots = IntRange(0, through: MaxBallot)
-            let acceptors = SetExpr<Member>.literal(.a1, .a2, .a3)
-            let values = scope.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.v1, .v2])]))
-            let quorums = Set<Set<Member>>([
-                Set([Member.a1, Member.a2]), Set([Member.a1, Member.a3]), Set([Member.a2, Member.a3])
-            ])
+            let acceptors = scope.parameter(as: Set<Member>.self, in: Set<Set<Member>>([Set([.a1, .a2, .a3]), Set([.a1])]))
+            let values = scope.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.v1, .v2]), Set([.v1])]))
+            let quorums = scope.parameter(as: Set<Set<Member>>.self, in: Set<Set<Set<Member>>>([
+                Set<Set<Member>>([[Member.a1, Member.a2], [Member.a1, Member.a3], [Member.a2, Member.a3]]), Set<Set<Member>>([[Member.a1]])
+            ]))
             let votes = scope.sharedVar(initial: Dictionary<Member, Set<Pair<Int, Choice>>>.mapping(over: acceptors) { _ in
                 Set<Pair<Int, Choice>>()
             })
@@ -65,17 +67,17 @@ package struct TuringVotingModel: Sendable {
                 }
             }
 
-            let typeOK = votes.keys == acceptors.assuming(Set<Member>.self) && maxBal.keys == acceptors.assuming(Set<Member>.self) && acceptors.allSatisfy { a in
+            let typeOK = votes.keys == acceptors.expr && maxBal.keys == acceptors.expr && acceptors.allSatisfy { a in
                 IntRange(-1, through: MaxBallot).contains(maxBal[a])
                     && votes[a].allSatisfy { vote in ballots.contains(vote.first()) && values.contains(vote.second()) }
             }
-            let votesSafe = acceptors.allSatisfy { a in
-                votes[a].allSatisfy { vote in
-                    IntRange(0, through: vote.first() - 1).allSatisfy { c in
-                        quorums.contains { quorum in
-                            quorum.allSatisfy { member in
+            let votesSafe = acceptors.allSatisfy { (a: WithValue<Member>) in
+                votes[a].allSatisfy { (vote: WithValue<Pair<Int, Choice>>) in
+                    IntRange(0, through: vote.first() - 1).allSatisfy { (c: WithValue<Int>) in
+                        quorums.contains { (quorum: WithValue<Set<Member>>) in
+                            quorum.allSatisfy { (member: WithValue<Member>) in
                                 votes[member].contains(Pair<Int, Choice>.literal(c, vote.second()))
-                                    || (maxBal[member] > c && !votes[member].contains { prior in prior.first() == c })
+                                    || (maxBal[member] > c && !votes[member].contains { (prior: WithValue<Pair<Int, Choice>>) in prior.first() == c })
                             }
                         }
                     }
@@ -86,7 +88,8 @@ package struct TuringVotingModel: Sendable {
                     acceptors.contains { a in votes[a].contains(Pair<Int, Choice>.literal(b, v)) }
                 }.count <= 1
             }
-            Invariant("Inv") { typeOK && votesSafe && oneValuePerBallot }
+            let Inv = Invariant()
+            Inv { typeOK && votesSafe && oneValuePerBallot }
             let chosen = values.filter { v in
                 ballots.contains { b in
                     quorums.contains { quorum in
@@ -95,11 +98,23 @@ package struct TuringVotingModel: Sendable {
                 }
             }
             let consensus = Instance(of: TuringConsensusModel.self) { Bind(\.Value, projecting: values) }
-            Refinement("prop_156180051387248000", instance: consensus) { Map(\.chosen, projecting: chosen) }
+            let prop_156180051387248000 = Refinement(instance: consensus) { Map(\.chosen, projecting: chosen) }
+            let ConsensusSpecBar = Refinement(instance: consensus, behavior: .initialAndNext) {
+                Map(\.chosen, projecting: chosen)
+            }
+            let ballotSymmetry = Symmetry(independently: acceptors, values)
             Validation("published") {
+                Bind(quorums, to: Set<Set<Member>>([[Member.a1, Member.a2], [Member.a1, Member.a3], [Member.a2, Member.a3]]))
+                Bind(acceptors, to: Set<Member>([.a1, .a2, .a3]))
                 Bind(MaxBallot, to: 2)
                 Bind(values, to: Set<Choice>([.v1, .v2]))
-            }.checkingDeadlock(false)
+            }.checking(only: [Inv, prop_156180051387248000]).checkingDeadlock(false)
+            Validation("MCVoting") {
+                Bind(quorums, to: Set<Set<Member>>([[Member.a1, Member.a2], [Member.a1, Member.a3], [Member.a2, Member.a3]]))
+                Bind(acceptors, to: Set<Member>([.a1, .a2, .a3]))
+                Bind(MaxBallot, to: 1)
+                Bind(values, to: Set<Choice>([.v1, .v2]))
+            }.checking(only: [Inv, ConsensusSpecBar]).usingSymmetry(ballotSymmetry).checkingDeadlock(false)
         }
     }
 }

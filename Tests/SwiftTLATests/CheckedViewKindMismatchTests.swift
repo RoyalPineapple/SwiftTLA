@@ -7,6 +7,18 @@ import SwiftSyntax
 
 @Suite("Checked view kind mismatch")
 struct CheckedViewKindMismatchTests {
+    @Test("A tuple viewed as a sequence preserves field order and checks every element")
+    func tupleSequenceView() throws {
+        var machine = try CheckedTupleSequence.makeMachine()
+        try machine.send(.copy)
+        #expect(machine.state.items == [.first(3), .second(true)])
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noMatchingCase) {
+            try machine.send(.copyIntegers)
+        }
+        #expect(machine.snapshot == before)
+    }
+
     @Test("Only total field checks on a stable record can use record-set membership")
     func recordMembershipPreservesReachedFailures() throws {
         let shape = FormalValueShape.record([.init(name: "tag", shape: .finite(typeName: "Tag", values: [.int(1)])),

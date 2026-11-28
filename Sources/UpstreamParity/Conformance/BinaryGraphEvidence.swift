@@ -241,7 +241,7 @@ struct BinaryGraphEvidenceWriter {
         uint64(UInt64(reachability))
         byte(completion)
         append(hash)
-        try handle.write(contentsOf: buffer)
+        try handle.writeEvidenceChunk(buffer)
         buffer.removeAll(keepingCapacity: true)
         try handle.close()
         if let compressor {
@@ -298,8 +298,27 @@ struct BinaryGraphEvidenceWriter {
     private mutating func flush() throws {
         guard !buffer.isEmpty else { return }
         digest.update(data: buffer)
-        try handle.write(contentsOf: buffer)
+        try handle.writeEvidenceChunk(buffer)
         buffer.removeAll(keepingCapacity: true)
+    }
+}
+
+// FileHandle can autorelease each Foundation I/O buffer on Darwin. Bound its lifetime to the transfer.
+extension FileHandle {
+    func readEvidenceChunk(upToCount count: Int) throws -> Data? {
+        #if canImport(ObjectiveC)
+        try autoreleasepool { try read(upToCount: count) }
+        #else
+        try read(upToCount: count)
+        #endif
+    }
+
+    func writeEvidenceChunk(_ data: Data) throws {
+        #if canImport(ObjectiveC)
+        try autoreleasepool { try write(contentsOf: data) }
+        #else
+        try write(contentsOf: data)
+        #endif
     }
 }
 
@@ -350,7 +369,7 @@ struct BinaryGraphEvidenceReader {
     mutating func isAtEnd() throws -> Bool {
         if let fileSize { return offset == fileSize }
         guard buffer.count == cursor else { return false }
-        let extra = try handle.read(upToCount: 1) ?? Data()
+        let extra = try handle.readEvidenceChunk(upToCount: 1) ?? Data()
         guard extra.isEmpty else { return false }
         decompressor?.waitUntilExit()
         guard decompressor?.terminationStatus == 0 else {
@@ -444,7 +463,7 @@ struct BinaryGraphEvidenceReader {
                 buffer.removeSubrange(0..<cursor)
                 cursor = 0
             }
-            let chunk = try handle.read(upToCount: max(1_048_576, count - buffer.count)) ?? Data()
+            let chunk = try handle.readEvidenceChunk(upToCount: max(1_048_576, count - buffer.count)) ?? Data()
             guard !chunk.isEmpty else { throw BinaryGraphEvidenceError.invalid("truncated record") }
             if let digestPrefixLength, digestedBytes < digestPrefixLength {
                 let length = Int(min(UInt64(chunk.count), digestPrefixLength - digestedBytes))
@@ -496,7 +515,7 @@ struct BinaryEdgeWriter {
 
     private mutating func flush() throws {
         guard !buffer.isEmpty else { return }
-        try handle.write(contentsOf: buffer)
+        try handle.writeEvidenceChunk(buffer)
         buffer.removeAll(keepingCapacity: true)
     }
 }
@@ -532,7 +551,7 @@ struct BinaryStateWriter {
 
     private mutating func flush() throws {
         guard !buffer.isEmpty else { return }
-        try handle.write(contentsOf: buffer)
+        try handle.writeEvidenceChunk(buffer)
         buffer.removeAll(keepingCapacity: true)
     }
 }

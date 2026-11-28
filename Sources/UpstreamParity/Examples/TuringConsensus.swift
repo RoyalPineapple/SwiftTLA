@@ -18,7 +18,7 @@ package struct TuringConsensusModel: Sendable {
     package static var spec: TLASpec {
         #spec("TuringConsensus") { scope in
             Extends(.finiteSets)
-            let Value = scope.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.a, .b, .c]), Set([.v1, .v2])]))
+            let Value = scope.parameter(as: Set<Choice>.self, in: Set<Set<Choice>>([Set([.a, .b, .c]), Set([.v1, .v2]), Set([.v1])]))
             let chosen = scope.sharedVar(initial: Set<Choice>())
             Do(Step.choose, when: chosen.isEmpty) {
                 With(Value) { value in chosen.insert(value) }

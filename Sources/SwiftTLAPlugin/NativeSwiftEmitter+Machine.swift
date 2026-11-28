@@ -1385,18 +1385,7 @@ extension NativeSwiftEmitter {
                 if apiBinding.isPublic {
                     pattern.append("\(apiBinding.swiftIdentifier): let \(name)")
                     actionArguments.append("\(apiBinding.swiftIdentifier): \(name)")
-                }
-                let argumentValue: String
-                if apiBinding.isPublic {
-                    argumentValue = name
-                } else {
-                    guard let value = binding.literalMembers?.first else {
-                        throw unsupported("a hidden action argument requires a literal singleton domain")
-                    }
-                    argumentValue = try literal(value, as: type)
-                }
-                formalArguments.append(try formalValue(argumentValue, type: type))
-                if apiBinding.isPublic {
+                    formalArguments.append(try formalValue(name, type: type))
                     let membership: String
                     let domain: String
                     if case .set(let element) = binding.domain.resultType,
@@ -1423,7 +1412,11 @@ extension NativeSwiftEmitter {
                     loops += "for \(name) in \(domain) {\n"
                     closing += "}\n"
                 } else {
-                    invocation.append("\(name): \(argumentValue)")
+                    guard let members = binding.literalMembers, members.count == 1, let value = members.first else {
+                        throw unsupported("a hidden action argument requires a literal singleton domain")
+                    }
+                    invocation.append("\(name): \(try literal(value, as: type))")
+                    formalArguments.append(try formalLiteral(value))
                 }
                 domainParameters.append("\(name): \(try swiftType(type))")
             }

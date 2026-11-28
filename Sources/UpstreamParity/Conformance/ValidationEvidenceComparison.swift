@@ -1036,7 +1036,7 @@ private struct RankedEdgeBucketWriter {
 
     private mutating func flush() throws {
         guard !buffer.isEmpty else { return }
-        try handle.write(contentsOf: buffer)
+        try handle.writeEvidenceChunk(buffer)
         buffer.removeAll(keepingCapacity: true)
     }
 }
@@ -1120,7 +1120,7 @@ private struct ValidationLineWriter {
     }
     private mutating func flush() throws {
         guard !buffer.isEmpty else { return }
-        try handle.write(contentsOf: buffer)
+        try handle.writeEvidenceChunk(buffer)
         buffer.removeAll(keepingCapacity: true)
     }
 }

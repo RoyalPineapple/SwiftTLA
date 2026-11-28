@@ -7,6 +7,9 @@ private struct AssumptionModelRegistration: Sendable {
 }
 
 private let assumptionModels: [AssumptionModelRegistration] = [
+    .init(id: "reachability-assumptions", scenarios: {
+        try ReachabilityAssumptions.validationScenarios().map { $0 as any AssumptionValidationScenario }
+    }),
     .init(id: "car-talk-puzzle", scenarios: {
         try CarTalkPuzzleModel.validationScenarios().map { $0 as any AssumptionValidationScenario }
     }),

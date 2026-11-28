@@ -266,6 +266,7 @@ struct NativeSwiftEmitter {
         case (.set(let values), .set(let element)):
             return "\(try swiftType(type))([\(try values.sorted().map { try literal($0, as: element) }.joined(separator: ", "))])"
         case (.tuple(let values), .array(let element)):
+            if values.isEmpty { return "\(try swiftType(type))()" }
             return "[\(try values.map { try literal($0, as: element) }.joined(separator: ", "))]"
         case (.tuple(let values), .dictionary) where values.isEmpty:
             return "\(try swiftType(type))()"
@@ -1313,9 +1314,9 @@ struct NativeSwiftEmitter {
         case .tupleLiteral:
             let result = node.resultType
             switch result {
+            case .array where node.children.isEmpty, .dictionary where node.children.isEmpty:
+                return "\(try swiftType(result))()"
             case .array: return "[\(try node.children.indices.map { try emit($0) }.joined(separator: ", "))]"
-            case .dictionary where node.children.isEmpty:
-                return "\(try swiftType(node.resultType))()"
             case .tuple:
                 return "\(try swiftType(result))(\(try node.children.indices.map { index in fieldArgument(try emit(index), type: result, index: index) }.joined(separator: ", ")))"
             default: throw unsupported("tuple literal")

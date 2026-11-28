@@ -16,6 +16,10 @@ extension NativeSwiftEmitter {
     func checkedView(_ value: String, from source: CompiledValueType, to target: CompiledValueType) throws -> String {
         if program.canProject(source: source, to: target) { return try projected(value, from: source, to: target) }
         if source.unionAlternatives != nil { return try unionProjection(value, from: source, to: target, checked: true) }
+        if let alternatives = target.unionAlternatives,
+           alternatives.contains(where: { program.canProject(source: source, to: $0) }) {
+            return try projected(value, from: source, to: target)
+        }
         if let fields = source.recordFields, let alternatives = target.unionAlternatives {
             let keys = Set(fields.map(\.name))
             let matches = alternatives.indices.filter { index in
@@ -78,6 +82,11 @@ extension NativeSwiftEmitter {
             let key = try checkedView("entry.key", from: sourceKey, to: targetKey)
             let item = try checkedView("entry.value", from: sourceValue, to: targetValue)
             return "\(try dictionaryConstructor(target))(uniqueKeysWithValues: try (\(value)).map { entry in (\(key), \(item)) })"
+        case (.tuple(let inputs), .array(let element)):
+            let elements = try inputs.indices.map { index in
+                try checkedView(fieldRead("value", type: source, index: index), from: inputs[index], to: element)
+            }.joined(separator: ", ")
+            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in [\(elements)] }(\(value)))"
         case (.tuple(let inputs), .tuple(let outputs)) where inputs.count == outputs.count:
             return try checkedFields(value, from: source, to: target, inputs: inputs.elements, outputs: outputs.elements)
         default:
