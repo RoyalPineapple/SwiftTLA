@@ -57,3 +57,7 @@ Verification/FiniteGraph/fixtures/multicar-elevator/* whitespace=-blank-at-eol,-
 Verification/FiniteGraph/fixtures/nano-blockchain/MCNano*.cfg whitespace=-blank-at-eof
 Verification/FiniteGraph/fixtures/tcp/*.tla whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/tcp/MCtcp.cfg whitespace=-blank-at-eol
+Verification/FiniteGraph/fixtures/bosco/bosco.cfg whitespace=-blank-at-eof
+Verification/FiniteGraph/fixtures/bosco/bosco.tla whitespace=-blank-at-eol
+Verification/FiniteGraph/fixtures/misra-reachability/ParReach.tla whitespace=-blank-at-eol
+Verification/FiniteGraph/fixtures/multipaxos-smr/* whitespace=-blank-at-eol

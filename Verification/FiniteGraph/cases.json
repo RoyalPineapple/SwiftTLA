@@ -4120,6 +4120,121 @@
       "moduleSHA256": "51b25788a688f63bf28788530e0b7884d635ae1feb69b4def405b126af80a7b1",
       "cfgSHA256": "0801b570810e2902b41e8ebcf564d713dc075d6d158805d2e8f09fef0d8fb9ae",
       "timeoutSeconds": 1800
+    },
+    {
+      "id": "bosco-bosco",
+      "sourceModel": "bosco",
+      "scenario": "FourProcesses",
+      "module": "bosco/bosco.tla",
+      "configuration": "bosco/bosco.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bosco/bosco.tla",
+        "sha256": "a2b9f8564b658992f036dadaeb5acdc8ba8b79ba1262400ca3217721796f7fd8"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "a2b9f8564b658992f036dadaeb5acdc8ba8b79ba1262400ca3217721796f7fd8",
+      "cfgSHA256": "f741200793a0fe4c09aab8275476a1ad6f49ef597db3c9de7c823b257af94e84",
+      "timeoutSeconds": 28800
+    },
+    {
+      "id": "bosco-apbosco",
+      "sourceModel": "bosco",
+      "scenario": "FourProcesses",
+      "module": "bosco/APbosco.tla",
+      "configuration": "bosco/APbosco.cfg",
+      "imports": [
+        "bosco/bosco.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APbosco",
+          "importedModule": "bosco"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/bosco/APbosco.tla",
+        "sha256": "be3a14daab5b7c0402aa7acf50f0841c073382ce69bb3b3138a2d626e73db47c"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "be3a14daab5b7c0402aa7acf50f0841c073382ce69bb3b3138a2d626e73db47c",
+      "cfgSHA256": "57d21f0e97a0e5afdcad23833d4b5356cc9210c004019d48d793b749377ab718",
+      "timeoutSeconds": 28800
+    },
+    {
+      "id": "ap-par-reach",
+      "sourceModel": "ap-par-reach",
+      "scenario": "APParReach",
+      "module": "misra-reachability/APParReach.tla",
+      "configuration": "misra-reachability/APParReach.cfg",
+      "imports": [
+        "misra-reachability/ParReach.tla",
+        "misra-reachability/Reachable.tla",
+        "misra-reachability/Reachability.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APParReach",
+          "importedModule": "ParReach"
+        },
+        {
+          "importingModule": "ParReach",
+          "importedModule": "Reachable"
+        },
+        {
+          "importingModule": "ParReach",
+          "importedModule": "Reachability"
+        },
+        {
+          "importingModule": "Reachable",
+          "importedModule": "Reachability"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MisraReachability/APParReach.tla",
+        "sha256": "332a28d6cce37977f41f0738da3037683a45b33225f364f4575c9354730c0caa"
+      },
+      "exploration": {
+        "maximumStateLimit": 5000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "332a28d6cce37977f41f0738da3037683a45b33225f364f4575c9354730c0caa",
+      "cfgSHA256": "f90ea4628f6abef0821b2d064cf4c2115c706483114c6bd0b7b10004525ced62",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "multipaxos-smr-multipaxos-mc-small",
+      "sourceModel": "multipaxos-smr",
+      "scenario": "Small",
+      "module": "multipaxos-smr/MultiPaxos_MC.tla",
+      "configuration": "multipaxos-smr/MultiPaxos_MC_small.cfg",
+      "imports": [
+        "multipaxos-smr/MultiPaxos.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MultiPaxos_MC",
+          "importedModule": "MultiPaxos"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MultiPaxos-SMR/MultiPaxos_MC.tla",
+        "sha256": "de29fa4029bb0f678ce5b325faa273397a18b91f867d72cf20f3b6dd9925beee"
+      },
+      "exploration": {
+        "maximumStateLimit": 2100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "de29fa4029bb0f678ce5b325faa273397a18b91f867d72cf20f3b6dd9925beee",
+      "cfgSHA256": "0cc59be82d3e1e06f850ca272582b6982a06f75fe6f8d14ad36d1c207d50e24b",
+      "timeoutSeconds": 28800
     }
   ]
 }
